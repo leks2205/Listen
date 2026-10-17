@@ -331,8 +331,9 @@ impl Listen {
             settings: &self.config.settings.mixing,
             out_position_s: out_now,
             voice_break: self.dj_voice_break(next.uid),
-            out_genres: &cur.song.genres,
-            in_genres: &next.song.genres,
+            // the copy that plays: an own-server copy of a YouTube Music song has the genre tags
+            out_genres: &cur_song.genres,
+            in_genres: &next_song.genres,
         };
         let plan = listen_mix::plan::plan(fa, fb, &ctx);
         if plan.kind == Kind::Gapless {
