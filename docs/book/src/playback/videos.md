@@ -16,6 +16,7 @@ The switch is off by default. Turning it on opens the [full-screen player](fulls
 ## How it behaves
 
 - The audio plays through the normal player. The video is a separate, silent picture, and the audio is the clock: the picture follows it, and if it drifts too far, it catches up by skipping ahead or restarting.
+- When the song plays from your own server (see [YouTube Music](../getting-started/youtube-music.md)), the video still shows: it follows the server's audio as the clock. If both files have been [analysed](../dj/analysis.md) (including the YouTube Music one), Listen lines the video up with the server's file by its beats and first sound; otherwise it assumes both start together.
 - Seeking, pausing, resuming and skipping to the next song move the video along.
 - The video of the next song is prepared in advance when possible, so it starts quickly after a song change.
 - The picture is rendered at 640 by 360 pixels and 30 frames per second, with black bars for other aspect ratios. This keeps the load low, and the picture is not saved anywhere.

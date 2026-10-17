@@ -145,6 +145,8 @@ pub struct Playback {
     pub audio_player: AudioPlayer,
     /// Look for DLNA / UPnP media renderers on the network and offer the cast button.
     pub dlna_enabled: bool,
+    /// Play a YouTube Music song from the user's own server when it has the same song.
+    pub prefer_own_servers: bool,
     pub scrobble: bool,
     pub scrobble_at_percent: u8,
     pub scrobble_at_secs: u32,
@@ -182,6 +184,7 @@ impl Default for Playback {
             audio_format: String::new(),
             audio_player: AudioPlayer::Mpv,
             dlna_enabled: true,
+            prefer_own_servers: true,
             scrobble: true,
             scrobble_at_percent: 75,
             scrobble_at_secs: 240,

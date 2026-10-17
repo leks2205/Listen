@@ -3,7 +3,8 @@
 //! over the song's end, the next song's start, or across the change; those three play on a second mpv under
 //! which the music is ducked (see `fade`). Any failure falls back to the Auto-DJ; playback never waits.
 
-use super::{Listen, Message, Setting, Sources, err, stream_track};
+use super::substitute::{Substitutes, stream_for};
+use super::{Listen, Message, Setting, Sources, err};
 use iced::Task;
 use listen_core::model::{ImageRef, ServerId, Song};
 use listen_core::versions::{dedupe_versions, song_key};
@@ -120,10 +121,14 @@ impl DjState {
     }
 }
 
-pub async fn resolve_slot(sources: &Sources, slot: Option<Slot>) -> Result<Option<Track>, String> {
+pub async fn resolve_slot(
+    sources: &Sources,
+    subs: &Substitutes,
+    slot: Option<Slot>,
+) -> Result<Option<Track>, String> {
     match slot {
         Some(Slot::Clip(track)) => Ok(Some(track)),
-        Some(Slot::Song(song)) => stream_track(sources, &song).await.map(Some),
+        Some(Slot::Song(song)) => stream_for(sources, subs, &song).await.map(Some),
         None => Ok(None),
     }
 }
@@ -391,11 +396,12 @@ impl Listen {
         self.fader.pos_at = None;
         let player = self.decks.active_player()?;
         let sources = self.sources.clone();
+        let subs = self.substitutes.clone();
         let next = self.queue.peek_next().map(|i| i.song.clone());
         Some(Task::perform(
             async move {
                 let track = match next {
-                    Some(n) => stream_track(&sources, &n).await.ok(),
+                    Some(n) => stream_for(&sources, &subs, &n).await.ok(),
                     None => None,
                 };
                 player.advanced(track.as_ref()).await.map_err(err)

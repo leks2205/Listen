@@ -192,6 +192,7 @@ Shown only when the connected server supports smart playlists.
 | Streaming quality | Caps the bit rate: **Original**, **High** (320 kbit/s), **Normal** (192), **Low** (96). Navidrome transcodes to MP3; YouTube Music picks a smaller format. Downloaded songs stay original. | Original | `settings.playback.stream_quality` (`"original"`, `"high"`, `"normal"`, `"low"`) |
 | Fade songs in and out | Each song fades in at its start and out at its end, 0 to 10 s in half-second steps (0 is off). The AI DJ uses the same speed for turning the music down and up (at least 1 s). | 1.5 s | `settings.playback.track_fade_secs` |
 | Fade on pause | Fades out briefly when pausing and back in when resuming. | On | `settings.playback.fade_on_pause` |
+| Prefer my own servers for YouTube Music songs | Only shown with a YouTube Music account. Plays a YouTube Music song from your Navidrome, Jellyfin or local library when it has the same song. The song stays a YouTube Music song. See [YouTube Music](../getting-started/youtube-music.md). | On | `settings.playback.prefer_own_servers` |
 | Cast to DLNA devices | Looks for DLNA / UPnP speakers and TVs on the network and shows a cast button when some answer. See [Casting](../playback/casting.md). | On | `settings.playback.dlna_enabled` |
 
 The player bar's volume (0 to 100) is saved in `settings.playback.volume` (default 70).

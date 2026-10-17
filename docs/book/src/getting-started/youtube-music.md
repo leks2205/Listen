@@ -60,6 +60,14 @@ When you are signed in:
 - Playing a song reports it to YouTube Music, so your history and recommendations stay current there.
 - Mixing YouTube Music songs with DJ transitions, once you switch on **Analyse YouTube Music songs** and choose an analysis folder. See [Song analysis](../dj/analysis.md).
 
+## Your own copy of a song
+
+When a YouTube Music song is also on one of your own servers (Navidrome, Jellyfin or a local folder), Listen plays that copy, which usually sounds better. It looks the song up by title and artist when the song enters the queue, ignores things like "(Official Video)", "(Remastered 2011)" or "- Topic", compares the length, and never swaps a live, remix, instrumental or karaoke version for a different one. If nothing is found, or the server does not answer in time, the YouTube Music version plays.
+
+The song stays a YouTube Music song: likes, playlists, radio and the music video work as before, and the play is reported to YouTube Music and also to the server that played it. A small server icon next to the title shows the swap; hover it to see the server, and press it to play the YouTube Music version instead (and again to go back). The video switch keeps working: the video runs silently alongside the server's audio.
+
+Turn it off with **Settings > Playback > Prefer my own servers for YouTube Music songs**. See [Music videos](../playback/videos.md) for how the picture is lined up.
+
 Audio is streamed, not saved. Listen does not download YouTube Music songs for offline use, and the offline download feature works only for your own servers.
 
 ## Requirements

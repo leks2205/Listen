@@ -67,6 +67,7 @@ mod settings_msg;
 pub mod settings_shell;
 pub mod sleep_timer;
 pub mod smart_playlist;
+pub mod substitute;
 mod transport;
 pub mod updater;
 mod video;
@@ -511,6 +512,8 @@ pub struct Listen {
     play_token: u64,
     /// `play_token`, readable from background tasks (drops stale results).
     live_token: Arc<std::sync::atomic::AtomicU64>,
+    /// Own copies of YouTube Music songs (see `substitute.rs`).
+    pub substitutes: substitute::Substitutes,
     /// Retries so far for a queue entry that failed to play: (uid, attempts,
     /// position to resume at).
     retried: Option<(u64, u8, Duration)>,
@@ -851,6 +854,10 @@ pub enum Message {
     ListScrolled(scrollable::Viewport),
     ImageLoaded(images::Key, Option<Arc<Vec<u8>>>),
     BlurLoaded(images::Key, Option<iced::widget::image::Handle>),
+    /// The lookup for an own copy of this YouTube Music song finished.
+    Substituted(String),
+    /// Switch the playing song between its own copy and the YouTube Music version.
+    SubstituteToggle,
     StreamsResolved {
         token: u64,
         current: Result<Track, String>,
@@ -953,6 +960,8 @@ impl Listen {
                 .filter(|_| !(args.demo || args.login.is_some() || args.ephemeral))
                 .map(|p| p.data_dir.as_path()),
         );
+        let substitutes = substitute::Substitutes::default();
+        substitutes.set_enabled(config.settings.playback.prefer_own_servers);
         let mut state = Self {
             history,
             history_view: history::HistoryView::default(),
@@ -1026,6 +1035,7 @@ impl Listen {
             player_config,
             play_token: 0,
             live_token: Arc::default(),
+            substitutes,
             retried: None,
             use_backup: false,
             resume_at: None,
@@ -2155,6 +2165,7 @@ impl Listen {
             return image_task;
         }
         let sources = self.sources.clone();
+        let subs = self.substitutes.clone();
         let token = self.play_token;
         let stop = std::mem::take(&mut self.stop_first).then(|| self.decks.active_player()).flatten();
         let backup = std::mem::take(&mut self.use_backup);
@@ -2166,9 +2177,10 @@ impl Listen {
                 if let Some(player) = stop {
                     let _ = player.stop().await;
                 }
-                let mut track = stream_track(&sources, &current).await?;
+                let mut track = substitute::stream_for(&sources, &subs, &current).await?;
                 if backup {
-                    match sources.get(&current.server_id).and_then(|s| s.alternate_url(&track.url)) {
+                    let from = subs.used(&current).map_or(current.server_id.clone(), |own| own.server_id);
+                    match sources.get(&from).and_then(|s| s.alternate_url(&track.url)) {
                         Some(url) => {
                             tracing::info!(
                                 "using the backup server {}",
@@ -2183,7 +2195,7 @@ impl Listen {
             },
             move |current| Message::StreamsResolved { token, current, next: None },
         );
-        Task::batch([resolve, image_task, self.scrobble(ScrobbleEvent::NowPlaying)])
+        Task::batch([resolve, image_task, self.scrobble(ScrobbleEvent::NowPlaying), self.substitute_warm()])
     }
 
     /// The current track couldn't be resolved or played: retry it once with a
@@ -2202,6 +2214,17 @@ impl Listen {
             song.server_id.0
         );
         self.stop_first = true;
+        // The own copy broke: straight back to the YouTube Music version, no retries on the server.
+        if self.substitutes.used(&song).is_some() {
+            self.substitutes.set_denied(&song, true);
+            let resume = self.playback.position;
+            tracing::info!("own copy of “{}” failed; playing the YouTube Music version", song.title);
+            let task = self.start_current();
+            if resume > Duration::from_secs(3) {
+                self.resume_at = Some((self.play_token, resume));
+            }
+            return task;
+        }
         let (attempts, resume) = match self.retried {
             Some((u, n, at)) if u == uid => (n, at.max(self.playback.position)),
             _ => (0, self.playback.position),
@@ -2235,6 +2258,10 @@ impl Listen {
 
     /// Re-queues mpv's "next" slot after the queue changed.
     fn refresh_next(&mut self) -> Task<Message> {
+        Task::batch([self.substitute_warm(), self.refresh_next_slot()])
+    }
+
+    fn refresh_next_slot(&mut self) -> Task<Message> {
         // The queue changed: analyse what's coming up.
         self.analysis_want();
         let Some(player) = self.decks.active_player() else { return Task::none() };
@@ -2249,6 +2276,7 @@ impl Listen {
             );
         }
         let sources = self.sources.clone();
+        let subs = self.substitutes.clone();
         let next = self.next_slot();
         let plan = self.mix_consider();
         if self.mix.owns_next() {
@@ -2258,7 +2286,7 @@ impl Listen {
             plan,
             Task::perform(
                 async move {
-                    let track = dj::resolve_slot(&sources, next).await?;
+                    let track = dj::resolve_slot(&sources, &subs, next).await?;
                     player.set_next(track.as_ref()).await.map_err(err)
                 },
                 Message::PlayerDone,
@@ -2302,8 +2330,20 @@ impl Listen {
             return Task::none();
         }
         let Some(song) = self.queue.current().map(|i| i.song.clone()) else { return Task::none() };
-        let Some(source) = self.sources.get(&song.server_id).cloned() else { return Task::none() };
-        Task::perform(async move { source.scrobble(&song, event).await.map_err(err) }, Message::PlayerDone)
+        // The YouTube Music account hears it as before; the server whose copy plays counts it too.
+        let own = self.substitutes.used(&song);
+        let tasks: Vec<_> = [Some(song), own]
+            .into_iter()
+            .flatten()
+            .filter_map(|song| {
+                let source = self.sources.get(&song.server_id).cloned()?;
+                Some(Task::perform(
+                    async move { source.scrobble(&song, event).await.map_err(err) },
+                    Message::PlayerDone,
+                ))
+            })
+            .collect();
+        Task::batch(tasks)
     }
 
     fn on_player_event(&mut self, event: PlayerEvent) -> Task<Message> {
@@ -2387,10 +2427,11 @@ impl Listen {
                 // First: a DJ transition planned into the next song keeps mpv's next slot empty.
                 let changed = self.on_track_changed();
                 let sources = self.sources.clone();
+                let subs = self.substitutes.clone();
                 let next = if self.mix.owns_next() { None } else { self.next_slot() };
                 let rotate = Task::perform(
                     async move {
-                        let track = dj::resolve_slot(&sources, next).await.ok().flatten();
+                        let track = dj::resolve_slot(&sources, &subs, next).await.ok().flatten();
                         player.advanced(track.as_ref()).await.map_err(err)
                     },
                     Message::PlayerDone,
@@ -3497,6 +3538,7 @@ impl Listen {
                         self.fader.last_sent = Some(volume);
                         let start = self.resume_at.take().filter(|(t, _)| *t == token).map(|(_, at)| at);
                         let sources = self.sources.clone();
+                        let subs = self.substitutes.clone();
                         // A planned DJ transition brings the next song in on the other deck.
                         let upcoming =
                             if next.is_none() && !self.mix.owns_next() { self.next_slot() } else { None };
@@ -3506,7 +3548,7 @@ impl Listen {
                             p.play_from(&current, next.as_ref(), start).await?;
                             // Prefetch the next track for a gapless transition, unless
                             // the user moved on meanwhile.
-                            if let Ok(Some(track)) = dj::resolve_slot(&sources, upcoming).await
+                            if let Ok(Some(track)) = dj::resolve_slot(&sources, &subs, upcoming).await
                                 && live.load(std::sync::atomic::Ordering::SeqCst) == token
                             {
                                 p.set_next(Some(&track)).await?;
@@ -3550,6 +3592,8 @@ impl Listen {
             Message::FadeTick => return self.fade_tick(),
             Message::VideoTick => return self.video_sync(),
             Message::VideoUrl(id, url) => return self.video_url(id, url),
+            Message::Substituted(id) => return self.on_substituted(&id),
+            Message::SubstituteToggle => return self.substitute_toggle(),
             Message::PlayerDone(Ok(())) => {}
             Message::PlayerDone(Err(e)) => tracing::warn!("player/server command failed: {e}"),
             Message::ArtistsLoaded(result) => {

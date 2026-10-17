@@ -1,10 +1,11 @@
 //! Left column: cover + title / artists / album (or the AI DJ caption).
 
 use crate::app::{Listen, Message};
+use crate::i18n::trf;
 use crate::icons::Icon;
 use crate::style::{self, metrics};
 use crate::ui::list::anchor::anchored;
-use crate::ui::tip::{Position, tip};
+use crate::ui::tip::{Position, tip, tip_raw};
 use crate::ui::{ellipsize_px, icon, label, label_w, song_cover, song_links};
 use iced::font::Weight;
 use iced::widget::{Row, button, column, container, row, space};
@@ -54,9 +55,42 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
                 }
             },
         );
-        row![song_links::title(state, song, metrics::font_md(), t.foreground, (px - MORE).max(0.0)), more]
-            .align_y(Alignment::Center)
-            .into()
+        // A YouTube Music song that plays from one of the user's own servers (or was sent back).
+        let own_copy = state.substitutes.alternative(song).map(|alt| {
+            let server = state.server_name(&alt.song.server_id);
+            let hint = if alt.active {
+                trf("Playing from {}. Click to play the YouTube Music version.", &[&server])
+            } else {
+                trf("Playing from YouTube Music. Click to play the copy on {}.", &[&server])
+            };
+            tip_raw(
+                state,
+                button(
+                    container(icon(
+                        Icon::LuServer,
+                        metrics::font_md(),
+                        if alt.active { t.primary } else { t.muted },
+                    ))
+                    .center(Length::Fill),
+                )
+                .width(MORE)
+                .height(MORE)
+                .padding(0)
+                .style(style::icon_button(t, false))
+                .on_press(Message::SubstituteToggle),
+                &hint,
+                None,
+                Position::Top,
+            )
+        });
+        let title_w = (px - MORE - if own_copy.is_some() { MORE } else { 0.0 }).max(0.0);
+        let mut line = Row::new()
+            .push(song_links::title(state, song, metrics::font_md(), t.foreground, title_w))
+            .align_y(Alignment::Center);
+        if let Some(badge) = own_copy {
+            line = line.push(badge);
+        }
+        line.push(more).into()
     };
     let artist_line = || song_links::artists(state, &song.artists, metrics::font_md(), t.muted, px);
     let meta = match &state.dj.caption {

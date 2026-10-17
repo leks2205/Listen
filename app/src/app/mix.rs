@@ -311,11 +311,14 @@ impl Listen {
             tracing::debug!("mix “{}” → “{}”: not eligible (gapless)", cur.song.title, next.song.title);
             return Task::none();
         }
-        let Some(source) = self.sources.get(&next.song.server_id).cloned() else {
+        // The files that play: an own copy where there is one.
+        let cur_song = self.substitutes.used(&cur.song).unwrap_or_else(|| cur.song.clone());
+        let next_song = self.playable(&next.song);
+        let Some(source) = self.sources.get(&next_song.server_id).cloned() else {
             return Task::none(); // planned once its server is connected
         };
         let Some(analysis) = self.analysis.clone() else { return Task::none() };
-        let (Some(a), Some(b)) = (analysis.lookup(&cur.song), analysis.lookup(&next.song)) else {
+        let (Some(a), Some(b)) = (analysis.lookup(&cur_song), analysis.lookup(&next_song)) else {
             tracing::debug!("mix “{}” → “{}”: waiting for the analysis", cur.song.title, next.song.title);
             return Task::none(); // planned when the analysis arrives
         };
@@ -346,7 +349,9 @@ impl Listen {
             plan.reason
         );
         self.start_plan(cur.uid, next.uid, plan, fa, fb);
-        let fetch = self.mix_fetch(source, next.uid, next.song);
+        // The mix brings the file in, not the stream: note which one it is.
+        self.substitutes.mark(&next.song, (next_song.id != next.song.id).then(|| next_song.clone()));
+        let fetch = self.mix_fetch(source, next.uid, next_song);
         Task::batch([fetch, self.refresh_next()])
     }
 
@@ -390,11 +395,12 @@ impl Listen {
             && matches!(self.mix.fetch.input(in_uid), Some(AudioInput::File(_)))
             && !want.iter().any(|(u, _)| *u == in_uid)
             && let Some(item) = self.queue.iter().find(|i| i.uid == in_uid)
-            && let Some(s) = self.sources.get(&item.song.server_id)
+            && let song = self.playable(&item.song)
+            && let Some(s) = self.sources.get(&song.server_id)
         {
-            tracing::debug!("mix: pin “{}”", item.song.title);
-            s.pin_mix(&item.song, true);
-            want.push((in_uid, item.song.clone()));
+            tracing::debug!("mix: pin “{}”", song.title);
+            s.pin_mix(&song, true);
+            want.push((in_uid, song));
         }
         self.mix.fetch.pins = want;
     }

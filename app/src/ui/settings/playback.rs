@@ -113,6 +113,17 @@ fn playback_section(state: &Listen) -> Element<'_, Message> {
             switch_with(p.dlna_enabled, |v| Message::Dlna(crate::app::dlna::DlnaMsg::SetEnabled(v))),
         ),
     ];
+    // Only where a YouTube Music account and some other server can both exist.
+    if state.config.servers.iter().any(|s| s.kind == listen_core::model::SourceKind::YouTubeMusic) {
+        rows.push(line(
+            state,
+            "Prefer my own servers for YouTube Music songs",
+            "When a YouTube Music song is also on your Navidrome, Jellyfin or local library, play that copy \
+             (usually better quality). The song stays a YouTube Music song: likes, playlists, radio and \
+             the music video work as before.",
+            switch(p.prefer_own_servers, Setting::PreferOwnServers),
+        ));
+    }
     // The server's jukebox, only when it answered (Feishin: audio player type).
     if state.jukebox_offered() {
         rows.insert(

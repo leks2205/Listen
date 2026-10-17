@@ -33,6 +33,7 @@ pub enum Setting {
     HistoryPrivate(bool),
     TrackFade(f32),
     FadeOnPause(bool),
+    PreferOwnServers(bool),
     EqEnabled(bool),
     EqBand(usize, f32),
     EqPreamp(f32),
@@ -167,6 +168,10 @@ impl Listen {
             }
             Setting::TrackFade(v) => s.playback.track_fade_secs = v.clamp(0.0, 10.0),
             Setting::FadeOnPause(v) => s.playback.fade_on_pause = v,
+            Setting::PreferOwnServers(v) => {
+                s.playback.prefer_own_servers = v;
+                self.substitutes.set_enabled(v);
+            }
             Setting::EqEnabled(v) => {
                 s.playback.equalizer_enabled = v;
                 player_changed = true;

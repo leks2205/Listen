@@ -244,12 +244,19 @@ impl Listen {
             .skip(position)
             .take(12)
             .enumerate()
-            .filter_map(|(i, item)| {
-                // Mixed queues: each song through its own server.
-                let source =
-                    self.sources.get(&item.song.server_id).filter(|s| self.may_analyse(s.as_ref()))?;
+            .flat_map(|(i, item)| {
                 let priority = if i < 2 { Priority::Now } else { Priority::Queue };
-                Some(Job::new(item.song.clone(), source.clone(), priority))
+                // Mixed queues: each song through its own server. A YouTube Music song that plays
+                // from an own server is analysed there too (its transitions use that file).
+                let own = self.playable(&item.song);
+                [(own.id != item.song.id).then_some(own), Some(item.song.clone())]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(move |song| {
+                        let source =
+                            self.sources.get(&song.server_id).filter(|s| self.may_analyse(s.as_ref()))?;
+                        Some(Job::new(song, source.clone(), priority))
+                    })
             })
             .collect();
         if !jobs.is_empty() {

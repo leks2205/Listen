@@ -8,5 +8,6 @@ pub mod model;
 pub mod platform;
 pub mod queue;
 pub mod settings;
+pub mod substitute;
 pub mod theme;
 pub mod versions;

@@ -45,6 +45,8 @@ const MARK_BITS: usize = 24;
 const MARK_BLOCK: usize = 16;
 /// No frame at all after this long: give up.
 const NO_FRAME: Duration = Duration::from_secs(25);
+/// How often the alignment of the picture with an own copy of the song is worked out again.
+const SHIFT_REFRESH: Duration = Duration::from_secs(3);
 /// How often the `video-stats:` line is logged.
 const STATS_EVERY: Duration = Duration::from_secs(5);
 
@@ -164,6 +166,11 @@ pub struct Video {
     seek_pending: Option<Instant>,
     /// Whether the audio was playing at the last tick (a resume starts a settle period).
     was_playing: bool,
+    /// Picture time minus audio time: non-zero when the audio is an own copy of the song that starts
+    /// at another moment than the YouTube Music file the picture belongs to.
+    shift: f64,
+    /// The song (and own copy) `shift` was worked out for, and when.
+    shift_for: Option<((String, Option<String>), Instant)>,
 }
 
 impl Default for Video {
@@ -179,6 +186,8 @@ impl Default for Video {
             seeked: false,
             seek_pending: None,
             was_playing: false,
+            shift: 0.0,
+            shift_for: None,
         }
     }
 }
@@ -477,7 +486,33 @@ impl Listen {
             self.video.pos_seen = (self.playback.position, Instant::now());
         }
         let (pos, seen) = self.video.pos_seen;
-        pos.as_secs_f64() + if self.playback.playing { seen.elapsed().as_secs_f64() } else { 0.0 }
+        let audio =
+            pos.as_secs_f64() + if self.playback.playing { seen.elapsed().as_secs_f64() } else { 0.0 };
+        (audio + self.video.shift).max(0.0)
+    }
+
+    /// Works out how the picture lines up with the audio when that is an own copy of the song: from
+    /// the two analyses where both exist (they may arrive while the song plays), else 0.
+    fn video_shift_update(&mut self, song: &Song) {
+        let own = self.substitutes.used(song);
+        let key = (song.id.clone(), own.as_ref().map(|o| o.id.clone()));
+        let due = self
+            .video
+            .shift_for
+            .as_ref()
+            .is_none_or(|(k, at)| *k != key || (own.is_some() && at.elapsed() > SHIFT_REFRESH));
+        if !due {
+            return;
+        }
+        let shift = own.as_ref().map_or(0.0, |o| self.substitute_shift(song, o));
+        if (shift - self.video.shift).abs() > 0.15
+            && self.video.session.as_ref().is_some_and(|s| s.song_id == song.id)
+        {
+            // The picture moves to the new alignment like after a user seek.
+            self.video.seeked = true;
+        }
+        self.video.shift = shift;
+        self.video.shift_for = Some((key, Instant::now()));
     }
 
     /// Brings the video in line with the switch, the current song and the audio. Runs on every tick.
@@ -497,6 +532,7 @@ impl Listen {
         if self.dj_airing() {
             return Task::none();
         }
+        self.video_shift_update(&song);
         let resumed = self.playback.playing && !self.video.was_playing;
         self.video.was_playing = self.playback.playing;
         if resumed {

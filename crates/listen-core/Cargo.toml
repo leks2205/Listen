@@ -13,5 +13,6 @@ thiserror.workspace = true
 directories.workspace = true
 rand.workspace = true
 regex.workspace = true
+unicode-normalization = "0.1"
 tracing.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
