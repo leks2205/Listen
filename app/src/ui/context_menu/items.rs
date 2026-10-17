@@ -7,7 +7,7 @@ use crate::icons::Icon;
 use crate::style::{self, metrics};
 use crate::ui::{divider_h, icon, label_w};
 use iced::font::Weight;
-use iced::widget::{button, container, mouse_area, row, space};
+use iced::widget::{button, container, mouse_area, row};
 use iced::{Alignment, Background, Element, Length, Padding, border};
 
 /// Height of a divider row.
@@ -36,16 +36,14 @@ pub fn entry_row<'a>(state: &Listen, entry: &Entry, focused: bool, wiring: Wirin
     let color = if entry.enabled { t.foreground } else { t.muted };
     let mut content = row![
         icon(entry.icon, metrics::font_lg(), color),
-        label_w(entry.label.clone(), metrics::font_sm(), color, Weight::Medium)
+        container(label_w(entry.label.clone(), metrics::font_sm(), color, Weight::Medium))
+            .width(Length::Fill)
+            .clip(true)
     ]
     .spacing(metrics::space_sm())
     .align_y(Alignment::Center);
     if entry.is_submenu() {
-        content = content.push(space().width(Length::Fill)).push(icon(
-            Icon::LuChevronRight,
-            metrics::font_md(),
-            t.muted,
-        ));
+        content = content.push(icon(Icon::LuChevronRight, metrics::font_md(), t.muted));
     }
     // iced puts a button's content at the top; center it so the hover box
     // sits evenly around the text.
@@ -75,7 +73,9 @@ pub fn plain<'a>(state: &Listen, glyph: Icon, title: String, msg: Option<Message
         container(
             row![
                 icon(glyph, metrics::font_lg(), color),
-                label_w(title, metrics::font_md(), color, Weight::Medium)
+                container(label_w(title, metrics::font_md(), color, Weight::Medium))
+                    .width(Length::Fill)
+                    .clip(true)
             ]
             .spacing(metrics::space_md())
             .align_y(Alignment::Center),

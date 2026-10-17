@@ -3,7 +3,7 @@
 //! featured genres. The source's own feed (YouTube Music's Quick picks,
 //! mixes, ...) is shown first, its shelves page like the others.
 
-use super::{album_cover, cover_on, ellipsize, icon, label, label_w, song_cover};
+use super::{album_cover, cover_on, ellipsize, ellipsize_px, icon, label, label_w, song_cover};
 use crate::app::home::{HomeMsg, RowId, Section, SectionRow, can_next, section_list, slide_offsets};
 use crate::app::menu::MenuTarget;
 use crate::app::{Listen, Message, Route};
@@ -306,7 +306,7 @@ fn feature_single<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Messag
         ),
         column![
             crate::ui::header_title_fit(&album.name, white, text_w),
-            label_w(album.artist_line(), 16.0, white, Weight::Bold),
+            label_w(ellipsize_px(&album.artist_line(), text_w, 16.0), 16.0, white, Weight::Bold),
             label_w(metadata(album, 2), metrics::font_sm(), white, Weight::Semibold),
             play,
         ]
@@ -406,7 +406,6 @@ fn carousel<'a>(
         let n = cards_per_row(size.width);
         let gap = metrics::space_md();
         let card_w = ((size.width - gap * (n as f32 - 1.0)) / n as f32).floor();
-        let chars = (card_w / 7.5) as usize;
         let len = cards.len();
         let first = first.min(len.saturating_sub(1));
 
@@ -442,12 +441,23 @@ fn carousel<'a>(
                     button(art).padding(0).style(style::bare_button(t)).on_press(on_press),
                     target
                 ),
-                column![
-                    label_w(ellipsize(&title, chars), metrics::font_md(), t.foreground, Weight::Medium),
-                    label(ellipsize(&sub, chars), metrics::font_sm(), t.muted),
-                    label(extra, metrics::font_sm(), t.muted),
-                ]
-                .spacing(metrics::space_xs()),
+                // Every line is cut to the card and clipped: a long third line
+                // must not run under the next card.
+                container(
+                    column![
+                        label_w(
+                            ellipsize_px(&title, card_w, metrics::font_md()),
+                            metrics::font_md(),
+                            t.foreground,
+                            Weight::Medium
+                        ),
+                        label(ellipsize_px(&sub, card_w, metrics::font_sm()), metrics::font_sm(), t.muted),
+                        label(ellipsize_px(&extra, card_w, metrics::font_sm()), metrics::font_sm(), t.muted),
+                    ]
+                    .spacing(metrics::space_xs()),
+                )
+                .width(card_w)
+                .clip(true),
             ]
             .spacing(metrics::space_sm())
             .width(card_w)
