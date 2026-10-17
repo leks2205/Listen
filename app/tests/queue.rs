@@ -150,11 +150,22 @@ fn auto_dj_songs_keep_their_tag_and_stay_behind_the_manual_queue() {
     let manual = order.iter().position(|t| t == "Paper Moons").unwrap();
     let first_auto = s.queue.iter().position(|i| i.auto).unwrap();
     assert!(manual < first_auto, "queued songs play before the Auto-DJ songs: {order:?}");
-    assert!(shows(&s, "Auto-DJ"));
+    assert!(shows(&s, "Auto"));
+    assert!(!shows(&s, "Auto-DJ"));
     // Rows dragged around keep the flag.
     let uid = s.queue.iter().find(|i| i.auto).unwrap().uid;
     s.queue.move_uids(&[uid], 0);
     assert!(s.queue.iter().find(|i| i.uid == uid).unwrap().auto);
+}
+
+#[test]
+fn the_mode_tag_can_be_hidden_in_the_sidebar() {
+    let mut s = boot();
+    let _ = s.update(Message::AutoDjLoaded(Ok(songs(2))));
+    assert!(shows(&s, "Auto"), "shown by default");
+    let _ = s.update(Message::Queue(QueueMsg::Setting(QueueSetting::ModeTag(false))));
+    assert!(!s.config.settings.queue.show_mode_tag);
+    assert!(!shows(&s, "Auto"), "no mode row and no tags in the panel");
 }
 
 #[test]
@@ -585,7 +596,7 @@ fn youtube_music_rows_keep_their_menu_hearts_and_dj() {
     assert_eq!(queue_uids, [s.queue.item_at(1).unwrap().uid, s.queue.item_at(3).unwrap().uid]);
     // Hearts and the DJ toggle are still on the rows / in the header.
     // The play-mode toggle is in the header (it names the current mode).
-    assert!(shows(&s, s.play_mode().label()));
+    assert!(shows(&s, s.play_mode().tag()));
     assert!(shows(&s, "Coastline"));
     // YouTube Music has no server queue: no save / restore.
     assert!(!s.queue_server_sync());

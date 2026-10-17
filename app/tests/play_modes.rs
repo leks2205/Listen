@@ -106,7 +106,7 @@ fn the_queue_toggle_cycles_the_modes() {
     assert!(s.config.settings.auto_dj.enabled && !s.queue.shuffle());
     // Without a Gemini key the AI DJ is skipped.
     assert!(!s.ai_dj_available());
-    click_text(&mut s, "Auto-DJ");
+    click_text(&mut s, "Auto");
     assert_eq!(s.play_mode(), PlayMode::Off);
     assert!(!s.config.settings.auto_dj.enabled);
 }

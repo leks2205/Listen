@@ -108,6 +108,7 @@ pub enum QueueMsg {
 pub enum QueueSetting {
     FollowCurrent(bool),
     UpNext(bool),
+    ModeTag(bool),
     Confirm(bool),
     SavePlayQueue(bool),
     AutosaveServer(bool),
@@ -806,6 +807,7 @@ impl Listen {
                 follow = v;
             }
             QueueSetting::UpNext(v) => q.up_next_queue = v,
+            QueueSetting::ModeTag(v) => q.show_mode_tag = v,
             QueueSetting::Confirm(v) => q.confirm_queue_changes = v,
             QueueSetting::SavePlayQueue(v) => q.save_play_queue = v,
             QueueSetting::AutosaveServer(v) => q.autosave_server = v,

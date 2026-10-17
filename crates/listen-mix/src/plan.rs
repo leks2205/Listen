@@ -935,6 +935,7 @@ mod tests {
             uid: u64::from(track),
             song: song(&format!("t{track}"), "A", Some(album), Some(track)),
             auto,
+            ai: false,
             queued,
         };
         // DJ picks mix.

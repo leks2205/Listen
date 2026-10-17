@@ -143,6 +143,12 @@ pub(super) fn sidebar_panels(state: &Listen) -> Element<'_, Message> {
             ),
             line(
                 state,
+                "Play mode tag",
+                "Show the play mode (Shuffle, Auto or AI) above the sidebar queue, and Auto and AI tags on the songs the Auto-DJ and the AI DJ added.",
+                switch(s.queue.show_mode_tag, QueueSetting::ModeTag),
+            ),
+            line(
+                state,
                 "Lyrics panel",
                 "Show the lyrics of the playing song in the right sidebar.",
                 switch(s.queue.lyrics_in_sidebar, QueueSetting::LyricsInSidebar),

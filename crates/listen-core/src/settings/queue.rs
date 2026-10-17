@@ -239,6 +239,8 @@ pub struct QueueSettings {
     /// Label the songs added with "Play next" / "Add to queue" as "Up Next"
     /// (Feishin `upNextQueue`).
     pub up_next_queue: bool,
+    /// Show the play mode row and the Auto / AI tags in the sidebar queue.
+    pub show_mode_tag: bool,
     /// Ask before "Play now" replaces a queue that has songs (Feishin `confirmQueueChanges`).
     pub confirm_queue_changes: bool,
     /// Keep the queue between runs (Feishin "Save play queue").
@@ -266,6 +268,7 @@ impl Default for QueueSettings {
         Self {
             follow_current_song: true,
             up_next_queue: true,
+            show_mode_tag: true,
             confirm_queue_changes: false,
             save_play_queue: true,
             autosave_server: false,

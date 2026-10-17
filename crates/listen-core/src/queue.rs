@@ -32,6 +32,9 @@ pub struct QueueItem {
     pub song: Song,
     /// Added by Auto-DJ rather than by the user.
     pub auto: bool,
+    /// Picked by the AI DJ (also `auto`).
+    #[serde(default)]
+    pub ai: bool,
     /// Added with "Play next" / "Add to queue": part of the manual queue that
     /// plays right after the current song, before the rest.
     #[serde(default)]
@@ -206,6 +209,17 @@ impl Queue {
     /// Appends songs at the end of the queue.
     pub fn add_last(&mut self, songs: Vec<Song>, auto: bool) {
         self.push(songs, auto);
+        if self.position.is_none() && !self.order.is_empty() {
+            self.position = Some(0);
+        }
+    }
+
+    /// Appends songs the AI DJ picked.
+    pub fn add_ai(&mut self, songs: Vec<Song>) {
+        let new = self.push(songs, true);
+        for i in new {
+            self.items[i].ai = true;
+        }
         if self.position.is_none() && !self.order.is_empty() {
             self.position = Some(0);
         }
@@ -504,7 +518,13 @@ impl Queue {
         for &i in &self.order {
             let it = &self.items[i];
             h = mix(h, it.uid);
-            h = mix(h, u64::from(it.auto) | u64::from(it.queued) << 1 | u64::from(it.song.favorite) << 2);
+            h = mix(
+                h,
+                u64::from(it.auto)
+                    | u64::from(it.queued) << 1
+                    | u64::from(it.song.favorite) << 2
+                    | u64::from(it.ai) << 3,
+            );
             h = mix(h, u64::from(it.song.rating.unwrap_or(0)));
             h = mix(h, it.song.duration.as_millis() as u64);
         }
@@ -602,7 +622,7 @@ impl Queue {
         let start = self.items.len();
         for song in songs {
             self.next_uid += 1;
-            self.items.push(QueueItem { uid: self.next_uid, song, auto, queued: false });
+            self.items.push(QueueItem { uid: self.next_uid, song, auto, ai: false, queued: false });
         }
         let new: Vec<usize> = (start..self.items.len()).collect();
         self.order.extend(&new);
@@ -615,6 +635,21 @@ mod tests {
     use super::*;
     use crate::model::{GainInfo, ServerId, SourceKind};
     use std::time::Duration;
+
+    #[test]
+    fn ai_picks_are_auto_and_flagged() {
+        let mut q = Queue::default();
+        q.add_last(vec![song("a")], true);
+        q.add_ai(vec![song("b"), song("c")]);
+        let flags: Vec<_> = q.iter().map(|i| (i.auto, i.ai)).collect();
+        assert_eq!(flags, [(true, false), (true, true), (true, true)]);
+        // Old saved queues have no flag.
+        let item: QueueItem = serde_json::from_str(
+            &serde_json::to_string(q.iter().next().unwrap()).unwrap().replace("\"ai\":false,", ""),
+        )
+        .unwrap();
+        assert!(!item.ai);
+    }
 
     fn song(id: &str) -> Song {
         Song {

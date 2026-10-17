@@ -606,15 +606,19 @@ impl Listen {
         if let Some(why) =
             plan_blocker(self.ai_dj_on(), self.dj.busy, self.queue.upcoming(), self.backing_off())
         {
+            if why == "backing off" {
+                tracing::debug!("AI DJ: backing off after an error; Auto-DJ fills in");
+                return self.fetch_autodj();
+            }
             tracing::debug!("AI DJ: not planning ({why})");
-            return if why == "backing off" { self.fetch_autodj() } else { Task::none() };
+            return Task::none();
         }
         let Some(current) = self.queue.current().map(|i| i.song.clone()) else {
             tracing::debug!("AI DJ: not planning (nothing playing)");
             return Task::none();
         };
         let Some(key) = self.dj.key.clone() else {
-            tracing::debug!("AI DJ: not planning (no key)");
+            tracing::debug!("AI DJ: no API key; Auto-DJ fills in");
             return self.fetch_autodj();
         };
         let seed = self.dj.seed.get_or_insert_with(|| current.clone()).clone();
@@ -847,7 +851,7 @@ impl Listen {
         }
         let refs: Vec<ImageRef> = planned.songs.iter().filter_map(|s| s.image.clone()).collect();
         let first = planned.songs.first().cloned();
-        self.queue.add_last(planned.songs, true);
+        self.queue.add_ai(planned.songs);
         let before_uid = self.queue.iter().nth(self.queue.len().saturating_sub(count)).map(|i| i.uid);
         match before_uid {
             Some(before_uid) if !planned.line.is_empty() => {

@@ -38,6 +38,16 @@ impl PlayMode {
         }
     }
 
+    /// The short name for tags: "Shuffle", "Auto", "AI".
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Shuffle => "Shuffle",
+            Self::AutoDj => "Auto",
+            Self::AiDj => "AI",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Off => "Off",

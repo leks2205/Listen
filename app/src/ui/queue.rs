@@ -23,7 +23,7 @@ use std::sync::LazyLock;
 pub const TOOLBAR_H: f32 = 44.0;
 /// Height of the drop zone after the last row.
 const TAIL_H: f32 = 56.0;
-/// Width the "Auto-DJ" / "Queued" tag takes.
+/// Width the "Auto" / "AI" / "Queued" tag takes.
 const TAG_W: f32 = 60.0;
 /// Id of the scrollable of the lyrics panel.
 pub const PANEL_LYRICS_ID: &str = "queue-panel-lyrics";
@@ -124,13 +124,35 @@ pub fn index_cell<'a>(cx: &Cx<'a>, current: bool) -> Element<'a, Message> {
     label(number.to_string(), metrics::font_md(), t.muted).into()
 }
 
-/// What the tag of a row says: "Auto-DJ" for the DJ's songs, "Queued" for
+/// Who added a song: "AI" for the AI DJ's picks, "Auto" for the Auto-DJ's.
+fn origin_tag(auto: bool, ai: bool) -> Option<&'static str> {
+    match (auto, ai) {
+        (_, true) => Some(PlayMode::AiDj.tag()),
+        (true, false) => Some(PlayMode::AutoDj.tag()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::origin_tag;
+
+    #[test]
+    fn the_tag_names_who_added_the_song() {
+        assert_eq!(origin_tag(true, true), Some("AI"));
+        assert_eq!(origin_tag(true, false), Some("Auto"));
+        assert_eq!(origin_tag(false, false), None);
+    }
+}
+
+/// What the tag of a row says: who added the DJ's songs, "Queued" for
 /// "Play next" songs that wait (only when the Up Next headers are off).
-fn tag_text(state: &Listen, row: usize) -> Option<&'static str> {
+fn tag_text(state: &Listen, id: &ListId, row: usize) -> Option<&'static str> {
     let pos = state.queue_row_pos(row)?;
     let it = state.queue.item_at(pos)?;
-    if it.auto {
-        Some("Auto-DJ")
+    let hidden = *id == ListId::SideQueue && !state.config.settings.queue.show_mode_tag;
+    if let Some(tag) = origin_tag(it.auto, it.ai) {
+        if hidden { None } else { Some(tag) }
     } else if it.queued
         && !state.config.settings.queue.up_next_queue
         && state.queue.current_position().is_none_or(|p| pos > p)
@@ -146,13 +168,17 @@ pub fn tag<'a>(cx: &Cx<'a>) -> Option<Element<'a, Message>> {
     if !cx.id.is_queue() {
         return None;
     }
-    let text = tag_text(cx.state, cx.index)?;
+    let text = tag_text(cx.state, &cx.id, cx.index)?;
     Some(container(label(text, metrics::font_xs(), cx.state.tokens.primary)).width(TAG_W).into())
 }
 
 /// Room the tag takes next to the title text.
 pub fn tag_width(cx: &Cx<'_>) -> f32 {
-    if cx.id.is_queue() && tag_text(cx.state, cx.index).is_some() { TAG_W + metrics::space_md() } else { 0.0 }
+    if cx.id.is_queue() && tag_text(cx.state, &cx.id, cx.index).is_some() {
+        TAG_W + metrics::space_md()
+    } else {
+        0.0
+    }
 }
 
 /// The artists under a title; in the queue followed by the tempo and key of
@@ -474,7 +500,7 @@ pub fn mode_switcher(state: &Listen) -> Element<'_, Message> {
     let b = button(
         row![
             super::mode_glyph(mode, metrics::font_md(), color),
-            label_w(mode.label(), metrics::font_sm(), color, Weight::Semibold),
+            label_w(mode.tag(), metrics::font_sm(), color, Weight::Semibold),
         ]
         .spacing(metrics::space_xs())
         .align_y(Alignment::Center),
@@ -564,12 +590,13 @@ pub fn panels(state: &Listen) -> Vec<Panel> {
 }
 
 fn queue_panel(state: &Listen, width: f32) -> Element<'_, Message> {
-    column![
-        header_row(state),
-        container(mode_switcher(state)).padding(Padding::from([metrics::SPACE_XS, metrics::SPACE_MD])),
-        list(state, width)
-    ]
-    .into()
+    let mut col = column![header_row(state)];
+    if state.config.settings.queue.show_mode_tag {
+        col = col.push(
+            container(mode_switcher(state)).padding(Padding::from([metrics::SPACE_XS, metrics::SPACE_MD])),
+        );
+    }
+    col.push(list(state, width)).into()
 }
 
 fn visualizer_panel(state: &Listen) -> Element<'_, Message> {

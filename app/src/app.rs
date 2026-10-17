@@ -543,6 +543,8 @@ pub struct Listen {
     pub spectrum: Option<listen_visualizer::Frame>,
     pub visualizer_error: Option<String>,
     autodj_busy: bool,
+    /// The running Auto-DJ fetch was started as the AI DJ's fallback.
+    autodj_for_ai: bool,
     /// Keyboard modifiers currently held (the player-bar buttons don't report them).
     pub modifiers: iced::keyboard::Modifiers,
     /// Time the seek slider is being dragged to; the seek happens on release.
@@ -1044,6 +1046,7 @@ impl Listen {
             spectrum: None,
             visualizer_error: None,
             autodj_busy: false,
+            autodj_for_ai: false,
             modifiers: iced::keyboard::Modifiers::default(),
             seek_preview: None,
             session_played: Default::default(),
@@ -2059,6 +2062,7 @@ impl Listen {
             return Task::none();
         };
         self.autodj_busy = true;
+        self.autodj_for_ai = self.ai_dj_on();
         // More candidates when they get ordered by flow (only the best are queued).
         let spread = if self.config.settings.mixing.flow_select { 6 } else { 3 };
         let count = s.item_count.max(1) as usize * spread / 3;
@@ -3865,6 +3869,10 @@ impl Listen {
             Message::AutoDjLoaded(result) => {
                 self.autodj_busy = false;
                 match result {
+                    // Started before the AI DJ went on: its picks are not wanted.
+                    Ok(_) if self.ai_dj_on() && !self.autodj_for_ai => {
+                        tracing::info!("Auto-DJ: dropped a stale fetch (AI DJ is on)");
+                    }
                     Ok(songs) => {
                         use listen_core::versions::{dedupe_versions, song_key};
                         let s = &self.config.settings.auto_dj;
@@ -3890,7 +3898,11 @@ impl Listen {
                         if picked.is_empty() {
                             return Task::none();
                         }
-                        tracing::info!("Auto-DJ added {} songs", picked.len());
+                        tracing::info!(
+                            "Auto-DJ added {} songs{}",
+                            picked.len(),
+                            if self.autodj_for_ai { " (fallback for the AI DJ)" } else { "" }
+                        );
                         let had_next = self.queue.peek_next().is_some();
                         let refs: Vec<ImageRef> = picked.iter().filter_map(|s| s.image.clone()).collect();
                         self.queue.add_last(picked, true);
