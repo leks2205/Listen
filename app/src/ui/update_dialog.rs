@@ -67,7 +67,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
         }
     };
     let notes = container(scrollable(
-        crate::ui::t_text(plain_notes(&rel.body)).size(metrics::font_sm()).color(t.foreground),
+        crate::ui::t_text(plain_notes(&rel.changes)).size(metrics::font_sm()).color(t.foreground),
     ))
     .padding(metrics::space_md())
     .height(Length::Fixed(220.0))

@@ -128,6 +128,9 @@ pub struct Release {
     pub version: Version,
     pub prerelease: bool,
     pub body: String,
+    /// What the update dialog shows: the changes of every release between the running version
+    /// and this one, newest first. Filled by [`pick_update`].
+    pub changes: String,
     pub page: String,
     pub assets: Vec<Asset>,
 }
@@ -168,6 +171,7 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
                 tag: r.tag_name,
                 version,
                 body: r.body.unwrap_or_default(),
+                changes: String::new(),
                 page: r.html_url,
                 assets: r
                     .assets
@@ -179,14 +183,66 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
         .collect())
 }
 
-/// The newest release on `channel` that is newer than `current`.
+/// The newest release on `channel` that is newer than `current`, with the changes of all
+/// releases in between.
 pub fn pick_update(releases: &[Release], current: &Version, channel: UpdateChannel) -> Option<Release> {
-    releases
+    let mut newer: Vec<&Release> = releases
         .iter()
         .filter(|r| channel == UpdateChannel::Beta || !r.prerelease)
         .filter(|r| r.version > *current)
-        .max_by(|a, b| a.version.cmp(&b.version))
-        .cloned()
+        .collect();
+    newer.sort_by(|a, b| b.version.cmp(&a.version));
+    let mut pick = (*newer.first()?).clone();
+    pick.changes = if newer.len() == 1 {
+        changelog(&pick.body)
+    } else {
+        newer
+            .iter()
+            .map(|r| format!("## Listen {}\n\n{}", r.version, changelog(&r.body)))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    };
+    Some(pick)
+}
+
+fn heading(line: &str) -> Option<(usize, &str)> {
+    let level = line.chars().take_while(|&c| c == '#').count();
+    (level > 0 && line[level..].starts_with(' ')).then(|| (level, line[level..].trim()))
+}
+
+/// The "Changes" section of a release body. Bodies without one lose the intro and the
+/// downloads table instead, so the dialog never shows the release page boilerplate.
+pub fn changelog(body: &str) -> String {
+    const NAMES: [&str; 4] = ["changes", "changelog", "what's new", "what’s new"];
+    let lines: Vec<&str> = body.lines().collect();
+    if let Some(start) =
+        lines.iter().position(|l| heading(l).is_some_and(|(_, t)| NAMES.contains(&t.to_lowercase().as_str())))
+    {
+        let level = heading(lines[start]).map_or(1, |(l, _)| l);
+        let end = lines[start + 1..]
+            .iter()
+            .position(|l| heading(l).is_some_and(|(l, _)| l <= level))
+            .map_or(lines.len(), |i| start + 1 + i);
+        return lines[start + 1..end].join("\n").trim().to_string();
+    }
+    let mut out = Vec::new();
+    let mut seen_heading = false;
+    let mut skipping = false;
+    for l in lines {
+        if let Some((_, t)) = heading(l) {
+            seen_heading = true;
+            skipping = t.eq_ignore_ascii_case("downloads");
+            if skipping {
+                continue;
+            }
+        }
+        if !seen_heading || skipping || l.trim_start().starts_with('|') {
+            continue;
+        }
+        out.push(l);
+    }
+    let text = out.join("\n").trim().to_string();
+    if text.is_empty() { body.trim().to_string() } else { text }
 }
 
 /// What to download for an install.
@@ -797,6 +853,26 @@ mod tests {
         let r2 = parse_releases(r#"[{"tag_name":"v0.30.0","prerelease":false,"assets":[]}]"#).unwrap();
         assert!(pick_update(&r2, &v("0.30.0-beta.1"), UpdateChannel::Stable).is_some());
         assert!(pick_update(&[], &cur, UpdateChannel::Beta).is_none());
+    }
+
+    #[test]
+    fn dialog_shows_only_the_changes() {
+        let body = "A music player.\n\n**Documentation:** https://example.com\n\n### Downloads\n| File | For |\n|---|---|\n| `x.rpm` | Fedora |\n\n### Changes\n- Mini player seek bar\n- Fixed overlapping text\n\n### Checksums\nsee SHA256SUMS";
+        assert_eq!(changelog(body), "- Mini player seek bar\n- Fixed overlapping text");
+        let old = "A music player.\n\n### Downloads\n| File | For |\n|---|---|\n| `x.rpm` | Fedora |\n\n### Highlights\n- Gapless playback\n\nUnofficial.";
+        assert_eq!(changelog(old), "### Highlights\n- Gapless playback\n\nUnofficial.");
+        assert_eq!(changelog("just text"), "just text");
+
+        let r = parse_releases(
+            r####"[{"tag_name":"v0.37.0","body":"### Changes\n- b","assets":[]},
+                {"tag_name":"v0.36.0","body":"## What's new\n- a","assets":[]}]"####,
+        )
+        .unwrap();
+        let one = pick_update(&r, &v("0.36.0"), UpdateChannel::Stable).unwrap();
+        assert_eq!(one.changes, "- b");
+        let two = pick_update(&r, &v("0.35.0"), UpdateChannel::Stable).unwrap();
+        assert_eq!(two.tag, "v0.37.0");
+        assert_eq!(two.changes, "## Listen 0.37.0\n\n- b\n\n## Listen 0.36.0\n\n- a");
     }
 
     #[test]
