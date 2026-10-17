@@ -61,6 +61,7 @@ Options:
   --demo                 Use the built-in demo library (no server needed)
   --queue                Open the queue sidebar on start (with --demo)
   --video                Start with the video switch on (with --demo)
+  --fullscreen           Open the full-screen player on start (with --demo)
   --theme <ID>           Force a Feishin theme id (e.g. tokyoNight, defaultLight)
   --size <WxH>           Initial window size (default 1600x950)
   --screenshot <PATH>    Save a PNG of the window after start-up, then exit
@@ -89,6 +90,8 @@ pub struct Args {
     pub show_queue: bool,
     /// Start with the song/video switch on (for headless demo tests).
     pub video: bool,
+    /// Open the full-screen player on start (for headless demo screenshots).
+    pub fullscreen: bool,
     pub theme: Option<String>,
     pub size: (f32, f32),
     pub screenshot: Option<PathBuf>,
@@ -110,6 +113,7 @@ impl Args {
             demo_audio: false,
             show_queue: false,
             video: false,
+            fullscreen: false,
             theme: None,
             size: (1600.0, 950.0),
             screenshot: None,
@@ -129,6 +133,7 @@ impl Args {
                 }
                 "--queue" => args.show_queue = true,
                 "--video" => args.video = true,
+                "--fullscreen" => args.fullscreen = true,
                 "--theme" => args.theme = Some(value("--theme")?),
                 "--size" => {
                     let v = value("--size")?;

@@ -5,7 +5,7 @@
 
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
-use listen::app::audio::{AudioMsg, Popup};
+use listen::app::audio::AudioMsg;
 use listen::app::overlay::OverlayMsg;
 use listen::app::{INTER, Listen, Message};
 use listen::ui::player_bar;
@@ -126,18 +126,15 @@ fn squeezed_bar_snapshots() {
     render("player-polish-bar-900", &s);
 }
 
-// ---- compact bar: the player-config button ---------------------------------------
+// ---- compact bar: no player-config button ---------------------------------------
 
 #[test]
-fn compact_bar_has_the_player_config_button() {
+fn compact_bar_has_no_player_config_button() {
     let (w, h) = (500.0, 700.0);
     let mut s = state(w, h);
+    let messages = click(&mut s, (w - 8.0 - 18.0 - 4.0 * 40.0, h - 38.0));
+    assert!(!messages.iter().any(|m| matches!(m, Message::Audio(AudioMsg::TogglePopover))), "{messages:?}");
     assert!(s.audio.popup.is_none());
-    // Five 36 px buttons, 4 px gaps, 8 px padding: the sliders button is the fifth from the right.
-    let messages = click(&mut s, (w - 8.0 - 18.0 - 4.0 * 40.0, h - 45.0));
-    assert!(messages.iter().any(|m| matches!(m, Message::Audio(AudioMsg::TogglePopover))), "{messages:?}");
-    assert_eq!(s.audio.popup, Some(Popup::Config));
-    render("player-polish-compact-config", &s);
 }
 
 #[test]

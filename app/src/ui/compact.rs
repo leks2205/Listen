@@ -14,12 +14,9 @@ pub const MENU_MIN_HEIGHT: f32 = 192.0;
 /// Gap between the Menu button and the window edge / player bar (0.75 rem).
 const MENU_GAP: f32 = 12.0;
 
-/// Everything below the window bar: page (or full-screen player), divider and the 90 px player bar.
+/// Everything below the window bar: the page, divider and the 90 px player bar.
 pub fn body(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
-    if state.fullscreen {
-        return super::fullscreen::mobile(state);
-    }
     let mut middle = stack![container(super::page::view(state)).height(Length::Fill)];
     if state.window_size.height >= MENU_MIN_HEIGHT {
         let menu = button(
@@ -57,7 +54,7 @@ pub fn overlays<'a>(state: &'a Listen, root: Element<'a, Message>) -> Element<'a
     if state.layout_mode() != super::LayoutMode::Compact || state.needs_login() {
         return stack![root].into();
     }
-    if state.drawer_open && !state.fullscreen {
+    if state.drawer_open {
         let top =
             if state.config.settings.window.custom_title_bar { super::title_bar::HEIGHT + 1.0 } else { 0.0 };
         let dim = mouse_area(container(space()).width(Length::Fill).height(Length::Fill).style(|_| {
@@ -75,7 +72,7 @@ pub fn overlays<'a>(state: &'a Listen, root: Element<'a, Message>) -> Element<'a
         );
         return stack![root, dim, pin(panel).position(Point::new(0.0, top))].into();
     }
-    if state.volume_popup && !state.fullscreen {
+    if state.volume_popup {
         let at = super::player_bar::compact::popover_position(state.window_size);
         return super::popover::over(
             root,

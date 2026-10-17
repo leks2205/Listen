@@ -1,9 +1,8 @@
 //! Compact player bar (window <= 768 px), Feishin's mobile bar: a 90 px `1fr auto` grid with
-//! cover, title + "⋮", artists and album on the left and transport buttons on the right,
+//! cover, title, artists and album on the left and transport buttons on the right,
 //! plus a speaker button that opens a volume slider above it.
 
-use crate::app::audio::{AudioMsg, Popup};
-use crate::app::menu::{MenuMsg, MenuTarget};
+use crate::app::menu::MenuTarget;
 use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
@@ -12,24 +11,18 @@ use crate::ui::{icon, label, song_cover, song_links, with_menu};
 use iced::widget::{button, column, container, mouse_area, row, slider, space};
 use iced::{Alignment, Element, Length, Padding, Point, Size};
 
-/// Five 36 px buttons (config, speaker, previous, play, next), four 4 px gaps, 8 px padding each side.
-const RIGHT_WIDTH: f32 = 5.0 * metrics::CONTROL + 4.0 * metrics::SPACE_XS + 2.0 * metrics::SPACE_SM;
-const MENU_BUTTON: f32 = 28.0;
+/// Four 36 px buttons (speaker, previous, play, next), three 4 px gaps, 8 px padding each side.
+const RIGHT_WIDTH: f32 = 4.0 * metrics::CONTROL + 3.0 * metrics::SPACE_XS + 2.0 * metrics::SPACE_SM;
 /// Width of the text column, from the bar's `width`.
 fn text_width(width: f32) -> f32 {
     (width - metrics::space_md() - metrics::PLAYER_ART - metrics::space_md() - RIGHT_WIDTH).max(0.0)
 }
 
-/// Left edge of the "⋮" button: it sits at the right end of the text column.
-pub fn more_button_x(width: f32) -> f32 {
-    metrics::space_md()
-        + metrics::PLAYER_ART
-        + metrics::space_md()
-        + (text_width(width) - MENU_BUTTON).max(0.0)
-}
-
 /// Size of the volume popover (slider + number).
 pub const POPOVER: Size = Size::new(144.0, 24.0);
+
+/// Height of the seek bar's strip.
+const SEEK_HEIGHT: f32 = 14.0;
 
 /// Width of the horizontal slider track.
 const SLIDER_WIDTH: f32 = 100.0;
@@ -125,22 +118,6 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         Position::Top,
     ))
     .on_right_press(Message::ToggleMute);
-    // The sliders button: the same player-config popover as the full bar.
-    let config_open = state.audio.popup == Some(Popup::Config);
-    let config = button(
-        container(icon(
-            Icon::LuSlidersHorizontal,
-            metrics::font_xl(),
-            if config_open { t.primary } else { t.foreground },
-        ))
-        .center(Length::Fill),
-    )
-    .width(metrics::CONTROL)
-    .height(metrics::CONTROL)
-    .padding(0)
-    .style(style::icon_button(t, config_open))
-    .on_press(Message::Audio(AudioMsg::TogglePopover));
-    let config = tip(state, config, "Player options", None, Position::Top);
     let play = button(
         container(icon(
             if state.playback.playing { Icon::LuPause } else { Icon::LuPlay },
@@ -163,7 +140,6 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     );
     let controls = container(
         row![
-            config,
             super::wheel_volume(speaker),
             ctl(Icon::LuSkipBack, Message::Previous, "Previous track", "previous"),
             play,
@@ -181,47 +157,11 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             let song = &item.song;
             let target = MenuTarget::queue_item(song, item.uid);
             let text_px = text_width(width);
-            // The "⋮" opens the same song menu as a right-click; it flips above the bar.
-            let at = Point::new(more_button_x(width), state.window_size.height - metrics::PLAYER_BAR_HEIGHT);
-            let more = tip(
-                state,
-                button(
-                    container(icon(Icon::LuEllipsisVertical, metrics::font_lg(), t.muted))
-                        .center(Length::Fill),
-                )
-                .width(MENU_BUTTON)
-                .height(MENU_BUTTON)
-                .padding(0)
-                .style(style::icon_button(t, false))
-                .on_press(Message::Menu(MenuMsg::OpenAt(target.clone(), at))),
-                "More options",
-                None,
-                Position::Top,
-            );
-            let cover = tip(
-                state,
-                button(song_cover(state, song, metrics::PLAYER_ART, 4.0))
-                    .padding(0)
-                    .style(style::bare_button(t))
-                    .on_press(Message::ToggleFullscreen),
-                "Open full-screen player",
-                Some("toggleFullscreenPlayer"),
-                Position::Top,
-            );
+            let cover = song_cover(state, song, metrics::PLAYER_ART, 4.0);
             let meta = column![
-                row![
-                    container(song_links::title(
-                        state,
-                        song,
-                        metrics::font_md(),
-                        t.foreground,
-                        text_px - MENU_BUTTON
-                    ))
-                    .width((text_px - MENU_BUTTON).max(0.0))
+                container(song_links::title(state, song, metrics::font_md(), t.foreground, text_px))
+                    .width(text_px.max(0.0))
                     .clip(true),
-                    more
-                ]
-                .align_y(Alignment::Center),
                 container(song_links::artists(state, &song.artists, metrics::font_sm(), t.muted, text_px))
                     .width(text_px.max(0.0))
                     .clip(true),
@@ -232,7 +172,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             with_menu(row![cover, meta].spacing(metrics::space_md()).align_y(Alignment::Center), target)
         }
     };
-    row![
+    let main = row![
         container(info)
             .padding(Padding { left: metrics::space_md(), ..Padding::ZERO })
             .width(Length::Fill)
@@ -241,6 +181,25 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             .clip(true),
         controls
     ]
-    .height(Length::Fill)
+    .height(Length::Fill);
+    column![seek_bar(state), main].into()
+}
+
+/// Thin seek bar along the top of the bar; it seeks on release like the main one. Hidden (the
+/// space stays) for radio streams and tracks without a length.
+fn seek_bar(state: &Listen) -> Element<'_, Message> {
+    let duration = state.duration();
+    if state.queue.current().is_none() || state.radio_active() || duration.is_zero() {
+        return space::vertical().height(SEEK_HEIGHT).into();
+    }
+    let shown = state.seek_preview.unwrap_or(state.playback.position.as_secs_f32());
+    container(
+        slider(0.0..=duration.as_secs_f32().max(1.0), shown, Message::SeekPreview)
+            .on_release(Message::SeekRelease)
+            .step(0.5_f32)
+            .height(SEEK_HEIGHT)
+            .style(style::bar_slider(state.tokens)),
+    )
+    .padding(Padding::from([0.0, metrics::space_md()]))
     .into()
 }

@@ -1,16 +1,12 @@
 //! The compact layout (window <= 768 px): breakpoint, sidebar drawer, volume
-//! popover, the full bar keeping its volume slider, and the song menu.
+//! popover, the full bar keeping its volume slider, the seek bar.
 
 use iced::mouse::{Button, Event as MouseEvent, ScrollDelta};
 use iced_test::simulator::Simulator;
-use listen::app::menu::{MenuMsg, MenuTarget};
-use listen::app::{INTER, Listen, Message, SourceHandle};
+use listen::app::{INTER, Listen, Message};
 use listen::ui::LayoutMode;
 use listen::ui::player_bar::compact;
 use listen::{Args, FONTS, demo};
-use listen_core::config::ServerConfig;
-use listen_core::model::{ServerId, SourceKind};
-use std::sync::Arc;
 
 /// The headless renderer creates a Vulkan instance per `Simulator`; creating
 /// and dropping several at once races inside the Vulkan loader and crashes
@@ -214,37 +210,42 @@ fn full_bar_wheel_over_the_slider_changes_volume() {
 }
 
 #[test]
-fn compact_more_button_opens_the_song_menu_with_add_to_playlist() {
-    let (mut s, _) = Listen::boot(&Args { ephemeral: true, ..Args::default() });
-    s.config.servers = vec![ServerConfig {
-        id: ServerId("yt".into()),
-        name: "YouTube Music".into(),
-        kind: SourceKind::Subsonic,
-        url: "https://yt.example".into(),
-        username: "me".into(),
-    }];
-    let source: Arc<dyn listen_source::MusicSource> = Arc::new(
-        listen_subsonic::Subsonic::new(ServerId("yt".into()), "https://yt.example", "me", "pw").unwrap(),
-    );
-    let _ = s.update(Message::Connected(ServerId("yt".into()), Ok(SourceHandle(source))));
-    let mut songs = demo::album_songs(0);
-    for song in &mut songs {
-        song.server_id = ServerId("yt".into());
-        song.source = SourceKind::YouTubeMusic;
-        song.favorite = false;
-    }
-    s.queue.set(songs, 0);
-    let _ = s.update(Message::WindowResized(iced::Size::new(600.0, 600.0)));
+fn compact_bar_has_a_seek_bar_that_seeks_on_release() {
+    let mut s = state(600.0, 600.0);
+    let at = (300.0, 600.0 - 90.0 + 7.0);
+    let messages = click(&mut s, at);
+    assert!(messages.iter().any(|m| matches!(m, Message::SeekPreview(_))), "{messages:?}");
+    assert!(messages.iter().any(|m| matches!(m, Message::SeekRelease)), "{messages:?}");
+    assert!(s.seek_preview.is_none());
+}
 
-    let x = compact::more_button_x(600.0) + 14.0;
-    let messages = click(&mut s, (x, 600.0 - 62.0));
-    assert!(
-        messages.iter().any(|m| matches!(m, Message::Menu(MenuMsg::OpenAt(MenuTarget::Songs { .. }, _)))),
-        "{messages:?}"
-    );
-    let menu = s.menu.as_ref().expect("song menu open");
-    assert!(matches!(&menu.target, MenuTarget::Songs { queue_uids, .. } if queue_uids.len() == 1));
-    for entry in ["Add to playlist…", "Start radio", "Favorite", "Move items"] {
-        assert!(has_text(&s, entry), "menu lacks {entry}");
-    }
+#[test]
+fn compact_bar_has_no_seek_bar_for_radio() {
+    let mut s = state(600.0, 600.0);
+    s.radio.active = Some(listen::app::radio::ActiveStation {
+        station: listen_source::InternetRadio {
+            id: "r".into(),
+            name: "Station".into(),
+            stream_url: "https://radio.example/live".into(),
+            home_page_url: None,
+            image_id: None,
+        },
+        title: None,
+    });
+    let messages = click(&mut s, (300.0, 600.0 - 90.0 + 7.0));
+    assert!(!messages.iter().any(|m| matches!(m, Message::SeekPreview(_))), "{messages:?}");
+}
+
+#[test]
+fn compact_layout_wins_over_the_fullscreen_player() {
+    let mut s = state(1000.0, 700.0);
+    let _ = s.update(Message::ToggleFullscreen);
+    assert!(s.fullscreen);
+    let _ = s.update(Message::WindowResized(iced::Size::new(600.0, 700.0)));
+    assert!(has_text(&s, "Menu"));
+    // Toggling does nothing while compact; growing brings the player back.
+    let _ = s.update(Message::ToggleFullscreen);
+    assert!(s.fullscreen);
+    let _ = s.update(Message::WindowResized(iced::Size::new(1000.0, 700.0)));
+    assert!(!has_text(&s, "Menu"));
 }

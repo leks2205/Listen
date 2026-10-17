@@ -1138,6 +1138,7 @@ impl Listen {
             }
             state.show_queue = args.show_queue;
             state.video.on = args.video && state.demo_audio;
+            state.fullscreen = args.fullscreen;
         }
         state.history_boot();
         state.restore_queue();
@@ -3858,6 +3859,8 @@ impl Listen {
                     WindowAction::SystemMenu => latest.then(window::show_system_menu),
                 };
             }
+            // The compact layout has no full-screen player.
+            Message::ToggleFullscreen if self.layout_mode() == ui::LayoutMode::Compact => {}
             Message::ToggleFullscreen => return self.fullscreen_toggled(),
             Message::ToggleDrawer => self.drawer_open = !self.drawer_open,
             Message::CloseDrawer => self.drawer_open = false,
@@ -4127,10 +4130,10 @@ impl Listen {
             ui::onboarding::view(self)
         } else if self.needs_login() {
             ui::login::view(self)
-        } else if self.fs.visualizer_expanded {
-            ui::fullscreen::visualizer_overlay(self)
         } else if self.layout_mode() == ui::LayoutMode::Compact {
             ui::compact::body(self)
+        } else if self.fs.visualizer_expanded {
+            ui::fullscreen::visualizer_overlay(self)
         } else {
             let left_divider = if self.config.settings.sidebar.collapsed {
                 ui::divider_v(t)
