@@ -142,6 +142,9 @@ impl Mpv {
         if let Some(log) = &opts.log_file {
             args.push(format!("--log-file={}", log.display()));
         }
+        if cfg!(windows) && !opts.video {
+            args.extend(windows_audio_defaults(&opts.extra_args));
+        }
         args.extend(opts.extra_args.iter().cloned());
 
         let mut cmd = Command::new(&opts.binary);
@@ -263,6 +266,28 @@ impl Drop for Mpv {
     }
 }
 
+/// Arguments that keep the audio-only mpv from opening a video window or output
+/// on Windows; the ones the user's extra arguments already carry are left out.
+fn windows_audio_defaults(extra: &[String]) -> Vec<String> {
+    let has = |key: &str| {
+        extra.iter().any(|a| {
+            let a = a.trim().trim_start_matches('-');
+            a == key || a.strip_prefix(key).is_some_and(|rest| rest.starts_with('='))
+        })
+    };
+    let mut out = Vec::new();
+    if !has("no-video") && !has("video") && !has("vid") {
+        out.push("--no-video".to_string());
+    }
+    if !has("force-window") {
+        out.push("--force-window=no".into());
+    }
+    if !has("vo") {
+        out.push("--vo=null".into());
+    }
+    out
+}
+
 /// `CREATE_NO_WINDOW`: spawned helpers must not flash a console window on Windows.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -341,9 +366,21 @@ async fn connect(path: &std::path::Path) -> Result<(Reader, Writer), MpvError> {
 }
 
 async fn read_loop(reader: Reader, pending: Pending, events: mpsc::UnboundedSender<MpvEvent>) {
-    let mut lines = BufReader::new(reader).lines();
-    while let Ok(Some(line)) = lines.next_line().await {
-        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+    let mut reader = BufReader::new(reader);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        // Bytes, not `lines()`: one non-UTF-8 line (a tag) must not end the loop.
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let line = String::from_utf8_lossy(&buf);
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(msg) = serde_json::from_str::<Value>(line) else {
             tracing::warn!("unparseable mpv message: {line}");
             continue;
         };
@@ -401,6 +438,29 @@ mod tests {
     fn socket_names_carry_the_pid() {
         assert_eq!(socket_pid("listen-mpv-1234-7.sock"), Some(1234));
         assert_eq!(socket_pid("other.sock"), None);
+    }
+
+    #[test]
+    fn windows_defaults_skip_what_the_user_set() {
+        let none = windows_audio_defaults(&[]);
+        assert_eq!(none, ["--no-video", "--force-window=no", "--vo=null"]);
+        let user = ["--vo=gpu".to_string(), "force-window=yes".to_string()];
+        assert_eq!(windows_audio_defaults(&user), ["--no-video"]);
+        let all = ["--no-video".into(), "--force-window=no".into(), "--vo=null".into()];
+        assert!(windows_audio_defaults(&all).is_empty());
+    }
+
+    #[tokio::test]
+    async fn reader_survives_invalid_utf8_and_split_lines() {
+        let (mut tx, rx) = tokio::io::duplex(64);
+        let (events, mut out) = mpsc::unbounded_channel();
+        tokio::spawn(read_loop(Box::new(rx), Pending::default(), events));
+        tx.write_all(b"{\"event\":\"idle\"}\r\n{\"event\":\"x\",\"t\":\"\xff\"}\n{\"even").await.unwrap();
+        tx.write_all(b"t\":\"file-loaded\"}\n").await.unwrap();
+        drop(tx);
+        assert_eq!(out.recv().await, Some(MpvEvent::Idle));
+        assert_eq!(out.recv().await, Some(MpvEvent::FileLoaded));
+        assert_eq!(out.recv().await, Some(MpvEvent::Shutdown));
     }
 
     #[test]
