@@ -364,6 +364,7 @@ See [Song analysis](../dj/analysis.md) and [DJ transitions](../dj/transitions.md
 | Order by flow | Picks songs whose tempo, key and energy follow on from the current one. | On | `settings.mixing.flow_select` |
 | Largest tempo change | Beyond this the songs fade instead of being beat-matched, 2 to 8 %. | 6 | `settings.mixing.max_tempo_pct` |
 | Long blends | Length of a blend over instrumental intros and outros: 8 or 16 bars. | 16 | `settings.mixing.long_blend_bars` |
+| Transition edges | Whether vocals at a song's end or start may be blended over: Always, Instrumental only, or Smart (relaxed for club genres such as garage, house, techno and drum and bass). | Smart | `settings.mixing.transition_edges` (`"smart"`, `"always"`, `"instrumental"`) |
 | Tempo ramps | Glides the tempo between songs instead of jumping. | On | `settings.mixing.tempo_ramps` |
 | Bass swap | Swaps the basslines on a downbeat so only one plays at a time. | On | `settings.mixing.bass_swap` |
 | Mix queued songs | Also mixes into songs added with Add to queue while a DJ is on. | On | `settings.mixing.mix_manual_queue` |

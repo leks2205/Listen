@@ -47,10 +47,16 @@ impl MixPreview {
         }
         let Some(out_rec) = (self.lookup)(&self.from) else { return };
         let Some(out) = out_rec.features() else { return };
-        let ctx = PlanCtx { settings: &self.settings, out_position_s: 0.0, voice_break: None };
         for song in pool {
             let Some(in_rec) = (self.lookup)(song) else { continue };
             let Some(inn) = in_rec.features() else { continue };
+            let ctx = PlanCtx {
+                settings: &self.settings,
+                out_position_s: 0.0,
+                voice_break: None,
+                out_genres: &self.from.genres,
+                in_genres: &song.genres,
+            };
             let plan = listen_mix::plan::plan(out, inn, &ctx);
             let phrase = format!(
                 "{} {}",

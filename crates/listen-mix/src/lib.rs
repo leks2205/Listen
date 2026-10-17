@@ -8,6 +8,7 @@
 //! - [`render`](mod@render): an offline mono preview of a plan (dev tool for
 //!   `listen --check-mix --render`).
 
+pub mod genre;
 pub mod plan;
 pub mod render;
 pub mod score;

@@ -51,6 +51,33 @@ impl Default for Analysis {
     }
 }
 
+/// How strictly a song's start and end must be free of vocals to be blended over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransitionEdges {
+    /// Vocals never block a blend.
+    Always,
+    /// Blends need instrumental edges.
+    Instrumental,
+    /// Like `Always` for club genres, like `Instrumental` otherwise.
+    #[default]
+    Smart,
+}
+
+impl TransitionEdges {
+    pub const ALL: [TransitionEdges; 3] = [Self::Always, Self::Instrumental, Self::Smart];
+}
+
+impl std::fmt::Display for TransitionEdges {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Always => "Always",
+            Self::Instrumental => "Instrumental only",
+            Self::Smart => "Smart",
+        })
+    }
+}
+
 /// DJ transitions between songs the Auto-DJ / AI DJ picked (Navidrome).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -68,6 +95,8 @@ pub struct Mixing {
     pub mix_manual_queue: bool,
     /// Length of the plain fade used when songs can't be beat-matched (s).
     pub fallback_fade_secs: f32,
+    /// Whether vocals at a song's start or end may be blended over.
+    pub transition_edges: TransitionEdges,
 }
 
 impl Default for Mixing {
@@ -81,6 +110,7 @@ impl Default for Mixing {
             bass_swap: true,
             mix_manual_queue: true,
             fallback_fade_secs: 4.0,
+            transition_edges: TransitionEdges::default(),
         }
     }
 }

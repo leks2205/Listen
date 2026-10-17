@@ -10,7 +10,7 @@ use iced::widget::{
     button, column, container, pick_list, row, slider, text_editor, text_input, toggler, vertical_slider,
 };
 use iced::{Alignment, Element, Padding};
-use listen_core::settings::{self, ReplayGain, StreamQuality};
+use listen_core::settings::{self, ReplayGain, StreamQuality, TransitionEdges};
 
 /// Audio sections of the Playback tab: playback, output, ReplayGain, mpv, EQ, compressor, transcoding.
 pub(super) fn playback(state: &Listen) -> Vec<Element<'_, Message>> {
@@ -977,6 +977,16 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
         ),
         line(
             state,
+            "Transition edges",
+            "Whether songs with vocals at the end or start are blended. Smart allows it for club genres such \
+             as garage, house, techno and drum & bass; Instrumental only needs instrumental edges.",
+            pick_list(TransitionEdges::ALL.map(EdgeChoice), Some(EdgeChoice(m.transition_edges)), |c| {
+                Message::Setting(Setting::MixEdges(c.0))
+            })
+            .into(),
+        ),
+        line(
+            state,
             "Tempo ramps",
             "Glide the tempo between songs instead of jumping.",
             switch(m.tempo_ramps, Setting::MixTempoRamps),
@@ -1007,6 +1017,21 @@ pub(super) fn lyrics(state: &Listen) -> Element<'_, Message> {
         fetch,
     );
     section(state, "Lyrics", rows)
+}
+
+/// An entry of the transition edges picker, shown translated.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct EdgeChoice(TransitionEdges);
+
+impl std::fmt::Display for EdgeChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use crate::i18n::tr;
+        f.write_str(match self.0 {
+            TransitionEdges::Always => tr("Always"),
+            TransitionEdges::Instrumental => tr("Instrumental only"),
+            TransitionEdges::Smart => tr("Smart"),
+        })
+    }
 }
 
 /// A language in the AI DJ's picker; an empty code follows the app's language.

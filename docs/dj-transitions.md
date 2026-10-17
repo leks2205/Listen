@@ -594,6 +594,28 @@ config; `--login` writes no credentials):
   refinement keeps the grid unchanged when attacks are unclear.
 - The AI DJ (voice windows, talk-over) and "Add to queue" songs.
 
+## Vocal edges
+
+The planner (`listen-mix::plan::best_candidate`) rejects long blends whose
+overlap has vocals on both decks (`clash > 0.1 * bars`) and short blends with
+`clash > 0.25`; without a quiet pair it falls to a filter-out or fade.
+`settings.mixing.transition_edges` relaxes that:
+
+| Mode | Outgoing outro | Incoming intro |
+|---|---|---|
+| `instrumental` | strict | strict |
+| `always` | relaxed | relaxed |
+| `smart` (default) | relaxed if the outgoing song is a club genre | relaxed if the incoming song is a club genre |
+
+A relaxed edge contributes no clash, so a blend is never refused for its
+vocals; the cover term in the score still favours quieter sections. Tempo,
+key and beat-confidence rules are untouched. Club genres live in
+`listen-mix::genre::CLUB_GENRE_TERMS` (whole-word, case-insensitive match per
+tag part; tags with rock, punk, metal, pop, folk or country words are
+excluded). Genres come from the song's tags (Navidrome, Jellyfin, local files).
+YouTube Music songs carry none, so Smart treats them as strict. `--check-mix`
+has no song metadata and behaves the same way.
+
 ## YouTube Music
 Pairs are eligible when both sources
 are analysable (Navidrome, YouTube Music, and mixed pairs: both decks decode

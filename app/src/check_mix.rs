@@ -53,7 +53,14 @@ async fn check(a: &str, b: &str, render: Option<&str>) -> Result<(), String> {
         sides.push((pcm, f));
     }
     let ((out_pcm, fa), (in_pcm, fb)) = (&sides[0], &sides[1]);
-    let ctx = PlanCtx { settings: &config.settings.mixing, out_position_s: 0.0, voice_break: None };
+    // No song metadata here: genres are unknown, so Smart acts like Instrumental only.
+    let ctx = PlanCtx {
+        settings: &config.settings.mixing,
+        out_position_s: 0.0,
+        voice_break: None,
+        out_genres: &[],
+        in_genres: &[],
+    };
     let plan = listen_mix::plan(fa, fb, &ctx);
     println!(
         "\n{:?}: out {:.2}s → in {:.2}s (loaded at {:.2}s), blend {:.1}s, in speed {:.4}, handover {:.2}s, out stops {:.2}s, score {:.2}\n{}",

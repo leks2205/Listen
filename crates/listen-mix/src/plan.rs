@@ -6,6 +6,7 @@
 //! - Bars count on the outgoing grid; in a beat-matched blend one outgoing bar is `1/k` incoming bars
 //!   (`k` ∈ {1, 2, ½}, see [`crate::score::octave_match`]).
 
+use crate::genre::relax_vocal_edge;
 use crate::score::octave_match;
 use listen_core::analysis::{BeatGrid, Features, SectionKind};
 use listen_core::model::SourceKind;
@@ -194,6 +195,9 @@ pub struct PlanCtx<'a> {
     /// Where the outgoing deck is now (file seconds).
     pub out_position_s: f64,
     pub voice_break: Option<VoiceBreak>,
+    /// Genres of the outgoing and incoming song (empty when unknown), for the vocal edge rule.
+    pub out_genres: &'a [String],
+    pub in_genres: &'a [String],
 }
 
 /// Sources whose decks play the exact file that was analysed: Navidrome (raw file) and YouTube Music
@@ -333,6 +337,8 @@ struct Cand {
     score: f32,
     tempo: Tempo,
     clash: f32,
+    /// Vocals overlap here, and only the genre rule let the candidate through.
+    sampled: bool,
 }
 
 /// Plans the transition from `out` into `inn`. Falls back to [`Kind::Fade`] without a usable grid or with
@@ -401,6 +407,10 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx) -> Option<
         ins.push(first_in + i.phrase());
     }
 
+    // Each edge is relaxed by its own song's genre: the outro for the outgoing, the intro for the incoming.
+    let relax_out = relax_vocal_edge(s.transition_edges, ctx.out_genres);
+    let relax_in = relax_vocal_edge(s.transition_edges, ctx.in_genres);
+
     let voice = ctx.voice_break.filter(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
     let long = usize::from(s.long_blend_bars).clamp(8, 32);
     let mut lengths = vec![long, 8, 4, 2, 1];
@@ -432,10 +442,12 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx) -> Option<
                 if m + n > o.bars || in_bar(n as f64 - 1.0) >= i.bars {
                     continue;
                 }
-                let (mut clash, mut cover) = (0.0f32, 0.0f32);
+                let (mut clash, mut cover, mut raw_clash) = (0.0f32, 0.0f32, 0.0f32);
                 for j in 0..n {
                     let (vo, vi) = (o.vocal(m + j), i.vocal(in_bar(j as f64)));
-                    clash += vo * vi;
+                    // Relaxed edges don't count as a clash; `cover` still prefers quieter sections.
+                    clash += if relax_out || relax_in { 0.0 } else { vo * vi };
+                    raw_clash += vo * vi;
                     cover += (1.0 - vo) * (1.0 - vi);
                 }
                 // Long blends need (nearly) instrumental overlaps; short ones must fit between vocals.
@@ -461,7 +473,8 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx) -> Option<
                     let secs = (b - a) / tempo.s_out;
                     score += 1.5 * (secs / v.clip_secs.max(1.0)).min(1.0) as f32;
                 }
-                consider(Cand { kind, m, i: inb, n, score, tempo, clash });
+                let sampled = kind == CandKind::Beat && raw_clash > clash && raw_clash > 0.1 * n as f32;
+                consider(Cand { kind, m, i: inb, n, score, tempo, clash, sampled });
             }
         }
     }
@@ -533,7 +546,7 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx) -> TransitionPlan {
         CandKind::Beat => (
             Kind::BeatBlend { bars, bass_swap_bar: bass_swap.then_some(bars / 2) },
             vec![(0.0, 1.0, 0.0), (blend_s / 2.0, 1.0, 1.0), (blend_s, 0.0, 1.0)],
-            "beat blend over instrumental parts",
+            if c.sampled { "beat blend over vocal samples" } else { "beat blend over instrumental parts" },
         ),
         CandKind::Short => (
             Kind::ShortBlend { bars },
@@ -666,13 +679,14 @@ mod tests {
     use super::*;
     use crate::testutil::{FeatBuilder, song};
     use listen_core::model::SourceKind;
+    use listen_core::settings::TransitionEdges;
 
     fn settings() -> Mixing {
         Mixing::default()
     }
 
     fn ctx(s: &Mixing, now: f64) -> PlanCtx<'_> {
-        PlanCtx { settings: s, out_position_s: now, voice_break: None }
+        PlanCtx { settings: s, out_position_s: now, voice_break: None, out_genres: &[], in_genres: &[] }
     }
 
     fn assert_in_downbeats(f: &Features, t: f64) {
@@ -802,6 +816,47 @@ mod tests {
     }
 
     #[test]
+    fn vocal_edges_block_a_blend_only_where_the_rule_says() {
+        use listen_core::settings::TransitionEdges::{Always, Instrumental, Smart};
+        let club = vec!["UK Garage".to_string()];
+        let pop = vec!["Pop".to_string()];
+        let out = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
+        let inn = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
+        let none: Vec<String> = Vec::new();
+        for (mode, og, ig, blends) in [
+            (Instrumental, &club, &club, false),
+            (Always, &none, &none, true),
+            (Always, &pop, &pop, true),
+            (Smart, &club, &club, true),
+            (Smart, &club, &pop, true),
+            (Smart, &pop, &club, true),
+            (Smart, &pop, &pop, false),
+            (Smart, &none, &none, false),
+        ] {
+            let s = Mixing { transition_edges: mode, ..settings() };
+            let c = PlanCtx { out_genres: og, in_genres: ig, ..ctx(&s, 30.0) };
+            let p = plan(&out, &inn, &c);
+            let beat = matches!(p.kind, Kind::BeatBlend { .. });
+            assert_eq!(beat, blends, "{mode:?} {og:?} {ig:?}: {:?} {}", p.kind, p.reason);
+            if !blends {
+                assert_eq!(p.kind, Kind::FilterOut { bars: 2 });
+            }
+        }
+    }
+
+    #[test]
+    fn relaxed_edges_still_prefer_the_quieter_section() {
+        // The outgoing song has a long instrumental outro; with relaxed vocals the blend still starts there.
+        let s = Mixing { transition_edges: TransitionEdges::Always, ..settings() };
+        let out = FeatBuilder::new(124.0, 96).intro(8).outro(16).build();
+        let inn = FeatBuilder::new(124.0, 96).intro(16).outro(8).build();
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        let og = out.grid.as_ref().unwrap();
+        assert!(matches!(p.kind, Kind::BeatBlend { .. }), "{}", p.reason);
+        assert!((p.out_mix_start_s - f64::from(og.bar_time(80))).abs() < 1e-3, "{}", p.reason);
+    }
+
+    #[test]
     fn half_time_incoming_settles_within_the_cap() {
         // 118 → 62 bpm (×2 time, 5 % apart): 16 of its 3.9 s bars would be a minute of settling.
         let s = settings();
@@ -864,6 +919,8 @@ mod tests {
             settings: &s,
             out_position_s: 30.0,
             voice_break: Some(VoiceBreak { mode: VoiceMode::Across, clip_secs: 40.0 }),
+            out_genres: &[],
+            in_genres: &[],
         };
         let p = plan(&out, &inn, &c);
         assert!(matches!(p.kind, Kind::BeatBlend { bars: 32, .. }), "lengthened: {}", p.reason);
