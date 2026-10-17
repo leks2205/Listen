@@ -1,0 +1,3 @@
+{"status":"STATUS_FAILED","actions":[{"confirmDialogEndpoint":{"content":{"confirmDialogRenderer":{
+ "title":{"runs":[{"text":"Duplicate"}]},
+ "confirmButton":{"buttonRenderer":{"command":{"playlistEditEndpoint":{"playlistId":"PLx","actions":[{"addedVideoId":"songA","action":"ACTION_ADD_VIDEO","dedupeOption":"DEDUPE_OPTION_SKIP"}]}}}}}}}}]}

@@ -1,0 +1,10 @@
+[package]
+name = "listen-mix"
+description = "Song flow scoring and DJ transition planning for Listen (pure logic, no DSP)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+listen-core.workspace = true
+serde.workspace = true

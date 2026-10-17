@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="/manifest.json">
+<title>Listen Remote</title>
+<style>
+:root{--bg:#111;--panel:#1b1b1d;--fg:#f2f2f3;--muted:#9a9aa1;--accent:#4f8cff;--line:#2a2a2e}
+@media (prefers-color-scheme:light){:root{--bg:#f5f5f7;--panel:#fff;--fg:#1c1c1e;--muted:#6c6c72;--line:#dcdce0}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif}
+body{display:flex;flex-direction:column;max-width:560px;margin:0 auto}
+nav{display:flex;gap:2px;padding:8px 8px 0;overflow-x:auto;border-bottom:1px solid var(--line)}
+nav button{flex:none;background:none;border:0;color:var(--muted);padding:10px 12px;font:inherit;border-bottom:2px solid transparent}
+nav button.on{color:var(--fg);border-color:var(--accent)}
+main{flex:1;overflow:auto;padding:16px}
+#status{padding:6px 16px;font-size:13px;color:var(--muted);text-align:center}
+.cover{width:100%;aspect-ratio:1;border-radius:12px;background:var(--panel) center/cover;display:block}
+.title{font-size:22px;font-weight:700;margin:16px 0 2px}
+.sub{color:var(--muted);margin:0}
+.row{display:flex;align-items:center;gap:12px;justify-content:center;margin:14px 0}
+button.ic{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:50%;width:52px;height:52px;font-size:20px}
+button.ic.big{width:68px;height:68px;font-size:26px;background:var(--accent);border-color:var(--accent);color:#fff}
+button.ic.on{color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.time{display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+.item{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.item img,.item .ph{width:44px;height:44px;border-radius:6px;background:var(--panel);object-fit:cover;flex:none}
+.item .t{flex:1;min-width:0}
+.item .t b,.item .t span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .t span{color:var(--muted);font-size:14px}
+.item.cur .t b{color:var(--accent)}
+.item button{background:none;border:0;color:var(--muted);font-size:18px;padding:8px}
+input[type=search]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font:inherit;margin-bottom:8px}
+.stars button{background:none;border:0;font-size:24px;color:var(--muted);padding:2px}
+.stars button.on{color:#f5b301}
+.empty{color:var(--muted);text-align:center;padding:32px 0}
+</style>
+</head>
+<body>
+<nav id="tabs"></nav>
+<div id="status">Connecting…</div>
+<main id="view"></main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const el = (tag, props, ...kids) => {
+  const n = document.createElement(tag);
+  Object.assign(n, props || {});
+  for (const k of kids) n.append(k);
+  return n;
+};
+const st = { song: null, status: "stopped", pos: 0, at: Date.now(), volume: 0, shuffle: false, repeat: "none",
+             queue: { currentUniqueId: null, items: [] }, radio: { isActive: false } };
+let ws = null, tab = "now", retry = 0, authHeader = "";
+const lists = {}; const pending = {};
+const TABS = [["now", "Home"], ["queue", "Queue"], ["albums", "Albums"], ["playlists", "Playlists"],
+              ["radio", "Radio"], ["tracks", "Tracks"]];
+
+function send(msg) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg)); }
+function setStatus(t) { $("status").textContent = t; $("status").hidden = !t; }
+function fmt(s) { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function position() { return st.status === "playing" ? st.pos + (Date.now() - st.at) / 1000 : st.pos; }
+function coverUrl() { return st.song && st.song.imageUrl ? st.song.imageUrl : ""; }
+
+async function connect() {
+  try { const r = await fetch("/credentials"); authHeader = r.ok ? await r.text() : ""; } catch (e) { authHeader = ""; }
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+  ws.onopen = () => { retry = 0; setStatus(""); if (authHeader) send({ event: "authenticate", header: authHeader }); };
+  ws.onmessage = (m) => { try { on(JSON.parse(m.data)); } catch (e) { /* ignore */ } };
+  ws.onclose = (e) => {
+    if (e.code === 4002) return location.reload();
+    if (e.code === 4000 || e.code === 4004) return setStatus(e.code === 4004 ? "Sign-in failed" : "Listen closed the remote");
+    setStatus("Reconnecting…"); setTimeout(connect, Math.min(10000, 500 * 2 ** retry++));
+  };
+}
+
+function on(m) {
+  const d = m.data;
+  switch (m.event) {
+    case "state": Object.assign(st, { song: d.song || null, status: d.status || "stopped", pos: d.position || 0, at: Date.now(),
+                  volume: d.volume || 0, shuffle: !!d.shuffle, repeat: d.repeat || "none" }); break;
+    case "song": st.song = d; st.pos = 0; st.at = Date.now(); break;
+    case "playback": st.status = d; st.at = Date.now(); break;
+    case "position": st.pos = d; st.at = Date.now(); break;
+    case "volume": st.volume = d; break;
+    case "shuffle": st.shuffle = d; break;
+    case "repeat": st.repeat = d; break;
+    case "queue-state": st.queue = d; break;
+    case "radio-status": st.radio = d; break;
+    case "accent-color": st.accent = d; applyAccent(); break;
+    case "favorite": if (st.song && st.song.id === d.id) st.song.userFavorite = d.favorite; break;
+    case "rating": if (st.song && st.song.id === d.id) st.song.userRating = d.rating; break;
+    case "albums-response": case "playlists-response": case "tracks-response": case "radio-response": {
+      const key = m.event.split("-")[0]; const l = lists[key];
+      if (l && pending[key] === d.requestId) { l.items = l.items.concat(d.items); l.more = d.hasMore; l.busy = false; }
+      break; }
+    case "error": setStatus(String(d)); setTimeout(() => setStatus(""), 4000); break;
+  }
+  render();
+}
+
+const dark = matchMedia("(prefers-color-scheme: dark)");
+function applyAccent() {
+  if (!st.accent) return;
+  document.documentElement.style.setProperty("--accent", dark.matches ? st.accent.dark : st.accent.light);
+}
+dark.addEventListener("change", applyAccent);
+
+function request(key, reset) {
+  const l = lists[key] || (lists[key] = { items: [], more: true, busy: false, q: "" });
+  if (reset) { l.items = []; l.more = true; l.busy = false; }
+  if (l.busy || !l.more) return;
+  l.busy = true; pending[key] = key + Date.now();
+  send({ event: key + "-request", requestId: pending[key], startIndex: l.items.length, limit: 50, searchTerm: l.q || undefined });
+}
+
+const btn = (txt, cls, fn, label) => { const b = el("button", { className: cls, textContent: txt, title: label || "", onclick: fn }); b.setAttribute("aria-label", label || txt); return b; };
+
+function viewNow() {
+  const s = st.song, v = el("div");
+  if (st.radio.isActive) { v.append(el("p", { className: "title", textContent: st.radio.stationName }), el("p", { className: "sub", textContent: "Internet radio" })); }
+  const cv = el("div", { className: "cover" }); if (coverUrl()) cv.style.backgroundImage = "url('" + coverUrl() + "?" + encodeURIComponent(s.id) + "')";
+  v.append(cv);
+  v.append(el("p", { className: "title", textContent: s ? s.name : "Nothing playing" }),
+           el("p", { className: "sub", textContent: s ? s.artistName + (s.album ? " · " + s.album : "") : "" }));
+  const dur = s ? s.duration / 1000 : 0;
+  const seek = el("input", { type: "range", min: 0, max: Math.max(1, Math.floor(dur)), step: 1, value: Math.floor(position()), id: "seek" });
+  seek.onchange = () => send({ event: "position", position: Number(seek.value) });
+  v.append(seek, el("div", { className: "time" }, el("span", { id: "t0", textContent: fmt(position()) }), el("span", { textContent: fmt(dur) })));
+  const play = st.status === "playing";
+  v.append(el("div", { className: "row" },
+    btn("⇄", "ic" + (st.shuffle ? " on" : ""), () => send({ event: "shuffle" }), "Shuffle"),
+    btn("⏮", "ic", () => send({ event: "previous" }), "Previous"),
+    btn(play ? "⏸" : "▶", "ic big", () => send({ event: play ? "pause" : "play" }), play ? "Pause" : "Play"),
+    btn("⏭", "ic", () => send({ event: "next" }), "Next"),
+    btn(st.repeat === "one" ? "🔂" : "🔁", "ic" + (st.repeat !== "none" ? " on" : ""), () => send({ event: "repeat" }), "Repeat")));
+  const vol = el("input", { type: "range", min: 0, max: 100, value: st.volume, "aria-label": "Volume" });
+  vol.oninput = () => send({ event: "volume", volume: Number(vol.value) });
+  v.append(el("div", { className: "row" }, el("span", { textContent: "🔈" }), vol));
+  if (s) {
+    const row = el("div", { className: "row stars" });
+    row.append(btn(s.userFavorite ? "♥" : "♡", "ic" + (s.userFavorite ? " on" : ""), () => send({ event: "favorite", id: s.id, favorite: !s.userFavorite }), "Favourite"));
+    if (typeof s.userRating === "number") for (let i = 1; i <= 5; i++)
+      row.append(btn("★", i <= s.userRating ? "on" : "", () => send({ event: "rating", id: s.id, rating: s.userRating === i ? 0 : i }), i + " stars"));
+    v.append(row);
+  }
+  return v;
+}
+
+function item(title, sub, img, onplay, cur, extra) {
+  const i = el("div", { className: "item" + (cur ? " cur" : "") });
+  i.append(img ? el("img", { src: img, loading: "lazy", alt: "" }) : el("div", { className: "ph" }),
+           el("div", { className: "t" }, el("b", { textContent: title }), el("span", { textContent: sub || "" })));
+  i.firstChild.onclick = i.children[1].onclick = onplay;
+  if (extra) i.append(extra);
+  return i;
+}
+
+function viewQueue() {
+  const v = el("div"), q = st.queue.items;
+  if (!q.length) return el("div", { className: "empty", textContent: "The queue is empty" });
+  v.append(btn("Clear queue", "", () => send({ event: "clear-queue" })));
+  for (const it of q) v.append(item(it.name, it.artistName, null, () => send({ event: "queue-jump", uniqueId: it.uniqueId }),
+    it.uniqueId === st.queue.currentUniqueId, btn("✕", "", () => send({ event: "remove-from-queue", uniqueId: it.uniqueId }), "Remove")));
+  return v;
+}
+
+function viewList(key, play, searchable) {
+  const l = lists[key] || (lists[key] = { items: [], more: true, busy: false, q: "" });
+  const v = el("div");
+  if (searchable) { const s = el("input", { type: "search", placeholder: "Search", value: l.q });
+    s.onchange = () => { l.q = s.value; request(key, true); render(); }; v.append(s); }
+  for (const it of l.items) v.append(item(it.name, it.artistName || it.albumArtistName || it.homepageUrl || "", null, () => play(it)));
+  if (l.more) v.append(btn(l.busy ? "Loading…" : "Load more", "", () => { request(key); render(); }));
+  else if (!l.items.length) v.append(el("div", { className: "empty", textContent: "Nothing here" }));
+  if (!l.items.length && l.more && !l.busy) request(key);
+  return v;
+}
+
+let lastTab = null, dragging = false;
+document.addEventListener("pointerdown", (e) => { if (e.target.type === "range") dragging = true; });
+for (const ev of ["pointerup", "pointercancel", "change"]) document.addEventListener(ev, () => { dragging = false; });
+function render() {
+  const nav = $("tabs");
+  if (!nav.children.length) for (const [k, name] of TABS) nav.append(el("button", { textContent: name, onclick: () => { tab = k; render(); } }));
+  [...nav.children].forEach((b, i) => b.className = TABS[i][0] === tab ? "on" : "");
+  const main = $("view"), keep = main.scrollTop, focus = document.activeElement;
+  if ((dragging || (focus && focus.type === "search")) && lastTab === tab) { tickOnly(); return; }
+  main.replaceChildren(
+    tab === "now" ? viewNow() : tab === "queue" ? viewQueue() :
+    tab === "albums" ? viewList("albums", (a) => send({ event: "play-album", id: a.id, playType: "now", requestId: "p" + Date.now() }), true) :
+    tab === "playlists" ? viewList("playlists", (p) => send({ event: "play-playlist", id: p.id, playType: "now", requestId: "p" + Date.now() }), false) :
+    tab === "radio" ? viewList("radio", (r) => send({ event: "play-radio", id: r.id }), false) :
+    viewList("tracks", (t) => send({ event: "play-track", id: t.id, playType: "now", requestId: "p" + Date.now() }), true));
+  main.scrollTop = lastTab === tab ? keep : 0; lastTab = tab;
+}
+function tickOnly() {
+  const seek = $("seek"); if (seek && !dragging) seek.value = Math.floor(position());
+}
+setInterval(() => { const t = $("t0"); if (t) t.textContent = fmt(position()); tickOnly(); }, 500);
+render(); connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Listen: third-party licenses</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: #1b1d22; background: #fff; }
+  @media (prefers-color-scheme: dark) { body { color: #d7dae0; background: #16181d; } pre { background: #22252c !important; } }
+  pre { white-space: pre-wrap; background: #f3f4f6; padding: 12px; border-radius: 8px; font-size: 13px; }
+  h2 { margin-top: 40px; }
+  li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<h1>Third-party licenses</h1>
+<p>Listen is licensed under the GNU Affero General Public License v3.0 or later. It is built from the open-source
+Rust crates below. Fonts, icons and the parts derived from Feishin are listed in NOTICE.md.</p>
+<h2>Overview</h2>
+<ul>
+{{#each overview}}
+  <li><a href="#{{id}}">{{name}}</a> ({{count}})</li>
+{{/each}}
+</ul>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Used by:</p>
+<ul>
+{{#each used_by}}
+  <li><a href="{{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}">{{crate.name}} {{crate.version}}</a></li>
+{{/each}}
+</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body>
+</html>

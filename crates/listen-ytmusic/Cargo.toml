@@ -1,0 +1,34 @@
+[package]
+name = "listen-ytmusic"
+description = "YouTube Music backend for Listen (library via ytmapi-rs, streams via yt-dlp)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+listen-core.workspace = true
+listen-source.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite = { version = "0.37", features = ["bundled"] }
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { workspace = true, features = ["fs"] }
+tracing.workspace = true
+rand.workspace = true
+futures = "0.3"
+ytmapi-rs = { version = "0.3.3", default-features = false, features = ["rustls", "simplified-queries"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }

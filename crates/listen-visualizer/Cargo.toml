@@ -1,0 +1,18 @@
+[package]
+name = "listen-visualizer"
+description = "Spectrum analyzer for Listen: captures Listen's own audio stream and computes audioMotion-style bands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rustfft = "6.4"
+tokio.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[target.'cfg(windows)'.dependencies]
+cpal = "0.17"

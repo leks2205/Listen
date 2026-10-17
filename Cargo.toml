@@ -1,0 +1,41 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "app"]
+
+[workspace.package]
+version = "0.35.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/leks2205/Listen"
+authors = ["leks2205 <281423329+leks2205@users.noreply.github.com>"]
+
+[workspace.dependencies]
+listen-core = { path = "crates/listen-core" }
+listen-source = { path = "crates/listen-source" }
+listen-mix = { path = "crates/listen-mix" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+thiserror = "2"
+anyhow = "1"
+async-trait = "0.1"
+bitflags = { version = "2", features = ["serde"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "net", "io-util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+directories = "6"
+rand = "0.9"
+regex = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true
+
+# Dev builds: line tables for workspace crates; dependencies get light optimisation and no debuginfo.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+opt-level = 1
+debug = false

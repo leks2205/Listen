@@ -1,0 +1,88 @@
+[package]
+name = "listen"
+description = "A Feishin-style music player for Navidrome/OpenSubsonic and YouTube Music"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = ["furigana"]
+# Furigana / kanji romaji from an embedded dictionary (+12 MB).
+furigana = ["listen-lyrics/furigana"]
+
+[dependencies]
+listen-core.workspace = true
+regex.workspace = true
+listen-source.workspace = true
+listen-player = { path = "../crates/listen-player" }
+listen-subsonic = { path = "../crates/listen-subsonic" }
+listen-ytmusic = { path = "../crates/listen-ytmusic" }
+listen-jellyfin = { path = "../crates/listen-jellyfin" }
+listen-local = { path = "../crates/listen-local" }
+listen-visualizer = { path = "../crates/listen-visualizer" }
+listen-lyrics = { path = "../crates/listen-lyrics", default-features = false }
+listen-dj = { path = "../crates/listen-dj" }
+listen-mix.workspace = true
+listen-analysis = { path = "../crates/listen-analysis" }
+listen-rip = { path = "../crates/listen-rip" }
+listen-offline = { path = "../crates/listen-offline" }
+listen-dlna = { path = "../crates/listen-dlna" }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+toml.workspace = true
+discord-rich-presence = "1.1"
+iced = { version = "0.14", features = ["tokio", "image", "svg", "advanced", "canvas"] }
+unicode-normalization = "0.1"
+thumbhash = "0.1"
+fontdb = "0.23"
+serde.workspace = true
+serde_json.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+tokio.workspace = true
+rand.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+directories.workspace = true
+url = "2"
+sha2 = "0.10"
+flate2 = "1"
+crc32fast = "1"
+base64 = "0.22"
+sha1 = "0.10"
+libloading = "0.8"
+
+[dev-dependencies]
+iced_test = "0.14"
+iced_runtime = "0.14"
+listen-lyrics = { path = "../crates/listen-lyrics" }
+listen-visualizer = { path = "../crates/listen-visualizer" }
+listen-player = { path = "../crates/listen-player" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+listen-ytmusic = { path = "../crates/listen-ytmusic" }
+listen-source.workspace = true
+listen-subsonic = { path = "../crates/listen-subsonic" }
+listen-core.workspace = true
+async-trait.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+khronos-egl = { version = "6", features = ["dynamic"] }
+glow = "0.16"
+keyring = { version = "3", default-features = false, features = ["async-secret-service", "tokio", "crypto-rust"] }
+mpris-server = "0.10"
+ksni = { version = "0.3", default-features = false, features = ["tokio"] }
+zbus = "5"
+ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+souvlaki = "0.8.3"
+tray-icon = "0.26.1"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]
+winresource = "0.1"

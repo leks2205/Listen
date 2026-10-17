@@ -1,0 +1,17 @@
+[package]
+name = "listen-player"
+description = "Audio playback for Listen: an mpv process driven over JSON IPC"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+listen-core.workspace = true

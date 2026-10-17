@@ -1,0 +1,18 @@
+/target
+*.swp
+.env*
+!.env.example
+scripts/ship.env
+/dist
+# never commit personal presets / credentials
+assets/preset/*.local.json
+*.cookies
+/app/i18n/.unmatched.json
+
+# local tooling and notes, kept out of the public repo
+.claude/
+CLAUDE.md
+AGENTS.md
+scripts/ship.sh
+docs/PROGRESS.md
+docs/ytm-dj-research.md

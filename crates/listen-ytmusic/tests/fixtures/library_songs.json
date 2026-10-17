@@ -1,0 +1,24 @@
+{"contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[
+ {"musicShelfRenderer":{
+  "contents":[
+   {"musicResponsiveListItemRenderer":{
+     "playlistItemData":{"videoId":"songA"},
+     "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/a=w60-h60","width":60,"height":60}]}}},
+     "flexColumns":[
+       {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Dynamite","navigationEndpoint":{"watchEndpoint":{"videoId":"songA"}}}]}}},
+       {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"BTS","navigationEndpoint":{"browseEndpoint":{"browseId":"UCbts"}}}]}}},
+       {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Dynamite (DayTime Version)","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_dyn"}}}]}}}
+     ],
+     "fixedColumns":[{"musicResponsiveListItemFixedColumnRenderer":{"text":{"runs":[{"text":"3:19"}]}}}]}},
+   {"musicResponsiveListItemRenderer":{
+     "playlistItemData":{"videoId":"songB"},
+     "flexColumns":[
+       {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Uploaded track"}]}}},
+       {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Me • My demo"}]}}}
+     ],
+     "fixedColumns":[{"musicResponsiveListItemFixedColumnRenderer":{"text":{"runs":[{"text":"1:02:03"}]}}}]}},
+   {"musicResponsiveListItemRenderer":{"flexColumns":[]}}
+  ],
+  "continuations":[{"nextContinuationData":{"continuation":"NEXTPAGE"}}]
+ }}
+]}}}}]}}}

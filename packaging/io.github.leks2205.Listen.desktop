@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Listen
+GenericName=Music Player
+Comment=Play music from Navidrome and YouTube Music
+Exec=listen %U
+Icon=io.github.leks2205.Listen
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;navidrome;subsonic;youtube;player;
+StartupWMClass=io.github.leks2205.Listen

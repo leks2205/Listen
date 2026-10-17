@@ -1,0 +1,1489 @@
+{
+ "contents": {
+  "singleColumnBrowseResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "musicShelfRenderer": {
+           "bottomEndpoint": {
+            "browseEndpoint": {
+             "browseEndpointContextSupportedConfigs": {
+              "browseEndpointContextMusicConfig": {
+               "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+              }
+             },
+             "browseId": "VLOLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+             "params": "ggMCCAI%3D"
+            }
+           },
+           "bottomText": {
+            "runs": [
+             {
+              "text": "Show all"
+             }
+            ]
+           },
+           "contents": [
+            {
+             "musicResponsiveListItemRenderer": {
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                      "videoId": "C8qnzHCsXpI"
+                     }
+                    },
+                    "text": "Bahamut"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCRxFsyMT9Kq733uMvP5ZSng"
+                     }
+                    },
+                    "text": "Rinkadink"
+                   },
+                   {
+                    "text": ", "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCqzMbgOpRV8tJUefilpAQHQ"
+                     }
+                    },
+                    "text": "UNI"
+                   },
+                   {
+                    "text": " & "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCH2NucMYrkk4MLoner-hWCw"
+                     }
+                    },
+                    "text": "Tsuyoshi Suzuki"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "10K plays"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_MEDIUM",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                       }
+                      },
+                      "browseId": "MPREb_RN2tD92UDEa"
+                     }
+                    },
+                    "text": "Raw Update 2"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "C8qnzHCsXpI"
+              },
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 60,
+                   "url": "https://yt3.googleusercontent.com/AcFCMXVRQ1k5xviOBSaBBW5EszsJtdL_UdJTiBcuOO1q6KG_AQbfu3O0wpzjqx5XI2OCoo9tQobJFv2Cfg=w60-h60-l90-rj",
+                   "width": 60
+                  },
+                  {
+                   "height": 120,
+                   "url": "https://yt3.googleusercontent.com/AcFCMXVRQ1k5xviOBSaBBW5EszsJtdL_UdJTiBcuOO1q6KG_AQbfu3O0wpzjqx5XI2OCoo9tQobJFv2Cfg=w120-h120-l90-rj",
+                   "width": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                      "videoId": "x_tthufFpVs"
+                     }
+                    },
+                    "text": "When Are We"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCDeX65TOxm9ARGvfL2bmSyg"
+                     }
+                    },
+                    "text": "Dickster"
+                   },
+                   {
+                    "text": " & "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCqzMbgOpRV8tJUefilpAQHQ"
+                     }
+                    },
+                    "text": "UNI"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "14K plays"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_MEDIUM",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                       }
+                      },
+                      "browseId": "MPREb_wFEPQyik1cG"
+                     }
+                    },
+                    "text": "Psy-Trance Odyssey, Vol. 12"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "x_tthufFpVs"
+              },
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 60,
+                   "url": "https://yt3.googleusercontent.com/DyicJfg7XTi7laizKCE_evW3nbx7Lc9iAH8yOS-F7IecuTAKzta9jyPSx9HkkwjVpeRbnyKiv3ZGcYM9Kg=w60-h60-l90-rj",
+                   "width": 60
+                  },
+                  {
+                   "height": 120,
+                   "url": "https://yt3.googleusercontent.com/DyicJfg7XTi7laizKCE_evW3nbx7Lc9iAH8yOS-F7IecuTAKzta9jyPSx9HkkwjVpeRbnyKiv3ZGcYM9Kg=w120-h120-l90-rj",
+                   "width": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                      "videoId": "oZE6m6ul0wE"
+                     }
+                    },
+                    "text": "Bass on Top (2026 Remix)"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCqzMbgOpRV8tJUefilpAQHQ"
+                     }
+                    },
+                    "text": "UNI"
+                   },
+                   {
+                    "text": " & "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCH2NucMYrkk4MLoner-hWCw"
+                     }
+                    },
+                    "text": "Tsuyoshi Suzuki"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "3K plays"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_MEDIUM",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                       }
+                      },
+                      "browseId": "MPREb_bn9W1xBhmPA"
+                     }
+                    },
+                    "text": "Bass on Top Remixes"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "oZE6m6ul0wE"
+              },
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 60,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w60-h60-l90-rj",
+                   "width": 60
+                  },
+                  {
+                   "height": 120,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w120-h120-l90-rj",
+                   "width": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                      "videoId": "jRkFsdBBlIc"
+                     }
+                    },
+                    "text": "Bahamut (Rugrats Remix)"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCRxFsyMT9Kq733uMvP5ZSng"
+                     }
+                    },
+                    "text": "Rinkadink"
+                   },
+                   {
+                    "text": ", "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCqzMbgOpRV8tJUefilpAQHQ"
+                     }
+                    },
+                    "text": "UNI"
+                   },
+                   {
+                    "text": " & "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCH2NucMYrkk4MLoner-hWCw"
+                     }
+                    },
+                    "text": "Tsuyoshi Suzuki"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "1.8K plays"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_MEDIUM",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                       }
+                      },
+                      "browseId": "MPREb_Lh2mdpzRBT5"
+                     }
+                    },
+                    "text": "Bahamut (Rugrats Remix)"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "jRkFsdBBlIc"
+              },
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 60,
+                   "url": "https://yt3.googleusercontent.com/VGucikQT9KHtrTBNrNpcAlVqdBGmh3bCX1fJWvNGI_nrN1RNDzOW9fg76JKpAGZdOdz0tuF11Mnrwt5B=w60-h60-l90-rj",
+                   "width": 60
+                  },
+                  {
+                   "height": 120,
+                   "url": "https://yt3.googleusercontent.com/VGucikQT9KHtrTBNrNpcAlVqdBGmh3bCX1fJWvNGI_nrN1RNDzOW9fg76JKpAGZdOdz0tuF11Mnrwt5B=w120-h120-l90-rj",
+                   "width": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              }
+             }
+            },
+            {
+             "musicResponsiveListItemRenderer": {
+              "flexColumns": [
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "watchEndpoint": {
+                      "playlistId": "OLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                      "videoId": "Db7PmspE8Jc"
+                     }
+                    },
+                    "text": "Bass on Top (Cylon Remix)"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCqzMbgOpRV8tJUefilpAQHQ"
+                     }
+                    },
+                    "text": "UNI"
+                   },
+                   {
+                    "text": " & "
+                   },
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ARTIST"
+                       }
+                      },
+                      "browseId": "UCH2NucMYrkk4MLoner-hWCw"
+                     }
+                    },
+                    "text": "Tsuyoshi Suzuki"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_HIGH",
+                 "text": {
+                  "runs": [
+                   {
+                    "text": "1K plays"
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "musicResponsiveListItemFlexColumnRenderer": {
+                 "displayPriority": "MUSIC_RESPONSIVE_LIST_ITEM_COLUMN_DISPLAY_PRIORITY_MEDIUM",
+                 "text": {
+                  "runs": [
+                   {
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseEndpointContextSupportedConfigs": {
+                       "browseEndpointContextMusicConfig": {
+                        "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                       }
+                      },
+                      "browseId": "MPREb_bn9W1xBhmPA"
+                     }
+                    },
+                    "text": "Bass on Top Remixes"
+                   }
+                  ]
+                 }
+                }
+               }
+              ],
+              "playlistItemData": {
+               "videoId": "Db7PmspE8Jc"
+              },
+              "thumbnail": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 60,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w60-h60-l90-rj",
+                   "width": 60
+                  },
+                  {
+                   "height": 120,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w120-h120-l90-rj",
+                   "width": 120
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FIT"
+               }
+              }
+             }
+            }
+           ],
+           "shelfDivider": {
+            "musicShelfDividerRenderer": {
+             "hidden": true
+            }
+           },
+           "title": {
+            "runs": [
+             {
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_PLAYLIST"
+                 }
+                },
+                "browseId": "VLOLAK5uy_nCL3rb1XNi7gggpVYibI_NpjKCFEBn9uY",
+                "params": "ggMCCAI%3D"
+               }
+              },
+              "text": "Top songs"
+             }
+            ]
+           }
+          }
+         },
+         {
+          "musicCarouselShelfRenderer": {
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE",
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                 }
+                },
+                "browseId": "MPREb_nz9gjsqTHgn",
+                "params": "ggMrGilPTEFLNXV5X25NS1BXby01cElNeDR4ZkkyZ3JXNzJac2d5eS1MUlEtTQ%3D%3D"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Single"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "2022"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "0",
+                   "0"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Ipomoea"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Ipomoea"
+                   }
+                  },
+                  "activeBackgroundColor": 4278190080,
+                  "activeScaleFactor": 1.2,
+                  "backgroundColor": 2566914048,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_MEDIUM",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 1308622847,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "playlistId": "OLAK5uy_nMKPWo-5pIMx4xfI2grW72Zsgyy-LRQ-M",
+                    "videoId": "Dx-u_4C6RKU"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_BOTTOM_RIGHT",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_HOVER"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 226,
+                   "url": "https://yt3.googleusercontent.com/L1sc5Rv-gKGoWZMIs-Y0BjgmcJR75Q99Do4NDN6qxvxheC8lkUg-2QBRdfOeVNMm9aX4bRWxSDtn1d5w=w226-h226-l90-rj",
+                   "width": 226
+                  },
+                  {
+                   "height": 544,
+                   "url": "https://yt3.googleusercontent.com/L1sc5Rv-gKGoWZMIs-Y0BjgmcJR75Q99Do4NDN6qxvxheC8lkUg-2QBRdfOeVNMm9aX4bRWxSDtn1d5w=w544-h544-l90-rj",
+                   "width": 544
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                    }
+                   },
+                   "browseId": "MPREb_nz9gjsqTHgn",
+                   "params": "ggMrGilPTEFLNXV5X25NS1BXby01cElNeDR4ZkkyZ3JXNzJac2d5eS1MUlEtTQ%3D%3D"
+                  }
+                 },
+                 "text": "Ipomoea"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE",
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                 }
+                },
+                "browseId": "MPREb_bn9W1xBhmPA",
+                "params": "ggMrGilPTEFLNXV5X21RXzVLV25mMWlrY1poRkZ4RDk3eU9GZ0N5UnhNTHA0WQ%3D%3D"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Single"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "2026"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "0",
+                   "0"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Bass on Top Remixes"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Bass on Top Remixes"
+                   }
+                  },
+                  "activeBackgroundColor": 4278190080,
+                  "activeScaleFactor": 1.2,
+                  "backgroundColor": 2566914048,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_MEDIUM",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 1308622847,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "playlistId": "OLAK5uy_mQ_5KWnf1ikcZhFFxD97yOFgCyRxMLp4Y",
+                    "videoId": "oZE6m6ul0wE"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_BOTTOM_RIGHT",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_HOVER"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 226,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w226-h226-l90-rj",
+                   "width": 226
+                  },
+                  {
+                   "height": 544,
+                   "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w544-h544-l90-rj",
+                   "width": 544
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                    }
+                   },
+                   "browseId": "MPREb_bn9W1xBhmPA",
+                   "params": "ggMrGilPTEFLNXV5X21RXzVLV25mMWlrY1poRkZ4RDk3eU9GZ0N5UnhNTHA0WQ%3D%3D"
+                  }
+                 },
+                 "text": "Bass on Top Remixes"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_SQUARE",
+              "navigationEndpoint": {
+               "browseEndpoint": {
+                "browseEndpointContextSupportedConfigs": {
+                 "browseEndpointContextMusicConfig": {
+                  "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                 }
+                },
+                "browseId": "MPREb_Lh2mdpzRBT5",
+                "params": "ggMrGilPTEFLNXV5X2x3Zk9IYVozQ2pfTTVmdXVBLUNzaElNZkNiVFBUM0NHVQ%3D%3D"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "text": "Single"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "2025"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "0",
+                   "0"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Bahamut (Rugrats Remix)"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Bahamut (Rugrats Remix)"
+                   }
+                  },
+                  "activeBackgroundColor": 4278190080,
+                  "activeScaleFactor": 1.2,
+                  "backgroundColor": 2566914048,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_MEDIUM",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 1308622847,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "playlistId": "OLAK5uy_lwfOHaZ3Cj_M5fuuA-CshIMfCbTPT3CGU",
+                    "videoId": "jRkFsdBBlIc"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_SELF"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_BOTTOM_RIGHT",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_HOVER"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 226,
+                   "url": "https://yt3.googleusercontent.com/VGucikQT9KHtrTBNrNpcAlVqdBGmh3bCX1fJWvNGI_nrN1RNDzOW9fg76JKpAGZdOdz0tuF11Mnrwt5B=w226-h226-l90-rj",
+                   "width": 226
+                  },
+                  {
+                   "height": 544,
+                   "url": "https://yt3.googleusercontent.com/VGucikQT9KHtrTBNrNpcAlVqdBGmh3bCX1fJWvNGI_nrN1RNDzOW9fg76JKpAGZdOdz0tuF11Mnrwt5B=w544-h544-l90-rj",
+                   "width": 544
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_ALBUM"
+                    }
+                   },
+                   "browseId": "MPREb_Lh2mdpzRBT5",
+                   "params": "ggMrGilPTEFLNXV5X2x3Zk9IYVozQ2pfTTVmdXVBLUNzaElNZkNiVFBUM0NHVQ%3D%3D"
+                  }
+                 },
+                 "text": "Bahamut (Rugrats Remix)"
+                }
+               ]
+              }
+             }
+            }
+           ],
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "accessibilityData": {
+              "accessibilityData": {
+               "label": "Singles & EPs"
+              }
+             },
+             "headerStyle": "MUSIC_CAROUSEL_SHELF_BASIC_HEADER_STYLE_DISPLAY_TWO",
+             "title": {
+              "runs": [
+               {
+                "text": "Singles & EPs"
+               }
+              ]
+             }
+            }
+           },
+           "itemSize": "COLLECTION_STYLE_ITEM_SIZE_MEDIUM"
+          }
+         },
+         {
+          "musicCarouselShelfRenderer": {
+           "contents": [
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "index": 0,
+                "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                "videoId": "Rhpv-lFFh4k"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                    }
+                   },
+                   "browseId": "UCt-Zwf8TON73Wtz21R8DgAg"
+                  }
+                 },
+                 "text": "Nano Records"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "13K views"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "2147483648"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Dickster & Uni - When Are We"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Dickster & Uni - When Are We"
+                   }
+                  },
+                  "activeBackgroundColor": 0,
+                  "activeScaleFactor": 1,
+                  "backgroundColor": 0,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_HUGE",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "index": 0,
+                    "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                    "videoId": "Rhpv-lFFh4k"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_ANCESTOR"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 225,
+                   "url": "https://i.ytimg.com/vi/Rhpv-lFFh4k/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mBDGDVSvU7NSuPUZpAKVWr_U2Nbw",
+                   "width": 400
+                  },
+                  {
+                   "height": 450,
+                   "url": "https://i.ytimg.com/vi/Rhpv-lFFh4k/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3l2NZkAgOf69TlCDriTGdk3tP1MxA",
+                   "width": 800
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Dickster & Uni - When Are We"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "index": 1,
+                "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                "videoId": "bCGzONyOAYs"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                    }
+                   },
+                   "browseId": "UCPvkTCeGc0U7KUL5QVcKF-w"
+                  }
+                 },
+                 "text": "Trancentral"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "1.4K views"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "2147483648"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Uni & Tsuyoshi Suzuki - Bass on Top (2026 Remix) [Psychedelic Visuals]"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Uni & Tsuyoshi Suzuki - Bass on Top (2026 Remix) [Psychedelic Visuals]"
+                   }
+                  },
+                  "activeBackgroundColor": 0,
+                  "activeScaleFactor": 1,
+                  "backgroundColor": 0,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_HUGE",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "index": 1,
+                    "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                    "videoId": "bCGzONyOAYs"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_ANCESTOR"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 225,
+                   "url": "https://i.ytimg.com/vi/bCGzONyOAYs/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mkH_NqfqwtRrv1cHGsApgPD20dAA",
+                   "width": 400
+                  },
+                  {
+                   "height": 450,
+                   "url": "https://i.ytimg.com/vi/bCGzONyOAYs/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3lR75Q-CSIfaeaScuCK9a0c_xAoQw",
+                   "width": 800
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Uni & Tsuyoshi Suzuki - Bass on Top (2026 Remix) [Psychedelic Visuals]"
+                }
+               ]
+              }
+             }
+            },
+            {
+             "musicTwoRowItemRenderer": {
+              "aspectRatio": "MUSIC_TWO_ROW_ITEM_THUMBNAIL_ASPECT_RATIO_RECTANGLE_16_9",
+              "navigationEndpoint": {
+               "watchEndpoint": {
+                "index": 2,
+                "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                "videoId": "gncV38OF23Y"
+               }
+              },
+              "subtitle": {
+               "runs": [
+                {
+                 "navigationEndpoint": {
+                  "browseEndpoint": {
+                   "browseEndpointContextSupportedConfigs": {
+                    "browseEndpointContextMusicConfig": {
+                     "pageType": "MUSIC_PAGE_TYPE_USER_CHANNEL"
+                    }
+                   },
+                   "browseId": "UCHFbukDwOqWucGKY0BBv_jQ"
+                  }
+                 },
+                 "text": "Phantasm Records"
+                },
+                {
+                 "text": " • "
+                },
+                {
+                 "text": "769 views"
+                }
+               ]
+              },
+              "thumbnailOverlay": {
+               "musicItemThumbnailOverlayRenderer": {
+                "background": {
+                 "verticalGradient": {
+                  "gradientLayerColors": [
+                   "2147483648",
+                   "2147483648"
+                  ]
+                 }
+                },
+                "content": {
+                 "musicPlayButtonRenderer": {
+                  "accessibilityPauseData": {
+                   "accessibilityData": {
+                    "label": "Pause Uni & Tsuyoshi Suzuki - Bass on Top (Cylon remix) | NEW PSYTRANCE 2026"
+                   }
+                  },
+                  "accessibilityPlayData": {
+                   "accessibilityData": {
+                    "label": "Play Uni & Tsuyoshi Suzuki - Bass on Top (Cylon remix) | NEW PSYTRANCE 2026"
+                   }
+                  },
+                  "activeBackgroundColor": 0,
+                  "activeScaleFactor": 1,
+                  "backgroundColor": 0,
+                  "buttonSize": "MUSIC_PLAY_BUTTON_SIZE_HUGE",
+                  "iconColor": 4294967295,
+                  "iconLoadingColor": 0,
+                  "loadingIndicatorColor": 14745645,
+                  "pauseIcon": {
+                   "iconType": "PAUSE"
+                  },
+                  "playIcon": {
+                   "iconType": "PLAY_ARROW"
+                  },
+                  "playNavigationEndpoint": {
+                   "watchEndpoint": {
+                    "index": 2,
+                    "playlistId": "OLAK5uy_mNfm5YJ6x9SCSnF9YGaZcTFfRO5UyPN-M",
+                    "videoId": "gncV38OF23Y"
+                   }
+                  },
+                  "playingIcon": {
+                   "iconType": "VOLUME_UP"
+                  },
+                  "rippleTarget": "MUSIC_PLAY_BUTTON_RIPPLE_TARGET_ANCESTOR"
+                 }
+                },
+                "contentPosition": "MUSIC_ITEM_THUMBNAIL_OVERLAY_CONTENT_POSITION_CENTERED",
+                "displayStyle": "MUSIC_ITEM_THUMBNAIL_OVERLAY_DISPLAY_STYLE_PERSISTENT"
+               }
+              },
+              "thumbnailRenderer": {
+               "musicThumbnailRenderer": {
+                "thumbnail": {
+                 "thumbnails": [
+                  {
+                   "height": 225,
+                   "url": "https://i.ytimg.com/vi/gncV38OF23Y/hqdefault.jpg?sqp=-oaymwEWCJADEOEBIAQqCggAEOADGC0guwJIWg&rs=AMzJL3mP8y9np7Cocper1kFjsjwSxB1g_g",
+                   "width": 400
+                  },
+                  {
+                   "height": 450,
+                   "url": "https://i.ytimg.com/vi/gncV38OF23Y/hq720.jpg?sqp=-oaymwEKCKAGEMIDIABIWg&rs=AMzJL3mAHHkBf-4cSLdnwnilfpAikoHSOQ",
+                   "width": 800
+                  }
+                 ]
+                },
+                "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+                "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+               }
+              },
+              "title": {
+               "runs": [
+                {
+                 "text": "Uni & Tsuyoshi Suzuki - Bass on Top (Cylon remix) | NEW PSYTRANCE 2026"
+                }
+               ]
+              }
+             }
+            }
+           ],
+           "header": {
+            "musicCarouselShelfBasicHeaderRenderer": {
+             "accessibilityData": {
+              "accessibilityData": {
+               "label": "Videos"
+              }
+             },
+             "headerStyle": "MUSIC_CAROUSEL_SHELF_BASIC_HEADER_STYLE_DISPLAY_TWO",
+             "title": {
+              "runs": [
+               {
+                "text": "Videos"
+               }
+              ]
+             }
+            }
+           },
+           "itemSize": "COLLECTION_STYLE_ITEM_SIZE_MEDIUM"
+          }
+         }
+        ]
+       }
+      },
+      "endpoint": {
+       "browseEndpoint": {
+        "browseId": "UCqzMbgOpRV8tJUefilpAQHQ",
+        "params": "EghmZWF0dXJlZA%3D%3D"
+       }
+      },
+      "selected": true,
+      "title": "Music"
+     }
+    }
+   ]
+  }
+ },
+ "header": {
+  "musicImmersiveHeaderRenderer": {
+   "thumbnail": {
+    "musicThumbnailRenderer": {
+     "thumbnail": {
+      "thumbnails": [
+       {
+        "height": 225,
+        "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w540-h225-p-l90-rj",
+        "width": 540
+       },
+       {
+        "height": 340,
+        "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w816-h340-p-l90-rj",
+        "width": 816
+       },
+       {
+        "height": 416,
+        "url": "https://yt3.googleusercontent.com/-LtVmzMAFYWoYKryS_-57KiPUFSShzf-RFT2hy1UCJMWIKG0VVlsiU_TD8wuA5lzM18qgZg5EX2q2cCc=w1000-h416-p-l90-rj",
+        "width": 1000
+       }
+      ]
+     },
+     "thumbnailCrop": "MUSIC_THUMBNAIL_CROP_UNSPECIFIED",
+     "thumbnailScale": "MUSIC_THUMBNAIL_SCALE_ASPECT_FILL"
+    }
+   },
+   "title": {
+    "runs": [
+     {
+      "text": "UNI"
+     }
+    ]
+   },
+   "subscriptionButton": {
+    "subscribeButtonRenderer": {
+     "channelId": "UCqzMbgOpRV8tJUefilpAQHQ",
+     "subscribed": false
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,25 @@
+[package]
+name = "listen-lyrics"
+description = "Lyrics for Listen: LRC parsing, providers (lrclib, NetEase, Genius, SimpMusic), translation, romaji, export"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["furigana"]
+# Furigana and kanji romaji from IPADIC via lindera: ~12 MB more binary.
+# lindera's build script downloads the dictionary, so the first build needs network.
+furigana = ["dep:lindera"]
+
+[dependencies]
+lindera = { version = "1.5", features = ["embedded-ipadic"], optional = true }
+listen-core.workspace = true
+serde.workspace = true
+tracing.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+url = "2"
+serde_json.workspace = true
+tokio = { workspace = true, features = ["time", "rt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

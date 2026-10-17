@@ -1,0 +1,43 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Listen version
+      description: Settings → About
+      placeholder: "0.34.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Linux, Windows]
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Music source
+      multiple: true
+      options: [Navidrome / OpenSubsonic, Jellyfin, YouTube Music, Local folders, Not source-related]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: >
+        Settings → Advanced → Export diagnostics writes a zip with passwords, cookies and tokens removed.
+        Please still check it before you attach it.
+      render: text

@@ -1,0 +1,30 @@
+[package]
+name = "listen-analysis"
+description = "Audio analysis for DJ transitions: beats, key, sections, loudness, shared result store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+listen-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["io-std"] }
+realfft = "3"
+ebur128 = "0.1"
+sha2 = "0.10"
+libc = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Neural beats + downbeats (MIT code and weights; pure-Rust rten runtime).
+beat-this = "1"
+# Timbre/similarity vector from raw samples (GPL-3.0, fine for AGPL).
+bliss-audio = { version = "0.13", default-features = false, features = ["analysis"] }
+
+[dev-dependencies]
+# Only for the analyser bench (examples/bench.rs).
+stratum-dsp = "1"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+listen-source.workspace = true
+listen-subsonic = { path = "../listen-subsonic" }

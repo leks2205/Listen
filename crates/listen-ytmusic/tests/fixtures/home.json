@@ -1,0 +1,29 @@
+{"contents":{"singleColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{
+ "contents":[
+  {"musicCarouselShelfRenderer":{
+    "header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"Quick picks"}]}}},
+    "contents":[{"musicResponsiveListItemRenderer":{
+      "playlistItemData":{"videoId":"vid1"},
+      "thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/a=w60-h60","width":60,"height":60}]}}},
+      "flexColumns":[
+        {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"봄날","navigationEndpoint":{"watchEndpoint":{"videoId":"vid1"}}}]}}},
+        {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[
+          {"text":"BTS","navigationEndpoint":{"browseEndpoint":{"browseId":"UCbts"}}},{"text":" • "},
+          {"text":"You Never Walk Alone","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_x"}}}]}}}
+      ]}}]}},
+  {"musicCarouselShelfRenderer":{
+    "header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"Mixed for you"}]}}},
+    "contents":[
+      {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"My Supermix"}]},"subtitle":{"runs":[{"text":"BTS, IU and more"}]},
+        "navigationEndpoint":{"browseEndpoint":{"browseId":"VLRDTMAK1","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_PLAYLIST"}}}},
+        "thumbnailRenderer":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[]}}}}},
+      {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"Some Album"}]},
+        "subtitle":{"runs":[{"text":"Album"},{"text":" • "},{"text":"Artist","navigationEndpoint":{"browseEndpoint":{"browseId":"UCart"}}},{"text":" • "},{"text":"2021"}]},
+        "navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_y","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ALBUM"}}}},
+        "thumbnailRenderer":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://lh3.googleusercontent.com/b=w226-h226","width":226,"height":226}]}}}}},
+      {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"An Artist"}]},
+        "navigationEndpoint":{"browseEndpoint":{"browseId":"UCz","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_ARTIST"}}}}}}
+    ]}}
+ ],
+ "continuations":[{"nextContinuationData":{"continuation":"CONT"}}]
+}}}}]}}}

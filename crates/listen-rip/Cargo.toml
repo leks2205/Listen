@@ -1,0 +1,26 @@
+[package]
+name = "listen-rip"
+description = "CD ripping for Listen: whipper rips, Listen tags (MusicBrainz), files and publishes FLAC albums"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["process", "time", "sync", "macros", "io-util", "rt"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+sha1 = "0.10"
+base64 = "0.22"
+futures-util = "0.3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

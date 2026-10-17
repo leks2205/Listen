@@ -1,0 +1,7 @@
+Brand icons (si-*.svg): Simple Icons, CC0 1.0 Universal (LICENSE-simple-icons.txt).
+Source: https://github.com/simple-icons/simple-icons, npm package simple-icons@16.35.0,
+fetched from https://cdn.jsdelivr.net/npm/simple-icons@16.35.0/icons/<name>.svg:
+lastdotfm, musicbrainz, spotify.
+Simple Icons has no ListenBrainz, MetaBrainz or Qobuz glyph, so those use Lucide
+icons (lu-headphones, lu-disc-3). The brand logos remain trademarks of their owners.
+lu-headphones.svg: lucide-static@1.48.0 (ISC, see LICENSE-lucide.txt).

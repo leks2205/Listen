@@ -1,0 +1,19 @@
+[package]
+name = "listen-source"
+description = "The MusicSource trait implemented by every Listen backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+listen-core.workspace = true
+async-trait.workspace = true
+bitflags.workspace = true
+thiserror.workspace = true
+futures = "0.3"
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }

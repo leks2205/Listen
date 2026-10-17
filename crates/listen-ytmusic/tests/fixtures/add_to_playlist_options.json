@@ -1,0 +1,5 @@
+{"contents":[{"addToPlaylistRenderer":{"playlists":[
+ {"playlistAddToOptionRenderer":{"playlistId":"PLroad","title":{"simpleText":"Roadtrip"},"containsSelectedVideos":"NONE","privacy":"PRIVATE"}},
+ {"playlistAddToOptionRenderer":{"playlistId":"PLchill","title":{"runs":[{"text":"Chill"}]},"containsSelectedVideos":"ALL","privacy":"PUBLIC"}},
+ {"playlistAddToOptionRenderer":{"playlistId":"LM","title":{"simpleText":"Liked Music"},"containsSelectedVideos":"NONE","privacy":"PRIVATE"}}
+]}}]}

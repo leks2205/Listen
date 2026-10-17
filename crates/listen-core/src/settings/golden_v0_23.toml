@@ -1,0 +1,290 @@
+global_media_keys = true
+global_shortcuts = false
+
+[appearance]
+theme = "defaultDark"
+follow_desktop_theme = true
+follow_system_theme = true
+theme_dark = "tokyoNight"
+theme_light = "defaultLight"
+accent = [
+    53,
+    116,
+    252,
+]
+use_theme_accent = false
+font = "Inter"
+zoom = 100
+scroll_speed = 1.0
+album_background_blur = 3.0
+artist_background_blur = 3.0
+
+[sidebar]
+show_playlists = true
+playlist_folders = true
+playlist_folder_separator = "/"
+show_image = true
+show_queue = true
+panel_order = [
+    "queue",
+    "lyrics",
+    "visualizer",
+]
+collapsed = false
+cover_expanded = false
+width = 400.0
+queue_width = 600.0
+
+[[sidebar.items]]
+id = "Now Playing"
+label = "now playing"
+visible = false
+
+[[sidebar.items]]
+id = "Search"
+label = "search"
+visible = false
+
+[[sidebar.items]]
+id = "Home"
+label = "home"
+visible = true
+
+[[sidebar.items]]
+id = "Favorites"
+label = "favorites"
+visible = true
+
+[[sidebar.items]]
+id = "Albums"
+label = "albums"
+visible = true
+
+[[sidebar.items]]
+id = "Tracks"
+label = "tracks"
+visible = true
+
+[[sidebar.items]]
+id = "Artists"
+label = "album artists"
+visible = true
+
+[[sidebar.items]]
+id = "Artists-all"
+label = "artists"
+visible = true
+
+[[sidebar.items]]
+id = "Genres"
+label = "genres"
+visible = true
+
+[[sidebar.items]]
+id = "Folders"
+label = "folders"
+visible = true
+
+[[sidebar.items]]
+id = "Playlists"
+label = "playlists"
+visible = false
+
+[[sidebar.items]]
+id = "Recently Played"
+label = "recently played"
+visible = true
+
+[[sidebar.items]]
+id = "Statistics"
+label = "statistics"
+visible = true
+
+[[sidebar.items]]
+id = "Mixes"
+label = "mixes"
+visible = true
+
+[home]
+feature = true
+sections = [
+    "genres",
+    "mostPlayed",
+    "random",
+    "recentlyAdded",
+    "recentlyPlayed",
+    "recentlyReleased",
+    "playlists",
+]
+
+[player_bar]
+info_items = [
+    "codec",
+    "release_year",
+]
+skip_buttons = true
+skip_backward_secs = 5
+skip_forward_secs = 10
+volume_wheel_step = 5
+volume_width = 70
+button_size = 15
+
+[playback]
+gapless = "weak"
+crossfade_secs = 0.0
+track_fade_secs = 1.5
+replay_gain = "no"
+replay_gain_preamp_db = 0.0
+replay_gain_clip = true
+audio_device = "auto"
+mpv_extra_args = []
+fade_on_pause = true
+equalizer_enabled = false
+equalizer_preamp = 0.0
+stream_quality = "original"
+scrobble = true
+scrobble_at_percent = 75
+scrobble_at_secs = 240
+volume = 70
+
+[[playback.equalizer]]
+freq = 31.5
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 63.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 125.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 250.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 500.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 1000.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 2000.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 4000.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 8000.0
+gain = 0.0
+
+[[playback.equalizer]]
+freq = 16000.0
+gain = 0.0
+
+[auto_dj]
+enabled = true
+item_count = 5
+timing = 1
+allow_duplicates = false
+strategy = "similar"
+
+[ai_dj]
+enabled = false
+persona = "late_night"
+text_model = "gemini-3.5-flash-lite"
+tts_model = "gemini-3.8-flash-lite-tts"
+set_min = 2
+set_max = 5
+talk_every = 1
+max_voiced_per_day = 15
+voice_gain_db = 0.0
+
+[analysis]
+enabled = true
+analyze_library = true
+shared_dir = ""
+threads = 0
+on_battery = false
+
+[mixing]
+enabled = true
+flow_select = true
+max_tempo_pct = 6.0
+long_blend_bars = 16
+tempo_ramps = true
+bass_swap = true
+mix_manual_queue = true
+fallback_fade_secs = 4.0
+
+[ripping]
+auto_rip = true
+destination = "/mnt/nas/Music"
+eject_when_done = true
+notify_sound = true
+replay_gain = true
+scan_navidrome = true
+picker_timeout_secs = 30
+
+[history]
+enabled = true
+retention = "forever"
+
+[lyrics]
+fetch = true
+follow = true
+alignment = "center"
+font_size = 24.0
+gap = 24.0
+opacity_non_active = 0.2
+sources = [
+    "NetEase",
+    "lrclib.net",
+]
+delay_ms = 0
+
+[visualizer]
+mode = 10
+gradient = "prism"
+fft_size = 16384
+min_freq = 20.0
+max_freq = 22050.0
+min_db = -85.0
+max_db = -25.0
+smoothing = 0.6
+peak_line = true
+line_width = 1.9
+fill_alpha = 0.0
+in_queue_panel = true
+
+[hotkeys]
+globalSearch = "mod+k"
+listNavigateToPage = "mod+g"
+listPlayDefault = "enter"
+listShowPlayingSong = "mod+l"
+localSearch = "mod+f"
+playPause = "space"
+
+[global_hotkeys]
+next = "CTRL+ALT+Right"
+playPause = "CTRL+ALT+space"
+previous = "CTRL+ALT+Left"
+stop = ""
+volumeDown = "CTRL+ALT+Down"
+volumeMute = "CTRL+ALT+m"
+volumeUp = "CTRL+ALT+Up"
+
+[window]
+tray = true
+minimize_to_tray = false
+exit_to_tray = false
+start_minimized = false
+custom_title_bar = true
+title_bar_track_info = true
+discord_rpc = false
+discord_client_id = "1165957668758900787"

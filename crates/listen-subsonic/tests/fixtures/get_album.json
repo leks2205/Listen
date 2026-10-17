@@ -1,0 +1,64 @@
+{
+  "subsonic-response": {
+    "status": "ok",
+    "version": "1.16.1",
+    "type": "navidrome",
+    "serverVersion": "0.58.0",
+    "openSubsonic": true,
+    "album": {
+      "id": "al-1",
+      "name": "Night Drive",
+      "artist": "Neon Coast",
+      "artistId": "ar-1",
+      "coverArt": "al-1_0",
+      "songCount": 2,
+      "duration": 401,
+      "year": 2024,
+      "genre": "Synthwave",
+      "genres": [{ "name": "Synthwave" }, { "name": "Electronic" }],
+      "artists": [{ "id": "ar-1", "name": "Neon Coast" }],
+      "releaseTypes": ["Album"],
+      "song": [
+        {
+          "id": "s-1",
+          "parent": "al-1",
+          "isDir": false,
+          "title": "Midnight Signal",
+          "album": "Night Drive",
+          "artist": "Neon Coast",
+          "track": 1,
+          "discNumber": 1,
+          "year": 2024,
+          "genre": "Synthwave",
+          "genres": [{ "name": "Synthwave" }, { "name": "Electronic" }],
+          "coverArt": "al-1_0",
+          "size": 25000000,
+          "contentType": "audio/flac",
+          "suffix": "flac",
+          "duration": 214,
+          "bitRate": 1011,
+          "samplingRate": 44100,
+          "bitDepth": 16,
+          "albumId": "al-1",
+          "artistId": "ar-1",
+          "starred": "2026-01-02T10:00:00Z",
+          "playCount": 4,
+          "artists": [{ "id": "ar-1", "name": "Neon Coast" }],
+          "albumArtists": [{ "id": "ar-1", "name": "Neon Coast" }],
+          "replayGain": { "trackGain": -6.5, "albumGain": -7.1, "trackPeak": 0.98 }
+        },
+        {
+          "id": "s-2",
+          "title": "Coastline",
+          "album": "Night Drive",
+          "artist": "Neon Coast feat. Guest",
+          "track": 2,
+          "duration": 187,
+          "suffix": "mp3",
+          "albumId": "al-1",
+          "artists": [{ "id": "ar-1", "name": "Neon Coast" }, { "id": "ar-2", "name": "Guest" }]
+        }
+      ]
+    }
+  }
+}

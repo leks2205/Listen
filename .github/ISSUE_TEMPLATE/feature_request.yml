@@ -1,0 +1,14 @@
+name: Feature request
+description: An idea for Listen
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Listen to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why? How do you do it today?

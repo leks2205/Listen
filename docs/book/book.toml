@@ -1,0 +1,17 @@
+[book]
+title = "Listen"
+description = "User and developer guide for Listen, a native desktop music player for Navidrome, Jellyfin, YouTube Music and local files."
+authors = ["Listen contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+git-repository-url = "https://github.com/leks2205/Listen"
+edit-url-template = "https://github.com/leks2205/Listen/edit/main/docs/book/{path}"
+site-url = "/Listen/"
+default-theme = "navy"
+preferred-dark-theme = "navy"
+no-section-label = true
+
+[output.html.search]
+enable = true

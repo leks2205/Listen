@@ -1,0 +1,9 @@
+{"onResponseReceivedActions":[{"appendContinuationItemsAction":{"continuationItems":[
+ {"musicResponsiveListItemRenderer":{
+   "playlistItemData":{"videoId":"songC"},
+   "flexColumns":[
+     {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Third"}]}}},
+     {"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Artist C","navigationEndpoint":{"browseEndpoint":{"browseId":"UCc"}}}]}}}
+   ]}},
+ {"continuationItemRenderer":{"continuationEndpoint":{"continuationCommand":{"token":"BODYTOKEN"}}}}
+]}}]}

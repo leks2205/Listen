@@ -1,0 +1,20 @@
+[package]
+name = "listen-local"
+description = "Local music folder backend for Listen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+listen-core.workspace = true
+listen-source.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+rand.workspace = true
+url = "2"
+walkdir = "2"
+lofty = "0.22"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

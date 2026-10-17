@@ -1,0 +1,4 @@
+The *.json translation tables in this folder are derived from Feishin (https://github.com/jeffvli/feishin),
+(c) jeffvli and the Feishin contributors including its Weblate translators, GPL-3.0 (../../LICENSES/GPL-3.0.txt).
+They were selected and merged with Listen's own strings (listen/*.json, AGPL-3.0-or-later) by tools/gen_i18n.py
+in 2026-10. See ../../NOTICE.md.
