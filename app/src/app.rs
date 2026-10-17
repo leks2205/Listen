@@ -809,6 +809,8 @@ pub enum Message {
     AutoDjLoaded(Result<Vec<Song>, String>),
     /// A planned AI DJ set (generation, result).
     DjPlanned(u64, Result<dj::Planned, listen_dj::DjError>),
+    /// Periodic AI DJ refill check.
+    DjCheck,
     DjPreviewDone(Result<(), listen_dj::DjError>),
     /// The AI DJ button in the queue panel.
     ToggleAiDj,
@@ -2123,6 +2125,7 @@ impl Listen {
         self.restored = None;
         self.demo_started = true;
         self.sleep_manual_start();
+        self.dj_not_stalled();
         self.dj_interrupt();
         self.bump_token();
         self.playback.position = Duration::ZERO;
@@ -2283,6 +2286,7 @@ impl Listen {
 
     fn stop_player(&mut self) -> Task<Message> {
         self.playback.playing = false;
+        self.dj_not_stalled();
         if let Some(task) = self.dlna_stop_task() {
             return task;
         }
@@ -2407,6 +2411,7 @@ impl Listen {
                 self.dj_interrupt();
                 self.playback.playing = false;
                 self.playback.position = Duration::ZERO;
+                self.dj_queue_ended();
             }
             PlayerEvent::Error(e) => {
                 if let Some(task) = self.dj_clip_failed() {
@@ -3890,12 +3895,16 @@ impl Listen {
                         let refs: Vec<ImageRef> = picked.iter().filter_map(|s| s.image.clone()).collect();
                         self.queue.add_last(picked, true);
                         let images = self.request_images(refs.iter().map(Some));
+                        if let Some(play) = self.dj_after_fill() {
+                            return Task::batch([images, play]);
+                        }
                         return if had_next { images } else { Task::batch([images, self.refresh_next()]) };
                     }
                     Err(e) => tracing::warn!("Auto-DJ: {e}"),
                 }
             }
             Message::DjPlanned(generation, result) => return self.dj_planned(generation, result),
+            Message::DjCheck => return self.dj_watch(),
             Message::DjPreviewDone(result) => self.dj_preview_done(result),
             Message::Rip(m) => return self.on_rip(m),
             Message::Offline(m) => return self.on_offline(m),
@@ -3954,6 +3963,7 @@ impl Listen {
             }
             if self.ai_dj_on() {
                 subs.push(playback::subscription(self.player_config.voice()));
+                subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::DjCheck));
             }
             if self.fade_active() {
                 subs.push(iced::time::every(fade::TICK).map(|_| Message::FadeTick));

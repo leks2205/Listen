@@ -54,6 +54,10 @@ pub struct DjState {
     played: Vec<Played>,
     last_line: Option<String>,
     busy: bool,
+    /// When `busy` was set, to notice a plan that never came back.
+    busy_since: Option<Instant>,
+    /// The queue ran out while the DJ was still planning: play the set when it lands.
+    stalled: bool,
     pub brk: Break,
     /// The line on screen: (text, spoken).
     pub caption: Option<(String, bool)>,
@@ -122,6 +126,29 @@ pub async fn resolve_slot(sources: &Sources, slot: Option<Slot>) -> Result<Optio
         Some(Slot::Song(song)) => stream_track(sources, &song).await.map(Some),
         None => Ok(None),
     }
+}
+
+/// A plan that has not returned after this long is given up on (the requests
+/// themselves time out well before).
+const BUSY_LIMIT: Duration = Duration::from_secs(240);
+
+/// Why a set is not planned now; `None` when it should be.
+fn plan_blocker(on: bool, busy: bool, upcoming: usize, backing_off: bool) -> Option<&'static str> {
+    if !on {
+        Some("off")
+    } else if busy {
+        Some("already planning")
+    } else if upcoming > 0 {
+        Some("songs still queued")
+    } else if backing_off {
+        Some("backing off")
+    } else {
+        None
+    }
+}
+
+fn busy_expired(busy: bool, since: Option<Instant>, now: Instant) -> bool {
+    busy && since.is_some_and(|t| now.duration_since(t) > BUSY_LIMIT)
 }
 
 impl Listen {
@@ -240,6 +267,7 @@ impl Listen {
         self.save_config();
         self.dj.generation += 1;
         self.dj.busy = false;
+        self.dj.stalled = false;
         self.drop_break();
         self.dj.caption = None;
         if !on {
@@ -533,20 +561,69 @@ impl Listen {
         Task::none()
     }
 
-    /// Plans the next set when the current song is the last one queued.
-    pub(super) fn dj_maybe_plan(&mut self) -> Task<Message> {
-        if !self.ai_dj_on() || self.dj.busy || self.queue.upcoming() > 0 {
+    /// Periodic check (the track-change trigger alone can be missed): unsticks a
+    /// plan that never returned and plans again once the queue is down to its last song.
+    pub(super) fn dj_watch(&mut self) -> Task<Message> {
+        if !self.ai_dj_on() {
             return Task::none();
         }
-        if self.dj.backoff_until.is_some_and(|t| Instant::now() < t) {
-            return self.fetch_autodj();
+        if busy_expired(self.dj.busy, self.dj.busy_since, Instant::now()) {
+            tracing::warn!("AI DJ: a plan did not come back in time; dropping it");
+            self.dj.generation += 1;
+            self.dj.busy = false;
+            self.dj.busy_since = None;
         }
-        let Some(current) = self.queue.current().map(|i| i.song.clone()) else { return Task::none() };
-        let Some(key) = self.dj.key.clone() else { return self.fetch_autodj() };
+        self.dj_maybe_plan()
+    }
+
+    /// Plays on when the queue had run out and songs have arrived since.
+    fn dj_resume(&mut self) -> Option<Task<Message>> {
+        if !self.dj.stalled || self.playback.playing || self.queue.peek_next().is_none() {
+            return None;
+        }
+        self.dj.stalled = false;
+        tracing::info!("AI DJ: the queue had run out; playing the new songs");
+        self.queue.advance();
+        Some(self.start_current())
+    }
+
+    /// Plays the new songs if the queue had run out (also after the Auto-DJ filled in).
+    pub(super) fn dj_after_fill(&mut self) -> Option<Task<Message>> {
+        if self.ai_dj_on() { self.dj_resume() } else { None }
+    }
+
+    /// The queue ended with the DJ on: whatever arrives next must start.
+    pub(super) fn dj_queue_ended(&mut self) {
+        self.dj.stalled = self.ai_dj_on() && self.queue.upcoming() == 0;
+    }
+
+    pub(super) fn dj_not_stalled(&mut self) {
+        self.dj.stalled = false;
+    }
+
+    /// Plans the next set when the current song is the last one queued.
+    pub(super) fn dj_maybe_plan(&mut self) -> Task<Message> {
+        if let Some(why) =
+            plan_blocker(self.ai_dj_on(), self.dj.busy, self.queue.upcoming(), self.backing_off())
+        {
+            tracing::debug!("AI DJ: not planning ({why})");
+            return if why == "backing off" { self.fetch_autodj() } else { Task::none() };
+        }
+        let Some(current) = self.queue.current().map(|i| i.song.clone()) else {
+            tracing::debug!("AI DJ: not planning (nothing playing)");
+            return Task::none();
+        };
+        let Some(key) = self.dj.key.clone() else {
+            tracing::debug!("AI DJ: not planning (no key)");
+            return self.fetch_autodj();
+        };
         let seed = self.dj.seed.get_or_insert_with(|| current.clone()).clone();
         let source =
             self.sources.get(&seed.server_id).or_else(|| self.sources.get(&current.server_id)).cloned();
-        let Some(source) = source else { return Task::none() };
+        let Some(source) = source else {
+            tracing::debug!("AI DJ: not planning (source not connected)");
+            return Task::none();
+        };
 
         self.roll_quota();
         let s = self.config.settings.ai_dj.clone();
@@ -560,6 +637,7 @@ impl Listen {
         self.save_quota();
         self.dj.sets_since_talk += 1;
         self.dj.busy = true;
+        self.dj.busy_since = Some(Instant::now());
         // Where the break sits, at random among what fits: talking over the
         // end of the song needs enough of it left for Gemini to answer.
         let remaining = self.duration().saturating_sub(self.playback.position).as_secs_f32();
@@ -796,6 +874,9 @@ impl Listen {
             }
         }
         let images = self.request_images(refs.iter().map(Some));
+        if let Some(play) = self.dj_resume() {
+            return Task::batch([images, play]);
+        }
         Task::batch([images, self.refresh_next()])
     }
 
@@ -834,6 +915,10 @@ impl Listen {
             }
             _ => BreakMode::Between,
         }
+    }
+
+    fn backing_off(&self) -> bool {
+        self.dj.backoff_until.is_some_and(|t| Instant::now() < t)
     }
 
     fn dj_failed(&mut self, e: DjError) -> Task<Message> {
@@ -1120,4 +1205,28 @@ fn save_clip(dir: &std::path::Path, pcm: &listen_dj::wav::Pcm) -> Result<PathBuf
     let path = dir.join(format!("break-{stamp}.wav"));
     std::fs::write(&path, listen_dj::wav::encode(pcm)).map_err(|e| e.to_string())?;
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plans_only_on_the_last_song_when_idle() {
+        assert_eq!(plan_blocker(true, false, 0, false), None);
+        assert_eq!(plan_blocker(false, false, 0, false), Some("off"));
+        assert_eq!(plan_blocker(true, true, 0, false), Some("already planning"));
+        assert_eq!(plan_blocker(true, false, 2, false), Some("songs still queued"));
+        assert_eq!(plan_blocker(true, false, 0, true), Some("backing off"));
+    }
+
+    #[test]
+    fn a_plan_that_never_returns_is_given_up() {
+        let now = Instant::now();
+        let long_ago = now.checked_sub(BUSY_LIMIT + Duration::from_secs(1));
+        assert!(busy_expired(true, long_ago, now));
+        assert!(!busy_expired(false, long_ago, now));
+        assert!(!busy_expired(true, Some(now), now));
+        assert!(!busy_expired(true, None, now));
+    }
 }
