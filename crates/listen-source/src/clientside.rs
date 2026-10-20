@@ -143,18 +143,16 @@ fn sort_songs(items: &mut [Song], q: &SongQuery) {
 }
 
 /// The songs that match the filters and the search, in the query's order.
+///
+/// One-shot use: no haystack Vec is built for every row. The per-field checks
+/// lower-case only the rows that reach the search filter, and only until a field
+/// matches, which is what the old code did. [`SongList`] is for lists that are
+/// queried again and again.
 pub fn songs(items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
     let needle = needle_of(q);
     let fav = q.favorite_filter();
-    // Only pay for the haystacks when there is something to search for.
-    let search = needle.is_some() && !needle.as_ref().is_some_and(|n| n.contains('\u{1f}'));
-    let hay: Option<Vec<String>> = search.then(|| items.iter().map(haystack).collect());
-    let mut out: Vec<Song> = items
-        .into_iter()
-        .enumerate()
-        .filter(|(i, s)| song_matches(s, hay.as_ref().map(|h| h[*i].as_str()), needle.as_deref(), fav, q))
-        .map(|(_, s)| s)
-        .collect();
+    let mut out: Vec<Song> =
+        items.into_iter().filter(|s| song_matches(s, None, needle.as_deref(), fav, q)).collect();
     sort_songs(&mut out, q);
     out
 }

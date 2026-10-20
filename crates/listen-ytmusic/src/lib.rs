@@ -863,14 +863,19 @@ impl MusicSource for YouTubeMusic {
     }
 
     async fn songs(&self, q: &SongQuery) -> Result<Page<Song>> {
-        let list: std::sync::Arc<clientside::SongList> = match (q.favorite_filter(), self.guest) {
-            (_, true) => std::sync::Arc::new(clientside::SongList::new(vec![])),
+        // The liked playlist is fetched per page anyway, so a one-shot query is
+        // cheaper than building and discarding a haystack per song.
+        let items = match (q.favorite_filter(), self.guest) {
+            (_, true) => query::songs_in(vec![], q),
             (Some(true), false) => {
-                std::sync::Arc::new(clientside::SongList::new(self.playlist_songs(LIKED_PLAYLIST).await?))
+                let liked = self.playlist_songs(LIKED_PLAYLIST).await?;
+                query::songs_in(liked, q)
             }
-            (_, false) => self.library_list().await?,
+            (_, false) => {
+                let list = self.library_list().await?;
+                query::songs_in_list(&list, q)
+            }
         };
-        let items = query::songs_in_list(&list, q);
         Ok(Self::page(&items, q.start, q.limit))
     }
 
