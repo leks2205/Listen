@@ -429,6 +429,10 @@ fn build_fixture() -> Vec<Scanned> {
         sc("case/02.wav", "Ten", &["F"], Some("loud"), Some("f"), 2),
         // No artist at all -> Unknown Artist.
         sc("unknown/01.wav", "Eleven", &[], Some("Nameless"), None, 1),
+        // Same folder + album, one track with an explicit album artist and one
+        // without (whose track artist becomes the album artist): two groups, one id.
+        sc("same/01.wav", "Twelve", &["X"], Some("Alike"), Some("X"), 1),
+        sc("same/02.wav", "Thirteen", &["X"], Some("Alike"), None, 2),
     ]
 }
 
@@ -448,8 +452,8 @@ fn index_build_matches_the_old_linear_lookups() {
         assert_eq!(a.song.artists, b.song.artists);
     }
     assert_eq!(
-        new.albums.iter().map(|e| (&e.album.id, &e.album.name)).collect::<Vec<_>>(),
-        old.albums.iter().map(|e| (&e.album.id, &e.album.name)).collect::<Vec<_>>()
+        new.albums.iter().map(|e| (&e.album.id, &e.album.name, e.album.artist_line())).collect::<Vec<_>>(),
+        old.albums.iter().map(|e| (&e.album.id, &e.album.name, e.album.artist_line())).collect::<Vec<_>>()
     );
     assert_eq!(new.artists.len(), old.artists.len());
     for (a, b) in new.artists.iter().zip(&old.artists) {
@@ -468,6 +472,16 @@ fn index_build_matches_the_old_linear_lookups() {
     let various = new.albums.iter().filter(|e| e.album.artist_line() == "Various Artists").count();
     assert_eq!(various, 1);
     assert_eq!(new.tracks.iter().filter(|t| t.song.album_id.is_none()).count(), 1);
+    // Duplicate album id: the explicit album artist and the implied one share a
+    // folder and album name, so both groups hash to the same id. Both the old and
+    // the new build keep two entries and point both tracks at the first group's
+    // album artists.
+    let alike: Vec<_> = new.albums.iter().filter(|e| e.album.name == "Alike").collect();
+    assert_eq!(alike.len(), 2, "two groups");
+    assert_eq!(alike[0].album.id, alike[1].album.id, "one id");
+    let same: Vec<_> = new.tracks.iter().filter(|t| t.path.starts_with("/music/same")).collect();
+    assert_eq!(same.len(), 2);
+    assert_eq!(same[0].song.album_artists, same[1].song.album_artists);
 }
 
 /// The step-1 `sorted_songs`: same haystack filter, but `sort_by_key` (the key is

@@ -312,6 +312,9 @@ impl Listen {
             M::EditSave => return self.edit_save(),
             M::EditSaved(Ok((server, secret, handle))) => {
                 let id = server.id.clone();
+                let old_root =
+                    self.config.servers.iter().find(|s| s.id == id).map(|s| (s.kind, s.url.clone()));
+                let new_root = server.url.clone();
                 let options =
                     self.servers.edit.as_ref().map_or_else(|| self.config.options_of(&id), |f| f.options);
                 apply_edit(
@@ -321,6 +324,12 @@ impl Listen {
                     secret.as_deref(),
                     options,
                 );
+                if let Some((SourceKind::Local, old)) = old_root
+                    && old != new_root
+                {
+                    // The old folder's cache would otherwise stay behind forever.
+                    listen_local::forget_cache(&id, std::path::Path::new(&old));
+                }
                 if let Some(f) = &self.servers.edit {
                     set_music_dir(&mut self.config, &id, &f.music_server, &f.music_local);
                 }

@@ -6,6 +6,7 @@
 use crate::scan::Scanned;
 use listen_core::model::ServerId;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -13,6 +14,12 @@ const MAGIC: &[u8; 8] = b"LSTNSCAN";
 const VERSION: u32 = 1;
 /// Bump when a field changes meaning; the version alone is not enough.
 const SCHEMA: &str = "rel,mtime,len,title,artists,album,album_artist,track,disc,year,genres,codec,bit_rate,sample_rate,bit_depth,bpm,gain,duration,embedded_art";
+/// Upper bound for the capacity reserved from a cache-file count. Corrupt or
+/// hostile counts must not turn into a large allocation before the entries fail.
+const MAX_PREALLOC: usize = 65_536;
+/// Longest plausible track duration (about 115 days); also keeps the sum in
+/// `Index::build` far away from `Duration`'s overflow panic.
+const MAX_DURATION_SECS: u64 = 10_000_000;
 
 /// An exact modification time: seconds since the epoch plus nanoseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,15 +90,19 @@ impl ScanCache {
         }
         let mut body = Reader { data: body, at: 0 };
         let count = usize::try_from(body.u64()?).ok()?;
-        // Each entry needs at least its type tag and a small key; this also stops
-        // a corrupt count from making a huge `HashMap`.
-        if count > body.data.len() {
+        // An entry is at least: key length + mtime (8+4) + length (8) + type tag (1),
+        // i.e. 25 bytes with an empty key. Checking this before allocating stops a
+        // corrupt count from reserving a huge `HashMap`.
+        if count > body.data.len() / 25 {
             return None;
         }
-        let mut entries = HashMap::with_capacity(count);
+        let mut entries = HashMap::with_capacity(count.min(MAX_PREALLOC));
         for _ in 0..count {
             let rel = body.string()?;
             let mtime = Stamp { secs: body.i64()?, nanos: body.u32()? };
+            if mtime.nanos >= 1_000_000_000 {
+                return None;
+            }
             let len = body.u64()?;
             let scanned = match body.u8()? {
                 0 => None,
@@ -155,15 +166,43 @@ pub(crate) fn encode(
     out
 }
 
+/// Removes temp files a killed writer left behind. Only files matching our own
+/// `.library-*.tmp` pattern and older than an hour are touched, so another
+/// process's fresh temp file is never deleted.
+fn sweep_stale_tmp(dir: &Path) {
+    const STALE: Duration = Duration::from_secs(60 * 60);
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Some(cutoff) = SystemTime::now().checked_sub(STALE) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !(name.starts_with(".library-") && name.ends_with(".tmp")) {
+            continue;
+        }
+        let stale = entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < cutoff);
+        if stale && let Err(e) = std::fs::remove_file(entry.path()) {
+            tracing::debug!("could not remove stale cache temp {}: {e}", entry.path().display());
+        }
+    }
+}
+
 /// Writes next to the target and renames, so a reader sees the old file or the new one.
 pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     let Some(dir) = path.parent() else { return Err(std::io::Error::other("cache path has no folder")) };
     std::fs::create_dir_all(dir)?;
+    sweep_stale_tmp(dir);
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("cache.bin");
     static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = dir.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
-    if let Err(e) = std::fs::write(&tmp, data) {
+    let write = || -> std::io::Result<()> {
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(data)?;
+        // Flush the data to disk before the rename, so a crash cannot leave a
+        // renamed file with unflushed contents.
+        file.sync_all()
+    };
+    if let Err(e) = write() {
         let _ = std::fs::remove_file(&tmp);
         return Err(e);
     }
@@ -176,17 +215,22 @@ pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The file name for a server and root; separate from the platform cache folder so
+/// it can be tested without `ProjectDirs` (and without a real home directory).
+pub(crate) fn cache_name(server: &ServerId, root: &Path) -> String {
+    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    format!(
+        "library-{:016x}-{:016x}.bin",
+        crate::fnv1a(server.0.as_str()),
+        crate::fnv1a(&root.to_string_lossy())
+    )
+}
+
 /// Where this root's cache lives: the platform cache folder, one file per server and
 /// canonical root path. `None` if no cache folder can be determined.
 pub(crate) fn cache_file(server: &ServerId, root: &Path) -> Option<PathBuf> {
     let dirs = directories::ProjectDirs::from("", "", "Listen")?;
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    let name = format!(
-        "library-{:016x}-{:016x}.bin",
-        crate::fnv1a(server.0.as_str()),
-        crate::fnv1a(&root.to_string_lossy())
-    );
-    Some(dirs.cache_dir().join("listen-local").join(name))
+    Some(dirs.cache_dir().join("listen-local").join(cache_name(server, root)))
 }
 
 // ---- binary encoding -------------------------------------------------------
@@ -337,10 +381,15 @@ impl<'a> Reader<'a> {
     }
     fn strings(&mut self) -> Option<Vec<String>> {
         let n = usize::try_from(self.u32()?).ok()?;
-        if n > self.data.len() {
+        // Each string needs at least its 4-byte length; this bounds the Vec.
+        if n > self.data.len() / 4 {
             return None;
         }
-        (0..n).map(|_| self.string()).collect()
+        let mut out = Vec::with_capacity(n.min(MAX_PREALLOC));
+        for _ in 0..n {
+            out.push(self.string()?);
+        }
+        Some(out)
     }
     fn opt_u32(&mut self) -> Option<Option<u32>> {
         match self.u8()? {
@@ -387,7 +436,16 @@ impl<'a> Reader<'a> {
                 album_gain: self.opt_f32()?,
                 album_peak: self.opt_f32()?,
             },
-            duration: Duration::new(self.u64()?, self.u32()?),
+            duration: {
+                let secs = self.u64()?;
+                let nanos = self.u32()?;
+                // `Duration::new` panics on nanos >= 1e9; a huge sec value would
+                // also overflow the `Duration` sum over all tracks in `Index::build`.
+                if nanos >= 1_000_000_000 || secs > MAX_DURATION_SECS {
+                    return None;
+                }
+                Duration::new(secs, nanos)
+            },
             folder_art: None,
             embedded_art: self.bool()?,
         })
@@ -415,5 +473,140 @@ mod tests {
             stamp(UNIX_EPOCH - Duration::new(1, 250_000_000)),
             Some(Stamp { secs: -2, nanos: 750_000_000 })
         );
+    }
+
+    fn sample_cache() -> Vec<u8> {
+        let scanned = vec![Scanned {
+            rel: "a.wav".into(),
+            path: PathBuf::new(),
+            modified: Some(UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
+            title: "Title".into(),
+            artists: vec!["Artist".into()],
+            album: Some("Album".into()),
+            album_artist: Some("Artist".into()),
+            track: Some(1),
+            disc: Some(1),
+            year: Some(2020),
+            genres: vec!["Rock".into()],
+            codec: Some("flac".into()),
+            bit_rate: Some(900_000),
+            sample_rate: Some(44_100),
+            bit_depth: Some(16),
+            bpm: Some(120),
+            gain: Default::default(),
+            duration: Duration::from_secs(100),
+            folder_art: None,
+            embedded_art: true,
+        }];
+        encode(&scanned, &[(0, 1234)], &[("bad.wav".into(), Stamp { secs: 1, nanos: 0 }, 77)])
+    }
+
+    /// A cache file around an arbitrary body, with a matching checksum (so the
+    /// decoder's own bounds checks are what gets exercised).
+    fn wrapped(body: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(MAGIC);
+        put_u32(&mut out, VERSION);
+        put_u64(&mut out, crate::fnv1a(SCHEMA));
+        put_u64(&mut out, body.len() as u64);
+        put_u64(&mut out, crate::fnv1a_bytes(body));
+        out.extend_from_slice(body);
+        out
+    }
+
+    #[test]
+    fn a_valid_cache_decodes() {
+        assert!(ScanCache::decode(&sample_cache()).is_some());
+    }
+
+    #[test]
+    fn decode_rejects_every_truncation_and_flipped_byte() {
+        let data = sample_cache();
+        for len in 0..data.len() {
+            assert!(ScanCache::decode(&data[..len]).is_none(), "truncated at {len}");
+        }
+        for i in 0..data.len() {
+            let mut flipped = data.clone();
+            flipped[i] ^= 0x40;
+            assert!(ScanCache::decode(&flipped).is_none(), "flipped byte {i}");
+        }
+        // Explicit body-checksum mismatch: a body byte without a new checksum.
+        let mut body_flip = data.clone();
+        body_flip[36] ^= 0x01;
+        assert!(ScanCache::decode(&body_flip).is_none(), "body checksum mismatch");
+    }
+
+    #[test]
+    fn decode_rejects_a_huge_count_before_allocating() {
+        // The count needs at least 25 body bytes per entry.
+        let mut body = Vec::new();
+        put_u64(&mut body, u64::MAX);
+        assert!(ScanCache::decode(&wrapped(&body)).is_none());
+
+        // Two entries need at least 50 body bytes, but only 25 are there.
+        let mut body = vec![0u8; 8 + 25];
+        body[..8].copy_from_slice(&2u64.to_le_bytes());
+        assert!(ScanCache::decode(&wrapped(&body)).is_none());
+    }
+
+    #[test]
+    fn decode_rejects_out_of_range_string_lengths() {
+        // A relative path whose length would read past the body.
+        let mut body = Vec::new();
+        put_u64(&mut body, 1);
+        put_u32(&mut body, u32::MAX);
+        assert!(ScanCache::decode(&wrapped(&body)).is_none());
+
+        // An artist list with a count that would reserve a huge Vec.
+        let mut body = Vec::new();
+        put_u64(&mut body, 1);
+        put_string(&mut body, "a");
+        put_i64(&mut body, 0);
+        put_u32(&mut body, 0);
+        put_u64(&mut body, 0);
+        put_u8(&mut body, 1);
+        put_string(&mut body, "title");
+        put_u32(&mut body, u32::MAX);
+        assert!(ScanCache::decode(&wrapped(&body)).is_none());
+    }
+
+    fn duration_body(secs: u64, nanos: u32) -> Vec<u8> {
+        let mut body = Vec::new();
+        put_u64(&mut body, 1); // count
+        put_string(&mut body, "a");
+        put_i64(&mut body, 0);
+        put_u32(&mut body, 0);
+        put_u64(&mut body, 0);
+        put_u8(&mut body, 1); // positive entry
+        put_string(&mut body, "title");
+        put_u32(&mut body, 0); // artists
+        put_u8(&mut body, 0); // album
+        put_u8(&mut body, 0); // album_artist
+        put_u8(&mut body, 0); // track
+        put_u8(&mut body, 0); // disc
+        put_u8(&mut body, 0); // year
+        put_u32(&mut body, 0); // genres
+        put_u8(&mut body, 0); // codec
+        put_u8(&mut body, 0); // bit_rate
+        put_u8(&mut body, 0); // sample_rate
+        put_u8(&mut body, 0); // bit_depth
+        put_u8(&mut body, 0); // bpm
+        for _ in 0..4 {
+            put_u8(&mut body, 0); // gain options
+        }
+        put_u64(&mut body, secs);
+        put_u32(&mut body, nanos);
+        put_u8(&mut body, 0); // embedded_art
+        body
+    }
+
+    #[test]
+    fn decode_rejects_duration_values_that_would_panic_or_overflow() {
+        // `Duration::new(0, 1_000_000_000)` would panic.
+        assert!(ScanCache::decode(&wrapped(&duration_body(0, 1_000_000_000))).is_none());
+        // A huge sec value would overflow the sum over all tracks in `Index::build`.
+        assert!(ScanCache::decode(&wrapped(&duration_body(MAX_DURATION_SECS + 1, 0))).is_none());
+        // The largest accepted value still decodes.
+        assert!(ScanCache::decode(&wrapped(&duration_body(MAX_DURATION_SECS, 999_999_999))).is_some());
     }
 }

@@ -3272,18 +3272,22 @@ impl Listen {
                     secrets.set(&server.id, &secret);
                 }
                 // Signing in to the same account again replaces the old entry.
-                let replaced: Vec<ServerId> = self
+                let replaced: Vec<(ServerId, String)> = self
                     .config
                     .servers
                     .iter()
                     .filter(|s| s.kind == server.kind && s.url == server.url && s.username == server.username)
-                    .map(|s| s.id.clone())
+                    .map(|s| (s.id.clone(), s.url.clone()))
                     .collect();
-                self.config.servers.retain(|s| !replaced.contains(&s.id));
-                for id in &replaced {
+                let replaced_ids: Vec<ServerId> = replaced.iter().map(|(id, _)| id.clone()).collect();
+                self.config.servers.retain(|s| !replaced_ids.contains(&s.id));
+                for (id, url) in &replaced {
                     self.sources.remove(id);
                     self.config.server_options.remove(&id.0);
                     self.config.music_dirs.remove(&id.0);
+                    if server.kind == SourceKind::Local {
+                        listen_local::forget_cache(id, std::path::Path::new(url));
+                    }
                 }
                 let id = server.id.clone();
                 self.commit_pending_options(&id);
@@ -3393,6 +3397,11 @@ impl Listen {
                 }
                 if let Some(secrets) = &self.secrets {
                     secrets.delete(&id);
+                }
+                if let Some(server) = self.config.servers.iter().find(|s| s.id == id)
+                    && server.kind == SourceKind::Local
+                {
+                    listen_local::forget_cache(&id, std::path::Path::new(&server.url));
                 }
                 self.config.servers.retain(|s| s.id != id);
                 self.sources.remove(&id);
