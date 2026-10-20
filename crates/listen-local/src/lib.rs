@@ -156,13 +156,18 @@ impl Index {
         }
 
         // Tracks, in file order; `files` index -> tracks index is the identity.
+        // The first entry with an id wins, like the linear `find` it replaces.
+        let mut entry_by_id: HashMap<String, usize> = HashMap::with_capacity(entries.len());
+        for (i, (album, _)) in entries.iter().enumerate() {
+            entry_by_id.entry(album.id.clone()).or_insert(i);
+        }
         let mut tracks: Vec<Track> = Vec::with_capacity(files.len());
         for (i, f) in files.iter().enumerate() {
             let album_id = album_of.get(&i).cloned();
             let album_artists = album_id
                 .as_ref()
-                .and_then(|id| entries.iter().find(|(a, _)| &a.id == id))
-                .map(|(a, _)| a.album_artists.clone())
+                .and_then(|id| entry_by_id.get(id))
+                .map(|&i| entries[i].0.album_artists.clone())
                 .unwrap_or_default();
             let artist_names: Vec<String> =
                 if f.artists.is_empty() { vec![UNKNOWN_ARTIST.into()] } else { f.artists.clone() };
@@ -234,6 +239,14 @@ impl Index {
             .collect();
         albums.sort_by_key(|e| e.album.name.to_lowercase());
         let album_by_id = albums.iter().enumerate().map(|(i, e)| (e.album.id.clone(), i)).collect();
+        // One pass over the albums; each album's artist ids are a set, so no album
+        // is counted twice for the same artist.
+        let mut album_count_by_artist: HashMap<&str, u32> = HashMap::new();
+        for e in &albums {
+            for id in &e.artist_ids {
+                *album_count_by_artist.entry(id.as_str()).or_default() += 1;
+            }
+        }
 
         // Artists: every name that is a track artist or album artist.
         let mut names: HashMap<String, String> = HashMap::new();
@@ -256,7 +269,7 @@ impl Index {
         let mut artists: Vec<Artist> = names
             .into_iter()
             .map(|(id, name)| Artist {
-                album_count: Some(albums.iter().filter(|e| e.artist_ids.contains(&id)).count() as u32),
+                album_count: Some(album_count_by_artist.get(id.as_str()).copied().unwrap_or(0)),
                 song_count: song_counts.get(&id).copied(),
                 id,
                 server_id: server.clone(),
@@ -307,8 +320,9 @@ fn page<T: Clone>(all: Vec<T>, start: usize, limit: usize) -> Page<T> {
     Page { items, start_index: start, total: Some(total) }
 }
 
-fn contains(haystack: &str, needle: &str) -> bool {
-    haystack.to_lowercase().contains(&needle.to_lowercase())
+/// `needle` is already lower-cased: the caller hoists that out of its row loop.
+fn contains(haystack: &str, needle_lower: &str) -> bool {
+    haystack.to_lowercase().contains(needle_lower)
 }
 
 /// A folder on this computer, scanned into memory.
@@ -347,6 +361,7 @@ impl LocalFolder {
     }
 
     fn sorted_songs(&self, query: &SongQuery) -> Vec<Song> {
+        let needle = query.search.as_deref().map(str::to_lowercase);
         let mut tracks: Vec<&Track> = self
             .index
             .tracks
@@ -354,7 +369,7 @@ impl LocalFolder {
             .filter(|t| {
                 query.genre.as_ref().is_none_or(|g| t.song.genres.iter().any(|x| x.eq_ignore_ascii_case(g)))
             })
-            .filter(|t| query.search.as_ref().is_none_or(|s| t.haystack.contains(&s.to_lowercase())))
+            .filter(|t| needle.as_ref().is_none_or(|s| t.haystack.contains(s)))
             .filter(|_| !query.favorites_only)
             .collect();
         match query.sort {
@@ -383,6 +398,7 @@ impl LocalFolder {
     }
 
     fn sorted_albums(&self, query: &AlbumQuery) -> Vec<Album> {
+        let needle = query.search.as_deref().map(str::to_lowercase);
         let mut albums: Vec<&Entry> = self
             .index
             .albums
@@ -392,10 +408,9 @@ impl LocalFolder {
             })
             .filter(|e| query.artist_id.as_ref().is_none_or(|a| e.artist_ids.contains(a)))
             .filter(|e| {
-                query
-                    .search
+                needle
                     .as_ref()
-                    .is_none_or(|s| contains(&e.album.name, s) || contains(&e.album.artist_line(), s))
+                    .is_none_or(|n| contains(&e.album.name, n) || contains(&e.album.artist_line(), n))
             })
             .filter(|_| !query.favorites_only)
             .collect();
@@ -484,11 +499,12 @@ impl MusicSource for LocalFolder {
     }
 
     async fn artists(&self, query: &ListQuery) -> Result<Page<Artist>> {
+        let needle = query.search.as_deref().map(str::to_lowercase);
         let all: Vec<Artist> = self
             .index
             .artists
             .iter()
-            .filter(|a| query.search.as_ref().is_none_or(|s| contains(&a.name, s)))
+            .filter(|a| needle.as_ref().is_none_or(|n| contains(&a.name, n)))
             .cloned()
             .collect();
         Ok(page(all, query.start, query.limit))
@@ -545,8 +561,9 @@ impl MusicSource for LocalFolder {
             .into_iter()
             .take(limit)
             .collect();
+        let needle = text.to_lowercase();
         let artists =
-            self.index.artists.iter().filter(|a| contains(&a.name, text)).take(limit).cloned().collect();
+            self.index.artists.iter().filter(|a| contains(&a.name, &needle)).take(limit).cloned().collect();
         Ok(SearchResults { songs, albums, artists, playlists: Vec::new() })
     }
 

@@ -60,6 +60,12 @@ pub fn new_songs(ids: &[String], existing: &[String]) -> Vec<String> {
     ids.iter().filter(|i| seen.insert(i.as_str())).cloned().collect()
 }
 
+/// `songs` whose id is in `ids`, in `songs` order (for the "Added N songs" text).
+fn shown_songs(songs: &[Song], ids: &[String]) -> Vec<Song> {
+    let have: std::collections::HashSet<&str> = ids.iter().map(String::as_str).collect();
+    songs.iter().filter(|s| have.contains(s.id.as_str())).cloned().collect()
+}
+
 /// "“Title”" or "N songs".
 fn what(songs: &[Song], n: usize) -> String {
     if n == 1 {
@@ -137,7 +143,7 @@ impl Listen {
                     }
                 }
                 let n = ids.len();
-                let shown: Vec<Song> = songs.iter().filter(|s| ids.contains(&s.id)).cloned().collect();
+                let shown = shown_songs(&songs, &ids);
                 source
                     .add_to_playlist(&id, &ids)
                     .await
@@ -205,5 +211,35 @@ mod tests {
         let have: Vec<String> = ["c"].map(String::from).to_vec();
         assert_eq!(new_songs(&ids, &have), ["a", "b"]);
         assert!(new_songs(&ids, &ids).is_empty());
+    }
+
+    /// The old per-song `Vec::contains` scan, kept as the equivalence reference.
+    fn shown_songs_old(songs: &[Song], ids: &[String]) -> Vec<Song> {
+        songs.iter().filter(|s| ids.contains(&s.id)).cloned().collect()
+    }
+
+    #[test]
+    fn shown_songs_matches_the_linear_scan_order_and_message() {
+        let mut songs: Vec<Song> = (0..6)
+            .map(|i| {
+                let mut s = crate::demo::album_songs(0).remove(0);
+                s.id = format!("id-{i}");
+                s.title = format!("Title {i}");
+                s
+            })
+            .collect();
+        songs[2].id = "id-1".into(); // duplicate id inside `songs`
+        // Selection with repeats and ids that are not in `songs`.
+        let ids: Vec<String> =
+            ["id-1", "id-4", "missing", "id-2", "id-1", "id-9", "id-0"].map(String::from).to_vec();
+        let new = shown_songs(&songs, &ids);
+        let old = shown_songs_old(&songs, &ids);
+        assert_eq!(
+            new.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            old.iter().map(|s| s.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(new.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["id-0", "id-1", "id-1", "id-4"]);
+        assert_eq!(what(&new, ids.len()), what(&old, ids.len()));
+        assert_eq!(what(&new, 7), "7 songs");
     }
 }
