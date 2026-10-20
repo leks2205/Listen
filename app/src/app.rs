@@ -1464,6 +1464,7 @@ impl Listen {
         server: ServerConfig,
         secret: String,
         options: listen_core::config::ServerOptions,
+        full_scan: bool,
     ) -> Result<SourceHandle, String> {
         let source: Arc<dyn MusicSource> = match server.kind {
             SourceKind::Subsonic => {
@@ -1488,9 +1489,14 @@ impl Listen {
                 }
                 Arc::new(yt)
             }
-            SourceKind::Local => Arc::new(
-                listen_local::LocalFolder::connect(server.id.clone(), &server.url).await.map_err(err)?,
-            ),
+            SourceKind::Local => {
+                let folder = if full_scan {
+                    listen_local::LocalFolder::connect_full(server.id.clone(), &server.url).await
+                } else {
+                    listen_local::LocalFolder::connect(server.id.clone(), &server.url).await
+                };
+                Arc::new(folder.map_err(err)?)
+            }
             SourceKind::Jellyfin => Arc::new(
                 listen_jellyfin::Jellyfin::connect_with(
                     server.id.clone(),
@@ -1535,18 +1541,26 @@ impl Listen {
 
     /// Connects a server without switching to it (silently skipped without credentials).
     fn connect_background(&mut self, id: ServerId) -> Task<Message> {
+        self.connect_background_mode(id, false)
+    }
+
+    fn connect_background_mode(&mut self, id: ServerId, full_scan: bool) -> Task<Message> {
         let Some(server) = self.config.servers.iter().find(|s| s.id == id).cloned() else {
             return Task::none();
         };
         let Some(secret) = self.secret_of(&server) else { return Task::none() };
         let options = self.config.options_of(&id);
-        Task::perform(Self::connect_source(server, secret, options), move |r| {
+        Task::perform(Self::connect_source(server, secret, options, full_scan), move |r| {
             Message::Connected(id.clone(), r)
         })
     }
 
     /// Connects a configured server with its stored credentials.
     fn connect_server(&mut self, id: ServerId) -> Task<Message> {
+        self.connect_server_mode(id, false)
+    }
+
+    fn connect_server_mode(&mut self, id: ServerId, full_scan: bool) -> Task<Message> {
         let Some(server) = self.config.servers.iter().find(|s| s.id == id).cloned() else {
             return Task::none();
         };
@@ -1561,7 +1575,7 @@ impl Listen {
         };
         self.connecting = true;
         let options = self.config.options_of(&id);
-        Task::perform(Self::connect_source(server, secret, options), move |r| {
+        Task::perform(Self::connect_source(server, secret, options, full_scan), move |r| {
             Message::Connected(id.clone(), r)
         })
     }
@@ -1683,7 +1697,7 @@ impl Listen {
         self.note_pending_options(&server.id, options);
         Task::perform(
             async move {
-                let handle = Self::connect_source(server.clone(), secret.clone(), options).await?;
+                let handle = Self::connect_source(server.clone(), secret.clone(), options, false).await?;
                 Ok((server, secret, handle))
             },
             Message::LoggedIn,
@@ -3344,9 +3358,9 @@ impl Listen {
                 self.sources.remove(&id);
                 if self.config.active_server.as_ref() == Some(&id) {
                     self.connecting = true;
-                    return self.connect_server(id);
+                    return self.connect_server_mode(id, true);
                 }
-                return self.connect_background(id);
+                return self.connect_background_mode(id, true);
             }
             Message::SwitchServer(id) => {
                 self.adding_server = false;

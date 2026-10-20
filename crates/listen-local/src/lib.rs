@@ -1,6 +1,7 @@
 //! Local music folder backend: scans a directory once on connect, reads tags
 //! and cover art with `lofty`, and serves the library from memory.
 
+mod cache;
 pub mod details;
 mod scan;
 pub mod tags;
@@ -23,8 +24,12 @@ use std::time::SystemTime;
 const UNKNOWN_ARTIST: &str = "Unknown Artist";
 const VARIOUS_ARTISTS: &str = "Various Artists";
 
-fn fnv1a(text: &str) -> u64 {
-    text.bytes().fold(0xcbf29ce484222325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100000001b3))
+pub(crate) fn fnv1a(text: &str) -> u64 {
+    fnv1a_bytes(text.as_bytes())
+}
+
+pub(crate) fn fnv1a_bytes(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf29ce484222325, |h, b| (h ^ u64::from(*b)).wrapping_mul(0x100000001b3))
 }
 
 fn artist_id(name: &str) -> String {
@@ -325,6 +330,13 @@ fn contains(haystack: &str, needle_lower: &str) -> bool {
     haystack.to_lowercase().contains(needle_lower)
 }
 
+/// Scans `root` with this server's persistent tag cache; `full` ignores and
+/// rewrites it (a "Full rescan", for editors that preserve modification times).
+pub fn scan_cached(server: &ServerId, root: &Path, full: bool) -> Vec<Scanned> {
+    let cache = cache::cache_file(server, root);
+    scan::scan_with_cache(root, cache.as_deref(), full)
+}
+
 /// A folder on this computer, scanned into memory.
 pub struct LocalFolder {
     server_id: ServerId,
@@ -335,6 +347,15 @@ pub struct LocalFolder {
 impl LocalFolder {
     /// Scans `root` (off the async executor); fails if it is not a folder.
     pub async fn connect(server_id: ServerId, root: &str) -> Result<Self> {
+        Self::connect_with(server_id, root, false).await
+    }
+
+    /// Like [`LocalFolder::connect`], but re-reads every tag and rewrites the cache.
+    pub async fn connect_full(server_id: ServerId, root: &str) -> Result<Self> {
+        Self::connect_with(server_id, root, true).await
+    }
+
+    async fn connect_with(server_id: ServerId, root: &str, full: bool) -> Result<Self> {
         let root = PathBuf::from(root.trim());
         if !root.is_dir() {
             return Err(SourceError::Other(format!("{} is not a folder.", root.display())));
@@ -342,9 +363,14 @@ impl LocalFolder {
         let (scan_root, id) = (root.clone(), server_id.clone());
         let index = tokio::task::spawn_blocking(move || {
             let started = std::time::Instant::now();
-            let files = scan(&scan_root);
+            let files = scan_cached(&id, &scan_root, full);
+            let scanned = started.elapsed();
             let index = Index::build(&id, files);
-            tracing::info!("scanned {} songs in {:?}", index.tracks.len(), started.elapsed());
+            tracing::info!(
+                "scanned {} songs in {:?} ({scanned:?} reading tags)",
+                index.tracks.len(),
+                started.elapsed()
+            );
             index
         })
         .await

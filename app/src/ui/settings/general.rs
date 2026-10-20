@@ -36,7 +36,7 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
         .on_press_maybe((!active).then(|| Message::SwitchServer(server.id.clone())));
         let rescan_button: Option<Element<'_, Message>> =
             (server.kind == listen_core::model::SourceKind::Local).then(|| {
-                button(label_w("Rescan", metrics::font_md(), t.foreground, Weight::Semibold))
+                button(label_w("Full rescan", metrics::font_md(), t.foreground, Weight::Semibold))
                     .padding(Padding::from([8.0, 16.0]))
                     .style(style::default_button(t))
                     .on_press(Message::RescanServer(server.id.clone()))

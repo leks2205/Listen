@@ -565,7 +565,7 @@ impl Listen {
         let options = form.options;
         Task::perform(
             async move {
-                let handle = Self::connect_source(server.clone(), secret, options).await?;
+                let handle = Self::connect_source(server.clone(), secret, options, false).await?;
                 Ok((server, new_secret, handle))
             },
             |r| Message::Servers(ServersMsg::EditSaved(r)),

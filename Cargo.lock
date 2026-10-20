@@ -4042,6 +4042,7 @@ name = "listen-local"
 version = "0.36.0"
 dependencies = [
  "async-trait",
+ "directories",
  "listen-core",
  "listen-source",
  "lofty",
