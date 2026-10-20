@@ -34,19 +34,29 @@ pub fn albums_in(items: Vec<Album>, q: &AlbumQuery) -> Vec<Album> {
     clientside::albums(items, &q)
 }
 
-/// `items` (library order, or the liked songs) searched and sorted per `q`.
-pub fn songs_in(items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
+/// The YouTube Music-specific interpretation of a list query (library order,
+/// the "liked" list needs no second favourite check).
+pub fn library_query(q: &SongQuery) -> SongQuery {
     let own = matches!(q.sort, SongSort::RecentlyAdded | SongSort::Id);
     let liked_only = q.favorite_filter() == Some(true);
-    let q = SongQuery {
+    SongQuery {
         // The liked list was chosen by the caller; its songs need no second check.
         favorites_only: false,
         favorite: if liked_only { None } else { q.favorite },
         sort: if own { SongSort::Id } else { q.sort },
         order: library_order(own, q.order),
         ..q.clone()
-    };
-    clientside::songs(items, &q)
+    }
+}
+
+/// `items` (library order, or the liked songs) searched and sorted per `q`.
+pub fn songs_in(items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
+    clientside::songs(items, &library_query(q))
+}
+
+/// The same query over an already-prepared library list (haystacks cached).
+pub fn songs_in_list(list: &clientside::SongList, q: &SongQuery) -> Vec<Song> {
+    list.query(&library_query(q))
 }
 
 #[cfg(test)]

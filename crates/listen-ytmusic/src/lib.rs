@@ -26,7 +26,7 @@ use listen_core::model::{
 use listen_core::settings::StreamQuality;
 use listen_source::{
     AlbumQuery, AlbumSort, AnalysisSource, AudioInput, Capabilities, HomeShelf, ItemKind, ListQuery,
-    MusicSource, Result, ScrobbleEvent, SongQuery, SourceError, StreamSource, Urgency,
+    MusicSource, Result, ScrobbleEvent, SongQuery, SourceError, StreamSource, Urgency, clientside,
 };
 use rand::seq::SliceRandom;
 use std::time::{Duration, Instant};
@@ -54,6 +54,12 @@ pub const GUEST_COOKIE: &str = "SOCS=CAI; SAPISID=guest;";
 struct Cached<T> {
     at: Instant,
     items: Vec<T>,
+}
+
+/// The liked songs with their search haystacks, built once per library refresh.
+struct CachedSongs {
+    at: Instant,
+    list: std::sync::Arc<clientside::SongList>,
 }
 
 /// Runs a ytmapi-rs call: `yt!(self, yt => yt.get_album(id).await)` →
@@ -96,7 +102,7 @@ pub struct YouTubeMusic {
     server_id: ServerId,
     yt: YtMusic<token::CookieToken>,
     ytdlp: ytdlp::YtDlp,
-    songs: Mutex<Option<Cached<Song>>>,
+    songs: Mutex<Option<CachedSongs>>,
     albums: Mutex<Option<Cached<Album>>>,
     /// Complete playlists by browse id, and ones being loaded page by page.
     playlist_cache: Mutex<std::collections::HashMap<String, Cached<Song>>>,
@@ -427,18 +433,24 @@ impl YouTubeMusic {
         *self.artist_page.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
-    async fn library_songs(&self) -> Result<Vec<Song>> {
+    async fn library_list(&self) -> Result<std::sync::Arc<clientside::SongList>> {
         if self.guest {
-            return Ok(vec![]);
+            return Ok(std::sync::Arc::new(clientside::SongList::new(vec![])));
         }
         let mut cache = self.songs.lock().await;
         if let Some(c) = cache.as_ref().filter(|c| c.at.elapsed() < LIBRARY_TTL) {
-            return Ok(c.items.clone());
+            return Ok(c.list.clone());
         }
         // YouTube Music's Library > Songs (liked songs are under Favorites = Liked Music).
         let items = self.browse_songs("FEmusic_liked_videos").await?;
-        *cache = Some(Cached { at: Instant::now(), items: items.clone() });
-        Ok(items)
+        let list = std::sync::Arc::new(clientside::SongList::new(items));
+        *cache = Some(CachedSongs { at: Instant::now(), list: list.clone() });
+        Ok(list)
+    }
+
+    /// The library as plain songs, for the callers that do not query it (random play).
+    async fn library_songs(&self) -> Result<Vec<Song>> {
+        Ok(self.library_list().await?.songs().to_vec())
     }
 
     async fn library_albums(&self) -> Result<Vec<Album>> {
@@ -851,12 +863,14 @@ impl MusicSource for YouTubeMusic {
     }
 
     async fn songs(&self, q: &SongQuery) -> Result<Page<Song>> {
-        let items = match (q.favorite_filter(), self.guest) {
-            (_, true) => vec![],
-            (Some(true), false) => self.playlist_songs(LIKED_PLAYLIST).await?,
-            (_, false) => self.library_songs().await?,
+        let list: std::sync::Arc<clientside::SongList> = match (q.favorite_filter(), self.guest) {
+            (_, true) => std::sync::Arc::new(clientside::SongList::new(vec![])),
+            (Some(true), false) => {
+                std::sync::Arc::new(clientside::SongList::new(self.playlist_songs(LIKED_PLAYLIST).await?))
+            }
+            (_, false) => self.library_list().await?,
         };
-        let items = query::songs_in(items, q);
+        let items = query::songs_in_list(&list, q);
         Ok(Self::page(&items, q.start, q.limit))
     }
 
@@ -1676,7 +1690,10 @@ mod tests {
         // A guest session needs no network to be built.
         let yt =
             YouTubeMusic::connect(ServerId("yt".into()), "").await.expect("a guest session builds offline");
-        *yt.songs.lock().await = Some(Cached { at: Instant::now(), items: vec![] });
+        *yt.songs.lock().await = Some(CachedSongs {
+            at: Instant::now(),
+            list: std::sync::Arc::new(clientside::SongList::new(vec![])),
+        });
         *yt.albums.lock().await = Some(Cached { at: Instant::now(), items: vec![] });
         yt.playlist_cache.lock().await.insert("PL1".into(), Cached { at: Instant::now(), items: vec![] });
         yt.playlist_partial.lock().await.insert("PL2".into(), vec![]);

@@ -75,47 +75,134 @@ pub fn albums(mut items: Vec<Album>, q: &AlbumQuery) -> Vec<Album> {
     items
 }
 
-/// The songs that match the filters and the search, in the query's order.
-pub fn songs(mut items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
-    let needle = q.search.as_deref().map(lower).filter(|s| !s.is_empty());
-    let fav = q.favorite_filter();
-    items.retain(|s| {
-        needle.as_ref().is_none_or(|n| {
+/// One lower-cased search haystack: the three searched fields, separated by a
+/// character a typed needle cannot contain (`\u{1f}`), so no match can run from
+/// one field into the next. Each field uses the same `lower()` as before.
+fn haystack(s: &Song) -> String {
+    let mut hay = lower(&s.title);
+    hay.push('\u{1f}');
+    hay.push_str(&lower(&s.artist_line()));
+    hay.push('\u{1f}');
+    hay.push_str(&lower(s.album.as_deref().unwrap_or("")));
+    hay
+}
+
+fn needle_of(q: &SongQuery) -> Option<String> {
+    q.search.as_deref().map(lower).filter(|s| !s.is_empty())
+}
+
+/// The old per-field checks, kept for a needle that itself contains the separator
+/// (pasted text), where the joined haystack could match across a field boundary.
+fn search_matches(s: &Song, hay: Option<&str>, needle: Option<&str>) -> bool {
+    let Some(n) = needle else { return true };
+    match hay {
+        Some(hay) => hay.contains(n),
+        None => {
             lower(&s.title).contains(n)
                 || lower(&s.artist_line()).contains(n)
                 || s.album.as_deref().is_some_and(|a| lower(a).contains(n))
-        }) && fav.is_none_or(|f| s.favorite == f)
-            && q.has_rating.is_none_or(|r| s.rating.is_some() == r)
-            && q.min_rating.is_none_or(|m| s.rating.unwrap_or(0) >= m)
-            && has_any(&s.genres, &q.genres, &q.genre)
-            && by_artist(&s.artists, &q.artist_ids, &None)
-            && in_years(s.year, q.year_min, q.year_max)
-    });
+        }
+    }
+}
+
+fn song_matches(s: &Song, hay: Option<&str>, needle: Option<&str>, fav: Option<bool>, q: &SongQuery) -> bool {
+    search_matches(s, hay, needle)
+        && fav.is_none_or(|f| s.favorite == f)
+        && q.has_rating.is_none_or(|r| s.rating.is_some() == r)
+        && q.min_rating.is_none_or(|m| s.rating.unwrap_or(0) >= m)
+        && has_any(&s.genres, &q.genres, &q.genre)
+        && by_artist(&s.artists, &q.artist_ids, &None)
+        && in_years(s.year, q.year_min, q.year_max)
+}
+
+fn sort_songs(items: &mut [Song], q: &SongQuery) {
     match q.sort {
-        SongSort::Name => items.sort_by_key(|s| lower(&s.title)),
-        SongSort::Album => items.sort_by_key(|s| {
+        SongSort::Name => items.sort_by_cached_key(|s| lower(&s.title)),
+        SongSort::Album => items.sort_by_cached_key(|s| {
             (lower(s.album.as_deref().unwrap_or("")), s.disc_number.unwrap_or(0), s.track_number.unwrap_or(0))
         }),
-        SongSort::Artist => items.sort_by_key(|s| lower(&s.artist_line())),
+        SongSort::Artist => items.sort_by_cached_key(|s| lower(&s.artist_line())),
         SongSort::AlbumArtist => {
-            items.sort_by_key(|s| lower(&listen_core::model::join_names(&s.album_artists)))
+            items.sort_by_cached_key(|s| lower(&listen_core::model::join_names(&s.album_artists)))
         }
         SongSort::Year | SongSort::ReleaseYear | SongSort::ReleaseDate => {
             items.sort_by_key(|s| s.year.unwrap_or(0))
         }
         SongSort::Bpm => items.sort_by_key(|s| s.bpm.unwrap_or(0)),
         SongSort::Channels => items.sort_by_key(|s| s.channels.unwrap_or(0)),
-        SongSort::Comment => items.sort_by_key(|s| lower(s.comment.as_deref().unwrap_or(""))),
+        SongSort::Comment => items.sort_by_cached_key(|s| lower(s.comment.as_deref().unwrap_or(""))),
         SongSort::Duration => items.sort_by_key(|s| s.duration),
         SongSort::Favorited => items.sort_by_key(|s| s.favorite),
-        SongSort::Genre => items.sort_by_key(|s| lower(s.genres.first().map_or("", |g| g.as_str()))),
+        SongSort::Genre => items.sort_by_cached_key(|s| lower(s.genres.first().map_or("", |g| g.as_str()))),
         SongSort::Rating => items.sort_by_key(|s| s.rating.unwrap_or(0)),
         SongSort::MostPlayed => items.sort_by_key(|s| s.play_count.unwrap_or(0)),
         SongSort::RecentlyAdded => items.sort_by(|a, b| a.created.cmp(&b.created)),
         SongSort::Random | SongSort::Id | SongSort::RecentlyPlayed => {}
     }
-    apply_order(&mut items, q.order, q.sort == SongSort::Random);
-    items
+    apply_order(items, q.order, q.sort == SongSort::Random);
+}
+
+/// The songs that match the filters and the search, in the query's order.
+pub fn songs(items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
+    let needle = needle_of(q);
+    let fav = q.favorite_filter();
+    // Only pay for the haystacks when there is something to search for.
+    let search = needle.is_some() && !needle.as_ref().is_some_and(|n| n.contains('\u{1f}'));
+    let hay: Option<Vec<String>> = search.then(|| items.iter().map(haystack).collect());
+    let mut out: Vec<Song> = items
+        .into_iter()
+        .enumerate()
+        .filter(|(i, s)| song_matches(s, hay.as_ref().map(|h| h[*i].as_str()), needle.as_deref(), fav, q))
+        .map(|(_, s)| s)
+        .collect();
+    sort_songs(&mut out, q);
+    out
+}
+
+/// Songs together with their search haystacks, for a list that is queried again
+/// and again (YouTube Music's library): the lower-casing happens once.
+#[derive(Debug, Clone)]
+pub struct SongList {
+    songs: Vec<Song>,
+    haystacks: Vec<String>,
+}
+
+impl SongList {
+    pub fn new(songs: Vec<Song>) -> Self {
+        let haystacks = songs.iter().map(haystack).collect();
+        Self { songs, haystacks }
+    }
+
+    pub fn songs(&self) -> &[Song] {
+        &self.songs
+    }
+
+    pub fn len(&self) -> usize {
+        self.songs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.songs.is_empty()
+    }
+
+    /// The matching songs, in the query's order, cloned out of the cached list.
+    pub fn query(&self, q: &SongQuery) -> Vec<Song> {
+        let needle = needle_of(q);
+        let fav = q.favorite_filter();
+        let cross_field = needle.as_ref().is_some_and(|n| n.contains('\u{1f}'));
+        let mut out: Vec<Song> = self
+            .songs
+            .iter()
+            .enumerate()
+            .filter(|(i, s)| {
+                let hay = (!cross_field).then(|| self.haystacks[*i].as_str());
+                song_matches(s, hay, needle.as_deref(), fav, q)
+            })
+            .map(|(_, s)| s.clone())
+            .collect();
+        sort_songs(&mut out, q);
+        out
+    }
 }
 
 /// The artists that match the filters and the search, in the query's order.
@@ -147,7 +234,7 @@ pub fn page<T: Clone>(items: &[T], start: usize, limit: usize) -> Page<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use listen_core::model::{ServerId, SourceKind};
+    use listen_core::model::{GainInfo, ServerId, SourceKind};
     use std::time::Duration;
 
     fn album(id: &str, name: &str, artist: &str, year: i32, fav: bool) -> Album {
@@ -214,5 +301,135 @@ mod tests {
         let p = page(&all, 2, 5);
         assert_eq!((p.items.len(), p.total), (1, Some(3)));
         assert!(page(&all, 9, 5).items.is_empty());
+    }
+
+    // ---- search equivalence -------------------------------------------------
+
+    fn song(id: &str, title: &str, artist: &str, album: &str) -> Song {
+        Song {
+            mbz: Default::default(),
+            extra: Default::default(),
+            id: id.into(),
+            server_id: ServerId("s".into()),
+            source: SourceKind::Local,
+            title: title.into(),
+            artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
+            album_artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
+            album: Some(album.into()),
+            album_id: Some(album.into()),
+            image: None,
+            duration: Duration::from_secs(100),
+            track_number: Some(1),
+            disc_number: Some(1),
+            year: Some(2000),
+            genres: vec!["Rock".into()],
+            codec: None,
+            bit_rate: None,
+            sample_rate: None,
+            bit_depth: None,
+            bpm: None,
+            favorite: false,
+            rating: None,
+            play_count: None,
+            gain: GainInfo::default(),
+            explicit: false,
+            path: None,
+            size: None,
+            suffix: None,
+            channels: None,
+            created: None,
+            comment: None,
+        }
+    }
+
+    fn unicode_songs() -> Vec<Song> {
+        vec![
+            song("1", "Straße", "İlker", "ısparta"),
+            song("2", "ΟΔΟΣ", "ΣΙΓΜΑ", "ΤΕΛΟΣ"),
+            song("3", "ﬁle", "Ångström", "Café"),
+            song("4", "emoji 🎵", "DJ", "Album 🎶"),
+            song("5", "Title", "Artist", "Album"),
+            song("6", "lower", "artist", "album"),
+        ]
+    }
+
+    /// The pre-haystack implementation, kept as the equivalence reference.
+    fn songs_old(mut items: Vec<Song>, q: &SongQuery) -> Vec<Song> {
+        let needle = q.search.as_deref().map(lower).filter(|s| !s.is_empty());
+        let fav = q.favorite_filter();
+        items.retain(|s| {
+            needle.as_ref().is_none_or(|n| {
+                lower(&s.title).contains(n)
+                    || lower(&s.artist_line()).contains(n)
+                    || s.album.as_deref().is_some_and(|a| lower(a).contains(n))
+            }) && fav.is_none_or(|f| s.favorite == f)
+                && q.has_rating.is_none_or(|r| s.rating.is_some() == r)
+                && q.min_rating.is_none_or(|m| s.rating.unwrap_or(0) >= m)
+                && has_any(&s.genres, &q.genres, &q.genre)
+                && by_artist(&s.artists, &q.artist_ids, &None)
+                && in_years(s.year, q.year_min, q.year_max)
+        });
+        match q.sort {
+            SongSort::Name => items.sort_by_key(|s| lower(&s.title)),
+            SongSort::Album => items.sort_by_key(|s| {
+                (
+                    lower(s.album.as_deref().unwrap_or("")),
+                    s.disc_number.unwrap_or(0),
+                    s.track_number.unwrap_or(0),
+                )
+            }),
+            SongSort::Artist => items.sort_by_key(|s| lower(&s.artist_line())),
+            _ => {}
+        }
+        apply_order(&mut items, q.order, q.sort == SongSort::Random);
+        items
+    }
+
+    #[test]
+    fn haystack_search_matches_the_per_field_lowercase_checks() {
+        let library = unicode_songs();
+        let needles = [
+            "",
+            " ",
+            "title artist",
+            "ß",
+            "Straße",
+            "STRASSE",
+            "İ",
+            "i\u{307}",
+            "ı",
+            "I",
+            "Σ",
+            "σ",
+            "ς",
+            "ΟΔΟΣ",
+            "ﬁ",
+            "ﬁle",
+            "café",
+            "CAFÉ",
+            "ÅNGSTRÖM",
+            "🎵",
+            "title",
+            "artist",
+            "album",
+            "e a",
+            "\u{1f}",
+            "i\u{307}lker",
+            "ısparta",
+        ];
+        for needle in needles {
+            for sort in [SongSort::Name, SongSort::Album, SongSort::Artist, SongSort::Id] {
+                for order in [SortOrder::Ascending, SortOrder::Descending] {
+                    let q = SongQuery { search: Some(needle.into()), sort, order, ..Default::default() };
+                    let old: Vec<String> =
+                        songs_old(library.clone(), &q).iter().map(|s| s.id.clone()).collect();
+                    let new: Vec<String> = songs(library.clone(), &q).iter().map(|s| s.id.clone()).collect();
+                    let cached: Vec<String> =
+                        SongList::new(library.clone()).query(&q).iter().map(|s| s.id.clone()).collect();
+                    assert_eq!(new, old, "songs() for {needle:?} / {sort:?} / {order:?}");
+                    assert_eq!(cached, old, "SongList for {needle:?} / {sort:?} / {order:?}");
+                }
+            }
+        }
     }
 }

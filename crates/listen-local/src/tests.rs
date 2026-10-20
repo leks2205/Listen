@@ -469,3 +469,89 @@ fn index_build_matches_the_old_linear_lookups() {
     assert_eq!(various, 1);
     assert_eq!(new.tracks.iter().filter(|t| t.song.album_id.is_none()).count(), 1);
 }
+
+/// The step-1 `sorted_songs`: same haystack filter, but `sort_by_key` (the key is
+/// recomputed per comparison). Kept as the reference for the cached-key sort.
+fn sorted_songs_old(folder: &LocalFolder, query: &SongQuery) -> Vec<Song> {
+    let mut tracks: Vec<&Track> = folder
+        .index
+        .tracks
+        .iter()
+        .filter(|t| {
+            query.genre.as_ref().is_none_or(|g| t.song.genres.iter().any(|x| x.eq_ignore_ascii_case(g)))
+        })
+        .filter(|t| query.search.as_ref().is_none_or(|s| t.haystack.contains(&s.to_lowercase())))
+        .filter(|_| !query.favorites_only)
+        .collect();
+    match query.sort {
+        SongSort::Name => tracks.sort_by_key(|t| t.song.title.to_lowercase()),
+        SongSort::Album => tracks.sort_by_key(|t| {
+            (
+                t.song.album.clone().unwrap_or_default().to_lowercase(),
+                t.song.disc_number.unwrap_or(1),
+                t.song.track_number.unwrap_or(0),
+            )
+        }),
+        SongSort::Artist => tracks.sort_by_key(|t| t.song.artist_line().to_lowercase()),
+        SongSort::Year => tracks.sort_by_key(|t| t.song.year.unwrap_or(0)),
+        _ => {}
+    }
+    if query.order == SortOrder::Descending && !matches!(query.sort, SongSort::Random) {
+        tracks.reverse();
+    }
+    tracks.into_iter().map(|t| t.song.clone()).collect()
+}
+
+fn unicode_folder() -> LocalFolder {
+    folder(vec![
+        sc("u/1.flac", "Straße", &["İlker"], Some("ısparta"), Some("İlker"), 1),
+        sc("u/2.flac", "ΟΔΟΣ", &["ΣΙΓΜΑ"], Some("ΤΕΛΟΣ"), Some("ΣΙΓΜΑ"), 1),
+        sc("u/3.flac", "ﬁle", &["Ångström"], Some("Café"), Some("Ångström"), 1),
+        sc("u/4.flac", "emoji 🎵", &["DJ"], Some("Album 🎶"), Some("DJ"), 1),
+        sc("u/5.flac", "Title", &["Artist"], Some("Album"), Some("Artist"), 1),
+        sc("u/6.flac", "lower", &["artist"], Some("album"), Some("artist"), 1),
+    ])
+}
+
+#[test]
+fn cached_sort_keys_keep_the_unicode_search_order() {
+    let folder = unicode_folder();
+    let needles = [
+        "",
+        " ",
+        "title artist",
+        "ß",
+        "Straße",
+        "STRASSE",
+        "İ",
+        "i\u{307}",
+        "ı",
+        "I",
+        "Σ",
+        "σ",
+        "ς",
+        "ΟΔΟΣ",
+        "ﬁ",
+        "ﬁle",
+        "café",
+        "CAFÉ",
+        "ÅNGSTRÖM",
+        "🎵",
+        "title",
+        "artist",
+        "album",
+        "e a",
+        "i\u{307}lker",
+        "ısparta",
+    ];
+    for needle in needles {
+        for sort in [SongSort::Name, SongSort::Album, SongSort::Artist, SongSort::Year] {
+            for order in [SortOrder::Ascending, SortOrder::Descending] {
+                let q = SongQuery { search: Some(needle.into()), sort, order, ..Default::default() };
+                let old: Vec<String> = sorted_songs_old(&folder, &q).iter().map(|s| s.id.clone()).collect();
+                let new: Vec<String> = folder.sorted_songs(&q).iter().map(|s| s.id.clone()).collect();
+                assert_eq!(new, old, "sorted_songs for {needle:?} / {sort:?} / {order:?}");
+            }
+        }
+    }
+}

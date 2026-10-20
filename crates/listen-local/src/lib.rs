@@ -399,15 +399,15 @@ impl LocalFolder {
             .filter(|_| !query.favorites_only)
             .collect();
         match query.sort {
-            SongSort::Name => tracks.sort_by_key(|t| t.song.title.to_lowercase()),
-            SongSort::Album => tracks.sort_by_key(|t| {
+            SongSort::Name => tracks.sort_by_cached_key(|t| t.song.title.to_lowercase()),
+            SongSort::Album => tracks.sort_by_cached_key(|t| {
                 (
                     t.song.album.clone().unwrap_or_default().to_lowercase(),
                     t.song.disc_number.unwrap_or(1),
                     t.song.track_number.unwrap_or(0),
                 )
             }),
-            SongSort::Artist => tracks.sort_by_key(|t| t.song.artist_line().to_lowercase()),
+            SongSort::Artist => tracks.sort_by_cached_key(|t| t.song.artist_line().to_lowercase()),
             SongSort::Year => tracks.sort_by_key(|t| t.song.year.unwrap_or(0)),
             SongSort::RecentlyAdded => tracks.sort_by_key(|t| std::cmp::Reverse(t.added)),
             SongSort::Random => {
