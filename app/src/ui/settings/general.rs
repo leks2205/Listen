@@ -34,13 +34,22 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
         .padding(Padding::from([8.0, 16.0]))
         .style(style::primary_button(t))
         .on_press_maybe((!active).then(|| Message::SwitchServer(server.id.clone())));
-        let rescan_button: Option<Element<'_, Message>> =
+        // "Rescan" is the cheap incremental scan (cache hit for unchanged files);
+        // "Full rescan" re-reads every tag and rewrites the cache.
+        let rescan_buttons: Option<Element<'_, Message>> =
             (server.kind == listen_core::model::SourceKind::Local).then(|| {
-                button(label_w("Full rescan", metrics::font_md(), t.foreground, Weight::Semibold))
-                    .padding(Padding::from([8.0, 16.0]))
-                    .style(style::default_button(t))
-                    .on_press(Message::RescanServer(server.id.clone()))
-                    .into()
+                row![
+                    button(label_w("Rescan", metrics::font_md(), t.foreground, Weight::Semibold))
+                        .padding(Padding::from([8.0, 16.0]))
+                        .style(style::default_button(t))
+                        .on_press(Message::RescanServer(server.id.clone(), false)),
+                    button(label_w("Full rescan", metrics::font_md(), t.foreground, Weight::Semibold))
+                        .padding(Padding::from([8.0, 16.0]))
+                        .style(style::default_button(t))
+                        .on_press(Message::RescanServer(server.id.clone(), true)),
+                ]
+                .spacing(metrics::space_sm())
+                .into()
             });
         let edit_button: Element<'_, Message> =
             button(label_w("Edit", metrics::font_md(), t.foreground, Weight::Semibold))
@@ -67,7 +76,7 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
                 .width(Length::Fill),
                 switch_button,
             ]
-            .extend(rescan_button)
+            .extend(rescan_buttons)
             .push(edit_button)
             .push(remove_button)
             .spacing(metrics::space_sm())

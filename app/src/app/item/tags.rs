@@ -265,8 +265,9 @@ impl Listen {
                         failed.len()
                     ));
                 }
-                // The folder is read again so the library shows the new tags.
-                return self.update(Message::RescanServer(server));
+                // Re-read every tag, not just files whose mtime/size changed: the
+                // editor must not depend on the filesystem's mtime granularity.
+                return self.update(Message::RescanServer(server, true));
             }
         }
         Task::none()

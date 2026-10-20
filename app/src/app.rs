@@ -735,8 +735,9 @@ pub enum Message {
     Connected(ServerId, Result<SourceHandle, String>),
     /// Browse another configured server.
     SwitchServer(ServerId),
-    /// Scans a local folder again (files added, removed or retagged).
-    RescanServer(ServerId),
+    /// Scans a local folder again (files added, removed or retagged). `full`
+    /// ignores the tag cache and re-reads every file ("Full rescan").
+    RescanServer(ServerId, bool),
     /// Open the sign-in page to add a server (keeps the current ones).
     AddServer,
     CancelAddServer,
@@ -3358,13 +3359,13 @@ impl Listen {
                     });
                 }
             }
-            Message::RescanServer(id) => {
+            Message::RescanServer(id, full) => {
                 self.sources.remove(&id);
                 if self.config.active_server.as_ref() == Some(&id) {
                     self.connecting = true;
-                    return self.connect_server_mode(id, true);
+                    return self.connect_server_mode(id, full);
                 }
-                return self.connect_background_mode(id, true);
+                return self.connect_background_mode(id, full);
             }
             Message::SwitchServer(id) => {
                 self.adding_server = false;
