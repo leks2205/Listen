@@ -582,9 +582,13 @@ impl Listen {
         self.dj_maybe_plan()
     }
 
-    /// Plays on when the queue had run out and songs have arrived since.
+    /// Plays on when the queue had run out (or the player went idle) and songs have
+    /// arrived since.
     fn dj_resume(&mut self) -> Option<Task<Message>> {
-        if !self.dj.stalled || self.playback.playing || self.queue.peek_next().is_none() {
+        if self.playback.playing
+            || self.queue.peek_next().is_none()
+            || !(self.dj.stalled || self.playback.idle)
+        {
             return None;
         }
         self.dj.stalled = false;

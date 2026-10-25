@@ -173,6 +173,9 @@ pub struct Playback {
     pub duration: Option<Duration>,
     pub volume: u8,
     pub muted: bool,
+    /// mpv has run out of entries (`idle-active`) since the last start: songs can still
+    /// be queued while nothing plays (see `keep_going`).
+    pub idle: bool,
     /// Current track has been scrobbled as played.
     scrobbled: bool,
     /// Time of the current track actually listened to (seeks do not count).
@@ -546,6 +549,8 @@ pub struct Listen {
     pub spectrum: Option<listen_visualizer::Frame>,
     pub visualizer_error: Option<String>,
     autodj_busy: bool,
+    /// When `autodj_busy` was set, to notice a fetch that never comes back.
+    autodj_since: Option<std::time::Instant>,
     /// The running Auto-DJ fetch was started as the AI DJ's fallback.
     autodj_for_ai: bool,
     /// Keyboard modifiers currently held (the player-bar buttons don't report them).
@@ -998,6 +1003,7 @@ impl Listen {
                 duration: None,
                 volume,
                 muted: false,
+                idle: false,
                 scrobbled: false,
                 played: Duration::ZERO,
                 last_pos: None,
@@ -1057,6 +1063,7 @@ impl Listen {
             spectrum: None,
             visualizer_error: None,
             autodj_busy: false,
+            autodj_since: None,
             autodj_for_ai: false,
             modifiers: iced::keyboard::Modifiers::default(),
             seek_preview: None,
@@ -2088,6 +2095,7 @@ impl Listen {
             return Task::none();
         };
         self.autodj_busy = true;
+        self.autodj_since = Some(std::time::Instant::now());
         self.autodj_for_ai = self.ai_dj_on();
         // More candidates when they get ordered by flow (only the best are queued).
         let spread = if self.config.settings.mixing.flow_select { 6 } else { 3 };
@@ -2110,6 +2118,18 @@ impl Listen {
             },
             Message::AutoDjLoaded,
         )
+    }
+
+    /// A fill that never came back is dropped instead of blocking every later one.
+    fn autodj_timeout(&mut self) {
+        const LIMIT: Duration = Duration::from_secs(120);
+        if let Some(at) = self.autodj_since
+            && at.elapsed() > LIMIT
+        {
+            tracing::warn!("Auto-DJ: a fill did not come back in time; asking again");
+            self.autodj_busy = false;
+            self.autodj_since = None;
+        }
     }
 
     // ---- playback ---------------------------------------------------------------
@@ -2158,6 +2178,7 @@ impl Listen {
         self.dj_not_stalled();
         self.dj_interrupt();
         self.bump_token();
+        self.playback.idle = false;
         self.playback.position = Duration::ZERO;
         self.playback.duration = None;
         self.playback.reset_scrobble();
@@ -2269,7 +2290,12 @@ impl Listen {
             return self.start_current();
         }
         self.stop_first = false;
-        self.stop_player()
+        // The queue ran out of songs that play: whatever gets queued next must start
+        // (`keep_going`), and a DJ set that lands must play (`dj_resume`).
+        let stop = self.stop_player();
+        self.playback.idle = true;
+        self.dj_queue_ended();
+        stop
     }
 
     /// Re-queues mpv's "next" slot after the queue changed.
@@ -2334,6 +2360,8 @@ impl Listen {
 
     fn stop_player(&mut self) -> Task<Message> {
         self.playback.playing = false;
+        // Stopped on purpose: `keep_going` must not start the queue again.
+        self.playback.idle = false;
         self.dj_not_stalled();
         if let Some(task) = self.dlna_stop_task() {
             return task;
@@ -2416,10 +2444,9 @@ impl Listen {
                 }
             }
             PlayerEvent::Volume(v) => tracing::trace!("mpv volume {v:.1}"),
-            PlayerEvent::Muted(_)
-            | PlayerEvent::Codec(_)
-            | PlayerEvent::StreamTitle(_)
-            | PlayerEvent::Restarted => {}
+            PlayerEvent::Muted(_) | PlayerEvent::Codec(_) | PlayerEvent::StreamTitle(_) => {}
+            // A load (or a seek) finished: mpv has something to play again.
+            PlayerEvent::Restarted => self.playback.idle = false,
             PlayerEvent::Advanced => {
                 if let Some(task) = self.dj_on_advanced() {
                     return task; // the AI DJ's break went on air
@@ -2432,6 +2459,7 @@ impl Listen {
                     self.queue.current().map(|i| i.song.title.as_str()).unwrap_or("<end>")
                 );
                 self.bump_token();
+                self.playback.idle = false;
                 self.playback.position = Duration::ZERO;
                 // Keep the old duration: mpv only reports a change, so a next song of
                 // the same length would leave it unset and MPRIS stuck on Paused.
@@ -2471,6 +2499,8 @@ impl Listen {
             PlayerEvent::Ended => {
                 self.dj_interrupt();
                 self.playback.playing = false;
+                // Nothing plays any more; queued songs are started by `keep_going`.
+                self.playback.idle = true;
                 self.playback.position = Duration::ZERO;
                 self.dj_queue_ended();
             }
@@ -3939,6 +3969,7 @@ impl Listen {
             Message::VisualizerFailed(e) => self.visualizer_error = Some(e),
             Message::AutoDjLoaded(result) => {
                 self.autodj_busy = false;
+                self.autodj_since = None;
                 match result {
                     // Started before the AI DJ went on: its picks are not wanted.
                     Ok(_) if self.ai_dj_on() && !self.autodj_for_ai => {
@@ -3981,13 +4012,28 @@ impl Listen {
                         if let Some(play) = self.dj_after_fill() {
                             return Task::batch([images, play]);
                         }
-                        return if had_next { images } else { Task::batch([images, self.refresh_next()]) };
+                        if had_next {
+                            return images;
+                        }
+                        // The queue had run dry: start what just arrived.
+                        return match self.keep_going() {
+                            Some(play) => Task::batch([images, play]),
+                            None => Task::batch([images, self.refresh_next()]),
+                        };
                     }
                     Err(e) => tracing::warn!("Auto-DJ: {e}"),
                 }
             }
             Message::DjPlanned(generation, result) => return self.dj_planned(generation, result),
-            Message::DjCheck => return self.dj_watch(),
+            Message::DjCheck => {
+                self.autodj_timeout();
+                let keep = self.keep_going();
+                let dj = self.dj_watch();
+                return match keep {
+                    Some(play) => Task::batch([play, dj]),
+                    None => dj,
+                };
+            }
             Message::DjPreviewDone(result) => self.dj_preview_done(result),
             Message::Rip(m) => return self.on_rip(m),
             Message::Offline(m) => return self.on_offline(m),
@@ -4046,6 +4092,10 @@ impl Listen {
             }
             if self.ai_dj_on() {
                 subs.push(playback::subscription(self.player_config.voice()));
+            }
+            // Both refill modes promise that the music never stops: the check keeps the
+            // queue fed and starts queued songs when mpv went idle.
+            if self.ai_dj_on() || self.config.settings.auto_dj.enabled {
                 subs.push(iced::time::every(Duration::from_secs(5)).map(|_| Message::DjCheck));
             }
             if self.fade_active() {

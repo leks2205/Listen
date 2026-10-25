@@ -102,6 +102,8 @@ If the text model fails or its limit is reached, similar songs fill in (as if th
 
 Playback never waits for the DJ: if the answer is late, the music simply continues.
 
+If the player ever ends up idle while songs are still queued — a song that will not load, a break whose clip had nothing behind it — a check every five seconds starts the next queued song, so the music picks up again on its own instead of standing still until you press play.
+
 ## Privacy and data sent to Google
 
 Listen has no server of its own. Requests go from your computer straight to Google under your own key.
