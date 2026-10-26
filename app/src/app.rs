@@ -77,6 +77,10 @@ mod window_state;
 pub const INTER: Font = Font::with_name("Inter");
 /// Artwork size requested from servers (Feishin's `itemCard` resolution).
 pub const ART_SIZE: u32 = 300;
+/// How long a source may take to answer its connect ping before the attempt counts as failed.
+const PING_TIMEOUT: Duration = Duration::from_secs(20);
+/// Waits between the start-up connect attempts (three in total).
+const STARTUP_RETRY_DELAYS: [Duration; 2] = [Duration::from_secs(2), Duration::from_secs(5)];
 const ALBUM_PAGE: usize = 200;
 const SONG_PAGE: usize = 200;
 
@@ -1517,7 +1521,13 @@ impl Listen {
                 .map_err(err)?,
             ),
         };
-        source.ping().await.map_err(|e| match e {
+        // A ping that never returns must not hold the whole connect: right after a boot the
+        // network answers late rather than not at all, and a future that neither resolves nor
+        // errors leaves an empty window.
+        let ping = tokio::time::timeout(PING_TIMEOUT, source.ping())
+            .await
+            .map_err(|_| format!("{} did not answer within {} s", server.name, PING_TIMEOUT.as_secs()))?;
+        ping.map_err(|e| match e {
             listen_source::SourceError::Auth(m) if server.kind != SourceKind::YouTubeMusic => {
                 format!("Wrong username or password. ({m})")
             }
@@ -1529,14 +1539,59 @@ impl Listen {
     /// Reconnects on start-up: the active server first, the others in the
     /// background (so switching is instant and queued songs can play).
     fn restore_session(&mut self) -> Task<Message> {
-        let Some(active) = self.config.active_server.clone() else { return Task::none() };
+        let Some(active) = self.config.active_server.clone() else {
+            self.connecting = false;
+            return Task::none();
+        };
         let others: Vec<ServerId> =
             self.config.servers.iter().map(|s| s.id.clone()).filter(|id| *id != active).collect();
-        let mut tasks = vec![self.connect_server(active)];
+        let mut tasks = vec![self.connect_server_retrying(active)];
         for id in others {
             tasks.push(self.connect_background(id));
         }
         Task::batch(tasks)
+    }
+
+    /// The active server on start-up: retried while the network comes up (a cold boot or a
+    /// resume often answers the first attempt with an error or too late). The last failure
+    /// goes out as `Message::Connected(Err)`, which shows the action-required page.
+    fn connect_server_retrying(&mut self, id: ServerId) -> Task<Message> {
+        let Some(server) = self.config.servers.iter().find(|s| s.id == id).cloned() else {
+            return Task::none();
+        };
+        let Some(secret) = self.secret_of(&server) else {
+            if self.source.is_some() {
+                return Task::none();
+            }
+            self.servers.failure = Some(servers::Failure::Credentials { id });
+            return Task::none();
+        };
+        self.connecting = true;
+        let options = self.config.options_of(&id);
+        Task::perform(
+            async move {
+                let mut failures = 0;
+                loop {
+                    match Self::connect_source(server.clone(), secret.clone(), options, false).await {
+                        Ok(handle) => return Ok(handle),
+                        Err(e) => {
+                            failures += 1;
+                            let Some(delay) = STARTUP_RETRY_DELAYS.get(failures - 1) else {
+                                tracing::warn!("start-up connect to {} failed, giving up: {e}", server.id.0);
+                                return Err(e);
+                            };
+                            tracing::warn!(
+                                "start-up connect to {} failed (attempt {failures}), retrying in {} s: {e}",
+                                server.id.0,
+                                delay.as_secs()
+                            );
+                            tokio::time::sleep(*delay).await;
+                        }
+                    }
+                }
+            },
+            move |r| Message::Connected(id.clone(), r),
+        )
     }
 
     /// The stored credential; local folders have none.
@@ -3694,6 +3749,7 @@ impl Listen {
                     self.playlist_page_loaded(),
                     self.request_image(image.as_ref()),
                     self.request_images(covers.iter().map(Some)),
+                    self.load_recommendations(false),
                 ]);
             }
             Message::PlaylistFirstPage(generation, _) | Message::PlaylistMore(generation, _)

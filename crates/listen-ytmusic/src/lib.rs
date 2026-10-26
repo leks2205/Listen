@@ -576,7 +576,8 @@ pub fn capabilities(guest: bool) -> Capabilities {
     if guest {
         base
     } else {
-        base | Capabilities::PLAYLIST_EDIT
+        base | Capabilities::PLAYLIST_RECOMMENDATIONS
+            | Capabilities::PLAYLIST_EDIT
             | Capabilities::PLAYLIST_RENAME
             | Capabilities::PLAYLIST_REMOVE
             | Capabilities::PLAYLIST_REORDER

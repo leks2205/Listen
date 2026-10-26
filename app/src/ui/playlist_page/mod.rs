@@ -5,6 +5,7 @@
 pub mod filters;
 pub mod forms;
 pub mod header;
+pub mod recommended;
 
 use super::label;
 use super::list::ListView;
@@ -54,7 +55,15 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
                         .into()
                 });
             } else {
-                view = view.tail(80.0, || iced::widget::space().height(80.0).into());
+                // The "Recommended" strip sits under the last row (a plain spacer where the
+                // source has no recommendations, e.g. local folders).
+                let strip_id = id.clone();
+                let tail = if state.playlist_page.recommended.shown(&id) {
+                    recommended::height(state, &id)
+                } else {
+                    80.0
+                };
+                view = view.tail(tail, move || recommended::view(state, &strip_id));
             }
             view.view()
         }

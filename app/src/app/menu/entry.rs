@@ -137,7 +137,20 @@ pub struct Ctx<'a> {
 impl<'a> Ctx<'a> {
     pub fn new(state: &'a Listen, target: &'a MenuTarget, list: Option<&'a ListId>) -> Self {
         let server = target.server().or(state.config.active_server.as_ref());
-        let source = server.and_then(|s| state.sources.get(s)).cloned().or_else(|| state.source.clone());
+        // The items' own server first. Only the same kind of source may stand in while it is
+        // still connecting: an "Add to playlist" picker for a YouTube Music song must never
+        // offer another kind of server's playlists (it would list the wrong ones and the add
+        // would go nowhere).
+        let source = match target.server().and_then(|s| state.sources.get(s)).cloned() {
+            Some(source) => Some(source),
+            None => {
+                let same_kind = target
+                    .server()
+                    .and_then(|s| state.config.servers.iter().find(|c| &c.id == s))
+                    .is_none_or(|c| state.source.as_ref().is_some_and(|a| a.kind() == c.kind));
+                state.source.clone().filter(|_| same_kind)
+            }
+        };
         let caps = source.as_ref().map_or(Capabilities::empty(), |s| s.capabilities());
         let browsing = server.is_some() && server == state.config.active_server.as_ref();
         Ctx { state, target, list, source, caps, browsing }

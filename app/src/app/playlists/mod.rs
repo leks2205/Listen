@@ -176,6 +176,15 @@ pub enum PlaylistPageMsg {
     // ---- the picker
     PickerSearch(String),
     SkipDuplicates(bool),
+    // ---- the "Recommended" strip under the playlist's rows
+    /// Fetches the strip (`true`: pick another set, for its refresh button).
+    Recommend(bool),
+    /// Plays the strip's song at this position (and the ones after it).
+    RecommendPlay(usize),
+    /// The "+" of the strip's song at this position.
+    RecommendAdd(usize),
+    /// The strip was fetched (generation, songs).
+    Recommended(u64, Result<Vec<Song>, String>),
     /// Songs were added to a playlist (server, id of a playlist that was created, notice).
     Added(ServerId, Option<String>, Result<String, String>),
 }
@@ -210,6 +219,44 @@ pub struct PlaylistPage {
     pub form: Option<Form>,
     /// The playlist songs were last added to, per server (pinned in the picker).
     pub recent: HashMap<ServerId, String>,
+    /// The "Recommended" strip under the playlist's rows.
+    pub recommended: Recommended,
+}
+
+/// The "Recommended" strip at the bottom of a playlist page: songs that fit the playlist, each
+/// with a "+" that adds it in one click. Kept per playlist for [`Recommended::TTL`], so scrolling
+/// back or reopening the page asks the server nothing.
+#[derive(Debug, Default)]
+pub struct Recommended {
+    /// The playlist the strip belongs to.
+    pub id: Option<String>,
+    /// When `songs` were fetched.
+    pub at: Option<std::time::Instant>,
+    /// The songs to offer.
+    pub songs: Vec<Song>,
+    /// Fetching now.
+    pub loading: bool,
+    /// Why the last fetch failed (the strip then shows it with a Retry button).
+    pub error: Option<String>,
+}
+
+impl Recommended {
+    /// How many songs the strip offers.
+    pub const COUNT: usize = 5;
+    /// How long a fetched strip is shown without asking the server again.
+    pub const TTL: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+    /// Whether the strip has a fresh set of songs for playlist `id`.
+    pub fn fresh(&self, id: &str) -> bool {
+        self.id.as_deref() == Some(id)
+            && self.error.is_none()
+            && self.at.is_some_and(|at| at.elapsed() < Self::TTL)
+    }
+
+    /// Whether the strip is part of playlist `id`'s page right now.
+    pub fn shown(&self, id: &str) -> bool {
+        self.id.as_deref() == Some(id) && (self.loading || self.error.is_some() || !self.songs.is_empty())
+    }
 }
 
 impl PlaylistPage {
@@ -237,6 +284,60 @@ impl Listen {
             PlaylistTarget::Tracks => ListId::Playlist(id.to_string()),
             PlaylistTarget::Albums => ListId::PlaylistAlbums(id.to_string()),
         }
+    }
+
+    /// Fetches the "Recommended" strip of the open playlist (kept per playlist for
+    /// [`Recommended::TTL`]; `again` picks another set, for the refresh button).
+    pub(super) fn load_recommendations(&mut self, again: bool) -> Task<Message> {
+        let Some(detail) = self.library.playlist.clone() else { return Task::none() };
+        let id = detail.playlist.id.clone();
+        let Some(source) = self.source.clone() else { return Task::none() };
+        if !source.capabilities().contains(Capabilities::PLAYLIST_RECOMMENDATIONS) {
+            // No server-side similarity (local folders): the page has no strip.
+            self.playlist_page.recommended = Recommended::default();
+            return Task::none();
+        }
+        let strip = &self.playlist_page.recommended;
+        // A fetch still running for this playlist; one for another playlist is left to finish
+        // (its answer is dropped by the generation check) and does not block this one.
+        let busy = strip.loading && strip.id.as_deref() == Some(id.as_str());
+        if busy || (!again && strip.fresh(&id)) {
+            return Task::none();
+        }
+        let songs = detail.songs;
+        if songs.is_empty() {
+            // Nothing to seed from: an empty playlist has no recommendations either.
+            self.playlist_page.recommended = Recommended { id: Some(id), ..Recommended::default() };
+            return Task::none();
+        }
+        self.playlist_page.recommended =
+            Recommended { id: Some(id), loading: true, ..Recommended::default() };
+        let generation = self.library.playlist_gen;
+        Task::perform(
+            async move { source.playlist_recommendations(&songs, Recommended::COUNT).await.map_err(err) },
+            move |r| Message::PlaylistPage(PlaylistPageMsg::Recommended(generation, r)),
+        )
+    }
+
+    /// The strip's "+": adds that song to the open playlist and drops the row.
+    fn recommend_add(&mut self, index: usize) -> Task<Message> {
+        let Some(song) = self.playlist_page.recommended.songs.get(index).cloned() else {
+            return Task::none();
+        };
+        let Some((id, name)) =
+            self.open_playlist_detail().map(|d| (d.playlist.id.clone(), d.playlist.name.clone()))
+        else {
+            return Task::none();
+        };
+        if self.playlist_page.recommended.id.as_deref() != Some(id.as_str()) {
+            // A strip left over from another playlist: adds would go to the wrong one.
+            return Task::none();
+        }
+        // Optimistic: the row goes at once; a failure is reported in a toast.
+        if index < self.playlist_page.recommended.songs.len() {
+            self.playlist_page.recommended.songs.remove(index);
+        }
+        self.add_songs_to_playlist(id, name, vec![song])
     }
 
     /// Data of the playlist lists (`Listen::list_data`).
@@ -565,6 +666,34 @@ impl Listen {
             P::SkipDuplicates(on) => {
                 self.config.settings.lists.skip_duplicates = on;
                 self.save_config();
+            }
+            P::Recommend(again) => return self.load_recommendations(again),
+            P::RecommendPlay(index) => {
+                let songs = self.playlist_page.recommended.songs.clone();
+                if index < songs.len() {
+                    return self.play_songs(songs, index);
+                }
+            }
+            P::RecommendAdd(index) => return self.recommend_add(index),
+            P::Recommended(generation, result) => {
+                if generation != self.library.playlist_gen {
+                    return Task::none();
+                }
+                let strip = &mut self.playlist_page.recommended;
+                strip.loading = false;
+                match result {
+                    Ok(songs) => {
+                        tracing::debug!("recommended songs: {} for a playlist", songs.len());
+                        strip.at = Some(std::time::Instant::now());
+                        strip.error = None;
+                        strip.songs = songs;
+                    }
+                    Err(e) => {
+                        tracing::warn!("recommended songs failed: {e}");
+                        strip.at = None;
+                        strip.error = Some(e);
+                    }
+                }
             }
             other => return self.on_playlist_edit(other),
         }

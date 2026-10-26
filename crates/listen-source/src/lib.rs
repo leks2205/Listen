@@ -7,8 +7,12 @@ use listen_core::analysis::FileId;
 use listen_core::model::{
     Album, Artist, Folder, Genre, Lyrics, Page, Playlist, SearchResults, Song, SourceKind,
 };
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
+
+/// How many playlist songs the default [`MusicSource::playlist_recommendations`] seeds from.
+pub const RECOMMENDATION_SEEDS: usize = 3;
 
 pub mod clientside;
 pub mod nsp;
@@ -65,6 +69,9 @@ bitflags! {
         const PLAYLIST_REMOVE = 1 << 26;
         /// The server speaks `jukeboxControl`; it may still refuse, so probe with [`MusicSource::jukebox`].
         const JUKEBOX         = 1 << 27;
+        /// [`MusicSource::playlist_recommendations`]: songs that fit a playlist, for the
+        /// "Recommended" strip under its rows.
+        const PLAYLIST_RECOMMENDATIONS = 1 << 28;
     }
 }
 
@@ -599,6 +606,44 @@ pub trait MusicSource: Send + Sync {
             None => Ok((self.playlist_songs(id).await?, None)),
             Some(_) => Ok((vec![], None)),
         }
+    }
+    /// Songs that fit a playlist, for the "Recommended" strip under its rows
+    /// ([`Capabilities::PLAYLIST_RECOMMENDATIONS`]). `songs` are the rows the page shows (the
+    /// playlist's own songs); anything among them is left out. The default seeds the source's own
+    /// similarity with a few of them and picks at random, so asking again reshuffles.
+    async fn playlist_recommendations(&self, songs: &[Song], limit: usize) -> Result<Vec<Song>> {
+        if !self.capabilities().contains(Capabilities::PLAYLIST_RECOMMENDATIONS) {
+            return Err(SourceError::Unsupported);
+        }
+        if songs.is_empty() || limit == 0 {
+            return Ok(vec![]);
+        }
+        // Seeds spread over the playlist: its last, first and middle song.
+        let mut seeds: Vec<&Song> = Vec::new();
+        for at in [songs.len() - 1, 0, songs.len() / 2] {
+            let Some(song) = songs.get(at) else { continue };
+            if seeds.len() < RECOMMENDATION_SEEDS && !seeds.iter().any(|s| s.id == song.id) {
+                seeds.push(song);
+            }
+        }
+        seeds.shuffle(&mut rand::rng());
+        let have: std::collections::HashSet<&str> = songs.iter().map(|s| s.id.as_str()).collect();
+        let mut pool: Vec<Song> = Vec::new();
+        for seed in seeds {
+            // One similarity request per seed, and only until there are enough candidates.
+            for song in self.similar_songs(seed, limit * 3).await.unwrap_or_default() {
+                if have.contains(song.id.as_str()) || pool.iter().any(|p| p.id == song.id) {
+                    continue;
+                }
+                pool.push(song);
+            }
+            if pool.len() >= limit * 2 {
+                break;
+            }
+        }
+        pool.shuffle(&mut rand::rng());
+        pool.truncate(limit);
+        Ok(pool)
     }
     async fn create_playlist(&self, name: &str, songs: &[String]) -> Result<Playlist> {
         let _ = (name, songs);

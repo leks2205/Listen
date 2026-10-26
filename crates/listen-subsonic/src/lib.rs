@@ -480,6 +480,7 @@ pub fn capabilities() -> Capabilities {
         | Capabilities::SCROBBLE
         | Capabilities::LYRICS
         | Capabilities::SIMILAR_SONGS
+        | Capabilities::PLAYLIST_RECOMMENDATIONS
         | Capabilities::ARTIST_INFO
         | Capabilities::ALBUM_ARTISTS
         | Capabilities::DOWNLOAD

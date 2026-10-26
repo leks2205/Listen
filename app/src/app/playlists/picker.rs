@@ -105,13 +105,28 @@ impl Listen {
     ) -> Task<Message> {
         let server = songs[0].server_id.clone();
         let Some(source) = self.sources.get(&server).cloned() else {
-            // Demo: nothing to send; the list of playlists is local.
-            return self.demo_added(&server, &id, &name, songs.len());
+            if self.demo {
+                // Nothing to send; the list of playlists is local.
+                return self.demo_added(&server, &id, &name, songs.len());
+            }
+            // Never a success notice for an add that reached no server.
+            let server_name = self
+                .config
+                .servers
+                .iter()
+                .find(|s| s.id == server)
+                .map_or_else(|| "the server".to_string(), |s| format!("“{}”", s.name));
+            self.toast_error(format!("Not connected to {server_name} — try again in a moment."));
+            return Task::none();
         };
         let ytm = songs[0].source == SourceKind::YouTubeMusic;
         let skip = self.config.settings.lists.skip_duplicates && !ytm && !id.is_empty();
         let browsing = self.config.active_server.as_ref() == Some(&server);
-        if browsing {
+        // Adding to the playlist on screen: its rows and song count changed, so the page is
+        // loaded again afterwards (dropping the detail without that left the page empty).
+        let reopen = browsing && self.library.playlist.as_ref().is_some_and(|p| p.playlist.id == id);
+        let reopen_id = id.clone();
+        if browsing && !reopen {
             self.library.playlist = self.library.playlist.take().filter(|p| p.playlist.id != id);
         }
         if !id.is_empty() {
@@ -158,7 +173,13 @@ impl Listen {
                 Message::PlaylistPage(PlaylistPageMsg::Added(server.clone(), created, text))
             },
         );
-        if browsing { add.chain(self.load_playlists()) } else { add }
+        if reopen {
+            Task::batch([add, self.open_playlist(reopen_id), self.load_playlists()])
+        } else if browsing {
+            add.chain(self.load_playlists())
+        } else {
+            add
+        }
     }
 }
 

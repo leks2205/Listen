@@ -13,6 +13,7 @@ This page explains how to create, change and delete playlists, how to add songs 
 | Remove songs, change the order | yes | no | yes | no |
 | Delete a playlist | yes | no | yes | no |
 | Playlist cover | Navidrome 0.61 and newer | no | no | no |
+| Recommended songs | yes | yes | yes | no |
 | Smart playlists | Navidrome only | no | no | no |
 
 Buttons for things a source cannot do are not shown. On YouTube Music you need to be signed in with an account; as a guest you can browse and play but not change playlists. A playlist you do not own, and YouTube Music's built-in lists such as Liked Music, can be played but not edited. YouTube Music support is unofficial; see [YouTube Music](../getting-started/youtube-music.md).
@@ -62,6 +63,16 @@ The toolbar below has:
 | **Edit rules** | Smart playlists you own: opens the rule editor. |
 | **Edit** | Starts the order-editing mode (see below). |
 | Chevron | Collapses the large header so more rows fit. |
+
+## Recommended songs
+
+Below the last song of a playlist, Listen offers five **Recommended** songs that should fit it: your server's own similarity (Navidrome's and OpenSubsonic's `getSimilarSongs2`, Jellyfin's *Similar*) seeded with the playlist's first, last and middle song, or a YouTube Music radio around them. Songs the playlist already has are never offered, and the five are picked at random from everything that fits, so the strip changes as you open playlists.
+
+- a click on a recommended song plays it and the rest of the strip,
+- the **+** at its right adds it to this playlist in one click; the row disappears and a message confirms it,
+- the ↻ button next to **Recommended** asks for another five.
+
+The strip is cached per playlist for ten minutes, so scrolling up and down or coming back to the page does not ask the server again; **Refresh** in the toolbar, or the ↻ button, asks again. Local folders have no server-side similarity, so they show no strip, and neither does an empty playlist.
 
 ## Editing a playlist
 

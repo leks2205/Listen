@@ -164,6 +164,27 @@ async fn run() -> Result<(), String> {
         Ok(p) => println!("playlists: {}", p.len()),
         Err(e) => println!("playlists: error: {e}"),
     }
+    // The "Recommended" strip of a playlist (read-only): its radio seeds, minus its own songs.
+    if let Ok(list) = &playlists
+        && let Some(p) = list.iter().find(|p| p.song_count.unwrap_or(0) > 2)
+    {
+        match yt.playlist_songs(&p.id).await {
+            Ok(songs) => match yt.playlist_recommendations(&songs, 5).await {
+                Ok(rec) => {
+                    let dupes = rec.iter().filter(|r| songs.iter().any(|s| s.id == r.id)).count();
+                    let names: Vec<&str> = rec.iter().take(5).map(|r| r.title.as_str()).collect();
+                    println!(
+                        "recommended: {} songs for \"{}\" ({dupes} already in it) — {}",
+                        rec.len(),
+                        p.name,
+                        names.join(", ")
+                    );
+                }
+                Err(e) => println!("recommended: error: {e}"),
+            },
+            Err(e) => println!("recommended: could not read \"{}\": {e}", p.name),
+        }
+    }
     // Opens a random handful of playlists and albums with human pauses: this is a real account and must not
     // look like a bot. LISTEN_CHECK_ALL=1 opens all of them (still with short pauses).
     let all = std::env::var("LISTEN_CHECK_ALL").is_ok();

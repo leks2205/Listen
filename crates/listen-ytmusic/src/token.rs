@@ -5,7 +5,7 @@
 use serde_json::Value;
 use sha1::Digest;
 use std::borrow::Cow;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use ytmapi_rs::auth::{AuthToken, LoggedIn, RawResult};
 use ytmapi_rs::error::ErrorKind;
 
@@ -44,8 +44,14 @@ impl CookieToken {
 /// The web client version from the page (like ytmapi-rs), or ytmusicapi's
 /// date-based fallback.
 async fn client_version(cookies: &str) -> String {
+    // Right after a boot or resume the network (Tailscale, DNS) is not answering yet:
+    // without a bound this request sits there and the whole connect never completes.
     let page = async {
-        reqwest::Client::new()
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(10))
+            .build()
+            .ok()?
             .get(YTM)
             .header("User-Agent", USER_AGENT)
             .header("Cookie", cookies)
