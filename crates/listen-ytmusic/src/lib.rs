@@ -101,6 +101,8 @@ pub struct PlaylistEntry {
 pub struct YouTubeMusic {
     server_id: ServerId,
     yt: YtMusic<token::CookieToken>,
+    /// The cookies in use, to read them from the browser again when YouTube rotates the session.
+    session: Option<token::Session>,
     ytdlp: ytdlp::YtDlp,
     songs: Mutex<Option<CachedSongs>>,
     albums: Mutex<Option<Cached<Album>>>,
@@ -248,12 +250,9 @@ impl YouTubeMusic {
     /// or a raw `Cookie` header). Empty = guest.
     pub async fn connect(server_id: ServerId, secret: &str) -> Result<Self> {
         if let Some(profile) = browser::Profile::from_secret(secret) {
-            let page_id = profile.page_id.clone();
-            let header = tokio::task::spawn_blocking(move || profile.youtube_header())
-                .await
-                .map_err(|e| SourceError::Other(e.to_string()))?
-                .map_err(SourceError::Auth)?;
-            return Self::connect_cookies(server_id, &header, page_id, false).await;
+            // The profile, not just its cookies: YouTube rotates the session token while Listen
+            // runs, and the cookies have to be read again when it does (see `token::Session`).
+            return Self::connect_browser(server_id, profile, false).await;
         }
         let cookie = secret;
         let guest = cookie.trim().is_empty() || cookie.trim() == GUEST_COOKIE;
@@ -279,9 +278,27 @@ impl YouTubeMusic {
         guest: bool,
     ) -> Result<Self> {
         let token = token::CookieToken::new(cookie, page_id).await.map_err(SourceError::Auth)?;
+        Self::with_token(server_id, token, guest)
+    }
+
+    /// As [`YouTubeMusic::connect_cookies`], reading the cookies from the browser again while Listen
+    /// runs: YouTube rotates the session token, and an old one is answered as signed out.
+    pub async fn connect_browser(
+        server_id: ServerId,
+        profile: browser::Profile,
+        guest: bool,
+    ) -> Result<Self> {
+        let page_id = profile.page_id.clone();
+        let token = token::CookieToken::from_profile(profile, page_id).await.map_err(SourceError::Auth)?;
+        Self::with_token(server_id, token, guest)
+    }
+
+    fn with_token(server_id: ServerId, token: token::CookieToken, guest: bool) -> Result<Self> {
+        let session = token.session().can_refresh().then(|| token.session());
         let yt =
             ytmapi_rs::YtMusicBuilder::new_rustls_tls().with_auth_token(token).build().map_err(source_err)?;
         Ok(Self {
+            session,
             server_id,
             yt,
             ytdlp: ytdlp::YtDlp::new(),
@@ -731,7 +748,7 @@ impl MusicSource for YouTubeMusic {
         // The first response has ~6 shelves; two more pages cover the usual feed.
         for _ in 0..3 {
             let q = home::HomeQuery { continuation: continuation.take() };
-            let raw = yt_retry!(self, yt => yt.raw_json_query::<home::HomeQuery>(&q).await)?;
+            let raw = self.raw_json(&q).await?;
             let json: serde_json::Value =
                 serde_json::from_str(&raw).map_err(|e| SourceError::Other(format!("home feed: {e}")))?;
             let (page, next) = home::parse(&json);
@@ -1471,16 +1488,58 @@ impl YouTubeMusic {
         ))
     }
 
+    /// Raw InnerTube JSON. YouTube answers *signed out* once it has rotated the session cookie in
+    /// the browser: the cookies are then read again and the request repeated, because the page
+    /// itself parses into an empty library rather than an error.
+    async fn raw_json<Q>(&self, q: &Q) -> Result<String>
+    where
+        Q: ytmapi_rs::query::Query<token::CookieToken>,
+    {
+        let mut retries = 0;
+        let mut refreshed = false;
+        loop {
+            match self.yt.raw_json_query::<Q>(q).await.map_err(source_err) {
+                Ok(text) if !token::signed_out_page(&text) => {
+                    if let Some(session) = &self.session {
+                        session.clear_stale();
+                    }
+                    return Ok(text);
+                }
+                Ok(_) => {
+                    let Some(session) = &self.session else {
+                        return Err(SourceError::Auth("YouTube Music is signed out".into()));
+                    };
+                    if refreshed {
+                        return Err(SourceError::Auth(
+                            "YouTube Music is signed out, even after reading the browser cookies again"
+                                .into(),
+                        ));
+                    }
+                    tracing::warn!("YouTube Music answered signed out — reading the browser cookies again");
+                    session.mark_stale();
+                    refreshed = true;
+                }
+                Err(SourceError::Auth(e)) => return Err(SourceError::Auth(e)),
+                Err(e) if retries < 2 => {
+                    retries += 1;
+                    tracing::debug!("retrying after: {e}");
+                    tokio::time::sleep(Duration::from_millis(400 * retries)).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     /// Sends a raw InnerTube request and parses the answer.
     async fn raw(&self, q: &library::RawPost) -> Result<serde_json::Value> {
-        let text = yt!(self, yt => yt.raw_json_query::<library::RawPost>(q).await)?;
+        let text = self.raw_json(q).await?;
         serde_json::from_str(&text).map_err(|e| SourceError::Other(format!("{}: {e}", q.path)))
     }
 
     /// The raw browse response for `browse_id` (diagnostics).
     pub async fn raw_browse(&self, browse_id: &str) -> Result<serde_json::Value> {
         let q = home::BrowseQuery { browse_id: Some(browse_id.to_string()), continuation: None };
-        let raw = yt_retry!(self, yt => yt.raw_json_query::<home::BrowseQuery>(&q).await)?;
+        let raw = self.raw_json(&q).await?;
         serde_json::from_str(&raw).map_err(|e| SourceError::Other(e.to_string()))
     }
 
@@ -1493,7 +1552,7 @@ impl YouTubeMusic {
         let mut seen = std::collections::HashSet::new();
         for _ in 0..1000 {
             let q = home::BrowseQuery { browse_id: Some(browse_id.to_string()), continuation: cursor.take() };
-            let raw = yt_retry!(self, yt => yt.raw_json_query::<home::BrowseQuery>(&q).await)?;
+            let raw = self.raw_json(&q).await?;
             let json: serde_json::Value =
                 serde_json::from_str(&raw).map_err(|e| SourceError::Other(format!("{browse_id}: {e}")))?;
             let (page, next) = home::grid_page(&json);
@@ -1542,7 +1601,7 @@ impl YouTubeMusic {
     ) -> Result<(Vec<Song>, Option<home::Continuation>)> {
         let first = continuation.is_none();
         let q = home::BrowseQuery { browse_id: Some(browse_id.to_string()), continuation };
-        let raw = yt_retry!(self, yt => yt.raw_json_query::<home::BrowseQuery>(&q).await)?;
+        let raw = self.raw_json(&q).await?;
         let json: serde_json::Value =
             serde_json::from_str(&raw).map_err(|e| SourceError::Other(format!("{browse_id}: {e}")))?;
         let (page, next) = home::song_page(&json);

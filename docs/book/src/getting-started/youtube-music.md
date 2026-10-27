@@ -8,7 +8,7 @@ This page explains how to connect YouTube Music to Listen, what works, and what 
 
 YouTube Music does not let third-party apps sign in with Google directly. Instead, Listen uses the YouTube session of a browser you already use on the same computer. You never type your Google password into Listen.
 
-Listen stores only which browser profile and which channel to use. The cookies themselves are read again from the browser at every start, stay on your computer and are sent only to YouTube. This means Listen stays signed in for as long as the browser does.
+Listen stores only which browser profile and which channel to use. The cookies themselves are read again from the browser at every start and, while Listen runs, whenever YouTube has rotated its session cookie — an old one is answered as signed out, which used to empty the library and the playlists until the next restart. They stay on your computer and are sent only to YouTube. This means Listen stays signed in for as long as the browser does.
 
 Supported browsers: Firefox, Chrome, Chromium, Brave, Edge, Vivaldi and Ecosia, plus the Flatpak versions of Firefox, Chrome, Chromium, Brave and Ecosia.
 
@@ -87,7 +87,7 @@ Open **Settings → General → Servers** and press **Edit** next to the YouTube
 YouTube changes things often.
 
 - **Songs do not play, or play only some of the time.** Update yt-dlp first. On Fedora: `sudo dnf upgrade yt-dlp`. On Windows: **Settings → Advanced → Updates → Helper programs → Update**.
-- **The library is empty or errors appear.** Try **Reconnect** in the edit dialog, then check the channel. If it still fails, a new Listen version may be needed; see [Updates](updates.md).
+- **The library is empty or errors appear.** Listen reads the browser cookies again by itself when YouTube reports it as signed out, so this normally clears up without a restart. If the library still stays empty, press **Reconnect** in the edit dialog, then check the channel. If it still fails, a new Listen version may be needed; see [Updates](updates.md).
 - **Sign-in fails after you changed your Google password or signed out in the browser.** Sign in to music.youtube.com in the browser again, then reconnect.
 - **Windows security warnings.** Some antivirus programs find reading a browser's YouTube sign-in unusual. Listen reads only the cookies of youtube.com and music.youtube.com.
 
