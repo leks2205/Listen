@@ -22,6 +22,18 @@ const PRIVATE: &str = "; in your user profile";
 
 const SERVICE: &str = listen_core::config::APP_ID;
 
+/// Runs a keyring call on a plain thread.
+///
+/// The Secret Service client (`keyring` → `secret-service` → `zbus`) starts a runtime of its own,
+/// and creating a runtime inside this app's tokio runtime panics ("Cannot start a runtime from
+/// within a runtime"). That panic kills the worker thread, and with it whatever task was waiting
+/// there — at start-up that was the session restore, so no server was ever connected and the Home
+/// page stayed empty until the user switched servers by hand. A plain `std::thread` has no runtime
+/// context, which makes the call safe wherever it is made from.
+fn off_runtime<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    std::thread::spawn(f).join().ok()
+}
+
 pub struct Secrets {
     fallback: PathBuf,
     /// `SecretStore::File`: the keyring is never touched.
@@ -61,10 +73,11 @@ impl Secrets {
 
     /// Whether the system keyring answers (blocking: ask off the UI thread).
     pub fn keyring_available() -> bool {
-        match Entry::new(SERVICE, "listen-probe").and_then(|e| e.get_password()) {
+        off_runtime(|| match Entry::new(SERVICE, "listen-probe").and_then(|e| e.get_password()) {
             Ok(_) | Err(keyring::Error::NoEntry) => true,
             Err(_) => false,
-        }
+        })
+        .unwrap_or(false)
     }
 
     /// Where the secrets are kept right now, for the settings row.
@@ -82,20 +95,29 @@ impl Secrets {
     }
 
     fn delete_keyring(&self, server: &ServerId) {
-        if let Ok(entry) = Entry::new(SERVICE, &server.0) {
-            let _ = entry.delete_credential();
-        }
+        let id = server.0.clone();
+        off_runtime(move || {
+            if let Ok(entry) = Entry::new(SERVICE, &id) {
+                let _ = entry.delete_credential();
+            }
+        });
     }
 
     pub fn get(&self, server: &ServerId) -> Option<String> {
         if self.file_only.load(Ordering::Relaxed) {
             return self.read_fallback().remove(&server.0);
         }
-        match Entry::new(SERVICE, &server.0).and_then(|e| e.get_password()) {
-            Ok(secret) => Some(secret),
-            Err(keyring::Error::NoEntry) => self.read_fallback().remove(&server.0),
-            Err(e) => {
+        let id = server.0.clone();
+        let read = off_runtime(move || Entry::new(SERVICE, &id).and_then(|e| e.get_password()));
+        match read {
+            Some(Ok(secret)) => Some(secret),
+            Some(Err(keyring::Error::NoEntry)) => self.read_fallback().remove(&server.0),
+            Some(Err(e)) => {
                 tracing::warn!("keyring unavailable ({e}); using fallback file");
+                self.read_fallback().remove(&server.0)
+            }
+            None => {
+                tracing::warn!("the keyring call panicked; using fallback file");
                 self.read_fallback().remove(&server.0)
             }
         }
@@ -108,21 +130,31 @@ impl Secrets {
             self.write_fallback(&all);
             return;
         }
-        match Entry::new(SERVICE, &server.0).and_then(|e| e.set_password(secret)) {
-            Ok(()) => {
+        let id = server.0.clone();
+        let value = secret.to_string();
+        let keep = value.clone();
+        let written = off_runtime(move || Entry::new(SERVICE, &id).and_then(|e| e.set_password(&value)));
+        match written {
+            Some(Ok(())) => {
                 // Don't leave an older copy in the fallback file.
                 let mut all = self.read_fallback();
                 if all.remove(&server.0).is_some() {
                     self.write_fallback(&all);
                 }
             }
-            Err(e) => {
-                tracing::warn!(
-                    "keyring unavailable ({e}); storing credentials in {}",
-                    self.fallback.display()
-                );
+            other => {
+                match other {
+                    Some(Err(e)) => tracing::warn!(
+                        "keyring unavailable ({e}); storing credentials in {}",
+                        self.fallback.display()
+                    ),
+                    _ => tracing::warn!(
+                        "the keyring call panicked; storing credentials in {}",
+                        self.fallback.display()
+                    ),
+                }
                 let mut all = self.read_fallback();
-                all.insert(server.0.clone(), secret.to_string());
+                all.insert(server.0.clone(), keep.clone());
                 self.write_fallback(&all);
             }
         }

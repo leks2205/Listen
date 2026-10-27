@@ -3401,7 +3401,16 @@ impl Listen {
                 {
                     self.offline_refresh();
                 }
-                let browse = self.source.is_none() || self.config.active_server.as_ref() == Some(&id);
+                // Only the configured server is browsed. A background connection that answers
+                // first (Navidrome is usually ready before YouTube Music) must never take over:
+                // it used to be activated because nothing was connected yet, and that also saved
+                // it as the active server, so the intended one was only ever connected in the
+                // background and its Home page stayed empty until the user switched by hand.
+                let browse = match self.config.active_server.as_ref() {
+                    Some(active) => active == &id,
+                    // No server chosen yet (a fresh profile): the first answer is browsed.
+                    None => self.source.is_none(),
+                };
                 if browse {
                     self.connecting = false;
                     return self.on_connected(id, handle.0);
