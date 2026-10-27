@@ -10,6 +10,9 @@ use listen_source::{SongSort, SortOrder};
 use std::collections::HashMap;
 use std::time::Instant;
 
+/// How long the home feed may take before the load gives up and asks again.
+const HOME_FEED_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
 /// Items fetched per request (Feishin: `itemLimit` 20).
 pub const LIMIT: usize = 20;
 /// The feature carousel keeps at most this many albums.
@@ -332,16 +335,31 @@ impl Listen {
     /// The source's feed and every visible section, the feature carousel and the genres.
     pub(super) fn load_home(&mut self) -> Task<Message> {
         let Some(source) = self.source.clone() else { return Task::none() };
+        // The feed is asked again when the first answer is empty or does not come: right after a
+        // connect it sometimes comes back without shelves, which left the page empty until the
+        // next server switch re-ran the load.
         let feed = Task::perform(
             async move {
-                match source.home().await {
-                    Ok(shelves) => shelves,
-                    Err(listen_source::SourceError::Unsupported) => vec![],
-                    Err(e) => {
-                        tracing::warn!("home feed: {e}");
-                        vec![]
+                let mut last = Vec::new();
+                for attempt in 1..=2 {
+                    if attempt > 1 {
+                        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    }
+                    match tokio::time::timeout(HOME_FEED_TIMEOUT, source.home()).await {
+                        Ok(Ok(shelves)) if !shelves.is_empty() => return shelves,
+                        Ok(Ok(shelves)) => {
+                            tracing::info!("home feed: {} shelves (attempt {attempt})", shelves.len());
+                            last = shelves;
+                        }
+                        Ok(Err(listen_source::SourceError::Unsupported)) => return last,
+                        Ok(Err(e)) => tracing::warn!("home feed: {e} (attempt {attempt})"),
+                        Err(_) => tracing::warn!(
+                            "home feed: no answer within {} s (attempt {attempt})",
+                            HOME_FEED_TIMEOUT.as_secs()
+                        ),
                     }
                 }
+                last
             },
             self.scoped(Message::HomeLoaded),
         );

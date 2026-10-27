@@ -743,20 +743,19 @@ impl MusicSource for YouTubeMusic {
     }
 
     async fn home(&self) -> Result<Vec<HomeShelf>> {
+        // The first answer after a connect sometimes arrives without shelves (an older layout or
+        // the signed-out page), which parses to an empty feed: ask once more instead of leaving
+        // the page empty.
         let mut shelves = Vec::new();
-        let mut continuation = None;
-        // The first response has ~6 shelves; two more pages cover the usual feed.
-        for _ in 0..3 {
-            let q = home::HomeQuery { continuation: continuation.take() };
-            let raw = self.raw_json(&q).await?;
-            let json: serde_json::Value =
-                serde_json::from_str(&raw).map_err(|e| SourceError::Other(format!("home feed: {e}")))?;
-            let (page, next) = home::parse(&json);
-            shelves.extend(page.into_iter().map(|s| self.shelf(s)));
-            match next {
-                Some(n) => continuation = Some(n),
-                None => break,
+        for attempt in 1..=2 {
+            if attempt > 1 {
+                tokio::time::sleep(Duration::from_millis(800)).await;
             }
+            shelves = self.home_pages().await?;
+            if !shelves.is_empty() {
+                return Ok(shelves);
+            }
+            tracing::info!("home feed: no shelves in the answer (attempt {attempt})");
         }
         Ok(shelves)
     }
@@ -1486,6 +1485,25 @@ impl YouTubeMusic {
             None,
             &Explicit::NotExplicit,
         ))
+    }
+
+    async fn home_pages(&self) -> Result<Vec<HomeShelf>> {
+        let mut shelves = Vec::new();
+        let mut continuation = None;
+        // The first response has ~6 shelves; two more pages cover the usual feed.
+        for _ in 0..3 {
+            let q = home::HomeQuery { continuation: continuation.take() };
+            let raw = self.raw_json(&q).await?;
+            let json: serde_json::Value =
+                serde_json::from_str(&raw).map_err(|e| SourceError::Other(format!("home feed: {e}")))?;
+            let (page, next) = home::parse(&json);
+            shelves.extend(page.into_iter().map(|s| self.shelf(s)));
+            match next {
+                Some(n) => continuation = Some(n),
+                None => break,
+            }
+        }
+        Ok(shelves)
     }
 
     /// Raw InnerTube JSON. YouTube answers *signed out* once it has rotated the session cookie in

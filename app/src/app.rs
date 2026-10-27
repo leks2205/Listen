@@ -3590,6 +3590,9 @@ impl Listen {
                 }
             }
             Message::HomeLoaded(rows) => {
+                let cards: usize =
+                    rows.iter().map(|r| r.albums.len() + r.playlists.len() + r.songs.len()).sum();
+                tracing::info!("home: {} shelves, {cards} cards", rows.len());
                 self.library.home_loaded = true;
                 let refs: Vec<ImageRef> = rows
                     .iter()
