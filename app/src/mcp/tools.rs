@@ -260,7 +260,6 @@ pub fn definitions() -> Vec<Value> {
                 "set_max": i("Songs per set, 2 to 8"),
                 "talk_every": i("Talk after every n-th set, 1 to 5"),
                 "voice_gain_db": n("Voice loudness relative to the music, -12 to 12 dB"),
-                "max_voiced_per_day": i("Spoken breaks per day at most"),
             }),
             &[],
         ),

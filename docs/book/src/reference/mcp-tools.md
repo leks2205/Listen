@@ -103,7 +103,7 @@ Servers that cannot do an operation answer with an error such as `This server ca
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `max_voiced_per_day`, `voice_gain_db`. Never the key itself. | none |
+| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `voice_gain_db`. Never the key itself. | none |
 | `list_personas` | The AI DJ's personas with `id`, `name`, `description` and voices. | none |
 | `set_ai_dj` | Change the AI DJ. Only the given fields change; returns the new setup. | see below |
 | `set_gemini_key` | Store a Gemini API key for the AI DJ in the system keyring. An empty string removes it. The key is never returned by any tool. | `key` (string, required): the key from Google AI Studio |
@@ -122,7 +122,6 @@ Servers that cannot do an operation answer with an error such as `This server ca
 | `set_max` | integer | Songs per set, 2 to 8. |
 | `talk_every` | integer | Talk after every n-th set, 1 to 5. |
 | `voice_gain_db` | number | Voice loudness relative to the music, -12 to 12 dB. |
-| `max_voiced_per_day` | integer | Spoken breaks per day at most. |
 
 Remember that the AI DJ sends song titles, artists, the DJ's lines and your "Details" text to Google; see [AI DJ](../dj/ai-dj.md).
 

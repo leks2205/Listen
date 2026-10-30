@@ -37,7 +37,7 @@ If `config.toml` cannot be read because it is damaged, Listen starts with defaul
 | `offline/` | Songs you downloaded for offline playback from your own servers, with an index. The folder is private to your user. See [Downloads](../using/downloads.md). |
 | `milkdrop/presets/` | Milkdrop presets (`.milk` files) when you have not chosen another preset folder. |
 | `lyrics_overrides.json` | Which lyrics match you picked for songs. |
-| `ai-dj-quota.json` | The count of AI DJ spoken breaks used today. |
+| `ai-dj-quota.json` | The count of AI DJ spoken breaks voiced today, and whether Google reported the speech quota as used up. |
 | `rips.json` | Discs you have ripped, including those listed under **Rips to fix**. |
 
 ## Cache folder

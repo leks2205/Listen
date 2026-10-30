@@ -90,9 +90,9 @@ A line of free text, for example `Call me Sam. I love 90s R&B. No weather talk.`
 
 ## Quotas and the text fallback
 
-The free tier of the Gemini API has daily and per-minute limits, and the speech models have a small daily allowance. Listen is built to stay inside it:
+The free tier of the Gemini API has daily and per-minute limits, and the speech models have a small daily allowance. Listen sets no limit of its own: every break is voiced until Google says the quota is used up.
 
-- **Spoken breaks per day** limits how many breaks are voiced. The line under the option shows how many are left today. A day is counted like Google counts it, resetting at midnight Pacific time.
+- **Spoken breaks** in the settings shows how many breaks were voiced today. A day is counted like Google counts it, resetting at midnight Pacific time.
 - **Talk after** lets the DJ skip talking after some sets.
 - The Preview counts as one spoken break the first time you play a persona with a model.
 - When Google says the daily speech quota is used up, the DJ keeps picking songs and shows its lines as text on screen. It tries speech again after an hour. Saving a new key clears this state.

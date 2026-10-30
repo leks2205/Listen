@@ -129,7 +129,7 @@ pub struct AiDj {
     pub set_max: u32,
     /// Talk after every n-th set (1 = every set).
     pub talk_every: u32,
-    /// Spoken breaks per day at most (small free-tier quota); after that lines are shown as text.
+    /// No longer used (spoken breaks have no daily limit); kept so existing configs round-trip.
     pub max_voiced_per_day: u32,
     /// Voice loudness relative to the default level, in dB.
     pub voice_gain_db: f32,

@@ -642,8 +642,7 @@ impl Listen {
         self.roll_quota();
         let s = self.config.settings.ai_dj.clone();
         let talk = self.dj.sets_since_talk + 1 >= s.talk_every.max(1);
-        let voice =
-            talk && !self.dlna_casting() && self.dj.quota.can_voice(s.max_voiced_per_day, quota::unix_now());
+        let voice = talk && !self.dlna_casting() && self.dj.quota.can_voice(quota::unix_now());
         self.dj.quota.planned += 1;
         if voice {
             self.dj.quota.voiced += 1;
@@ -972,7 +971,6 @@ impl Listen {
                 s.set_min = s.set_min.min(s.set_max);
             }
             Setting::AiDjTalkEvery(n) => s.talk_every = n.clamp(1, 5),
-            Setting::AiDjMaxVoiced(n) => s.max_voiced_per_day = n,
             Setting::AiDjVoiceGain(db) => s.voice_gain_db = db.clamp(-12.0, 12.0),
             Setting::AiDjLocation(text) => s.location = text,
             Setting::AiDjPronunciation(text) => s.location_pronunciation = text,
@@ -1088,23 +1086,19 @@ impl Listen {
         });
     }
 
-    /// "12 of 15 spoken breaks left today" for the settings.
+    /// "8 spoken breaks today" for the settings.
     pub fn dj_quota_line(&self) -> String {
         let q = &self.dj.quota;
         let today = quota::pacific_day(SystemTime::now());
-        let max = self.config.settings.ai_dj.max_voiced_per_day;
         let used = if q.day == today { q.voiced } else { 0 };
-        if q.day == today && q.tts_exhausted && !q.can_voice(max, quota::unix_now()) {
+        if q.day == today && q.tts_exhausted && !q.can_voice(quota::unix_now()) {
             return "Google reported the speech quota as used up — lines show as text; trying again within the hour."
                 .into();
         }
-        // The quota day starts at 08:00 UTC (midnight on the fixed UTC-8 clock in `quota`).
-        let reset = chrono::Utc::now()
-            .date_naive()
-            .and_hms_opt(8, 0, 0)
-            .map(|t| t.and_utc().with_timezone(&chrono::Local).format("%H:%M").to_string())
-            .unwrap_or_default();
-        format!("{} of {max} spoken breaks left today (resets {reset}).", max.saturating_sub(used))
+        match used {
+            1 => "1 spoken break today.".into(),
+            n => format!("{n} spoken breaks today."),
+        }
     }
 }
 

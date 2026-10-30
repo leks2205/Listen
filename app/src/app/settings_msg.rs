@@ -70,7 +70,6 @@ pub enum Setting {
     AiDjTtsModel(String),
     AiDjSetMax(u32),
     AiDjTalkEvery(u32),
-    AiDjMaxVoiced(u32),
     AiDjVoiceGain(f32),
     AiDjLocation(String),
     AiDjPronunciation(String),
@@ -282,7 +281,6 @@ impl Listen {
             | Setting::AiDjTtsModel(_)
             | Setting::AiDjSetMax(_)
             | Setting::AiDjTalkEvery(_)
-            | Setting::AiDjMaxVoiced(_)
             | Setting::AiDjVoiceGain(_)
             | Setting::AiDjLocation(_)
             | Setting::AiDjPronunciation(_)

@@ -769,18 +769,7 @@ pub(super) fn ai_dj(state: &Listen) -> Element<'_, Message> {
                 |v| Setting::AiDjTalkEvery(v as u32),
             ),
         ),
-        line(
-            state,
-            "Spoken breaks per day",
-            state.dj_quota_line(),
-            stepper(
-                state,
-                0.0..=50.0,
-                dj.max_voiced_per_day as f32,
-                dj.max_voiced_per_day.to_string(),
-                |v| Setting::AiDjMaxVoiced(v as u32),
-            ),
-        ),
+        line(state, "Spoken breaks", state.dj_quota_line(), iced::widget::Space::new().into()),
         line(
             state,
             "Voice volume",

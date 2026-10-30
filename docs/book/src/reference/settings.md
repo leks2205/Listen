@@ -340,7 +340,6 @@ See [AI DJ](../dj/ai-dj.md) and [Creating a Gemini API key](../dj/gemini-key.md)
 | Voice model | **Flash-Lite TTS (fast)** or **Flash TTS (best voice acting)**. Both are on Gemini's free tier; the daily speech quota is small. | Flash-Lite TTS | `settings.ai_dj.tts_model` |
 | Songs per set | The DJ picks 2 up to this many songs between breaks, 2 to 8. | 5 | `settings.ai_dj.set_max` (and `set_min`, 2) |
 | Talk after | Talk after every set, or only every 2nd to 5th set (saves speech quota). | 1 | `settings.ai_dj.talk_every` |
-| Spoken breaks per day | Daily limit of spoken breaks, 0 to 50; beyond it the lines are shown as text. | 15 | `settings.ai_dj.max_voiced_per_day` |
 | Voice volume | Relative to the music, -12 to +12 dB. | 0 | `settings.ai_dj.voice_gain_db` |
 | Location | Where the show airs, for example your town; the hosts mention it now and then. Empty means no home town. | empty | `settings.ai_dj.location` |
 | Pronunciation | How the voice should say the place name if it gets it wrong. | empty | `settings.ai_dj.location_pronunciation` |

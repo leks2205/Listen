@@ -177,7 +177,6 @@ pub fn speech_body(model: &str, persona: &Persona, turns: &[Turn], say: &[(&str,
         .collect();
     let speech_config = match cohost {
         Some(c) if two_voices => json!({
-            "mode": "conversational",
             "speakers": [
                 { "speaker": persona.host, "voice": persona.voice },
                 { "speaker": c.name, "voice": c.voice },
@@ -286,7 +285,7 @@ mod tests {
             |who: &str, text: &str| Turn { speaker: who.into(), text: text.into(), style: "excited".into() };
         let duo = Persona::by_id("hamburg_duo");
         let body = speech_body("m", duo, &[turn("Hauke", "Moin!"), turn("Merle", "Moin zurück!")], &[]);
-        assert_eq!(body["generation_config"]["speech_config"]["mode"], "conversational");
+        assert!(body["generation_config"]["speech_config"].get("mode").is_none(), "the API rejects `mode`");
         assert_eq!(body["generation_config"]["speech_config"]["speakers"][1]["voice"], "Laomedeia");
         assert_eq!(body["input"][0]["content"][1]["annotations"][0]["speaker"], "Merle");
         // The host alone: a plain single-voice request.

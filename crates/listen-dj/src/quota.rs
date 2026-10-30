@@ -56,10 +56,10 @@ impl Quota {
         }
     }
 
-    /// Whether another break may be voiced today (`now`: Unix seconds).
-    pub fn can_voice(&self, max_per_day: u32, now: u64) -> bool {
-        let paused = self.tts_exhausted && now.saturating_sub(self.exhausted_at) < EXHAUSTED_PAUSE_SECS;
-        !paused && self.voiced < max_per_day
+    /// Whether a break may be voiced now (`now`: Unix seconds). There is no daily cap of our own:
+    /// speech only pauses for a while after Google reports its quota as used up.
+    pub fn can_voice(&self, now: u64) -> bool {
+        !(self.tts_exhausted && now.saturating_sub(self.exhausted_at) < EXHAUSTED_PAUSE_SECS)
     }
 
     pub fn mark_exhausted(&mut self, now: u64) {
@@ -89,26 +89,27 @@ mod tests {
     #[test]
     fn counting_and_limits() {
         let mut q = Quota { day: 5, voiced: 15, planned: 40, tts_exhausted: true, exhausted_at: 1000 };
-        assert!(!q.can_voice(15, 1000));
+        assert!(!q.can_voice(1000));
         q.roll(5);
         assert_eq!(q.voiced, 15);
         q.roll(6);
         assert_eq!(q, Quota { day: 6, ..Default::default() });
-        assert!(q.can_voice(15, 0));
-        assert!(!q.can_voice(0, 0));
+        assert!(q.can_voice(0));
+        q.voiced = 500;
+        assert!(q.can_voice(0), "no daily cap");
     }
 
     #[test]
     fn exhausted_pauses_speech_for_an_hour_only() {
         let mut q = Quota { day: 1, ..Default::default() };
         q.mark_exhausted(10_000);
-        assert!(!q.can_voice(50, 10_000 + 60));
-        assert!(q.can_voice(50, 10_000 + EXHAUSTED_PAUSE_SECS));
+        assert!(!q.can_voice(10_000 + 60));
+        assert!(q.can_voice(10_000 + EXHAUSTED_PAUSE_SECS));
         // Old counter files had no timestamp: speech is tried again right away.
         let old: Quota =
             serde_json::from_str(r#"{"day":1,"voiced":5,"planned":5,"tts_exhausted":true}"#).unwrap();
-        assert!(old.can_voice(50, unix_now()));
+        assert!(old.can_voice(unix_now()));
         q.clear_exhausted();
-        assert!(q.can_voice(50, 10_000));
+        assert!(q.can_voice(10_000));
     }
 }

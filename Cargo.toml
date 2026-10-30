@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "app"]
 
 [workspace.package]
-version = "0.37.3"
+version = "0.37.4"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/leks2205/Listen"

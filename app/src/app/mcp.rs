@@ -490,7 +490,6 @@ impl Listen {
             "set_min": d.set_min,
             "set_max": d.set_max,
             "talk_every": d.talk_every,
-            "max_voiced_per_day": d.max_voiced_per_day,
             "voice_gain_db": d.voice_gain_db,
         })
     }
@@ -1076,9 +1075,6 @@ impl Listen {
                 }
                 if let Some(v) = args.get("voice_gain_db").and_then(Value::as_f64) {
                     tasks.push(msg(self, Message::Setting(S::AiDjVoiceGain(v as f32))));
-                }
-                if let Some(v) = args.get("max_voiced_per_day").and_then(Value::as_u64) {
-                    tasks.push(msg(self, Message::Setting(S::AiDjMaxVoiced(v as u32))));
                 }
                 if let Some(on) = args.get("enabled").and_then(Value::as_bool) {
                     if on && !self.dj.has_key() {
