@@ -209,6 +209,103 @@ pub fn music_video_id(json: &Value, id: &str) -> Option<String> {
     }
 }
 
+/// One entry of a radio / watch queue, already turned into the song where the entry was a video.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RadioEntry {
+    pub video_id: String,
+    pub title: String,
+    /// (name, channel id) of each artist.
+    pub artists: Vec<(String, Option<String>)>,
+    /// (name, browse id) of the album; videos have none.
+    pub album: Option<(String, String)>,
+    pub length: String,
+    pub thumbnails: Vec<Thumbnail>,
+    /// 0 = the song (art track), 1 = an official video, 2 = an upload (covers, fancams, clips).
+    pub kind: u8,
+}
+
+/// Music videos, uploads and performance clips (anything but the art track `MUSIC_VIDEO_TYPE_ATV`).
+const VIDEO_TYPES: [&str; 3] =
+    ["MUSIC_VIDEO_TYPE_OMV", "MUSIC_VIDEO_TYPE_UGC", "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC"];
+
+fn entry_type(r: &Value) -> Option<&str> {
+    r.pointer("/navigationEndpoint/watchEndpoint/watchEndpointMusicSupportedConfigs/watchEndpointMusicConfig/musicVideoType")
+        .and_then(Value::as_str)
+}
+
+fn entry_is_video(r: &Value) -> bool {
+    entry_type(r).is_some_and(|t| VIDEO_TYPES.contains(&t))
+}
+
+fn radio_entry(r: &Value) -> Option<RadioEntry> {
+    let video_id = r.get("videoId")?.as_str()?.to_string();
+    let runs = r.pointer("/longBylineText/runs").and_then(Value::as_array).cloned().unwrap_or_default();
+    let mut artists = Vec::new();
+    let mut album = None;
+    for run in &runs {
+        let name = run.get("text").and_then(Value::as_str).unwrap_or("").to_string();
+        match run.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(Value::as_str) {
+            Some(id) if id.starts_with("MPRE") => album = Some((name, id.to_string())),
+            Some(id) if id.starts_with("UC") => artists.push((name, Some(id.to_string()))),
+            _ => {}
+        }
+    }
+    if artists.is_empty()
+        && let Some(first) = runs.first().and_then(|r| r.get("text")).and_then(Value::as_str)
+    {
+        artists.push((first.to_string(), None));
+    }
+    Some(RadioEntry {
+        video_id,
+        title: text(r, "/title"),
+        artists,
+        album,
+        length: text(r, "/lengthText"),
+        thumbnails: thumbs(r, "/thumbnail/thumbnails"),
+        kind: match entry_type(r) {
+            Some("MUSIC_VIDEO_TYPE_ATV") | None => 0,
+            Some("MUSIC_VIDEO_TYPE_OMV" | "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC") => 1,
+            Some(_) => 2,
+        },
+    })
+}
+
+/// The entries of a `next` answer in order. Where YouTube pairs a music video with its song
+/// (`playlistPanelVideoWrapperRenderer` / `counterpart`), the song is taken, so a radio started
+/// from a video or holding stage clips gives the official audio where there is one.
+pub fn radio_entries(json: &Value) -> Vec<RadioEntry> {
+    fn pick(primary: &Value, counterpart: Option<&Value>) -> Option<RadioEntry> {
+        match counterpart {
+            Some(c) if entry_is_video(primary) && !entry_is_video(c) => radio_entry(c),
+            _ => radio_entry(primary),
+        }
+    }
+    fn walk(v: &Value, out: &mut Vec<RadioEntry>) {
+        match v {
+            Value::Object(m) => {
+                if let Some(w) = m.get("playlistPanelVideoWrapperRenderer") {
+                    if let Some(p) = w.pointer("/primaryRenderer/playlistPanelVideoRenderer") {
+                        let c = w.pointer("/counterpart/0/counterpartRenderer/playlistPanelVideoRenderer");
+                        out.extend(pick(p, c));
+                    }
+                    return;
+                }
+                if let Some(p) = m.get("playlistPanelVideoRenderer") {
+                    let c = p.pointer("/counterpart/0/counterpartRenderer/playlistPanelVideoRenderer");
+                    out.extend(pick(p, c));
+                    return;
+                }
+                m.values().for_each(|x| walk(x, out));
+            }
+            Value::Array(a) => a.iter().for_each(|x| walk(x, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    walk(json.pointer("/contents").unwrap_or(json), &mut out);
+    out
+}
+
 /// `privacyStatus` / `playlistPrivacy` for a public flag.
 pub fn privacy(public: bool) -> &'static str {
     if public { "PUBLIC" } else { "PRIVATE" }
@@ -408,6 +505,34 @@ mod tests {
                 AddOption { id: "PLb".into(), title: "Chill".into(), contains: true },
             ]
         );
+    }
+
+    #[test]
+    fn radio_takes_the_song_of_a_video() {
+        let video = |id: &str, kind: &str| {
+            json!({"videoId": id, "title": {"runs": [{"text": "Magnetic"}]}, "lengthText": {"runs": [{"text": "3:09"}]},
+                "longBylineText": {"runs": [{"text": "HYBE LABELS"}]},
+                "navigationEndpoint": {"watchEndpoint": {"watchEndpointMusicSupportedConfigs":
+                    {"watchEndpointMusicConfig": {"musicVideoType": kind}}}}})
+        };
+        let mut song = video("SONG", "MUSIC_VIDEO_TYPE_ATV");
+        song["lengthText"] = json!({"runs": [{"text": "2:40"}]});
+        song["longBylineText"] = json!({"runs": [
+            {"text": "ILLIT", "navigationEndpoint": {"browseEndpoint": {"browseId": "UCx"}}}, {"text": " • "},
+            {"text": "SUPER REAL ME", "navigationEndpoint": {"browseEndpoint": {"browseId": "MPREb_y"}}}]});
+        let answer = json!({"contents": {"queue": [
+            {"playlistPanelVideoWrapperRenderer": {"primaryRenderer": {"playlistPanelVideoRenderer": video("MV", "MUSIC_VIDEO_TYPE_OMV")},
+                "counterpart": [{"counterpartRenderer": {"playlistPanelVideoRenderer": song.clone()}}]}},
+            {"playlistPanelVideoRenderer": video("STAGE", "MUSIC_VIDEO_TYPE_UGC")},
+            {"playlistPanelVideoWrapperRenderer": {"primaryRenderer": {"playlistPanelVideoRenderer": song},
+                "counterpart": [{"counterpartRenderer": {"playlistPanelVideoRenderer": video("MV2", "MUSIC_VIDEO_TYPE_OMV")}}]}},
+        ]}});
+        let got = radio_entries(&answer);
+        assert_eq!(got.iter().map(|e| e.video_id.as_str()).collect::<Vec<_>>(), ["SONG", "STAGE", "SONG"]);
+        assert_eq!(got[0].album, Some(("SUPER REAL ME".into(), "MPREb_y".into())));
+        assert_eq!(got[0].artists, vec![("ILLIT".to_string(), Some("UCx".to_string()))]);
+        assert_eq!(got[0].length, "2:40");
+        assert_eq!(got[1].album, None, "a video without a song stays as it is");
     }
 
     #[test]

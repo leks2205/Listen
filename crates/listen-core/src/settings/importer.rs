@@ -86,7 +86,10 @@ pub fn import_feishin(base: &Settings, json: &str) -> Result<Settings, serde_jso
         None => pl.replay_gain,
     };
     set_num(&mut pl.replay_gain_preamp_db, &mpv["replayGainPreampDB"]);
-    set_bool(&mut pl.replay_gain_clip, &mpv["replayGainClip"]);
+    // Feishin passes the mpv option replaygain-clip (yes = allow clipping); ours means "prevent clipping".
+    if let Some(allow) = mpv["replayGainClip"].as_bool() {
+        pl.replay_gain_clip = !allow;
+    }
     set_string(&mut pl.audio_device, &p["mpvAudioDeviceId"]);
     set_strings(&mut pl.mpv_extra_args, &p["mpvExtraParameters"]);
     set_bool(&mut pl.fade_on_pause, &p["audioFadeOnStatusChange"]);

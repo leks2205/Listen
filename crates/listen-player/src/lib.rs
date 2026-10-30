@@ -114,7 +114,8 @@ impl AudioSettings {
             ("gapless-audio", json!(self.gapless)),
             ("replaygain", json!(self.replay_gain)),
             ("replaygain-preamp", json!(self.replay_gain_preamp_db)),
-            ("replaygain-clip", json!(self.replay_gain_clip)),
+            // mpv: replaygain-clip=yes ALLOWS clipping; ours is "prevent clipping".
+            ("replaygain-clip", json!(!self.replay_gain_clip)),
             ("replaygain-fallback", json!(self.replay_gain_fallback_db)),
             ("audio-device", json!(self.audio_device)),
             ("audio-exclusive", json!(self.audio_exclusive)),

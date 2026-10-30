@@ -440,6 +440,89 @@ impl YouTubeMusic {
         }
     }
 
+    /// The song radio of `song` with the official audio where YouTube pairs a video with its song:
+    /// a music video as the seed is replaced by its song first (a video's radio is made of videos),
+    /// and every video entry that has a song version becomes that song (with its album).
+    async fn song_radio(&self, song: &Song, count: usize) -> Result<Vec<Song>> {
+        let mut seed = song.id.clone();
+        if song.album.is_none() {
+            let q = library::RawPost::new(
+                "next",
+                serde_json::json!({"videoId": seed, "isAudioOnly": true, "enablePersistentPlaylistPanel": true}),
+            );
+            if let Ok(json) = self.raw(&q).await
+                && let Some(first) = library::radio_entries(&json).into_iter().next()
+                && first.video_id != seed
+            {
+                tracing::debug!("song radio: {} is a video, starting from its song {}", seed, first.video_id);
+                seed = first.video_id;
+            }
+        }
+        let q = library::RawPost::new(
+            "next",
+            serde_json::json!({
+                "videoId": seed,
+                "playlistId": format!("RDAMVM{seed}"),
+                "isAudioOnly": true,
+                "enablePersistentPlaylistPanel": true,
+                "tunerSettingValue": "AUTOMIX_SETTING_NORMAL",
+            }),
+        );
+        let json = self.raw(&q).await?;
+        let mut seen = std::collections::HashSet::new();
+        let mut entries: Vec<library::RadioEntry> = library::radio_entries(&json)
+            .into_iter()
+            .filter(|e| e.video_id != song.id && e.video_id != seed && seen.insert(e.video_id.clone()))
+            .collect();
+        // Songs first, then official videos; uploads (covers, fancams, clips) only when the radio
+        // has too few of the others. A video-only seed (no song version) gets a video radio.
+        entries.sort_by_key(|e| e.kind);
+        let proper = entries.iter().filter(|e| e.kind < 2).count();
+        if proper >= count.min(10) {
+            entries.retain(|e| e.kind < 2);
+        }
+        Ok(entries.into_iter().take(count).map(|e| self.radio_song(e)).collect())
+    }
+
+    fn radio_song(&self, e: library::RadioEntry) -> Song {
+        let artists: Vec<ArtistRef> =
+            e.artists.into_iter().map(|(name, id)| ArtistRef { id, name }).collect();
+        Song {
+            mbz: Default::default(),
+            extra: Default::default(),
+            id: e.video_id,
+            server_id: self.server_id.clone(),
+            source: SourceKind::YouTubeMusic,
+            title: e.title,
+            album_artists: artists.clone(),
+            artists,
+            album: e.album.as_ref().map(|a| a.0.clone()),
+            album_id: e.album.map(|a| a.1),
+            image: thumb(&e.thumbnails),
+            duration: parse_duration(&e.length),
+            track_number: None,
+            disc_number: None,
+            year: None,
+            genres: vec![],
+            codec: None,
+            bit_rate: None,
+            sample_rate: None,
+            bit_depth: None,
+            bpm: None,
+            favorite: false,
+            rating: None,
+            play_count: None,
+            gain: GainInfo::default(),
+            explicit: false,
+            path: None,
+            size: None,
+            suffix: None,
+            channels: None,
+            created: None,
+            comment: None,
+        }
+    }
+
     /// Drops the cached library (songs, albums, complete and partial playlists
     /// and the open artist page): the next reads are one fresh burst.
     async fn forget_library(&self) {
@@ -904,6 +987,11 @@ impl MusicSource for YouTubeMusic {
     }
 
     async fn similar_songs(&self, song: &Song, count: usize) -> Result<Vec<Song>> {
+        match self.song_radio(song, count).await {
+            Ok(songs) if !songs.is_empty() => return Ok(songs),
+            Ok(_) => tracing::debug!("song radio for {} was empty; using the watch playlist", song.id),
+            Err(e) => tracing::debug!("song radio for {}: {e}; using the watch playlist", song.id),
+        }
         let radio =
             yt!(self, yt => yt.get_watch_playlist_from_video_id(VideoID::from_raw(song.id.clone())).await)?;
         Ok(radio

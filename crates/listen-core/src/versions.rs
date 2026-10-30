@@ -67,7 +67,21 @@ pub fn version_rank(song: &Song) -> u8 {
         return 0;
     }
     let t = song.title.to_lowercase();
-    const SPECIAL: [&str; 12] = [
+    const SPECIAL: [&str; 25] = [
+        // Music videos and performance clips: the song itself is the version to play.
+        " mv",
+        "m/v",
+        "music video",
+        "official video",
+        "performance video",
+        "lyric video",
+        "stage",
+        "@ ",
+        "fancam",
+        "dance practice",
+        "special clip",
+        "cover",
+        "teaser",
         "extended",
         "live",
         "remix",
@@ -94,7 +108,10 @@ pub fn dedupe_versions(songs: Vec<Song>) -> Vec<Song> {
         let key = song_key(&song);
         match slot.get(&key) {
             Some(&i) => {
-                if version_rank(&song) < version_rank(&out[i]) {
+                // Equal rank: the one with an album (the song, not a video upload) wins.
+                if (version_rank(&song), song.album.is_none())
+                    < (version_rank(&out[i]), out[i].album.is_none())
+                {
                     out[i] = song;
                 }
             }
