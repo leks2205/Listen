@@ -378,6 +378,24 @@ fn no_plan_for_ineligible_pairs() {
 }
 
 #[test]
+fn the_sources_stream_the_original_only_while_mixing_is_possible() {
+    use listen_core::settings::StreamQuality;
+    let mut s = auto_rig();
+    s.config.settings.playback.stream_quality = StreamQuality::Low;
+    s.config.settings.playback.transcode.enabled = true;
+    s.stream_settings_sync();
+    let (quality, transcode) = s.audio.stream_settings.clone().unwrap();
+    assert_eq!(quality, StreamQuality::Original);
+    assert!(!transcode.enabled);
+
+    s.config.settings.auto_dj.enabled = false;
+    s.stream_settings_sync();
+    let (quality, transcode) = s.audio.stream_settings.clone().unwrap();
+    assert_eq!(quality, StreamQuality::Low, "no DJ mode, the setting counts");
+    assert!(transcode.enabled);
+}
+
+#[test]
 fn a_between_break_armed_later_cancels_the_plan() {
     let mut s = auto_rig();
     plan(&mut s);

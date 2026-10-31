@@ -153,9 +153,6 @@ impl Listen {
             }
             Setting::StreamQuality(v) => {
                 s.playback.stream_quality = v;
-                for source in self.sources.values().chain(self.source.iter()) {
-                    source.set_stream_quality(v);
-                }
                 self.toast_info("The new quality applies to the songs that start from now on.".into());
             }
             Setting::Scrobble(v) => s.playback.scrobble = v,

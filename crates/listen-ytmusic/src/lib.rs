@@ -67,7 +67,7 @@ struct CachedSongs {
 macro_rules! yt {
     ($self:ident, $yt:ident => $call:expr) => {{
         let $yt = &$self.yt;
-        $call.map_err(source_err)
+        token::GUEST.scope($self.guest, async { $call }).await.map_err(source_err)
     }};
 }
 
@@ -78,7 +78,7 @@ macro_rules! yt_retry {
         let mut attempt = 0;
         loop {
             let $yt = &$self.yt;
-            match $call.map_err(source_err) {
+            match token::GUEST.scope($self.guest, async { $call }).await.map_err(source_err) {
                 Err(e) if attempt < 2 && !matches!(e, SourceError::Auth(_)) => {
                     attempt += 1;
                     tracing::debug!("retrying after: {e}");
@@ -1616,7 +1616,7 @@ impl YouTubeMusic {
         let mut refreshed = false;
         loop {
             match self.yt.raw_json_query::<Q>(q).await.map_err(source_err) {
-                Ok(text) if !token::signed_out_page(&text) => {
+                Ok(text) if self.guest || !token::signed_out_page(&text) => {
                     if let Some(session) = &self.session {
                         session.clear_stale();
                     }

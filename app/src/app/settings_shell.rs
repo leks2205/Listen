@@ -133,10 +133,6 @@ impl Listen {
         self.global_error = None;
         self.global_triggers.clear();
         self.hotkey_recording = None;
-        let quality = self.config.settings.playback.stream_quality;
-        for source in self.sources.values().chain(self.source.iter()) {
-            source.set_stream_quality(quality);
-        }
         self.desktop_theme = self
             .config
             .settings

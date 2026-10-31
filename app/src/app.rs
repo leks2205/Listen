@@ -2629,6 +2629,7 @@ impl Listen {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         let task = self.update_message(message);
+        self.stream_settings_sync();
         // The queue panel's search result and selection follow the queue.
         self.queue_ui_sync();
         self.queue_drawer_settle();
@@ -3387,8 +3388,9 @@ impl Listen {
                 self.login.error = Some(e);
             }
             Message::Connected(id, Ok(handle)) => {
-                handle.0.set_stream_quality(self.config.settings.playback.stream_quality);
-                handle.0.set_transcode(&self.config.settings.playback.transcode);
+                let (quality, transcode) = self.stream_settings();
+                handle.0.set_stream_quality(quality);
+                handle.0.set_transcode(&transcode);
                 tracing::info!("connected to {}", id.0);
                 if handle.0.kind() == SourceKind::YouTubeMusic
                     && handle.0.capabilities().contains(listen_source::Capabilities::DOWNLOAD)

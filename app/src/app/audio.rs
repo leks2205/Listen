@@ -8,7 +8,7 @@ use super::{Listen, Message, err};
 use crate::playback::PlayerConfig;
 use iced::widget::text_editor;
 use iced::{Point, Task};
-use listen_core::settings::{self, Playback};
+use listen_core::settings::{self, Playback, StreamQuality, Transcode};
 
 /// What the user is looking at in the audio popups.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -90,6 +90,8 @@ pub struct AudioState {
     pub sample_rate_input: Option<String>,
     pub eq_preset_name: String,
     pub comp_preset_name: String,
+    /// What the sources were last told to stream (see [`Listen::stream_settings`]).
+    pub stream_settings: Option<(StreamQuality, Transcode)>,
 }
 
 impl std::fmt::Debug for AudioState {
@@ -108,6 +110,7 @@ impl AudioState {
             speed: 1.0,
             args: text_editor::Content::with_text(&p.mpv_extra_args.join("\n")),
             sample_rate_input: None,
+            stream_settings: None,
             eq_preset_name: String::new(),
             comp_preset_name: String::new(),
         }
@@ -230,12 +233,30 @@ impl Listen {
         Task::batch(tasks)
     }
 
-    /// Pushes the transcoding settings to every connected source.
-    pub(super) fn sync_transcode(&self) {
-        let t = &self.config.settings.playback.transcode;
-        for source in self.sources.values().chain(self.source.iter()) {
-            source.set_transcode(t);
+    /// What the sources stream right now: the settings, except while DJ transitions can happen. A
+    /// mix is planned from the original file (the shared beat grids are measured on it, a capped or
+    /// transcoded copy shifts them), so then both are off, whatever the settings say.
+    pub(super) fn stream_settings(&self) -> (StreamQuality, Transcode) {
+        let p = &self.config.settings.playback;
+        if self.mixing_possible() {
+            (StreamQuality::Original, Transcode { enabled: false, ..p.transcode.clone() })
+        } else {
+            (p.stream_quality, p.transcode.clone())
         }
+    }
+
+    /// Hands [`Self::stream_settings`] to every connected source when they changed, whatever changed
+    /// them (a setting, an import, the play mode, a cast starting).
+    pub(super) fn stream_settings_sync(&mut self) {
+        let wanted = self.stream_settings();
+        if self.audio.stream_settings.as_ref() == Some(&wanted) {
+            return;
+        }
+        for source in self.sources.values().chain(self.source.iter()) {
+            source.set_stream_quality(wanted.0);
+            source.set_transcode(&wanted.1);
+        }
+        self.audio.stream_settings = Some(wanted);
     }
 
     /// Transcoding applies to sources other than YouTube Music (which keeps its
@@ -474,7 +495,6 @@ impl Listen {
         }
         self.save_config();
         if transcode {
-            self.sync_transcode();
             self.toast_info("Transcoding applies to the songs that start from now on.".into());
         }
         if apply {

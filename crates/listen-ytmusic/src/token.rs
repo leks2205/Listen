@@ -38,6 +38,18 @@ pub fn signed_out_page(json: &str) -> bool {
     json.contains("signInEndpoint")
 }
 
+tokio::task_local! {
+    /// The running request is a guest's: every page a guest gets has the sign-in button, so
+    /// [`signed_out_page`] says nothing about it. ytmapi-rs hands [`CookieToken::deserialize_response`]
+    /// no token, so the guest flag travels with the task.
+    pub static GUEST: bool;
+}
+
+/// The answer to an account's request (not a guest's) is the signed-out page.
+fn rotated_out(json: &str) -> bool {
+    signed_out_page(json) && !GUEST.try_with(|guest| *guest).unwrap_or(false)
+}
+
 /// The cookie header in use, and where to read it from again.
 #[derive(Debug, Clone)]
 pub struct Session(Arc<SessionInner>);
@@ -279,7 +291,7 @@ impl AuthToken for CookieToken {
         }
         // The signed-out page parses into nothing useful: report it as an error so the caller asks
         // again with the cookies read from the browser (code 0 = not a wrong password).
-        if signed_out_page(&raw.json) {
+        if rotated_out(&raw.json) {
             SIGNED_OUT.store(true, Ordering::Relaxed);
             return Err(ErrorKind::OtherErrorCodeInResponse {
                 code: 0,
@@ -316,6 +328,14 @@ mod tests {
         let own = token(None);
         assert!(!own.headers().unwrap().into_iter().any(|(k, _)| k == "X-Goog-PageId"));
         assert_eq!(today().len(), 8);
+    }
+
+    #[tokio::test]
+    async fn a_guest_is_not_signed_out_by_the_sign_in_button() {
+        let page = r#"{"contents":{"foo":{"signInEndpoint":{}}}}"#;
+        assert!(rotated_out(page));
+        assert!(!GUEST.scope(true, async { rotated_out(page) }).await);
+        assert!(GUEST.scope(false, async { rotated_out(page) }).await);
     }
 
     #[test]

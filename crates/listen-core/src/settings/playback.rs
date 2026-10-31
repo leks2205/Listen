@@ -20,8 +20,8 @@ impl std::fmt::Display for ReplayGain {
     }
 }
 
-/// How much quality to stream (lower saves bandwidth). Local files and the
-/// analysis copy used for DJ mixing always stay original.
+/// How much quality to stream (lower saves bandwidth). Local files, the analysis
+/// copy used for DJ mixing and playback while DJ transitions are on always stay original.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StreamQuality {
