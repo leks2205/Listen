@@ -1,5 +1,6 @@
 //! Local listening history: recording plays, the Recently played / Statistics
-//! / Mixes pages and the privacy controls. Everything stays on this computer.
+//! / Mixes pages and the privacy controls. It stays on this computer unless merging is on
+//! (`history_sync`).
 
 use super::{Listen, Message, Route};
 use iced::Task;
@@ -21,6 +22,11 @@ pub enum HistoryMsg {
     ConfirmClear(bool),
     Clear,
     Export(bool),
+    /// Merge with the other devices now.
+    Sync,
+    Synced(Result<super::history_sync::Outcome, String>),
+    SyncToken(String),
+    SaveSyncToken,
 }
 
 #[derive(Debug, Default)]
@@ -37,6 +43,12 @@ pub struct HistoryView {
     pub confirm_clear: bool,
     /// "Don't record this session": never saved, off again on the next start.
     pub private: bool,
+    pub sync: super::history_sync::SyncState,
+    pub syncing: bool,
+    pub sync_status: Option<super::history_sync::SyncStatus>,
+    /// The token being typed, gone once saved.
+    pub sync_token: String,
+    pub sync_token_saved: bool,
 }
 
 impl Listen {
@@ -102,8 +114,14 @@ impl Listen {
 
     /// Removes the single play at `index` of the history.
     pub(super) fn history_remove_entry(&mut self, index: usize) {
+        let entry = self.history.entries.get(index).cloned();
         match self.history.remove(index) {
-            Ok(()) => self.toast_success("Removed from the history.".into()),
+            Ok(()) => {
+                if let Some(entry) = &entry {
+                    self.history_sync_removed(entry);
+                }
+                self.toast_success("Removed from the history.".into());
+            }
             Err(e) => self.toast_error(format!("Could not update the history: {e}")),
         }
         self.refresh_history_views();
@@ -126,6 +144,10 @@ impl Listen {
                 }
                 self.refresh_history_views();
             }
+            HistoryMsg::Sync => return self.history_sync(),
+            HistoryMsg::Synced(result) => self.history_synced(result),
+            HistoryMsg::SyncToken(token) => self.history_view.sync_token = token,
+            HistoryMsg::SaveSyncToken => return self.history_sync_save_token(),
             HistoryMsg::Export(csv) => {
                 let dir = listen_core::platform::home_dir()
                     .map(|h| h.join("Downloads"))

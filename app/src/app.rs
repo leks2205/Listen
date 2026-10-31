@@ -37,6 +37,7 @@ mod flow;
 pub mod fullscreen_state;
 pub mod helpers;
 pub mod history;
+pub mod history_sync;
 pub mod home;
 pub mod hotkeys;
 pub mod integrations;
@@ -1219,6 +1220,7 @@ impl Listen {
         tasks.push(state.mcp_boot());
         tasks.push(state.dlna_boot());
         tasks.push(state.milkdrop_boot());
+        tasks.push(state.history_sync_boot());
         (state, Task::batch(tasks))
     }
 
@@ -4135,6 +4137,11 @@ impl Listen {
 
     pub fn subscription(&self) -> Subscription<Message> {
         let mut subs = vec![iced::system::theme_changes().map(Message::SystemTheme)];
+        if self.config.settings.history.sync {
+            subs.push(
+                iced::time::every(history_sync::EVERY).map(|_| Message::History(history::HistoryMsg::Sync)),
+            );
+        }
         if self.config.settings.appearance.follow_desktop_theme {
             subs.push(crate::desktop_theme::subscription());
         }

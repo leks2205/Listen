@@ -31,6 +31,8 @@ pub enum Setting {
     HistoryEnabled(bool),
     HistoryRetention(listen_core::settings::HistoryRetention),
     HistoryPrivate(bool),
+    HistorySync(bool),
+    HistorySyncServer(String),
     TrackFade(f32),
     FadeOnPause(bool),
     PreferOwnServers(bool),
@@ -158,6 +160,8 @@ impl Listen {
             Setting::Scrobble(v) => s.playback.scrobble = v,
             Setting::HistoryEnabled(v) => s.history.enabled = v,
             Setting::HistoryRetention(r) => self.set_history_retention(r),
+            Setting::HistorySync(v) => s.history.sync = v,
+            Setting::HistorySyncServer(v) => s.history.sync_server = v,
             Setting::HistoryPrivate(v) => {
                 return Task::done(Message::Integrations(super::integrations::IntegrationsMsg::SetPrivate(
                     v,

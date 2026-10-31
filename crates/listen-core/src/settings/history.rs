@@ -38,17 +38,21 @@ impl std::fmt::Display for HistoryRetention {
     }
 }
 
-/// Listening history. Stored only on this computer, never uploaded.
+/// Listening history. Stored on this computer; it leaves it only when `sync` is on.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HistorySettings {
     /// Off = nothing is written.
     pub enabled: bool,
     pub retention: HistoryRetention,
+    /// Merge the plays with the other devices through listen-server (`docs/history-sync.md`).
+    pub sync: bool,
+    /// listen-server's address. Its token lives in the keyring.
+    pub sync_server: String,
 }
 
 impl Default for HistorySettings {
     fn default() -> Self {
-        Self { enabled: true, retention: HistoryRetention::Forever }
+        Self { enabled: true, retention: HistoryRetention::Forever, sync: false, sync_server: String::new() }
     }
 }

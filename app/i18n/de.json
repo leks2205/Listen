@@ -2543,5 +2543,18 @@
 "· library {} songs{}": "· Bibliothek {} Titel{}",
 "· {} waiting": "· {} wartend",
 "“{}” is not an IP address": "„{}“ ist keine IP-Adresse",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ {} youtube.com-Cookies geladen – klicke auf „Verbinden“."
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ {} youtube.com-Cookies geladen – klicke auf „Verbinden“.",
+"Saved on this computer (song, server, time). It goes to your own listen-server only when merging is on. Off = nothing is written.": "Wird auf diesem Computer gespeichert (Titel, Server, Zeit). Nur wenn das Zusammenführen an ist, geht es an deinen eigenen listen-server. Aus = nichts wird geschrieben.",
+"Merge with other devices": "Mit anderen Geräten zusammenführen",
+"Sends your plays to your own listen-server and takes in the plays of your other devices. A play you remove goes everywhere; Delete all and the retention limit stay on this computer.": "Schickt deine Wiedergaben an deinen eigenen listen-server und übernimmt die deiner anderen Geräte. Eine entfernte Wiedergabe verschwindet überall; „Alle löschen“ und die Aufbewahrungsdauer gelten nur auf diesem Computer.",
+"listen-server address": "listen-server-Adresse",
+"The address of your listen-server, e.g. https://example.org/listen-api/.": "Die Adresse deines listen-servers, z. B. https://example.org/listen-api/.",
+"listen-server token": "listen-server-Token",
+"Kept in the keyring. Press Enter to save it.": "Liegt im Schlüsselbund. Mit der Eingabetaste speichern.",
+"Merge history now": "Verlauf jetzt zusammenführen",
+"Merge": "Zusammenführen",
+"Saved": "Gespeichert",
+"{} sent, {} received.": "{} gesendet, {} empfangen.",
+"Could not merge: {}": "Zusammenführen fehlgeschlagen: {}",
+"Runs every five minutes while merging is on.": "Läuft alle fünf Minuten, solange das Zusammenführen an ist."
 }

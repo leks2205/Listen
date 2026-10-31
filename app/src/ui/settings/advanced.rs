@@ -163,6 +163,7 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
 
 pub(super) fn history(state: &Listen) -> Element<'_, Message> {
     use crate::app::history::HistoryMsg;
+    use crate::app::history_sync::SyncStatus;
     use listen_core::settings::HistoryRetention;
     let t = state.tokens;
     let h = &state.config.settings.history;
@@ -184,11 +185,18 @@ pub(super) fn history(state: &Listen) -> Element<'_, Message> {
     } else {
         small("Delete all", Message::History(HistoryMsg::ConfirmClear(true))).into()
     };
+    let sync_status = match &state.history_view.sync_status {
+        Some(SyncStatus::Done { sent, received }) => {
+            crate::i18n::trf("{} sent, {} received.", &[sent, received])
+        }
+        Some(SyncStatus::Failed(e)) => crate::i18n::trf("Could not merge: {}", &[e]),
+        None => crate::i18n::tr("Runs every five minutes while merging is on.").to_string(),
+    };
     let rows = vec![
         line(
             state,
             "Record listening history",
-            "Saved only on this computer (song, server, time); never uploaded or shared. Off = nothing is written.",
+            "Saved on this computer (song, server, time). It goes to your own listen-server only when merging is on. Off = nothing is written.",
             switch(h.enabled, Setting::HistoryEnabled),
         ),
         line(
@@ -222,6 +230,43 @@ pub(super) fn history(state: &Listen) -> Element<'_, Message> {
             "Delete history",
             "Removes all entries; statistics and mixes are computed from them and disappear too. Single songs: right-click in Recently Played.",
             clear,
+        ),
+        line(
+            state,
+            "Merge with other devices",
+            "Sends your plays to your own listen-server and takes in the plays of your other devices. A play you remove goes everywhere; Delete all and the retention limit stay on this computer.",
+            switch(h.sync, Setting::HistorySync),
+        ),
+        line(
+            state,
+            "listen-server address",
+            "The address of your listen-server, e.g. https://example.org/listen-api/.",
+            text_input("https://", &h.sync_server)
+                .on_input(|v| Message::Setting(Setting::HistorySyncServer(v)))
+                .style(style::input(t))
+                .width(320.0)
+                .into(),
+        ),
+        line(
+            state,
+            "listen-server token",
+            "Kept in the keyring. Press Enter to save it.",
+            text_input(
+                crate::i18n::tr(if state.history_view.sync_token_saved { "Saved" } else { "Token" }),
+                &state.history_view.sync_token,
+            )
+            .on_input(|v| Message::History(HistoryMsg::SyncToken(v)))
+            .on_submit(Message::History(HistoryMsg::SaveSyncToken))
+            .secure(true)
+            .style(style::input(t))
+            .width(320.0)
+            .into(),
+        ),
+        line(
+            state,
+            "Merge history now",
+            sync_status,
+            small("Merge", Message::History(HistoryMsg::Sync)).into(),
         ),
     ];
     section(state, "Listening history", rows)

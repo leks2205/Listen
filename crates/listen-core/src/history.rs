@@ -1,10 +1,10 @@
-//! Local listening history: a JSON-lines file, never sent anywhere. Statistics and mixes are
-//! computed from it on demand, so deleting entries removes everything derived from them.
+//! Local listening history: a JSON-lines file, sent nowhere unless the user turns on merging with
+//! their own listen-server. Statistics and mixes are computed from it on demand, so deleting entries removes everything derived from them.
 
 use crate::model::{ArtistRef, ImageRef, ServerId, Song, SourceKind};
 use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -154,6 +154,35 @@ impl History {
         }
         self.entries.clear();
         Ok(())
+    }
+
+    /// The file, `None` for a history that is never written.
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
+    /// Takes in other devices' plays and removals. A play is the same on every device when second and
+    /// song match. `entries` end up sorted by time. Returns how many plays came or went.
+    pub fn merge(&mut self, incoming: Vec<Entry>, removed: &[(i64, String)]) -> std::io::Result<usize> {
+        let same = |e: &Entry| (e.ts, e.song_id.clone());
+        let gone: HashSet<&(i64, String)> = removed.iter().collect();
+        let mut left: Vec<Entry> =
+            self.entries.iter().filter(|e| !gone.contains(&same(e))).cloned().collect();
+        let mut changed = self.entries.len() - left.len();
+        let mut seen: HashSet<(i64, String)> = left.iter().map(same).collect();
+        for e in incoming {
+            let k = same(&e);
+            if !gone.contains(&k) && seen.insert(k) {
+                left.push(e);
+                changed += 1;
+            }
+        }
+        if changed > 0 {
+            left.sort_by_key(|e| e.ts);
+            self.write(&left)?;
+            self.entries = left;
+        }
+        Ok(changed)
     }
 
     /// Drops entries older than `max_age_days`. Returns how many were removed.
@@ -517,6 +546,26 @@ mod tests {
 
     fn temp(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("listen-hist-{name}-{}", std::process::id())).join(FILE_NAME)
+    }
+
+    #[test]
+    fn merge_adds_new_plays_drops_removed_ones_and_sorts() {
+        let path = temp("merge");
+        let _ = std::fs::remove_file(&path);
+        let mut h = History::load(&path);
+        let (a, b, c) = (at(0, 9, "1"), at(2, 9, "2"), at(1, 9, "3"));
+        h.add(a.clone()).unwrap();
+        h.add(b.clone()).unwrap();
+        // The same play from another device has another server id.
+        let mut twin = a.clone();
+        twin.server_id = ServerId("other".into());
+        let removed = [(b.ts, b.song_id.clone())];
+        let mut gone_too = b.clone();
+        gone_too.server_id = ServerId("other".into());
+        assert_eq!(h.merge(vec![twin, c.clone(), gone_too], &removed).unwrap(), 2);
+        assert_eq!(h.entries, [a.clone(), c.clone()]);
+        assert_eq!(History::load(&path).entries, [a, c]);
+        assert_eq!(h.merge(Vec::new(), &removed).unwrap(), 0);
     }
 
     #[test]
