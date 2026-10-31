@@ -458,6 +458,17 @@ impl YouTubeMusic {
                 seed = first.video_id;
             }
         }
+        if seed == song.id && song.album.is_none() {
+            // A video YouTube pairs with no song (its radio would be videos too): find the song.
+            for text in listen_core::substitute::queries(song) {
+                let Ok(found) = self.search(&text, 10).await else { break };
+                if let Some(s) = listen_core::substitute::song_of_video(song, &found.songs) {
+                    tracing::debug!("song radio: {} is a video, its song is {} ({})", seed, s.id, s.title);
+                    seed = s.id.clone();
+                    break;
+                }
+            }
+        }
         let q = library::RawPost::new(
             "next",
             serde_json::json!({

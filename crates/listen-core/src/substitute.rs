@@ -405,6 +405,47 @@ pub fn best_match<'a>(wanted: &Song, candidates: &'a [Song]) -> Option<&'a Song>
     best.map(|(_, c)| c)
 }
 
+/// The song name in a music video's title: the quoted part (`aespa 'Love Riot' MV`), else the
+/// title without "Artist - " and video tags (`ILLIT - Magnetic (Official MV)`).
+fn video_song_name(video: &Song) -> String {
+    let t = video.title.as_str();
+    for (open, close) in [('\'', '\''), ('‘', '’'), ('"', '"'), ('“', '”'), ('「', '」')] {
+        if let Some(i) = t.find(open) {
+            let rest = &t[i + open.len_utf8()..];
+            if let Some(j) = rest.find(close)
+                && j > 0
+            {
+                return rest[..j].to_string();
+            }
+        }
+    }
+    parse_title(t, &artist_keys(video, &[])).text
+}
+
+/// The song (art track) of a music video among search results: same name and artist, with an
+/// album. Video tags ("MV", "Official Video") and the video's longer intro don't count against
+/// it, unlike `score`, which looks for the same recording.
+pub fn song_of_video<'a>(video: &Song, candidates: &'a [Song]) -> Option<&'a Song> {
+    let name = fold(&plain(&video_song_name(video)));
+    if name.is_empty() {
+        return None;
+    }
+    let artists = artist_keys(video, &[]);
+    let title = fold(&plain(&video.title));
+    candidates.iter().find(|c| {
+        if c.album.is_none() || c.id == video.id {
+            return false;
+        }
+        let b = parse_title(&c.title, &artist_keys(c, &[]));
+        if !b.keys.contains(&name) || !b.tags.is_empty() {
+            return false;
+        }
+        // The artist is the uploader or is named in the video title (label channels upload MVs).
+        let theirs = artist_keys(c, &b.feat);
+        !artists.is_disjoint(&theirs) || theirs.iter().any(|a| !a.is_empty() && title.contains(a.as_str()))
+    })
+}
+
 /// Search texts for `wanted`, best first: the name alone, then name and artist.
 pub fn queries(wanted: &Song) -> Vec<String> {
     let title = parse_title(&wanted.title, &artist_keys(wanted, &[]));

@@ -432,3 +432,35 @@ fn shift_ignores_tiny_gaps_without_grid_and_far_ones() {
     assert_eq!(time_shift(&a, &b), None);
     assert_eq!(time_shift(&features(30.0, 120.0, 0.0, 0.9), &features(0.0, 120.0, 0.0, 0.9)), None);
 }
+
+#[test]
+fn song_of_a_music_video() {
+    let song = |id: &str, title: &str, artist: &str, secs: u64| {
+        let mut s = ytm(title, artist, secs);
+        s.id = id.into();
+        s.album = Some("Album".into());
+        s
+    };
+    let mut mv = ytm("aespa GISELLE 에스파 지젤 'Love Riot' MV", "aespa", 196);
+    mv.id = "MV".into();
+    let found = [
+        song("A", "Love Riot (Remix)", "aespa", 170),
+        song("B", "Riot", "Someone Else", 150),
+        song("C", "Love Riot", "aespa", 166),
+    ];
+    assert_eq!(song_of_video(&mv, &found).map(|s| s.id.as_str()), Some("C"));
+    let mut magnetic = ytm("ILLIT (아일릿) 'Magnetic' Official MV", "HYBE LABELS", 189);
+    magnetic.id = "MV2".into();
+    assert_eq!(
+        song_of_video(&magnetic, &[song("M", "Magnetic", "ILLIT", 160)]).map(|s| s.id.as_str()),
+        Some("M")
+    );
+    let mut stage = ytm("Love Riot", "aespa", 166);
+    stage.id = "S".into();
+    stage.album = Some("Live".into());
+    stage.title = "Love Riot (Live)".into();
+    assert_eq!(song_of_video(&mv, &[stage]).map(|s| s.id.clone()), None, "a live version is no studio song");
+    let mut video_only = ytm("Love Riot (Video)", "aespa", 196);
+    video_only.album = None;
+    assert!(song_of_video(&video_only, &[ytm("Love Riot", "aespa", 166)]).is_none(), "results need an album");
+}
