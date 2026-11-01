@@ -540,6 +540,8 @@ pub struct Listen {
     pub overlay: overlay::OverlayState,
     pub fullscreen: bool,
     pub fullscreen_tab: FullscreenTab,
+    /// While a video plays: the visualizer is shown next to the lyrics, under the video.
+    pub fullscreen_visualizer_too: bool,
     /// Compact layout: the sidebar drawer is open.
     pub drawer_open: bool,
     /// The vertical volume slider above the compact bar's speaker is open.
@@ -1057,6 +1059,7 @@ impl Listen {
             overlay: overlay::OverlayState::default(),
             fullscreen: false,
             fullscreen_tab: FullscreenTab::Lyrics,
+            fullscreen_visualizer_too: false,
             drawer_open: false,
             volume_popup: false,
             mobile_panel: None,
@@ -4022,8 +4025,11 @@ impl Listen {
             }
             Message::FullscreenTab(tab) => {
                 self.fullscreen_tab = tab;
+                if tab != FullscreenTab::Lyrics {
+                    self.fullscreen_visualizer_too = false;
+                }
                 self.queue_scroll.offset = 0.0;
-                if tab != FullscreenTab::Visualizer && !self.queue_visualizer_visible() {
+                if !self.fs_visualizer_in_panel() && !self.queue_visualizer_visible() {
                     self.spectrum = None;
                 }
                 return self.scroll_lyrics();
@@ -4191,8 +4197,8 @@ impl Listen {
             if self.visualizer_running() && !self.milkdrop_active() {
                 // The fullscreen visualizer keeps its full rate unfocused (e.g. on a
                 // second screen); the queue panel's strip slows down in the background.
-                let fullscreen_visualizer = self.fs.visualizer_expanded
-                    || (self.fullscreen && self.fullscreen_tab == FullscreenTab::Visualizer);
+                let fullscreen_visualizer =
+                    self.fs.visualizer_expanded || (self.fullscreen && self.fs_visualizer_in_panel());
                 crate::visualizer::set_background(!self.focused && !fullscreen_visualizer);
                 crate::visualizer::set_config(crate::visualizer::analyzer_config(
                     &self.config.settings.visualizer,

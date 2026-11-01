@@ -98,7 +98,7 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
             Position::Top,
         )
     };
-    let in_tab = |tab| state.fullscreen && state.fullscreen_tab == tab;
+    let in_tab = |tab| state.fullscreen && state.fs_tab_active(tab);
     let volume = if state.playback.muted { 0 } else { state.playback.volume };
     let volume_icon = match volume {
         0 => Icon::LuVolumeX,

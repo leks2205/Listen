@@ -133,7 +133,28 @@ impl Listen {
     pub(super) fn on_fullscreen(&mut self, msg: FullscreenMsg) -> Task<Message> {
         match msg {
             FullscreenMsg::TogglePanel(tab) => {
-                self.fullscreen_tab = if self.fullscreen_tab == tab { FullscreenTab::Hidden } else { tab };
+                // Under a video, lyrics and visualizer can be shown side by side.
+                let video = self.video_showing();
+                match (self.fullscreen_tab, tab) {
+                    (FullscreenTab::Lyrics, FullscreenTab::Visualizer) if video => {
+                        self.fullscreen_visualizer_too = !self.fullscreen_visualizer_too;
+                    }
+                    (FullscreenTab::Visualizer, FullscreenTab::Lyrics) if video => {
+                        self.fullscreen_tab = FullscreenTab::Lyrics;
+                        self.fullscreen_visualizer_too = true;
+                    }
+                    (FullscreenTab::Lyrics, FullscreenTab::Lyrics)
+                        if video && self.fullscreen_visualizer_too =>
+                    {
+                        self.fullscreen_tab = FullscreenTab::Visualizer;
+                        self.fullscreen_visualizer_too = false;
+                    }
+                    _ => {
+                        self.fullscreen_tab =
+                            if self.fullscreen_tab == tab { FullscreenTab::Hidden } else { tab };
+                        self.fullscreen_visualizer_too = false;
+                    }
+                }
                 return self.panel_shown();
             }
             FullscreenMsg::OpenSettings => self.open_modal(SETTINGS_MODAL),
@@ -228,7 +249,7 @@ impl Listen {
     /// The panel changed: the lyrics need loading and the queue list starts at the top.
     fn panel_shown(&mut self) -> Task<Message> {
         self.queue_scroll.offset = 0.0;
-        if self.fullscreen_tab != FullscreenTab::Visualizer && !self.queue_visualizer_visible() {
+        if !self.fs_visualizer_in_panel() && !self.queue_visualizer_visible() {
             self.spectrum = None;
         }
         Task::batch([self.load_lyrics(), self.scroll_lyrics(), self.related_track_changed()])
@@ -272,8 +293,28 @@ impl Listen {
     /// The spectrum is wanted by the full-screen panel or the full-window overlay.
     pub fn visualizer_wanted(&self) -> bool {
         self.fs.visualizer_expanded
-            || (self.fullscreen && self.fullscreen_tab == FullscreenTab::Visualizer)
+            || (self.fullscreen && self.fs_visualizer_in_panel())
             || self.queue_visualizer_visible()
+    }
+
+    /// A video picture is on screen instead of the cover.
+    pub fn video_showing(&self) -> bool {
+        self.video.on && self.video.frame.is_some()
+    }
+
+    /// Under a video: the visualizer is shown next to the lyrics.
+    pub fn fs_visualizer_beside_lyrics(&self) -> bool {
+        self.fullscreen_visualizer_too && self.fullscreen_tab == FullscreenTab::Lyrics && self.video_showing()
+    }
+
+    /// The fullscreen panel shows the visualizer (alone, or next to the lyrics).
+    pub fn fs_visualizer_in_panel(&self) -> bool {
+        self.fullscreen_tab == FullscreenTab::Visualizer || self.fs_visualizer_beside_lyrics()
+    }
+
+    /// The panel button for `tab` is lit.
+    pub fn fs_tab_active(&self, tab: FullscreenTab) -> bool {
+        self.fullscreen_tab == tab || (tab == FullscreenTab::Visualizer && self.fs_visualizer_beside_lyrics())
     }
 
     fn fs_setting(&mut self, setting: FsSetting) -> Task<Message> {

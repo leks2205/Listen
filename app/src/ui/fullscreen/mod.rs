@@ -40,9 +40,13 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         None => {
             container(label("Nothing is playing.", metrics::font_lg(), t.muted)).center(Length::Fill).into()
         }
+        // A video is wide: it goes on top, the panel (or lyrics and visualizer side by side) below.
+        Some(item) if panel_open && state.video_showing() => video_stack(state, &item.song),
         Some(item) if panel_open => row![
             container(image_column(state, &item.song)).width(Length::FillPortion(1)).height(Length::Fill),
-            container(panel(state)).width(Length::FillPortion(1)).height(Length::Fill),
+            container(panel(state, state.window_size.width * 0.5 - 64.0))
+                .width(Length::FillPortion(1))
+                .height(Length::Fill),
         ]
         .spacing(48)
         .into(),
@@ -76,7 +80,7 @@ fn top_bar(state: &Listen) -> Element<'_, Message> {
     };
     let mut tabs = iced::widget::Row::new().spacing(metrics::space_xs()).align_y(Alignment::Center);
     for (tab, glyph, name) in TABS {
-        let active = state.fullscreen_tab == tab;
+        let active = state.fs_tab_active(tab);
         tabs = tabs.push(tip(
             btn(glyph, active, Message::Fullscreen(FullscreenMsg::TogglePanel(tab))),
             name,
@@ -164,32 +168,83 @@ fn cover<'a>(state: &Listen, song: &Song, art: f32) -> Element<'a, Message> {
     song_cover(state, song, art, metrics::radius_md())
 }
 
-/// The open panel's content.
-fn panel(state: &Listen) -> Element<'_, Message> {
+/// The open panel's content; `queue_width` is the room the queue list gets.
+fn panel(state: &Listen, queue_width: f32) -> Element<'_, Message> {
     match state.fullscreen_tab {
-        // The right half of the fullscreen player, minus its padding.
-        FullscreenTab::Queue => super::queue::list(state, state.window_size.width * 0.5 - 64.0),
+        FullscreenTab::Queue => super::queue::list(state, queue_width),
         FullscreenTab::Related => related::view(state),
         FullscreenTab::Lyrics => lyrics::lyrics(state),
-        FullscreenTab::Visualizer => {
-            let expand = crate::ui::tip::tip(
-                state,
-                button(icon(Icon::LuChevronUp, 20.0, state.tokens.foreground))
-                    .padding(8)
-                    .style(style::icon_button(state.tokens, false))
-                    .on_press(Message::Fullscreen(FullscreenMsg::ExpandVisualizer)),
-                "Expand visualizer",
-                None,
-                tooltip::Position::Left,
-            );
-            stack![
-                visualizer_surface(state),
-                container(expand).width(Length::Fill).align_x(Horizontal::Right)
-            ]
-            .into()
-        }
+        FullscreenTab::Visualizer => visualizer_panel(state),
         FullscreenTab::Hidden => space().into(),
     }
+}
+
+/// The visualizer with its expand button.
+fn visualizer_panel(state: &Listen) -> Element<'_, Message> {
+    let expand = crate::ui::tip::tip(
+        state,
+        button(icon(Icon::LuChevronUp, 20.0, state.tokens.foreground))
+            .padding(8)
+            .style(style::icon_button(state.tokens, false))
+            .on_press(Message::Fullscreen(FullscreenMsg::ExpandVisualizer)),
+        "Expand visualizer",
+        None,
+        tooltip::Position::Left,
+    );
+    stack![visualizer_surface(state), container(expand).width(Length::Fill).align_x(Horizontal::Right)].into()
+}
+
+/// A playing video with a panel open: the video on top at full width, title and artists under it,
+/// then the panel; with lyrics and visualizer both on, they sit side by side.
+fn video_stack<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
+    let t = state.tokens;
+    responsive(move |size| {
+        // The video takes at most a bit more than half the height, so the panel keeps room.
+        let (w, h) = video_box(size.width, size.height * 0.55);
+        let picture: Element<'_, Message> = match &state.video.frame {
+            Some(frame) => iced::widget::image(frame.clone())
+                .width(Length::Fixed(w))
+                .height(Length::Fixed(h))
+                .content_fit(iced::ContentFit::Contain)
+                .into(),
+            None => space().into(),
+        };
+        let info = row![
+            label_w(
+                super::ellipsize_px(&song.title, w * 0.6, metrics::font_xl()),
+                metrics::font_xl(),
+                t.foreground,
+                Weight::Bold
+            ),
+            label(
+                super::ellipsize_px(&song.artist_line(), w * 0.35, metrics::font_lg()),
+                metrics::font_lg(),
+                t.muted
+            ),
+        ]
+        .spacing(metrics::space_md())
+        .align_y(Alignment::Center);
+        let below: Element<'_, Message> = if state.fs_visualizer_beside_lyrics() {
+            row![
+                container(lyrics::lyrics(state)).width(Length::FillPortion(1)).height(Length::Fill),
+                container(visualizer_panel(state)).width(Length::FillPortion(1)).height(Length::Fill),
+            ]
+            .spacing(48)
+            .into()
+        } else {
+            panel(state, size.width)
+        };
+        column![
+            container(picture).width(Length::Fill).align_x(Horizontal::Center),
+            container(info).width(Length::Fill).align_x(Horizontal::Center),
+            container(below).width(Length::Fill).height(Length::Fill),
+        ]
+        .spacing(metrics::space_md())
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    })
+    .into()
 }
 
 /// The spectrum (or why there is none), filling its space.
