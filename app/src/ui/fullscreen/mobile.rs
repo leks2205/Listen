@@ -80,11 +80,14 @@ pub fn mobile(state: &Listen) -> iced::Element<'_, Message> {
         _ => responsive(move |size| {
             let art = (size.width - 16.0).min(size.height - 90.0).max(60.0);
             let cover: iced::Element<'_, Message> = match &state.video.frame {
-                Some(frame) if state.video.on => iced::widget::image(frame.clone())
-                    .width(Length::Fixed(art))
-                    .height(Length::Fixed(art))
-                    .content_fit(iced::ContentFit::Contain)
-                    .into(),
+                Some(frame) if state.video.on => {
+                    let (w, h) = super::video_box(size.width - 16.0, size.height - 90.0);
+                    iced::widget::image(frame.clone())
+                        .width(Length::Fixed(w))
+                        .height(Length::Fixed(h))
+                        .content_fit(iced::ContentFit::Contain)
+                        .into()
+                }
                 _ => song_cover(state, song, art, metrics::radius_md()),
             };
             let text_px = size.width;

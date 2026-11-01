@@ -115,11 +115,14 @@ fn image_column<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
         // Room under the cover for title, artists, album and badges.
         let art = (size.width * pct).min((size.height - 190.0).max(0.0)).max(120.0).min(size.width);
         let cover: Element<'_, Message> = match &state.video.frame {
-            Some(frame) if state.video.on => iced::widget::image(frame.clone())
-                .width(Length::Fixed(art))
-                .height(Length::Fixed(art))
-                .content_fit(iced::ContentFit::Contain)
-                .into(),
+            Some(frame) if state.video.on => {
+                let (w, h) = video_box(size.width, size.height - 190.0);
+                iced::widget::image(frame.clone())
+                    .width(Length::Fixed(w))
+                    .height(Length::Fixed(h))
+                    .content_fit(iced::ContentFit::Contain)
+                    .into()
+            }
             _ => cover(state, song, art),
         };
         container(
@@ -135,6 +138,13 @@ fn image_column<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
         .into()
     })
     .into()
+}
+
+/// The video's box: the frames are 16:9, so it takes the full width the room allows instead of the
+/// cover's square, which left wide bands above and below the picture.
+pub(crate) fn video_box(width: f32, height: f32) -> (f32, f32) {
+    let w = width.min(height.max(0.0) * 16.0 / 9.0).max(120.0).min(width.max(0.0));
+    (w, w * 9.0 / 16.0)
 }
 
 /// The cover at `art` px; with "use image aspect ratio" the whole image fits in the square.
