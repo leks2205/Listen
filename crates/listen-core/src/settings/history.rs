@@ -49,10 +49,19 @@ pub struct HistorySettings {
     pub sync: bool,
     /// listen-server's address. Its token lives in the keyring.
     pub sync_server: String,
+    /// Show what the other devices play and take it over (Play here, or a new audio output) through
+    /// the same listen-server (`docs/handoff.md`).
+    pub handoff: bool,
 }
 
 impl Default for HistorySettings {
     fn default() -> Self {
-        Self { enabled: true, retention: HistoryRetention::Forever, sync: false, sync_server: String::new() }
+        Self {
+            enabled: true,
+            retention: HistoryRetention::Forever,
+            sync: false,
+            sync_server: String::new(),
+            handoff: true,
+        }
     }
 }

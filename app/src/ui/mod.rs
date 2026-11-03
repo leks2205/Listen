@@ -13,6 +13,7 @@ pub mod downloads;
 pub mod drag_scroll;
 pub mod favorites;
 pub mod fullscreen;
+pub mod handoff;
 pub mod history;
 pub mod home;
 pub mod item;

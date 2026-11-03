@@ -76,7 +76,7 @@ pub enum SyncStatus {
     Failed(String),
 }
 
-fn source_name(kind: SourceKind) -> String {
+pub(super) fn source_name(kind: SourceKind) -> String {
     serde_json::to_value(kind).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default()
 }
 
@@ -86,7 +86,7 @@ fn host(url: &str) -> String {
     url.trim_end_matches('/').to_lowercase()
 }
 
-fn key_of(server: &ServerConfig) -> String {
+pub(super) fn key_of(server: &ServerConfig) -> String {
     match server.kind {
         SourceKind::YouTubeMusic => source_name(server.kind),
         SourceKind::Local => format!("{}:{}", source_name(server.kind), server.id.0),
@@ -105,7 +105,11 @@ fn server_key(entry: &Entry, servers: &[ServerConfig]) -> String {
 
 /// The same server here: by its key, else the only server of that kind (the song ids are the same
 /// under another address). Local folders never match.
-fn local_server<'a>(key: &str, kind: SourceKind, servers: &'a [ServerConfig]) -> Option<&'a ServerConfig> {
+pub(super) fn local_server<'a>(
+    key: &str,
+    kind: SourceKind,
+    servers: &'a [ServerConfig],
+) -> Option<&'a ServerConfig> {
     if kind == SourceKind::Local {
         return None;
     }
@@ -207,7 +211,7 @@ impl Listen {
         Task::done(Message::History(HistoryMsg::Sync))
     }
 
-    fn history_sync_token(&self) -> Option<String> {
+    pub(super) fn history_sync_token(&self) -> Option<String> {
         let id = ServerId(TOKEN_SECRET.into());
         self.secrets.as_ref().and_then(|s| s.get(&id)).filter(|t| !t.is_empty())
     }

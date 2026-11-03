@@ -46,6 +46,7 @@
 - [Tray, window and notifications](integration/window.md)
 - [Discord status](integration/discord.md)
 - [Remote control](integration/remote.md)
+- [Continue on another device](integration/handoff.md)
 - [MCP server](integration/mcp.md)
 
 # Appearance

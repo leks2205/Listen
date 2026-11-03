@@ -38,14 +38,17 @@ pub fn body(state: &Listen) -> Element<'_, Message> {
                 .align_y(iced::alignment::Vertical::Bottom),
         );
     }
-    column![
-        middle,
-        super::divider_h(t),
-        container(super::player_bar::view(state))
-            .height(metrics::PLAYER_BAR_HEIGHT)
-            .style(style::player_bar(t)),
-    ]
-    .into()
+    let mut body = column![middle];
+    if let Some(strip) = super::handoff::strip(state) {
+        body = body.push(super::divider_h(t)).push(strip);
+    }
+    body.push(super::divider_h(t))
+        .push(
+            container(super::player_bar::view(state))
+                .height(metrics::PLAYER_BAR_HEIGHT)
+                .style(style::player_bar(t)),
+        )
+        .into()
 }
 
 /// `root` with the sidebar drawer and volume popover over it. `root` stays the first stack child

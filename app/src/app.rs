@@ -36,6 +36,7 @@ pub mod dlna;
 mod fade;
 mod flow;
 pub mod fullscreen_state;
+pub mod handoff;
 pub mod helpers;
 pub mod history;
 pub mod history_sync;
@@ -434,6 +435,8 @@ pub struct Listen {
     pub paths: Option<Paths>,
     pub history: listen_core::history::History,
     pub history_view: history::HistoryView,
+    /// What the other devices play, and taking the music over from them.
+    pub handoff: handoff::Handoff,
     pub adv: advanced::AdvancedState,
     pub onboard: onboarding::OnboardState,
     pub helpers: helpers::HelpersState,
@@ -910,6 +913,7 @@ pub enum Message {
     /// DJ transitions.
     Mix(mix::MixMsg),
     History(history::HistoryMsg),
+    Handoff(handoff::HandoffMsg),
     Radio(radio::RadioMsg),
     Dlna(dlna::DlnaMsg),
     Servers(servers::ServersMsg),
@@ -985,6 +989,7 @@ impl Listen {
         let mut state = Self {
             history,
             history_view: history::HistoryView::default(),
+            handoff: handoff::Handoff::default(),
             adv: advanced::AdvancedState::default(),
             onboard: onboarding::OnboardState::default(),
             helpers: helpers::HelpersState::default(),
@@ -2955,7 +2960,7 @@ impl Listen {
         };
         let message = match cmd {
             MprisCmd::PlayPause => Message::TogglePlay,
-            MprisCmd::Play if !self.playback.playing => Message::TogglePlay,
+            MprisCmd::Play if !self.playback.playing || !self.playing_here() => Message::TogglePlay,
             MprisCmd::Pause if self.playback.playing => Message::TogglePlay,
             MprisCmd::Play | MprisCmd::Pause => return Task::none(),
             MprisCmd::Stop => Message::Stop,
@@ -3052,6 +3057,12 @@ impl Listen {
                 self.apply_theme();
             }
             Message::TogglePlay => {
+                // Another device plays (or just stopped): the music moves here.
+                if !self.playing_here()
+                    && let Some(task) = self.handoff_on_play()
+                {
+                    return task;
+                }
                 if self.queue.current().is_none() {
                     return Task::none();
                 }
@@ -3847,6 +3858,7 @@ impl Listen {
                 self.refresh_genres_view();
             }
             Message::History(m) => return self.on_history(m),
+            Message::Handoff(m) => return self.on_handoff(m),
             Message::Radio(m) => return self.on_radio(m),
             Message::Dlna(m) => return self.on_dlna(m),
             Message::Servers(m) => return self.on_servers(m),
@@ -4176,6 +4188,9 @@ impl Listen {
                 iced::time::every(history_sync::EVERY).map(|_| Message::History(history::HistoryMsg::Sync)),
             );
         }
+        if self.handoff_on() {
+            subs.push(iced::time::every(handoff::TICK).map(|_| Message::Handoff(handoff::HandoffMsg::Tick)));
+        }
         if self.config.settings.appearance.follow_desktop_theme {
             subs.push(crate::desktop_theme::subscription());
         }
@@ -4361,14 +4376,17 @@ impl Listen {
                     .align_y(iced::alignment::Vertical::Bottom);
                 middle = middle.push(corner);
             }
-            column![
-                middle,
-                ui::divider_h(t),
-                container(ui::player_bar::view(self))
-                    .height(metrics::PLAYER_BAR_HEIGHT)
-                    .style(crate::style::player_bar(t)),
-            ]
-            .into()
+            let mut body = column![middle];
+            if let Some(strip) = ui::handoff::strip(self) {
+                body = body.push(ui::divider_h(t)).push(strip);
+            }
+            body.push(ui::divider_h(t))
+                .push(
+                    container(ui::player_bar::view(self))
+                        .height(metrics::PLAYER_BAR_HEIGHT)
+                        .style(crate::style::player_bar(t)),
+                )
+                .into()
         };
         let custom_bar = self.config.settings.window.custom_title_bar;
         let content: Element<'_, Message> =

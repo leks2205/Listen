@@ -268,6 +268,12 @@ pub(super) fn history(state: &Listen) -> Element<'_, Message> {
             sync_status,
             small("Merge", Message::History(HistoryMsg::Sync)).into(),
         ),
+        line(
+            state,
+            "Continue on other devices",
+            "Shows what your other devices play, with Play here. Pressing Play here, or connecting headphones here while another device plays or has just stopped, moves the song, its position and the queue to this computer, and the other device pauses. Uses the listen-server address and token above.",
+            switch(h.handoff, Setting::HistoryHandoff),
+        ),
     ];
     section(state, "Listening history", rows)
 }

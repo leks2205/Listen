@@ -1,4 +1,11 @@
 {
+"Now playing on {}.": "Läuft jetzt auf {}.",
+"Continuing from {}.": "Geht weiter von {}.",
+"“{}” from {} can't play here.": "„{}“ von {} kann hier nicht laufen.",
+"Playing on {}: {}": "Läuft auf {}: {}",
+"Play here": "Hier abspielen",
+"Continue on other devices": "Auf anderen Geräten weiterhören",
+"Shows what your other devices play, with Play here. Pressing Play here, or connecting headphones here while another device plays or has just stopped, moves the song, its position and the queue to this computer, and the other device pauses. Uses the listen-server address and token above.": "Zeigt, was deine anderen Geräte spielen, mit „Hier abspielen“. Drückst du hier auf Play oder verbindest hier Kopfhörer, während ein anderes Gerät spielt oder gerade aufgehört hat, wandern Song, Position und Warteschlange auf diesen Computer, und das andere Gerät pausiert. Nutzt die listen-server-Adresse und den Token oben.",
 "Connect to Last.fm": "Mit Last.fm verbinden",
 "Disconnect": "Trennen",
 "Waiting…": "Warte…",

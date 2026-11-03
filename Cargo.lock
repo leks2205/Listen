@@ -3898,7 +3898,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 
 [[package]]
 name = "listen"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "ashpd",
  "async-trait",
@@ -3960,7 +3960,7 @@ dependencies = [
 
 [[package]]
 name = "listen-analysis"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "beat-this",
  "bliss-audio",
@@ -3982,7 +3982,7 @@ dependencies = [
 
 [[package]]
 name = "listen-core"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "chrono",
  "directories",
@@ -3998,7 +3998,7 @@ dependencies = [
 
 [[package]]
 name = "listen-dj"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "base64 0.22.1",
  "listen-core",
@@ -4012,7 +4012,7 @@ dependencies = [
 
 [[package]]
 name = "listen-dlna"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "rand 0.9.5",
  "reqwest 0.12.28",
@@ -4025,7 +4025,7 @@ dependencies = [
 
 [[package]]
 name = "listen-jellyfin"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "async-trait",
  "listen-core",
@@ -4040,7 +4040,7 @@ dependencies = [
 
 [[package]]
 name = "listen-lastfm"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "listen-core",
  "md-5",
@@ -4054,7 +4054,7 @@ dependencies = [
 
 [[package]]
 name = "listen-local"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "async-trait",
  "directories",
@@ -4070,7 +4070,7 @@ dependencies = [
 
 [[package]]
 name = "listen-lyrics"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "lindera",
  "listen-core",
@@ -4084,7 +4084,7 @@ dependencies = [
 
 [[package]]
 name = "listen-mix"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "listen-core",
  "serde",
@@ -4092,7 +4092,7 @@ dependencies = [
 
 [[package]]
 name = "listen-offline"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "listen-core",
  "serde",
@@ -4103,7 +4103,7 @@ dependencies = [
 
 [[package]]
 name = "listen-player"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "listen-core",
  "serde",
@@ -4115,7 +4115,7 @@ dependencies = [
 
 [[package]]
 name = "listen-rip"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
@@ -4132,7 +4132,7 @@ dependencies = [
 
 [[package]]
 name = "listen-source"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "async-trait",
  "bitflags 2.13.2",
@@ -4147,7 +4147,7 @@ dependencies = [
 
 [[package]]
 name = "listen-subsonic"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "async-trait",
  "listen-core",
@@ -4164,7 +4164,7 @@ dependencies = [
 
 [[package]]
 name = "listen-visualizer"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "cpal",
  "rustfft",
@@ -4175,7 +4175,7 @@ dependencies = [
 
 [[package]]
 name = "listen-ytmusic"
-version = "0.39.0"
+version = "0.40.0"
 dependencies = [
  "aes",
  "aes-gcm",
