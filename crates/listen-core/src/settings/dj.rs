@@ -97,6 +97,10 @@ pub struct Mixing {
     pub fallback_fade_secs: f32,
     /// Whether vocals at a song's start or end may be blended over.
     pub transition_edges: TransitionEdges,
+    /// Put a short stretch of an analysed song between two DJ picks that are far apart (bridge).
+    pub bridges: bool,
+    /// How often (percent) a far-apart pair gets a bridge.
+    pub bridge_chance_pct: u8,
 }
 
 impl Default for Mixing {
@@ -111,6 +115,8 @@ impl Default for Mixing {
             mix_manual_queue: true,
             fallback_fade_secs: 4.0,
             transition_edges: TransitionEdges::default(),
+            bridges: true,
+            bridge_chance_pct: 50,
         }
     }
 }

@@ -34,6 +34,20 @@ Songs whose tempo is double or half of the other (for example 70 and 140 BPM) ar
 
 > **Note:** Tempo changes use the rubberband library inside mpv. If your mpv was built without it, Listen uses a different method, which works but can make the beat wobble slightly while a song is not at its natural speed.
 
+## Bridge songs
+
+Some pairs a DJ picked do not join well: the tempos are too far apart to beat-match, the keys clash, or the two songs simply sound very different. A club DJ solves this with a *bridge track*: a record that sits between the two, keeps the feel of the first and leads towards the second, so each step stays small.
+
+With **Bridge songs** on, Listen does the same with a song that has already been analysed:
+
+1. When the next song is far from the current one (no beat-matched join, a tempo gap of more than 4 %, clashing keys, or a large difference in sound), Listen looks for a bridge among the analysed songs the DJs were recently offered. Songs in the queue and songs played this session are not used.
+2. The bridge must be closer to both songs than they are to each other, and both joins, into the bridge and out of it, must be beat-matched blends.
+3. Only a short part of the bridge plays: 24 bars (about 45 seconds at 125 BPM) that start on a phrase and have no singing where they are blended, usually an instrumental groove, a break or a long intro. Listen blends into it with a short blend of up to 8 bars, glides it back to its own tempo, lets it play alone for a few bars, and blends out of it into the next song.
+
+The bridge shows in the queue with the tag **Bridge**. It does not count as played: it is not scrobbled and not added to the listening history. If its mix cannot be prepared, the bridge is removed and the two songs join as before; if nothing mixes out of it, the next song starts when its part ends.
+
+**How often to bridge** sets the share of far-apart pairs that get a bridge, so it stays an occasional move rather than a pattern.
+
 ## Order by flow
 
 When a DJ picks several songs, **Order by flow** arranges them so that each song follows from the one before: similar tempo, neighbouring keys and a sensible energy curve, and without repeating the same artist too soon. The Auto-DJ and the AI DJ both use this. Songs without analysis are placed by the server's own similarity order.
@@ -52,6 +66,8 @@ Everything is in **Settings → Playback → DJ transitions & song analysis**.
 | **Tempo ramps** | On | on/off | Glide the tempo between songs instead of jumping. |
 | **Bass swap** | On | on/off | Swap the basslines on a downbeat so only one plays at a time. |
 | **Mix queued songs** | On | on/off | Also mix into songs you added with **Add to queue** while a DJ is on. |
+| **Bridge songs** | On | on/off | Put a short part of an analysed song between two songs that are far apart and mix through it (see [Bridge songs](#bridge-songs)). |
+| **How often to bridge** | 50 % | 10 to 100 % | Share of far-apart pairs that get a bridge when one fits. |
 
 One more value has no switch in the window. Set it in the `[mixing]` section of the settings file (see [Files and folders](../reference/files.md)) or with the `set_settings` [MCP tool](../reference/mcp-tools.md):
 

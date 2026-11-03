@@ -339,6 +339,7 @@ impl Listen {
                 return iced::Task::batch([self.mix_consider(), self.waveform_analysed(&id)]);
             }
             AnalysisMsg::Pool(songs) => {
+                self.bridge_pool_add(&songs);
                 let jobs = self.analysis_pool_jobs(songs);
                 if !jobs.is_empty() {
                     tracing::info!("analysis: {} pool candidates queued", jobs.len());

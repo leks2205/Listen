@@ -113,6 +113,8 @@ pub struct Planned {
     mode: BreakMode,
     /// Speech was wanted but failed.
     tts_error: Option<DjError>,
+    /// The candidates Gemini chose from (bridge candidates).
+    pool: Vec<Song>,
 }
 
 impl DjState {
@@ -375,7 +377,10 @@ impl Listen {
         if !self.ai_dj_on() {
             return None;
         }
-        self.dj_finished(false);
+        // A bridge is a DJ move, not a song of the set.
+        if !self.bridge_playing() {
+            self.dj_finished(false);
+        }
         let Break::Armed { clip: Some(clip), line, mode: BreakMode::Between, .. } = self.dj.brk.clone()
         else {
             return None;
@@ -810,6 +815,7 @@ impl Listen {
                     seed_context: looked_up,
                     mode,
                     tts_error,
+                    pool,
                 })
             },
             move |r| Message::DjPlanned(generation, r),
@@ -828,6 +834,7 @@ impl Listen {
             Ok(p) => p,
             Err(e) => return self.dj_failed(e),
         };
+        self.bridge_pool_add(&planned.pool);
         self.dj.failures = 0;
         if self.dj.seed_context.is_empty() {
             self.dj.seed_context = planned.seed_context.clone();

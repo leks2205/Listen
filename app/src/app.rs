@@ -28,6 +28,7 @@ pub mod analysis;
 pub mod appearance;
 pub mod artist_page;
 pub mod audio;
+mod bridge;
 pub mod decks;
 mod dj;
 mod dj_mix;
@@ -567,6 +568,8 @@ pub struct Listen {
     /// Version keys of every song played since Listen started: the Auto-DJ
     /// and the AI DJ don't pick them (or another version of them) again.
     session_played: std::collections::HashSet<String>,
+    /// DJ bridges between far-apart songs.
+    bridge: bridge::BridgeState,
     /// The AI DJ (Gemini).
     pub dj: dj::DjState,
     /// The open right-click menu.
@@ -1076,6 +1079,7 @@ impl Listen {
             modifiers: iced::keyboard::Modifiers::default(),
             seek_preview: None,
             session_played: Default::default(),
+            bridge: Default::default(),
             menu: None,
             audio,
             analysis: None,
@@ -2110,6 +2114,9 @@ impl Listen {
 
     /// Called whenever the current track changes.
     fn on_track_changed(&mut self) -> Task<Message> {
+        if let Some(task) = self.bridge_unentered() {
+            return task;
+        }
         if let Some(item) = self.queue.current() {
             self.session_played.insert(listen_core::versions::song_key(&item.song));
         }
@@ -2430,7 +2437,11 @@ impl Listen {
     }
 
     fn scrobble(&self, event: ScrobbleEvent) -> Task<Message> {
-        if self.demo || !self.config.settings.playback.scrobble || self.private_mode() {
+        if self.demo
+            || !self.config.settings.playback.scrobble
+            || self.private_mode()
+            || self.bridge_playing()
+        {
             return Task::none();
         }
         let Some(song) = self.queue.current().map(|i| i.song.clone()) else { return Task::none() };
@@ -2468,6 +2479,9 @@ impl Listen {
                 self.playback.position = pos;
                 self.fader.pos_at = Some(std::time::Instant::now());
                 self.mix_position(self.decks.active, pos);
+                if let Some(task) = self.bridge_watch(pos) {
+                    return task;
+                }
                 if let Some(task) = self.dj_check_overlap() {
                     return task;
                 }
@@ -4055,6 +4069,7 @@ impl Listen {
                     }
                     Ok(songs) => {
                         use listen_core::versions::{dedupe_versions, song_key};
+                        self.bridge_pool_add(&songs);
                         let s = &self.config.settings.auto_dj;
                         let queued: std::collections::HashSet<String> =
                             self.queue.iter().map(|i| song_key(&i.song)).collect();

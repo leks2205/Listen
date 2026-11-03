@@ -992,6 +992,25 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
             "Also mix into songs added with \"Add to queue\" while a DJ is on.",
             switch(m.mix_manual_queue, Setting::MixManualQueue),
         ),
+        line(
+            state,
+            "Bridge songs",
+            "When the next song is far from the current one (tempo, key, sound), play a short instrumental \
+             stretch of an analysed song in between and mix through it, like a DJ's bridge track.",
+            switch(m.bridges, Setting::MixBridges),
+        ),
+        line(
+            state,
+            "How often to bridge",
+            "Share of far-apart pairs that get a bridge when one fits.",
+            stepper(
+                state,
+                10.0..=100.0,
+                f32::from(m.bridge_chance_pct),
+                format!("{} %", m.bridge_chance_pct),
+                |v| Setting::MixBridgeChance(((v / 10.0).round() * 10.0) as u8),
+            ),
+        ),
     ];
     if state.demo {
         rows.remove(1);

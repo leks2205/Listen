@@ -39,6 +39,20 @@ pub struct QueueItem {
     /// plays right after the current song, before the rest.
     #[serde(default)]
     pub queued: bool,
+    /// A DJ bridge: only this stretch of the song plays, mixed in and out (see `listen_mix::bridge`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bridge: Option<BridgeCut>,
+}
+
+/// The stretch of a song played as a DJ bridge between two songs that don't mix well directly.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct BridgeCut {
+    /// File seconds where the stretch starts (a phrase downbeat) and ends.
+    pub start_s: f64,
+    pub end_s: f64,
+    /// The same as bars on the song's beat grid.
+    pub start_bar: u32,
+    pub bars: u32,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -223,6 +237,19 @@ impl Queue {
         if self.position.is_none() && !self.order.is_empty() {
             self.position = Some(0);
         }
+    }
+
+    /// Inserts a DJ bridge right after the current song (picked by the DJ: `auto`, and `ai` when the AI DJ's
+    /// pick follows it). Returns its uid.
+    pub fn insert_bridge(&mut self, song: Song, cut: BridgeCut, ai: bool) -> Option<u64> {
+        let at = self.position? + 1;
+        let new = self.push(vec![song], true);
+        let i = *new.first()?;
+        self.items[i].ai = ai;
+        self.items[i].bridge = Some(cut);
+        self.order.truncate(self.order.len() - new.len());
+        self.order.insert(at.min(self.order.len()), i);
+        Some(self.items[i].uid)
     }
 
     /// Advances to the next track (the automatic "track ended" path).
@@ -622,7 +649,14 @@ impl Queue {
         let start = self.items.len();
         for song in songs {
             self.next_uid += 1;
-            self.items.push(QueueItem { uid: self.next_uid, song, auto, ai: false, queued: false });
+            self.items.push(QueueItem {
+                uid: self.next_uid,
+                song,
+                auto,
+                ai: false,
+                queued: false,
+                bridge: None,
+            });
         }
         let new: Vec<usize> = (start..self.items.len()).collect();
         self.order.extend(&new);

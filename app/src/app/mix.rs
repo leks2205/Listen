@@ -123,13 +123,20 @@ struct Fetch {
     done: Option<(u64, AudioInput)>,
     /// A fetch under way for this uid.
     busy: Option<u64>,
+    /// The song after a bridge, fetched early (the bridge plays only briefly): uid wanted, and the result.
+    ahead_for: Option<u64>,
+    ahead: Option<(u64, AudioInput)>,
     /// Songs whose fetched file is pinned in their source's cache, see [`Listen::mix_sync_pins`].
     pins: Vec<(u64, Song)>,
 }
 
 impl Fetch {
     fn input(&self, uid: u64) -> Option<&AudioInput> {
-        self.done.as_ref().filter(|(u, _)| *u == uid).map(|(_, i)| i)
+        [self.done.as_ref(), self.ahead.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|(u, _)| *u == uid)
+            .map(|(_, i)| i)
     }
 
     /// The fetch for `uid` is still under way.
@@ -327,15 +334,40 @@ impl Listen {
             return Task::none();
         };
         let out_now = self.playback.position.as_secs_f64();
+        let voice_break = self.dj_voice_break(next.uid);
+        // Far apart: a bridge may go between them; then this plans into the bridge.
+        if voice_break.is_none() && self.bridge_maybe_insert(&cur, &next, fa, fb, out_now) {
+            return self.mix_consider();
+        }
+        // A bridge is planned as just its stretch.
+        let fa_cut = cur.bridge.map(|c| listen_mix::bridge::clip(fa, &c));
+        let fb_cut = next.bridge.map(|c| listen_mix::bridge::clip(fb, &c));
+        let (fa, fb) = (fa_cut.as_ref().unwrap_or(fa), fb_cut.as_ref().unwrap_or(fb));
         let ctx = PlanCtx {
             settings: &self.config.settings.mixing,
             out_position_s: out_now,
-            voice_break: self.dj_voice_break(next.uid),
+            voice_break,
             // the copy that plays: an own-server copy of a YouTube Music song has the genre tags
             out_genres: &cur_song.genres,
             in_genres: &next_song.genres,
         };
-        let plan = listen_mix::plan::plan(fa, fb, &ctx);
+        let plan = if next.bridge.is_some() {
+            listen_mix::bridge::plan_into(fa, fb, &ctx)
+        } else if cur.bridge.is_some() {
+            listen_mix::bridge::plan_out_of(fa, fb, &ctx)
+        } else {
+            listen_mix::plan::plan(fa, fb, &ctx)
+        };
+        // A bridge is only played mixed: without a beat-matched way in, it goes again.
+        if next.bridge.is_some() && !matches!(plan.kind, Kind::BeatBlend { .. } | Kind::ShortBlend { .. }) {
+            tracing::info!(
+                "bridge “{}”: no beat-matched way in any more ({}); removed",
+                next.song.title,
+                plan.reason
+            );
+            self.queue.remove(next.uid);
+            return self.refresh_next();
+        }
         if plan.kind == Kind::Gapless {
             tracing::info!("mix “{}” → “{}”: gapless ({})", cur.song.title, next.song.title, plan.reason);
             self.mix.skip = Some((cur.uid, next.uid));
@@ -369,6 +401,24 @@ impl Listen {
             return Task::none();
         }
         self.mix.fetch.busy = Some(uid);
+        Task::perform(fetch_input(source, song), move |r| Message::Mix(MixMsg::Input(uid, r)))
+    }
+
+    /// A bridge just came in and plays only briefly: fetch the song after it now, so its mix isn't late.
+    fn mix_fetch_after_bridge(&mut self) -> Task<Message> {
+        if !self.bridge_playing() {
+            return Task::none();
+        }
+        let Some(next) = self.queue.peek_next().cloned() else { return Task::none() };
+        let song = self.playable(&next.song);
+        let Some(source) = self.sources.get(&song.server_id).cloned() else { return Task::none() };
+        if self.mix.fetch.input(next.uid).is_some() || self.mix.fetch.busy.is_some() {
+            return Task::none();
+        }
+        tracing::debug!("bridge: fetching “{}” ahead", song.title);
+        self.mix.fetch.ahead_for = Some(next.uid);
+        self.mix.fetch.busy = Some(next.uid);
+        let uid = next.uid;
         Task::perform(fetch_input(source, song), move |r| Message::Mix(MixMsg::Input(uid, r)))
     }
 
@@ -552,6 +602,7 @@ impl Listen {
             && !path.exists()
         {
             self.mix.fetch.done = None;
+            self.mix.fetch.ahead = None;
             return self.mix_fail("the fetched file is gone");
         }
         self.mix.phase = Phase::Preloading;
@@ -779,8 +830,10 @@ impl Listen {
         self.playback.playing = true;
         self.fader.pos_at = Some(Instant::now());
         self.mix_sync_pins();
+        let ahead = self.mix_fetch_after_bridge();
         let current = self.queue.current().map(|i| (i.song.server_id.clone(), i.song.image.clone()));
         Task::batch([
+            ahead,
             match current {
                 Some((server, image)) => self.request_image_on(&server, image.as_ref()),
                 None => Task::none(),
@@ -872,6 +925,9 @@ impl Listen {
             tasks.push(self.set_deck_speed(deck, 1.0));
         }
         let handed_over = self.mix.handed_over;
+        if !handed_over {
+            self.bridge_drop(self.mix.in_uid);
+        }
         self.mix = MixState {
             skip: self.mix.skip,
             // Before the handover it still marks the current song: no fade-in dip now.
@@ -955,6 +1011,14 @@ impl Listen {
             MixMsg::Input(uid, result) => {
                 if self.mix.fetch.busy == Some(uid) {
                     self.mix.fetch.busy = None;
+                }
+                if self.mix.fetch.ahead_for == Some(uid)
+                    && uid != self.mix.in_uid
+                    && let Ok(Some(input)) = &result
+                {
+                    self.mix.fetch.ahead_for = None;
+                    self.mix.fetch.ahead = Some((uid, input.clone()));
+                    return Task::none();
                 }
                 let waiting = self.mix.phase == Phase::Planned && self.mix.in_uid == uid;
                 match result {

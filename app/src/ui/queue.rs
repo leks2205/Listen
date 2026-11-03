@@ -151,6 +151,10 @@ fn tag_text(state: &Listen, id: &ListId, row: usize) -> Option<&'static str> {
     let pos = state.queue_row_pos(row)?;
     let it = state.queue.item_at(pos)?;
     let hidden = *id == ListId::SideQueue && !state.config.settings.queue.show_mode_tag;
+    if it.bridge.is_some() {
+        // A DJ bridge: only a short stretch of it plays.
+        return Some("Bridge");
+    }
     if let Some(tag) = origin_tag(it.auto, it.ai) {
         if hidden { None } else { Some(tag) }
     } else if it.queued

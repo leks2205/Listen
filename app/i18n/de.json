@@ -1,4 +1,10 @@
 {
+"Bridge songs": "Brücken-Songs",
+"When the next song is far from the current one (tempo, key, sound), play a short instrumental stretch of an analysed song in between and mix through it, like a DJ's bridge track.": "Liegt der nächste Song weit vom aktuellen entfernt (Tempo, Tonart, Klang), spielt dazwischen ein kurzer instrumentaler Abschnitt eines analysierten Songs, durch den gemischt wird – wie ein Bridge-Track beim DJ.",
+"How often to bridge": "Wie oft überbrücken",
+"How often to bridge (%)": "Wie oft überbrücken (%)",
+"Share of far-apart pairs that get a bridge when one fits.": "Anteil der weit auseinanderliegenden Paare, die eine Brücke bekommen, wenn eine passt.",
+"Bridge": "Brücke",
 "\"extends\" chain is longer than {}": "Die „extends“-Kette ist länger als {}",
 "\"extends\" loops back to \"{}\"": "„extends“ führt zurück zu „{}“",
 "\"extends\": no theme called \"{}\" (built-in or in this folder)": "„extends“: Kein Design namens „{}“ (eingebaut oder in diesem Ordner)",

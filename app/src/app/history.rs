@@ -64,7 +64,8 @@ impl Listen {
 
     /// The current song counts as played.
     pub(super) fn record_play(&mut self) {
-        if !self.config.settings.history.enabled || self.history_view.private {
+        // A bridge only played a few bars.
+        if !self.config.settings.history.enabled || self.history_view.private || self.bridge_playing() {
             return;
         }
         let Some(song) = self.queue.current().map(|i| i.song.clone()) else { return };

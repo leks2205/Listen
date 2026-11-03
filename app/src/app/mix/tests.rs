@@ -840,3 +840,171 @@ fn youtube_music_pairs_are_planned() {
         assert_eq!(s.duration(), Duration::from_secs(LEN_S));
     }
 }
+
+// ---------------------------------------------------------------- bridges
+
+/// A steady `bpm` 8A record with 8 instrumental bars at each end and a sung body; `groove` makes bars
+/// 32..64 an instrumental stretch (a bridge can be cut there).
+fn record_at(song: &Song, bpm: f32, groove: bool) -> Arc<TrackAnalysis> {
+    let mut r = (*record(song)).clone();
+    let period = 60.0 / bpm;
+    let len = LEN_S as f32;
+    let n = (len / period) as usize - 1;
+    let bars = n / 4;
+    let Outcome::Ok(f) = &mut r.outcome else { unreachable!() };
+    let g = f.grid.as_mut().unwrap();
+    g.beats = (0..n).map(|i| 0.1 + i as f32 * period).collect();
+    g.bpm = bpm;
+    let inst = |b: usize| b < 8 || b + 8 >= bars || (groove && (32..64).contains(&b));
+    f.bars = BarCurves {
+        energy: (0..bars).map(|b| if inst(b) { 170 } else { 200 }).collect(),
+        low: vec![200; bars],
+        vocal: (0..bars).map(|b| if inst(b) { 0 } else { 255 }).collect(),
+        centroid: vec![128; bars],
+        novelty: vec![0; bars],
+    };
+    r.analyzed_at = 2;
+    Arc::new(r)
+}
+
+/// Auto-DJ pair 120 → 127 bpm (too far apart without tempo ramps), a 123.5 bpm song with a groove in
+/// the bridge pool, every bridge taken.
+fn bridge_rig() -> (Listen, Song) {
+    let (a, c, b) = (song(0, 0), song(1, 0), song(2, 0));
+    let mut s = rig(a.clone(), vec![c.clone()], true);
+    let m = &mut s.config.settings.mixing;
+    m.tempo_ramps = false;
+    m.bass_swap = false;
+    m.bridges = true;
+    m.bridge_chance_pct = 100;
+    let handle = crate::app::analysis::AnalysisHandle::default();
+    handle.insert([record_at(&a, 120.0, false), record_at(&c, 127.0, false), record_at(&b, 123.5, true)]);
+    s.analysis = Some(handle);
+    s.bridge_pool_add(std::slice::from_ref(&b));
+    (s, b)
+}
+
+#[test]
+fn a_far_pair_gets_a_bridge_that_is_mixed_in_and_out() {
+    let (mut s, b) = bridge_rig();
+    let c_uid = uid(&s, 1);
+    plan(&mut s);
+    let bridge = s.queue.peek_next().unwrap().clone();
+    let cut = bridge.bridge.expect("a bridge before the far song");
+    assert_eq!(bridge.song.id, b.id);
+    assert!(bridge.auto);
+    assert_eq!(uid(&s, 2), c_uid, "the DJ's pick follows the bridge");
+    assert_eq!(s.mix.pair(), Some((uid(&s, 0), bridge.uid)));
+    let p = plan_of(&s);
+    assert!(matches!(p.kind, Kind::BeatBlend { .. } | Kind::ShortBlend { .. }), "{}", p.reason);
+    assert!((p.in_mix_start_s - cut.start_s).abs() < 1e-3, "mixed in at the stretch");
+
+    run(&mut s);
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    pos(&mut s, inn, p.in_mix_start_s + 1.0);
+    pos(&mut s, out, p.handover_out_s + 0.01);
+    tick(&mut s);
+    assert_eq!(s.queue.current().unwrap().uid, bridge.uid);
+    assert!(s.bridge_playing());
+    assert_eq!(s.mix.fetch.ahead_for, Some(c_uid), "the song after the bridge is fetched at once");
+    assert!(s.bridge_unentered().is_none(), "it came in through its mix");
+
+    // No tempo settle: the mix finishes and the way out of the bridge is planned straight away.
+    pos(&mut s, inn, cut.start_s + 8.0 * 4.0 * 60.0 / 123.5);
+    pos(&mut s, out, p.out_stop_s + 0.01);
+    tick(&mut s);
+    assert_eq!(s.mix.pair(), Some((bridge.uid, c_uid)));
+    let p2 = plan_of(&s);
+    assert!(matches!(p2.kind, Kind::BeatBlend { .. } | Kind::ShortBlend { .. }), "{}", p2.reason);
+    assert!(
+        p2.out_stop_s <= cut.end_s + 1e-3,
+        "out before the stretch ends: {} > {}",
+        p2.out_stop_s,
+        cut.end_s
+    );
+    // The early fetch is the one the plan uses.
+    assert_eq!(s.mix.fetch.busy, Some(c_uid));
+    fetch(&mut s);
+    assert!(s.mix.fetch.input(c_uid).is_some());
+    assert_eq!(s.mix.phase, Phase::Planned);
+}
+
+#[test]
+fn a_bridge_whose_mix_is_given_up_is_removed() {
+    let (mut s, _) = bridge_rig();
+    let c_uid = uid(&s, 1);
+    plan(&mut s);
+    let bridge_uid = uid(&s, 1);
+    assert_ne!(bridge_uid, c_uid);
+    let out = s.mix.out_deck;
+    let start = start_out(&s);
+    pos(&mut s, out, start - PRELOAD_LEAD_S + 0.5);
+    tick(&mut s);
+    assert_eq!(s.mix.phase, Phase::Preloading);
+    let deadline = plan_of(&s).out_mix_start_s - READY_DEADLINE_S;
+    pos(&mut s, out, deadline + 0.1);
+    tick(&mut s);
+    assert!(s.queue.iter().all(|i| i.bridge.is_none()), "the bridge went with its mix");
+    assert_eq!(uid(&s, 1), c_uid);
+    // The pair isn't bridged again.
+    let _ = s.refresh_next();
+    assert!(s.queue.iter().all(|i| i.bridge.is_none()));
+}
+
+#[test]
+fn a_bridge_not_mixed_out_hands_over_when_its_stretch_ends() {
+    let (mut s, _) = bridge_rig();
+    let c_uid = uid(&s, 1);
+    plan(&mut s);
+    let bridge = s.queue.peek_next().unwrap().clone();
+    let cut = bridge.bridge.unwrap();
+    run(&mut s);
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    let p = plan_of(&s);
+    pos(&mut s, out, p.out_stop_s + 0.01);
+    tick(&mut s);
+    assert_eq!(s.queue.current().unwrap().uid, bridge.uid);
+    // The way out isn't mixed (say it failed): nothing owns the next song.
+    s.mix.skip = Some((bridge.uid, c_uid));
+    let _ = s.mix_cancel("test");
+    assert!(!s.mix.owns_next());
+    pos(&mut s, inn, cut.end_s - 1.0);
+    assert_eq!(s.queue.current().unwrap().uid, bridge.uid, "still inside the stretch");
+    pos(&mut s, inn, cut.end_s + 0.05);
+    assert_eq!(s.queue.current().unwrap().uid, c_uid, "the next song starts when the stretch ends");
+}
+
+#[test]
+fn no_bridge_when_switched_off_or_the_pair_is_close() {
+    let (mut s, _) = bridge_rig();
+    s.config.settings.mixing.bridges = false;
+    let c_uid = uid(&s, 1);
+    let _ = s.refresh_next();
+    assert_eq!(uid(&s, 1), c_uid);
+    assert!(s.queue.iter().all(|i| i.bridge.is_none()));
+
+    // Close tempos and keys: the pair is mixed directly.
+    let mut s = auto_rig();
+    s.config.settings.mixing.bridge_chance_pct = 100;
+    let pool = song(2, 1);
+    s.analysis.as_ref().unwrap().insert([record_at(&pool, 124.0, true)]);
+    s.bridge_pool_add(&[pool]);
+    let next = uid(&s, 1);
+    plan(&mut s);
+    assert_eq!(s.mix.pair().unwrap().1, next);
+    assert!(s.queue.iter().all(|i| i.bridge.is_none()));
+}
+
+#[test]
+fn a_bridge_is_neither_scrobbled_nor_kept_in_the_history() {
+    let (mut s, b) = bridge_rig();
+    plan(&mut s);
+    let bridge = s.queue.peek_next().unwrap().clone();
+    assert_eq!(bridge.song.id, b.id);
+    s.queue.advance();
+    s.mix.entered_uid = Some(bridge.uid);
+    s.config.settings.history.enabled = true;
+    let before = s.history.entries.len();
+    s.record_play();
+    assert_eq!(s.history.entries.len(), before);
+}

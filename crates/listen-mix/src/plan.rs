@@ -230,17 +230,17 @@ pub fn mix_eligible(
 }
 
 /// One analysed song with a usable beat grid.
-struct Side<'a> {
-    f: &'a Features,
+pub(crate) struct Side<'a> {
+    pub(crate) f: &'a Features,
     g: &'a BeatGrid,
     /// Complete bars that end before the audio does.
-    bars: usize,
+    pub(crate) bars: usize,
     /// Nominal bar length (file seconds).
-    bar_s: f64,
+    pub(crate) bar_s: f64,
 }
 
 impl<'a> Side<'a> {
-    fn new(f: &'a Features) -> Option<Self> {
+    pub(crate) fn new(f: &'a Features) -> Option<Self> {
         let g = f.grid.as_ref().filter(|g| g.confidence >= MIN_GRID_CONFIDENCE && g.bpm > 0.0)?;
         let bar_s = 60.0 / f64::from(g.bpm) * f64::from(g.beats_per_bar.max(1));
         let mut side = Side { f, g, bars: g.bar_count(), bar_s };
@@ -250,12 +250,12 @@ impl<'a> Side<'a> {
         (side.bars >= MIN_BARS).then_some(side)
     }
 
-    fn bpm(&self) -> f64 {
+    pub(crate) fn bpm(&self) -> f64 {
         f64::from(self.g.bpm)
     }
 
     /// File time of (fractional) bar `bar`.
-    fn t(&self, bar: f64) -> f64 {
+    pub(crate) fn t(&self, bar: f64) -> f64 {
         let per = f64::from(self.g.beats_per_bar.max(1));
         f64::from(self.g.time_of((f64::from(self.g.downbeat_phase) + bar * per) as f32))
     }
@@ -275,7 +275,7 @@ impl<'a> Side<'a> {
         usize::from(self.f.phrase_offset) % self.phrase()
     }
 
-    fn on_phrase(&self, bar: usize) -> bool {
+    pub(crate) fn on_phrase(&self, bar: usize) -> bool {
         bar >= self.offset() && (bar - self.offset()).is_multiple_of(self.phrase())
     }
 
@@ -298,7 +298,7 @@ impl<'a> Side<'a> {
     }
 
     /// Lead-vocal likelihood of a bar (0..1); without a curve, from the instrumental intro/outro counts.
-    fn vocal(&self, bar: usize) -> f32 {
+    pub(crate) fn vocal(&self, bar: usize) -> f32 {
         if let Some(&v) = self.f.bars.vocal.get(bar) {
             return f32::from(v) / 255.0;
         }
@@ -307,7 +307,7 @@ impl<'a> Side<'a> {
         if instrumental { 0.0 } else { 1.0 }
     }
 
-    fn energy(&self, bar: usize) -> f32 {
+    pub(crate) fn energy(&self, bar: usize) -> f32 {
         self.f.bars.energy.get(bar).map_or(0.5, |&e| f32::from(e) / 255.0)
     }
 }
@@ -341,9 +341,26 @@ struct Cand {
     sampled: bool,
 }
 
+/// Limits for one plan: a normal song pair, or one leg of a bridge (see [`crate::bridge`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Opts {
+    /// Longest blend in bars.
+    pub(crate) max_bars: usize,
+    /// Bars the incoming deck takes to glide back to 1.0× after the blend (capped at [`SETTLE_MAX_S`]).
+    pub(crate) settle_bars: f64,
+}
+
+impl Opts {
+    pub(crate) const NORMAL: Opts = Opts { max_bars: 32, settle_bars: 16.0 };
+}
+
 /// Plans the transition from `out` into `inn`. Falls back to [`Kind::Fade`] without a usable grid or with
 /// too large a tempo gap, and to [`Kind::Gapless`] when it is too late to mix.
 pub fn plan(out: &Features, inn: &Features, ctx: &PlanCtx) -> TransitionPlan {
+    plan_with(out, inn, ctx, Opts::NORMAL)
+}
+
+pub(crate) fn plan_with(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
     let (Some(o), Some(i)) = (Side::new(out), Side::new(inn)) else {
         return fade_plan(out, inn, ctx, "no steady beat on one side");
     };
@@ -355,8 +372,8 @@ pub fn plan(out: &Features, inn: &Features, ctx: &PlanCtx) -> TransitionPlan {
             format!("tempo gap {:.1} % ({:.0} → {:.0} bpm)", lr.abs().exp_m1() * 100.0, o.bpm(), i.bpm());
         return fade_plan(out, inn, ctx, &reason);
     }
-    match best_candidate(&o, &i, k, lr, ctx) {
-        Some(c) => build(&o, &i, k, c, ctx),
+    match best_candidate(&o, &i, k, lr, ctx, opts) {
+        Some(c) => build(&o, &i, k, c, ctx, opts),
         None => fade_plan(out, inn, ctx, "no beat-matched mix point left"),
     }
 }
@@ -385,7 +402,7 @@ fn tempo_for(o: &Side, m: usize, lr: f64, ctx: &PlanCtx) -> Option<Tempo> {
     (lr.abs() <= per_deck).then_some(full)
 }
 
-fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx) -> Option<Cand> {
+fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) -> Option<Cand> {
     let s = ctx.settings;
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
@@ -412,11 +429,12 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx) -> Option<
     let relax_in = relax_vocal_edge(s.transition_edges, ctx.in_genres);
 
     let voice = ctx.voice_break.filter(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
-    let long = usize::from(s.long_blend_bars).clamp(8, 32);
+    let long = usize::from(s.long_blend_bars).clamp(8, 32).min(opts.max_bars.max(1));
     let mut lengths = vec![long, 8, 4, 2, 1];
     if voice.is_some() {
-        lengths.insert(0, (2 * long).min(32)); // talk-over wants room
+        lengths.insert(0, (2 * long).min(32).min(opts.max_bars.max(1))); // talk-over wants room
     }
+    lengths.retain(|&n| n <= opts.max_bars.max(1));
     lengths.dedup();
 
     let mut best: Option<Cand> = None;
@@ -509,7 +527,7 @@ fn quiet_run(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k: f64, now: f6
     (o.t(best.0 as f64), o.t(best.1 as f64))
 }
 
-fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx) -> TransitionPlan {
+fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
     let s = ctx.settings;
     let Tempo { s_out, s_in, out_ramp } = c.tempo;
     let (m, n) = (c.m as f64, c.n as f64);
@@ -580,7 +598,7 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx) -> TransitionPlan {
         to: 1.0,
         start_out_s: out_stop_s,
         // 16 bars, capped: a slow song's 16 bars can take a minute, blocking the next transition.
-        secs: (16.0 * i.bar_s / ((1.0 + s_in) / 2.0)).min(SETTLE_MAX_S),
+        secs: (opts.settle_bars * i.bar_s / ((1.0 + s_in) / 2.0)).min(SETTLE_MAX_S),
     });
     let (vw_a, vw_b) = quiet_run(o, i, c.m, c.i, c.n, k, ctx.out_position_s);
     let in_mix_start_s = i.t(c.i as f64);
@@ -598,7 +616,8 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx) -> TransitionPlan {
         score: c.score,
         out_mix_start_s,
         in_mix_start_s,
-        in_load_at_s: i.t(c.i as f64 - 1.0).clamp(0.0, in_mix_start_s),
+        // A first downbeat can sit a hair before 0 s.
+        in_load_at_s: i.t(c.i as f64 - 1.0).clamp(0.0, in_mix_start_s.max(0.0)),
         blend_s,
         handover_out_s: o.t(m + n / 2.0),
         out_stop_s,
@@ -994,6 +1013,7 @@ mod tests {
             auto,
             ai: false,
             queued,
+            bridge: None,
         };
         // DJ picks mix.
         assert!(mix_eligible(&item(1, "x", true, false), &item(5, "y", true, false), true, false, &s));
