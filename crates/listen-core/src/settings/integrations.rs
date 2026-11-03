@@ -187,6 +187,26 @@ pub struct Integrations {
     pub scrobble_mode: ScrobbleMode,
     /// Desktop notification when the song changes (Feishin `scrobble.notify`).
     pub notify_song_change: bool,
+    /// Scrobbling straight to Last.fm (every source, YouTube Music included).
+    pub lastfm: LastFmSettings,
+}
+
+/// Last.fm scrobbling. The shared secret and the session key are kept with the passwords, not here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LastFmSettings {
+    /// Scrobble to Last.fm while connected.
+    pub scrobble: bool,
+    /// API key of the user's Last.fm API account.
+    pub api_key: String,
+    /// The connected Last.fm user (empty = not connected).
+    pub user: String,
+}
+
+impl Default for LastFmSettings {
+    fn default() -> Self {
+        Self { scrobble: true, api_key: String::new(), user: String::new() }
+    }
 }
 
 impl Default for Integrations {
@@ -197,6 +217,7 @@ impl Default for Integrations {
             mcp: McpSettings::default(),
             scrobble_mode: ScrobbleMode::Both,
             notify_song_change: false,
+            lastfm: LastFmSettings::default(),
         }
     }
 }

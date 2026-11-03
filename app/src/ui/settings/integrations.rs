@@ -79,6 +79,7 @@ pub(super) fn scrobble(state: &Listen) -> Element<'_, Message> {
             ),
         ));
     }
+    rows.extend(lastfm_rows(state));
     rows.push(line(
         state,
         "Song change notifications",
@@ -86,6 +87,74 @@ pub(super) fn scrobble(state: &Listen) -> Element<'_, Message> {
         switch(ig.notify_song_change, |v| Setting::Integrations(I::Notify(v))),
     ));
     section(state, "Scrobble", rows)
+}
+
+/// Last.fm: connect / disconnect, and the API account it needs.
+fn lastfm_rows(state: &Listen) -> Vec<Element<'_, Message>> {
+    use crate::app::lastfm::LastFmMsg as L;
+    let t = state.tokens;
+    let lf = &state.config.settings.integrations.lastfm;
+    let button = |title: &'static str, msg: Option<Message>| -> Element<'static, Message> {
+        iced::widget::button(crate::ui::label(
+            crate::i18n::tr(title),
+            crate::style::metrics::font_md(),
+            t.foreground,
+        ))
+        .padding(iced::Padding::from([6.0, 14.0]))
+        .style(style::default_button(t))
+        .on_press_maybe(msg)
+        .into()
+    };
+    let status = state.lastfm.status.clone();
+    if state.lastfm.scrobbler.is_some() {
+        let waiting = state.lastfm.scrobbler.as_ref().map_or(0, |s| s.waiting());
+        let mut hint = format!(
+            "Connected as {}. Every song is scrobbled, YouTube Music included, under the name most people use on Last.fm.",
+            lf.user
+        );
+        if waiting > 0 {
+            hint.push_str(&format!(" {waiting} plays wait to be sent."));
+        }
+        return vec![
+            line(state, "Last.fm", hint, button("Disconnect", Some(Message::LastFm(L::Disconnect)))),
+            line(
+                state,
+                "Scrobble to Last.fm",
+                "Send plays to Last.fm (the switch above still has to be on).",
+                switch(lf.scrobble, |v| Setting::Integrations(I::LastFmScrobble(v))),
+            ),
+        ];
+    }
+    let connect = button(
+        if state.lastfm.signing_in { "Waiting…" } else { "Connect to Last.fm" },
+        (!state.lastfm.signing_in).then_some(Message::LastFm(L::Connect)),
+    );
+    if state.lastfm_account_known() {
+        let hint = status.unwrap_or_else(|| {
+            "Scrobble every song to Last.fm, YouTube Music included. Press Connect and allow access in the browser.".into()
+        });
+        return vec![line(state, "Last.fm", hint, connect)];
+    }
+    let key = state.lastfm.key_input.as_deref().unwrap_or(&lf.api_key).to_string();
+    let fields = row![
+        text_input(crate::i18n::tr("API key"), &key)
+            .on_input(|v| Message::LastFm(L::ApiKey(v)))
+            .style(style::input(t))
+            .width(200),
+        text_input(crate::i18n::tr("Shared secret"), &state.lastfm.secret_input)
+            .on_input(|v| Message::LastFm(L::Secret(v)))
+            .secure(true)
+            .style(style::input(t))
+            .width(200),
+        connect,
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+    let hint = status.unwrap_or_else(|| {
+        "Scrobble every song to Last.fm, YouTube Music included. Needs a free Last.fm API account          (last.fm/api/account/create): paste its API key and shared secret, then press Connect and allow          access in the browser."
+            .into()
+    });
+    vec![line(state, "Last.fm", hint, fields.into())]
 }
 
 /// The Discord rows below "Discord application ID" (Window tab).

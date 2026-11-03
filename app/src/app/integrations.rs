@@ -65,6 +65,7 @@ pub enum IntegrationSetting {
     ScrobbleSecs(u32),
     Notify(bool),
     RemoteEnabled(bool),
+    LastFmScrobble(bool),
 }
 
 /// Text fields being edited (saved on Enter).
@@ -249,6 +250,7 @@ impl Listen {
             IntegrationSetting::ScrobblePercent(v) => s.playback.scrobble_at_percent = v.clamp(25, 90),
             IntegrationSetting::ScrobbleSecs(v) => s.playback.scrobble_at_secs = v.min(1200),
             IntegrationSetting::Notify(v) => ig.notify_song_change = v,
+            IntegrationSetting::LastFmScrobble(v) => ig.lastfm.scrobble = v,
             IntegrationSetting::RemoteEnabled(v) => {
                 ig.remote.enabled = v;
                 remote = true;

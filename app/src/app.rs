@@ -43,6 +43,7 @@ pub mod home;
 pub mod hotkeys;
 pub mod integrations;
 pub mod item;
+pub mod lastfm;
 pub mod library_extra;
 pub mod list;
 pub mod list_query;
@@ -617,6 +618,8 @@ pub struct Listen {
     tray_published: (bool, String),
     discord: crate::discord::Discord,
     pub integ: integrations::State,
+    /// Last.fm scrobbling.
+    pub lastfm: lastfm::LastFmState,
     /// Hidden to the tray (close-to-tray).
     hidden: bool,
     /// Geometry of the main window (saved between runs).
@@ -800,6 +803,7 @@ pub enum Message {
     SingleInstance(crate::single_instance::Forward),
     Setting(Setting),
     Integrations(integrations::IntegrationsMsg),
+    LastFm(lastfm::LastFmMsg),
     #[cfg(any(target_os = "linux", windows))]
     Tray(crate::tray::TrayMsg),
     Keyboard(iced::keyboard::Event),
@@ -1080,6 +1084,7 @@ impl Listen {
             seek_preview: None,
             session_played: Default::default(),
             bridge: Default::default(),
+            lastfm: Default::default(),
             menu: None,
             audio,
             analysis: None,
@@ -1224,6 +1229,7 @@ impl Listen {
             );
         }
         tasks.push(state.integrations_boot());
+        tasks.push(state.lastfm_boot());
         tasks.push(state.mcp_boot());
         tasks.push(state.dlna_boot());
         tasks.push(state.milkdrop_boot());
@@ -2445,6 +2451,12 @@ impl Listen {
             return Task::none();
         }
         let Some(song) = self.queue.current().map(|i| i.song.clone()) else { return Task::none() };
+        // Last.fm hears the song as queued (once), whatever copy plays; a play began `position` ago.
+        let started = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() as i64)
+            - self.playback.position.as_secs() as i64;
+        let lastfm = self.lastfm_report(&song, matches!(event, ScrobbleEvent::Submission).then_some(started));
         // The YouTube Music account hears it as before; the server whose copy plays counts it too.
         let own = self.substitutes.used(&song);
         let tasks: Vec<_> = [Some(song), own]
@@ -2458,7 +2470,7 @@ impl Listen {
                 ))
             })
             .collect();
-        Task::batch(tasks)
+        Task::batch(tasks.into_iter().chain([lastfm]))
     }
 
     fn on_player_event(&mut self, event: PlayerEvent) -> Task<Message> {
@@ -3874,6 +3886,7 @@ impl Listen {
             Message::Mix(msg) => return self.on_mix(msg),
             Message::Setting(change) => return self.change_setting(change),
             Message::Integrations(m) => return self.on_integrations(m),
+            Message::LastFm(m) => return self.on_lastfm(m),
             #[cfg(any(target_os = "linux", windows))]
             Message::Tray(crate::tray::TrayMsg::Ready(handle)) => {
                 self.tray = Some(handle);

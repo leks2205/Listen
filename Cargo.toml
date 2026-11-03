@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "app"]
 
 [workspace.package]
-version = "0.38.0"
+version = "0.39.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/leks2205/Listen"
@@ -13,6 +13,7 @@ authors = ["leks2205 <281423329+leks2205@users.noreply.github.com>"]
 listen-core = { path = "crates/listen-core" }
 listen-source = { path = "crates/listen-source" }
 listen-mix = { path = "crates/listen-mix" }
+listen-lastfm = { path = "crates/listen-lastfm" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"

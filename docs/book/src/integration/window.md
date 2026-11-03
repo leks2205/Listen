@@ -70,7 +70,7 @@ Listen holds the lock only while a song is playing and releases it when you paus
 
 ## Scrobbling
 
-Scrobbling reports your plays to the music server, which can pass them on to services like Last.fm. It is under **Settings → General → Scrobble**.
+Scrobbling reports your plays to the music server and, once connected, straight to Last.fm (see [Last.fm](#lastfm)). It is under **Settings → General → Scrobble**.
 
 | Setting | Meaning | Default |
 |---|---|---|
@@ -87,5 +87,21 @@ What happens on each source:
 - **Jellyfin**: a "now playing" session report, then the item is marked as played.
 - **YouTube Music**: the play is added to your YouTube Music history (not for guest sessions).
 - **Local folders and radio**: nothing is reported.
+
+### Last.fm
+
+Listen can scrobble to Last.fm itself, for every source: YouTube Music, Navidrome, Jellyfin and local folders alike. It uses the same rule as above for when a play counts, and shows the song as "now playing" on your profile while it plays.
+
+1. You need a Last.fm API account (free, made with your normal Last.fm login at [last.fm/api/account/create](https://www.last.fm/api/account/create)). Under **Settings → General → Scrobble → Last.fm**, enter its **API key** and **Shared secret**.
+2. Press **Connect to Last.fm**. Your browser opens Last.fm; allow access there. Listen notices it within a few seconds and shows **Connected as** your user name.
+3. **Disconnect** forgets the sign-in. **Scrobble to Last.fm** pauses sending without signing out.
+
+The shared secret and the sign-in are kept with your server passwords (keyring), not in the settings file.
+
+**One name per song.** The same song is often spelled differently by different sources: "Ditto (Official Audio)" on YouTube Music, "Ditto" in your tags; "뉴진스 (NewJeans)" or "NewJeans"; "OMG - Single" or "OMG"; an artist's Korean and international name. Last.fm would count each spelling as a track of its own. Before a play is sent, Listen asks Last.fm which spelling of the artist, the title and the album most people use, and sends that one: upload labels such as "(Official Audio)" or "[MV]" go, " - Single" and " - EP" go, and an artist's other name is used when Last.fm itself ties the two together (same MusicBrainz id, or the artist's Last.fm biography names the other). The album is the one Last.fm files the track under, so the same song gets the same album from every source. The answers are kept for 30 days in `lastfm/lastfm-names.json` in Listen's data folder.
+
+**Offline.** Plays go into `lastfm/lastfm-queue.json` first and are sent in batches of up to 50. Plays made offline or while Last.fm is down are sent later (Last.fm accepts plays up to 14 days old). A short bridge stretch of the DJ is never scrobbled, and nothing is sent in private mode.
+
+If you scrobble to Last.fm from Listen, unlink Last.fm in Navidrome (user menu → Personal → Scrobble to Last.fm off); otherwise Navidrome songs arrive twice.
 
 Nothing is scrobbled in **private mode**. Turn it on under **Settings → Window → Private mode** (or in the application menu). In private mode nothing is scrobbled, shown on Discord or saved to the local history, and the window title says so. It switches off again when Listen restarts.

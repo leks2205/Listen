@@ -1,4 +1,12 @@
 {
+"Connect to Last.fm": "Mit Last.fm verbinden",
+"Disconnect": "Trennen",
+"Waiting…": "Warte…",
+"Shared secret": "Shared Secret",
+"Scrobble to Last.fm": "An Last.fm scrobbeln",
+"Send plays to Last.fm (the switch above still has to be on).": "Wiedergaben an Last.fm senden (der Schalter oben muss dafür an sein).",
+"Scrobble every song to Last.fm, YouTube Music included. Press Connect and allow access in the browser.": "Jeden Song an Last.fm scrobbeln, auch YouTube Music. Auf Verbinden drücken und den Zugriff im Browser erlauben.",
+"Scrobble every song to Last.fm, YouTube Music included. Needs a free Last.fm API account (last.fm/api/account/create): paste its API key and shared secret, then press Connect and allow access in the browser.": "Jeden Song an Last.fm scrobbeln, auch YouTube Music. Braucht ein kostenloses Last.fm-API-Konto (last.fm/api/account/create): dessen API-Schlüssel und Shared Secret einfügen, dann auf Verbinden drücken und den Zugriff im Browser erlauben.",
 "Bridge songs": "Brücken-Songs",
 "When the next song is far from the current one (tempo, key, sound), play a short instrumental stretch of an analysed song in between and mix through it, like a DJ's bridge track.": "Liegt der nächste Song weit vom aktuellen entfernt (Tempo, Tonart, Klang), spielt dazwischen ein kurzer instrumentaler Abschnitt eines analysierten Songs, durch den gemischt wird – wie ein Bridge-Track beim DJ.",
 "How often to bridge": "Wie oft überbrücken",

@@ -25,6 +25,7 @@ listen-visualizer = { path = "../crates/listen-visualizer" }
 listen-lyrics = { path = "../crates/listen-lyrics", default-features = false }
 listen-dj = { path = "../crates/listen-dj" }
 listen-mix.workspace = true
+listen-lastfm.workspace = true
 listen-analysis = { path = "../crates/listen-analysis" }
 listen-rip = { path = "../crates/listen-rip" }
 listen-offline = { path = "../crates/listen-offline" }

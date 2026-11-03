@@ -25,7 +25,9 @@ Lists your music sources with the buttons **Switch** (shown as **Browsing** for 
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Scrobble | Reports plays to the server (Last.fm and others the server forwards to). Nothing is reported in private mode. | On | `settings.playback.scrobble` |
+| Scrobble | Reports plays to the server and, when connected, to Last.fm. Nothing is reported in private mode. | On | `settings.playback.scrobble` |
+| Last.fm | API key and shared secret of your Last.fm API account, **Connect to Last.fm** / **Disconnect**. The secret and the sign-in are kept in the keyring. | not connected | `settings.integrations.lastfm.api_key`, `settings.integrations.lastfm.user` |
+| Scrobble to Last.fm | Sends plays to Last.fm while connected. | On | `settings.integrations.lastfm.scrobble` |
 | Scrobble minimum mode | When a play counts: **Percentage or seconds** (whichever comes first), **Percentage**, or **Seconds**. Skipping ahead does not count as listening. | Percentage or seconds | `settings.integrations.scrobble_mode` (`"both"`, `"percentage"`, `"seconds"`) |
 | Minimum scrobble percentage | The share of the song that has to be played, 25 to 90 %. Hidden in **Seconds** mode. | 75 | `settings.playback.scrobble_at_percent` |
 | Minimum scrobble seconds | The time that has to be played, 0 to 1200 s in steps of 5. Hidden in **Percentage** mode. | 240 | `settings.playback.scrobble_at_secs` |
