@@ -40,7 +40,7 @@ Some pairs a DJ picked do not join well: the tempos are too far apart to beat-ma
 
 With **Bridge songs** on, Listen does the same with a song that has already been analysed:
 
-1. When the next song is far from the current one (no beat-matched join, a tempo gap of more than 4 %, clashing keys, or a large difference in sound), Listen looks for a bridge among the analysed songs the DJs were recently offered. Songs in the queue and songs played this session are not used.
+1. When the next song is far from the current one (no beat-matched join, a tempo gap of more than 4 %, clashing keys, or a large difference in sound), Listen looks for a bridge among your analysed songs: first the ones the DJs were recently offered, then your listening history, then every other analysed YouTube Music song. Only a few songs have a mostly instrumental stretch at a tempo between the two, so the whole collection is searched. Songs in the queue and songs played this session are not used.
 2. The bridge must be closer to both songs than they are to each other, and both joins, into the bridge and out of it, must be beat-matched blends.
 3. Only a short part of the bridge plays: 24 bars (about 45 seconds at 125 BPM) that start on a phrase and have no singing where they are blended, usually an instrumental groove, a break or a long intro. Listen blends into it with a short blend of up to 8 bars, glides it back to its own tempo, lets it play alone for a few bars, and blends out of it into the next song.
 

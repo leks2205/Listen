@@ -930,6 +930,18 @@ fn a_far_pair_gets_a_bridge_that_is_mixed_in_and_out() {
 }
 
 #[test]
+fn a_bridge_can_come_from_the_listening_history() {
+    // Not offered by any DJ this session, but played before and analysed: still a candidate.
+    let (mut s, b) = bridge_rig();
+    s.bridge = Default::default();
+    s.history.entries.push(listen_core::history::Entry::new(&b, 1));
+    plan(&mut s);
+    let bridge = s.queue.peek_next().unwrap().clone();
+    assert!(bridge.bridge.is_some(), "a bridge from the history");
+    assert_eq!(bridge.song.id, b.id);
+}
+
+#[test]
 fn a_bridge_whose_mix_is_given_up_is_removed() {
     let (mut s, _) = bridge_rig();
     let c_uid = uid(&s, 1);

@@ -70,6 +70,25 @@ impl AnalysisHandle {
         }
     }
 
+    /// Every song's best record in the store (and the records added without one).
+    pub fn all_records(&self) -> Vec<Arc<TrackAnalysis>> {
+        let mut all: Vec<Arc<TrackAnalysis>> = self
+            .store
+            .read()
+            .ok()
+            .and_then(|s| s.as_ref().map(|s| s.best_records().cloned().collect()))
+            .unwrap_or_default();
+        if let Ok(extra) = self.extra.read() {
+            all.extend(extra.values().filter_map(|list| {
+                list.iter()
+                    .filter(|r| r.version >= MIN_COMPATIBLE_VERSION)
+                    .reduce(|best, r| if r.better_than(best) { r } else { best })
+                    .cloned()
+            }));
+        }
+        all
+    }
+
     pub fn flow(&self, song: &Song) -> Option<FlowFeatures> {
         self.lookup(song).and_then(|r| r.features().map(FlowFeatures::of))
     }

@@ -8,7 +8,7 @@
 use super::{Listen, Message};
 use iced::Task;
 use listen_core::analysis::{Features, TrackAnalysis};
-use listen_core::model::Song;
+use listen_core::model::{Song, SourceKind};
 use listen_core::queue::QueueItem;
 use listen_core::versions::song_key;
 use listen_mix::plan::PlanCtx;
@@ -18,8 +18,10 @@ use std::time::Duration;
 
 /// Songs remembered as bridge candidates (newest win).
 const POOL_MAX: usize = 400;
-/// Candidates checked per pair (newest first).
-const MAX_CANDIDATES: usize = 150;
+/// Candidates checked per pair: the DJ pool and the history first, then the rest of the analysis store.
+/// Few songs have a usable instrumental stretch at a tempo between both sides, so the whole store is
+/// needed (a few ms per pair).
+const MAX_CANDIDATES: usize = 6000;
 
 #[derive(Debug, Default)]
 pub struct BridgeState {
@@ -112,30 +114,38 @@ impl Listen {
         self.queue.insert_bridge(song, choice.cut, next.ai).is_some()
     }
 
-    /// Analysed pool songs that may bridge now: from a connected server, not in the queue and not played
-    /// this session.
+    /// Analysed songs that may bridge now: the DJ pool (newest first), then the listening history, then
+    /// every other analysed YouTube Music song of the store. Only from a connected server, not in the
+    /// queue and not played this session.
     fn bridge_candidates(&self) -> (Vec<Song>, Vec<Arc<TrackAnalysis>>) {
         let Some(analysis) = self.analysis.as_ref() else { return (vec![], vec![]) };
-        let queued: HashSet<String> = self.queue.iter().map(|i| song_key(&i.song)).collect();
-        let (mut songs, mut records) = (Vec::new(), Vec::new());
-        for song in self.bridge.pool.iter().rev() {
-            if songs.len() >= MAX_CANDIDATES {
-                break;
-            }
-            let key = song_key(song);
-            if queued.contains(&key)
-                || self.session_played.contains(&key)
-                || !self.sources.contains_key(&song.server_id)
-            {
-                continue;
-            }
-            let Some(record) = analysis.lookup(&self.playable(song)) else { continue };
-            if record.features().is_some() {
-                songs.push(song.clone());
-                records.push(record);
-            }
-        }
-        (songs, records)
+        let mut skip: HashSet<String> = self.queue.iter().map(|i| song_key(&i.song)).collect();
+        skip.extend(self.queue.iter().map(|i| listen_analysis::record_key(&i.song)));
+        skip.extend(self.session_played.iter().cloned());
+        let known = self
+            .bridge
+            .pool
+            .iter()
+            .rev()
+            .cloned()
+            .chain(self.history.entries.iter().rev().map(|e| e.to_song()))
+            .filter(|s| self.sources.contains_key(&s.server_id));
+        let ytm =
+            self.sources.iter().find(|(_, s)| s.kind() == SourceKind::YouTubeMusic).map(|(id, _)| id.clone());
+        let (songs, records) = listen_analysis::bridge_candidates(
+            known,
+            |s| analysis.lookup(&self.playable(s)),
+            analysis.all_records(),
+            ytm.as_ref(),
+            &skip,
+            MAX_CANDIDATES,
+        );
+        // Substitutes: keep only songs that play the analysed file.
+        songs
+            .into_iter()
+            .zip(records)
+            .filter(|(s, r)| listen_analysis::record_key(&self.playable(s)) == r.song_id)
+            .unzip()
     }
 
     /// A mix into a bridge was given up before its handover: the bridge goes (the pair is not bridged again).

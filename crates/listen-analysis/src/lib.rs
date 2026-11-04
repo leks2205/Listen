@@ -21,7 +21,8 @@ pub use models::BeatModel;
 pub use worker::{Worker, run_worker};
 
 use listen_core::analysis::{ANALYZER_VERSION, Features, FileId, Outcome, TrackAnalysis};
-use listen_core::model::{Song, SourceKind};
+use listen_core::model::{ArtistRef, ImageRef, ServerId, Song, SourceKind};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -253,6 +254,86 @@ pub fn record_key(song: &Song) -> String {
     }
 }
 
+/// A song to queue for a YouTube Music record that no list offered (a DJ bridge from the whole store):
+/// the videoId is all the source needs to play it; the title and artist come from the record's
+/// "Artist – Title" hint and the cover from YouTube's thumbnail. `None` for other sources (their songs
+/// need the server's own data) and for records without a usable hint.
+pub fn song_of_record(record: &TrackAnalysis, ytm_server: &ServerId) -> Option<Song> {
+    let id = record.song_id.strip_prefix(YTM_PREFIX).filter(|id| !id.is_empty())?;
+    let (artist, title) = record.title_hint.split_once(" – ")?;
+    let (artist, title) = (artist.trim(), title.trim());
+    if title.is_empty() {
+        return None;
+    }
+    let artists =
+        if artist.is_empty() { vec![] } else { vec![ArtistRef { id: None, name: artist.to_string() }] };
+    let entry = listen_core::history::Entry {
+        ts: 0,
+        server_id: ytm_server.clone(),
+        source: SourceKind::YouTubeMusic,
+        song_id: id.to_string(),
+        status: listen_core::history::PlayStatus::Played,
+        title: title.to_string(),
+        artists,
+        album: None,
+        album_id: None,
+        image: Some(ImageRef::Url(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg"))),
+        duration_secs: record.file.duration_ms / 1000,
+    };
+    Some(entry.to_song())
+}
+
+/// Candidates for a DJ bridge (desktop `bridge_candidates`, phone `choose_bridge_in_store`), best
+/// sources first: the `known` songs (what the DJs were offered, then the listening history: full song
+/// data) whose analysis `lookup` finds, then every other analysed YouTube Music record of the `store`
+/// (as songs from [`song_of_record`]; only with a `ytm_server`). Songs whose
+/// [`song_key`](listen_core::versions::song_key) or record key is in `skip` (queued, played this
+/// session) are left out, as are records without features; at most `limit`.
+pub fn bridge_candidates(
+    known: impl IntoIterator<Item = Song>,
+    lookup: impl Fn(&Song) -> Option<Arc<TrackAnalysis>>,
+    store: impl IntoIterator<Item = Arc<TrackAnalysis>>,
+    ytm_server: Option<&ServerId>,
+    skip: &HashSet<String>,
+    limit: usize,
+) -> (Vec<Song>, Vec<Arc<TrackAnalysis>>) {
+    use listen_core::versions::song_key;
+    let mut out: (Vec<Song>, Vec<Arc<TrackAnalysis>>) = (Vec::new(), Vec::new());
+    let mut seen = HashSet::new();
+    let mut take =
+        |song: Song, record: Arc<TrackAnalysis>, out: &mut (Vec<Song>, Vec<Arc<TrackAnalysis>>)| {
+            let key = song_key(&song);
+            if record.features().is_none()
+                || skip.contains(&key)
+                || skip.contains(&record.song_id)
+                || !seen.insert(record.song_id.clone())
+                || !seen.insert(key)
+            {
+                return;
+            }
+            out.0.push(song);
+            out.1.push(record);
+        };
+    for song in known {
+        if out.0.len() >= limit {
+            return out;
+        }
+        if let Some(record) = lookup(&song) {
+            take(song, record, &mut out);
+        }
+    }
+    let Some(server) = ytm_server else { return out };
+    for record in store {
+        if out.0.len() >= limit {
+            break;
+        }
+        if let Some(song) = song_of_record(&record, server) {
+            take(song, record, &mut out);
+        }
+    }
+    out
+}
+
 /// Wraps a result into a store record. `file` names the analysed audio (from
 /// `MusicSource::analysis_source`, e.g. YouTube's itag and size). `None` for cancellations.
 pub fn record(
@@ -286,6 +367,74 @@ pub fn record(
 mod tests {
     use super::*;
     use crate::test_util::click_track;
+
+    fn ytm_record(id: &str, hint: &str, ok: bool) -> Arc<TrackAnalysis> {
+        let f = analyze(&click_track(124.0, 40.0, 0.5, 0), &Opts::default());
+        Arc::new(TrackAnalysis {
+            version: ANALYZER_VERSION,
+            analyzed_at: 1,
+            machine: "m".into(),
+            decoder: "test".into(),
+            song_id: format!("{YTM_PREFIX}{id}"),
+            server_hint: String::new(),
+            file: FileId { duration_ms: 201_500, suffix: None, format: None, bytes: None },
+            title_hint: hint.into(),
+            outcome: if ok {
+                Outcome::Ok(Box::new(f))
+            } else {
+                Outcome::Failed { reason: "x".into(), transient: false }
+            },
+        })
+    }
+
+    #[test]
+    fn a_youtube_record_becomes_a_playable_song() {
+        let server = ServerId("ytm-1".into());
+        let s = song_of_record(&ytm_record("abc", "IU – Love wins all", true), &server).unwrap();
+        assert_eq!((s.id.as_str(), s.title.as_str(), s.artist_line()), ("abc", "Love wins all", "IU".into()));
+        assert_eq!(s.source, SourceKind::YouTubeMusic);
+        assert_eq!(s.server_id, server);
+        assert_eq!(s.duration.as_secs(), 201);
+        assert_eq!(record_key(&s), "ytm:abc");
+        // Navidrome records need the server's data; a record without a hint can't be named.
+        let mut nav = (*ytm_record("abc", "A – B", true)).clone();
+        nav.song_id = "abc".into();
+        assert!(song_of_record(&nav, &server).is_none());
+        assert!(song_of_record(&ytm_record("abc", "no dash", true), &server).is_none());
+    }
+
+    #[test]
+    fn bridge_candidates_put_known_songs_first_then_the_store() {
+        let server = ServerId("ytm-1".into());
+        let (known, a, b, c, failed) = (
+            ytm_record("k", "K – Known", true),
+            ytm_record("a", "A – Alpha", true),
+            ytm_record("b", "B – Beta", true),
+            ytm_record("c", "C – Queued", true),
+            ytm_record("f", "F – Failed", false),
+        );
+        let known_song = song_of_record(&known, &server).unwrap();
+        let queued = song_of_record(&c, &server).unwrap();
+        let skip: HashSet<String> = [listen_core::versions::song_key(&queued)].into();
+        let lookup = |s: &Song| (s.id == "k").then(|| known.clone());
+        let store = vec![known.clone(), a.clone(), b.clone(), c.clone(), failed.clone()];
+        let (songs, recs) =
+            bridge_candidates([known_song.clone()], lookup, store.clone(), Some(&server), &skip, 10);
+        let ids: Vec<&str> = songs.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids[0], "k", "known songs first");
+        assert_eq!(ids.len(), 3, "{ids:?}: the queued and the failed one are left out, the known one once");
+        assert!(ids.contains(&"a") && ids.contains(&"b"));
+        assert_eq!(songs.len(), recs.len());
+        assert!(songs.iter().zip(&recs).all(|(s, r)| record_key(s) == r.song_id));
+        // Without a YouTube Music source only the known songs can be queued; the limit holds.
+        let lookup = |s: &Song| (s.id == "k").then(|| known.clone());
+        assert_eq!(
+            bridge_candidates([known_song.clone()], lookup, store.clone(), None, &skip, 10).0.len(),
+            1
+        );
+        let lookup = |s: &Song| (s.id == "k").then(|| known.clone());
+        assert_eq!(bridge_candidates([known_song], lookup, store, Some(&server), &skip, 2).0.len(), 2);
+    }
 
     #[test]
     fn click_track_end_to_end() {

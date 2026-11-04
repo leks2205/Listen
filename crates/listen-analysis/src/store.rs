@@ -264,6 +264,15 @@ impl ShardStore {
         self.index.is_empty()
     }
 
+    /// Every song's best compatible analysis (one record per song id, failed ones included).
+    pub fn best_records(&self) -> impl Iterator<Item = &Arc<TrackAnalysis>> {
+        self.index.values().filter_map(|list| {
+            list.iter()
+                .filter(|r| r.version >= MIN_COMPATIBLE_VERSION)
+                .reduce(|best, r| if r.better_than(best) { r } else { best })
+        })
+    }
+
     /// Records read or written per machine, sorted by name.
     pub fn machines(&self) -> Vec<(String, usize)> {
         let mut v: Vec<_> = self.per_machine.iter().map(|(k, v)| (k.clone(), *v)).collect();
