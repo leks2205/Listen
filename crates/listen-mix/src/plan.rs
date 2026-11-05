@@ -426,7 +426,7 @@ fn plan_inner(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> Tran
     // Echo-out or cut: no overlap, so no tempo match needed. Not on bridge legs (they exist to be
     // beat-mixed) and not under an AI DJ talk-over (it wants a blend to talk over).
     let talk = ctx.voice_break.is_some_and(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
-    let hand = (opts == Opts::NORMAL && !talk).then(|| best_handover(&o, &i, ctx)).flatten();
+    let hand = (opts == Opts::NORMAL && !talk).then(|| handovers(&o, &i, ctx).first().copied()).flatten();
     if lr.abs() > max_lr {
         let reason =
             format!("tempo gap {:.1} % ({:.0} → {:.0} bpm)", lr.abs().exp_m1() * 100.0, o.bpm(), i.bpm());
@@ -435,12 +435,63 @@ fn plan_inner(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> Tran
             None => fade_plan(out, inn, ctx, &reason),
         };
     }
-    match (best_candidate(&o, &i, k, lr, ctx, opts), hand) {
+    match (candidates(&o, &i, k, lr, ctx, opts).first().copied(), hand) {
         (Some(c), Some(h)) if h.score > c.score => build_handover(&o, &i, h, "vocals on both edges"),
         (Some(c), _) => build(&o, &i, k, c, ctx, opts),
         (None, Some(h)) => build_handover(&o, &i, h, "no beat-matched mix point left"),
         (None, None) => fade_plan(out, inn, ctx, "no beat-matched mix point left"),
     }
+}
+
+/// The planner's options for `out` → `inn`, best first: [`plan`]'s own choice, then the other
+/// beat-matched candidates and echo-outs/cuts by score (the same constraints as [`plan`]: no handovers
+/// under a talk-over, no beat match past the tempo limit), then the plain fade. At most `max` plans; a
+/// fade or gapless first choice has no alternatives. For [`crate::verify`], which tries them in order.
+pub fn alternatives(out: &Features, inn: &Features, ctx: &PlanCtx, max: usize) -> Vec<TransitionPlan> {
+    let first = plan(out, inn, ctx);
+    if max <= 1 || matches!(first.kind, Kind::Fade { .. } | Kind::Gapless) {
+        return vec![first];
+    }
+    let (Some(o), Some(i)) = (Side::new(out), Side::new(inn)) else { return vec![first] };
+    let (k, lr) = octave_match(i.g.bpm, o.g.bpm);
+    let (k, lr) = (f64::from(k), f64::from(lr));
+    let max_lr = (1.0 + f64::from(ctx.settings.max_tempo_pct.max(0.0)) / 100.0).ln();
+    let talk = ctx.voice_break.is_some_and(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
+    let cands = if lr.abs() <= max_lr { candidates(&o, &i, k, lr, ctx, Opts::NORMAL) } else { Vec::new() };
+    let hands = if talk { Vec::new() } else { handovers(&o, &i, ctx) };
+    // Merged by score; on equal scores the blend first (as in `plan`).
+    enum Opt {
+        C(Cand),
+        H(Hand),
+    }
+    let mut opts: Vec<(f32, Opt)> = cands.into_iter().map(|c| (c.score, Opt::C(c))).collect();
+    opts.extend(hands.into_iter().map(|h| (h.score, Opt::H(h))));
+    opts.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let same = |a: &TransitionPlan, b: &TransitionPlan| {
+        std::mem::discriminant(&a.kind) == std::mem::discriminant(&b.kind)
+            && (a.out_mix_start_s - b.out_mix_start_s).abs() < 1e-6
+            && (a.in_mix_start_s - b.in_mix_start_s).abs() < 1e-6
+            && (a.blend_s - b.blend_s).abs() < 1e-6
+    };
+    let mut plans = vec![first];
+    for (_, opt) in opts {
+        if plans.len() + 1 >= max {
+            break;
+        }
+        let mut p = match opt {
+            Opt::C(c) => build(&o, &i, k, c, ctx, Opts::NORMAL),
+            Opt::H(h) => build_handover(&o, &i, h, "alternative"),
+        };
+        if plans.iter().any(|q| same(q, &p)) {
+            continue;
+        }
+        p.levels = crate::loudness::plan_levels(&p, out, inn);
+        plans.push(p);
+    }
+    let mut fade = fade_plan(out, inn, ctx, "plain fallback");
+    fade.levels = crate::loudness::plan_levels(&fade, out, inn);
+    plans.push(fade);
+    plans
 }
 
 /// Repeats of an echo-out fall off by this much each.
@@ -483,7 +534,8 @@ fn echo_tail(delay: f64) -> f64 {
 /// The best echo-out or cut: the outgoing stops on a phrase downbeat (or after a sung phrase / at a
 /// breakdown late in the song) and the incoming starts on its first phrase downbeat or, with lyrics, right
 /// on a verse or chorus entry. An echo suits a loud or sung bar before the stop, a cut a quiet one.
-fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
+/// Every echo-out and cut candidate, best first.
+fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
     let outro = o.outro_start();
@@ -501,7 +553,9 @@ fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
         .collect();
 
     let audio_start = f64::from(i.f.audio_start);
-    let first_in = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05)?;
+    let Some(first_in) = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05) else {
+        return Vec::new();
+    };
     let mut ins = vec![first_in];
     if i.has_lyrics() {
         let hi = (EARLY_IN_FRAC * f64::from(i.f.audio_end)).min(EARLY_IN_MAX_S);
@@ -511,7 +565,7 @@ fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
         );
     }
 
-    let mut best: Option<Hand> = None;
+    let mut all: Vec<Hand> = Vec::new();
     for &m in &outs {
         let phrase_pen = if o.on_phrase(m) || Some(m) == outro || o.after_phrase(m) { 0.0 } else { -0.25 };
         let cut = (outro_t.min(end) - o.t(m as f64)).max(0.0) as f32;
@@ -543,14 +597,13 @@ fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
                 if is_echo && !room {
                     continue;
                 }
-                let better = best.is_none_or(|b| score.total_cmp(&b.score).then(m.cmp(&b.m)).is_gt());
-                if better {
-                    best = Some(Hand { echo: is_echo, m, i: inb, score });
-                }
+                all.push(Hand { echo: is_echo, m, i: inb, score });
             }
         }
     }
-    best
+    // Stable: of equal options the first found stays first.
+    all.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.m.cmp(&a.m)));
+    all
 }
 
 fn build_handover(o: &Side, i: &Side, h: Hand, why: &str) -> TransitionPlan {
@@ -641,7 +694,8 @@ fn tempo_for(o: &Side, m: usize, lr: f64, ctx: &PlanCtx) -> Option<Tempo> {
     (lr.abs() <= per_deck).then_some(full)
 }
 
-fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) -> Option<Cand> {
+/// Every beat-matched candidate, best first.
+fn candidates(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand> {
     let s = ctx.settings;
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
@@ -663,7 +717,9 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
 
     // Mix-in: the first phrase downbeat with audio, plus the next phrase for a very long intro.
     let audio_start = f64::from(i.f.audio_start);
-    let first_in = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05)?;
+    let Some(first_in) = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05) else {
+        return Vec::new();
+    };
     let mut ins = vec![first_in];
     if i.f.intro_instrumental_bars > 32 && first_in + i.phrase() < i.bars {
         ins.push(first_in + i.phrase());
@@ -694,16 +750,8 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
     lengths.retain(|&n| n <= opts.max_bars.max(1));
     lengths.dedup();
 
-    let mut best: Option<Cand> = None;
-    let mut consider = |c: Cand| {
-        let better = match &best {
-            None => true,
-            Some(b) => c.score.total_cmp(&b.score).then(c.m.cmp(&b.m)).then(c.n.cmp(&b.n)).is_gt(),
-        };
-        if better {
-            best = Some(c);
-        }
-    };
+    let mut all: Vec<Cand> = Vec::new();
+    let mut consider = |c: Cand| all.push(c);
 
     for &m in &outs {
         let Some(tempo) = tempo_for(o, m, lr, ctx) else { continue };
@@ -761,7 +809,9 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
             }
         }
     }
-    best
+    // Stable: of equal options the first found stays first.
+    all.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.m.cmp(&a.m)).then(b.n.cmp(&a.n)));
+    all
 }
 
 /// What synced lyrics add to a candidate (0 without them): a bonus when the incoming singing (or its

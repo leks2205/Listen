@@ -12,6 +12,8 @@
 //! - [`echo`]: the echo of an echo-out as a sample-level effect (preview and Android mixer).
 //! - [`render`](mod@render): an offline mono preview of a plan (dev tool for
 //!   `listen --check-mix --render`).
+//! - [`verify`]: plays a plan through on the analysis curves and falls back to the next option when
+//!   it dips, bumps, clashes vocals or cuts a sung line.
 
 pub mod bridge;
 pub mod echo;
@@ -23,6 +25,7 @@ pub mod plan;
 pub mod render;
 pub mod score;
 pub mod sequence;
+pub mod verify;
 
 pub use loudness::{GainDb, GainSource, Levelling, RgTag, track_gain};
 pub use plan::{

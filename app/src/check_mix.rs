@@ -5,7 +5,7 @@
 //! into the analysis like the player does with fetched ones (`listen_mix::lyric`).
 
 use listen_analysis::{BeatModel, BeatSource, Cancel, Opts};
-use listen_mix::plan::PlanCtx;
+use listen_mix::plan::{Kind, PlanCtx};
 use listen_source::MusicSource;
 
 pub fn run(args: &[String]) -> i32 {
@@ -69,7 +69,24 @@ async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>;
         out_genres: &[],
         in_genres: &[],
     };
-    let plan = listen_mix::plan(fa, fb, &ctx);
+    // As the player plans: render-and-verify on the analysis curves, with the levelling gains.
+    let p = &config.settings.playback;
+    let gain = |f| listen_mix::track_gain(Some(f), None, None, p.levelling, true).db;
+    let gains = (gain(fa), gain(fb));
+    let verified = listen_mix::verify::plan_verified(fa, fb, &ctx, gains);
+    for r in &verified.rejected {
+        println!("rejected {r}");
+    }
+    let plan = verified.plan;
+    let c = &verified.check;
+    println!(
+        "check: hole {} LU, bump {} LU, vocals clash {:.1} s, cuts a sung line: {}{}",
+        c.dip_lu.map_or("-".into(), |d| format!("{d:.2}")),
+        c.bump_lu.map_or("-".into(), |b| format!("{b:.2}")),
+        c.clash_s,
+        c.cuts_line,
+        if verified.none_passed { " (no option passed; least bad)" } else { "" }
+    );
     println!(
         "\n{:?}: out {:.2}s → in {:.2}s (loaded at {:.2}s), blend {:.1}s, in speed {:.4}, handover {:.2}s, out stops {:.2}s, score {:.2}\n{}",
         plan.kind,
@@ -85,7 +102,42 @@ async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>;
     );
     if let Some(path) = render {
         let sr = out_pcm.sample_rate;
-        let samples = listen_mix::render(&out_pcm.mono(), &in_pcm.mono(), sr, &plan, 15.0);
+        let context = 15.0;
+        // Each deck at its levelling gain, as the player's levelling stage plays it (before the limiter).
+        let level = |pcm: &listen_analysis::Pcm, db: f32| -> Vec<f32> {
+            let g = listen_mix::loudness::db_to_factor(db);
+            pcm.mono().into_iter().map(|x| x * g).collect()
+        };
+        let (out_mono, in_mono) = (level(out_pcm, gains.0), level(in_pcm, gains.1));
+        let samples = listen_mix::render::render_with_gains(&out_mono, &in_mono, sr, &plan, context, gains);
+        // Where the blend starts in the preview (the outgoing ramp, if any, plays at its mean speed).
+        let first = plan.out_ramp.map_or(plan.out_mix_start_s, |r| r.start_out_s.min(plan.out_mix_start_s));
+        let pre = (first - context).max(0.0);
+        let ramp_speed = plan.out_ramp.map_or(1.0, |r| (r.from + r.to) / 2.0);
+        let blend_from = (first - pre) + (plan.out_mix_start_s - first) / ramp_speed;
+        // Hole and bump against each deck's own levelled audio, aligned to the preview (speed
+        // changes ignored; they are a few per cent). Only blends overlap two decks.
+        if !matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless) {
+            let srf = f64::from(sr);
+            let at = |t: f64| (t.max(0.0) * srf) as usize;
+            let out_own: Vec<f32> =
+                out_mono.get(at(pre)..).unwrap_or(&[]).iter().take(samples.len()).copied().collect();
+            let mut in_own = vec![0.0f32; at(blend_from).min(samples.len())];
+            in_own.extend(
+                in_mono
+                    .get(at(plan.in_mix_start_s)..)
+                    .unwrap_or(&[])
+                    .iter()
+                    .take(samples.len() - in_own.len()),
+            );
+            let lv = |x: &[f32]| listen_mix::verify::audio_levels(x, sr, 0.1);
+            let (lm, lo, li) = (lv(&samples), lv(&out_own), lv(&in_own));
+            if let Some((dip, bump)) =
+                listen_mix::verify::audio_dip_bump(&lm, &lo, &li, 0.1, blend_from, plan.blend_s)
+            {
+                println!("rendered: loudness hole {dip:.2} LU, bump {bump:.2} LU (3 s short-term, levelled)");
+            }
+        }
         write_wav(path, sr, &samples).map_err(|e| format!("{path}: {e}"))?;
         println!("rendered {:.1}s preview to {path}", samples.len() as f32 / sr.max(1) as f32);
     }

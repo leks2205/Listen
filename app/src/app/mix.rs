@@ -387,7 +387,14 @@ impl Listen {
         } else if cur.bridge.is_some() {
             listen_mix::bridge::plan_out_of(fa, fb, &ctx)
         } else {
-            listen_mix::plan::plan(fa, fb, &ctx)
+            // Render-and-verify (item 11): the plan is played through on the analysis curves first; one
+            // that dips, bumps, clashes vocals or cuts a sung line gives way to the next option.
+            let gains = (self.levelling_gain(&cur_song).db, self.levelling_gain(&next_song).db);
+            let v = listen_mix::verify::plan_verified(fa, fb, &ctx, gains);
+            for r in &v.rejected {
+                tracing::info!("mix “{}” → “{}”: rejected {r}", cur.song.title, next.song.title);
+            }
+            v.plan
         };
         // A bridge is only played mixed: without a beat-matched way in, it goes again.
         if next.bridge.is_some() && !matches!(plan.kind, Kind::BeatBlend { .. } | Kind::ShortBlend { .. }) {

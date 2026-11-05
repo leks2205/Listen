@@ -42,6 +42,8 @@ Cutting a song short or skipping an intro costs the plan points for every second
 
 While both songs play, Listen keeps the overall loudness steady: the sum of the two follows a straight line from the level of the outgoing song just before the mix to the level of the next song just after it. It knows how loud each part of a song is from the song analysis, so a blend over a quiet outro is lifted a little (at most 3 dB) and two loud choruses together are turned down (at most 6 dB). With **Volume levelling** on, each song's own gain is taken into account. Echo-outs and cuts have no overlap and are left as they are.
 
+Before a transition is armed, Listen plays it through once on the song analysis (no audio is needed, and it takes well under a millisecond). It rejects the plan if the mix would fall more than 1.5 LU below the quieter song or rise more than 1.5 LU above the louder one. It also rejects it if both singers would be clearly heard together for more than a second, or if the outgoing song would stop in the middle of a sung line (this last check is only made when synced lyrics show where the lines end). A rejected plan gives way to the next best option, and the plain fade comes last. If no option passes, the one with the smallest problem plays. Rejected plans are written to the log with the reason.
+
 For a beat-matched blend the two songs must run at the same speed. Listen speeds one or both songs up or down by a few percent without changing the pitch. With **Tempo ramps** on, the speed glides smoothly during the blend and returns to the natural speed of the new song afterwards. With it off, the tempo is matched for the whole blend at once, which can be heard on large differences.
 
 Songs whose tempo is double or half of the other (for example 70 and 140 BPM) are matched at that ratio instead of being sped up a lot.
@@ -105,6 +107,7 @@ The [AI DJ](ai-dj.md) knows how each candidate song would be mixed in after the 
 - **Many echo-outs, few beat-matched blends.** Raise **Largest tempo change**: songs whose tempos are too far apart are joined with an echo-out or a cut. Songs without a steady beat are faded.
 - **A song was skipped for mixing right after you started it.** A mix needs about 5 seconds of lead time. Songs started late are played gapless.
 - **A song ended earlier than usual, or the next one started after its intro.** The lyrics showed a cleaner place to mix (see [Lyrics show where the singing is](#lyrics-show-where-the-singing-is)). `listen --check-mix A B --lyrics-a A.lrc --lyrics-b B.lrc` shows how a pair is planned with given lyrics.
+- **Why was this transition chosen?** The log lists every plan that was rejected before it (`rejected … loudness dip`, `vocals clash`, `cuts a sung line`). `listen --check-mix A B --render out.wav` shows the same check for a pair and measures the rendered preview's loudness hole and bump.
 - **Different tempo after the mix.** That is the intended tempo ramp. If you dislike it, turn off **Tempo ramps** or lower **Largest tempo change**.
 
 How the engine works internally is described in [DJ transitions internals](../development/dj-transitions.md).
