@@ -297,6 +297,16 @@ fn classify(status: u16, body: &str) -> AiError {
 }
 
 async fn post(http: &reqwest::Client, key: &str, body: &Value, timeout: Duration) -> Result<String, AiError> {
+    post_reply(http, key, body, timeout).await.map(|r| reply_text(&r))
+}
+
+/// Sends an Interactions request; the whole completed reply (steps with annotations).
+pub(crate) async fn post_reply(
+    http: &reqwest::Client,
+    key: &str,
+    body: &Value,
+    timeout: Duration,
+) -> Result<Value, AiError> {
     let key = key.trim();
     if key.is_empty() {
         return Err(AiError::NoKey);
@@ -319,7 +329,7 @@ async fn post(http: &reqwest::Client, key: &str, body: &Value, timeout: Duration
     if let Some(s) = reply["status"].as_str().filter(|s| *s != "completed") {
         return Err(AiError::Api(format!("interaction {s}")));
     }
-    Ok(reply_text(&reply))
+    Ok(reply)
 }
 
 /// Translates the lines into `language` (English name). One entry per line.

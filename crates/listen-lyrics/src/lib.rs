@@ -1,6 +1,7 @@
 //! Lyrics: LRC parsing (plain, synced, word-synced, translations), providers (lrclib.net, NetEase,
 //! Genius, SimpMusic) with ranking and rate limits, translation, romaji, RTL detection, export.
 
+pub mod card;
 pub mod export;
 pub mod fetch;
 pub mod furigana;

@@ -1389,6 +1389,65 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// `listen --song-card <TITLE> <ARTIST> [--album A] [--year Y] [--lang de|en]`: builds the About
+/// card (Gemini with Google Search + MusicBrainz credits), prints it as JSON with a summary line,
+/// and fails when a fact has no source. Costs up to three Gemini requests; nothing is cached.
+pub fn song_card(args: &[String]) -> i32 {
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let (Some(title), Some(artist)) = (args.first().filter(|a| !a.starts_with("--")), args.get(1)) else {
+        eprintln!("usage: listen --song-card <TITLE> <ARTIST> [--album A] [--year Y] [--lang de|en]");
+        return 2;
+    };
+    let key = std::env::var("LISTEN_GEMINI_API_KEY").ok().filter(|k| !k.trim().is_empty()).or_else(|| {
+        let paths = listen_core::config::Paths::discover().ok()?;
+        crate::secrets::Secrets::new(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
+    });
+    let Some(key) = key else {
+        eprintln!("no key: set LISTEN_GEMINI_API_KEY or save one in Settings → AI DJ");
+        return 1;
+    };
+    let model = listen_core::config::Paths::discover()
+        .ok()
+        .and_then(|p| listen_core::config::Config::load(&p.config_file()).ok())
+        .map(|c| c.settings.ai_dj)
+        .unwrap_or_default()
+        .text_model;
+    let language = if opt("--lang").as_deref() == Some("de") { "German" } else { "English" };
+    let info = listen_lyrics::card::SongInfo {
+        title: title.clone(),
+        artists: vec![artist.clone()],
+        album: opt("--album"),
+        year: opt("--year").and_then(|y| y.parse().ok()),
+        recording_mbid: None,
+    };
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    };
+    let http = reqwest::Client::new();
+    let now = listen_core::history::now_secs();
+    match rt.block_on(listen_lyrics::card::card(&http, &key, &model, language, &info, now)) {
+        Ok(card) => {
+            println!("{}", serde_json::to_string_pretty(&card).unwrap_or_default());
+            let unsourced = card.facts.iter().filter(|f| f.sources.is_empty()).count();
+            println!(
+                "facts {} (unsourced {unsourced}), credits {}, shown: {}",
+                card.facts.len(),
+                card.credits.credits.len(),
+                !card.is_empty()
+            );
+            i32::from(unsourced > 0)
+        }
+        Err(e) => {
+            eprintln!("song card failed: {e}");
+            1
+        }
+    }
+}
+
 /// `listen --weekly-stats [--history PATH] [--now UNIX]`: prints the Statistics page's
 /// "Last 4 weeks" numbers as JSON (for recounting against `history.jsonl`).
 pub fn weekly_stats(args: &[String]) -> i32 {

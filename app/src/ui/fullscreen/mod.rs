@@ -3,6 +3,7 @@
 //! each toggleable), the cover-derived background, the gear's settings and
 //! the full-window visualizer.
 
+mod about;
 mod background;
 pub mod lyrics;
 pub mod metadata;
@@ -26,11 +27,12 @@ use listen_core::model::Song;
 use listen_core::settings::ItemAlignment;
 
 /// The panel tabs in button order: tab, icon, name.
-pub const TABS: [(FullscreenTab, Icon, &str); 4] = [
+pub const TABS: [(FullscreenTab, Icon, &str); 5] = [
     (FullscreenTab::Queue, Icon::LuListMusic, "Up Next"),
     (FullscreenTab::Related, Icon::LuRadio, "Related"),
     (FullscreenTab::Lyrics, Icon::LuMicVocal, "Lyrics"),
     (FullscreenTab::Visualizer, Icon::LuActivity, "Visualizer"),
+    (FullscreenTab::About, Icon::LuInfo, "About"),
 ];
 
 pub fn view(state: &Listen) -> Element<'_, Message> {
@@ -175,6 +177,7 @@ fn panel(state: &Listen, queue_width: f32) -> Element<'_, Message> {
         FullscreenTab::Related => related::view(state),
         FullscreenTab::Lyrics => lyrics::lyrics(state),
         FullscreenTab::Visualizer => visualizer_panel(state),
+        FullscreenTab::About => about::view(state),
         FullscreenTab::Hidden => space().into(),
     }
 }

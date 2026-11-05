@@ -252,7 +252,12 @@ impl Listen {
         if !self.fs_visualizer_in_panel() && !self.queue_visualizer_visible() {
             self.spectrum = None;
         }
-        Task::batch([self.load_lyrics(), self.scroll_lyrics(), self.related_track_changed()])
+        Task::batch([
+            self.load_lyrics(),
+            self.scroll_lyrics(),
+            self.related_track_changed(),
+            self.about_track_changed(),
+        ])
     }
 
     /// The full-screen player was opened or closed.
@@ -272,6 +277,7 @@ impl Listen {
             self.scroll_lyrics(),
             self.fs_backdrop(),
             self.related_track_changed(),
+            self.about_track_changed(),
         ])
     }
 

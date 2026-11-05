@@ -2668,5 +2668,19 @@
 "Only favourites": "Nur Lieblingssongs",
 "Focus": "Fokus",
 "Korean only": "Nur Koreanisch",
-"No ballads": "Keine Balladen"
+"No ballads": "Keine Balladen",
+"About this song": "Über diesen Song",
+"Looking up this song…": "Suche Infos zu diesem Song …",
+"Could not look up this song: {}": "Infos zu diesem Song nicht gefunden: {}",
+"About this song needs the AI DJ's Gemini key (Settings → AI DJ).": "„Über diesen Song“ braucht den Gemini-Schlüssel des KI-DJs (Einstellungen → KI-DJ).",
+"Nothing with a source was found about this song.": "Zu diesem Song wurde nichts mit Quelle gefunden.",
+"Searched for:": "Gesucht nach:",
+"Credits": "Mitwirkende",
+"Look it up again": "Neu nachschlagen",
+"Facts by Gemini with Google Search; each links the pages it rests on. Credits from MusicBrainz.": "Fakten von Gemini mit Google-Suche; jeder verlinkt die Seiten, auf denen er beruht. Mitwirkende von MusicBrainz.",
+"Writer": "Autor",
+"Lyricist": "Texter",
+"Arranger": "Arrangeur",
+"Mixing": "Abmischung",
+"Engineer": "Toningenieur"
 }

@@ -22,6 +22,7 @@ use listen_source::{AlbumQuery, AlbumSort, HomeShelf, ListQuery, MusicSource, Sc
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod about;
 pub mod advanced;
 pub mod album_page;
 pub mod analysis;
@@ -286,6 +287,8 @@ pub enum FullscreenTab {
     Related,
     Lyrics,
     Visualizer,
+    /// Facts and credits of the playing song.
+    About,
     /// No panel: the cover is centred.
     Hidden,
 }
@@ -647,6 +650,8 @@ pub struct Listen {
     pub sleep_timer: Option<sleep_timer::SleepTimer>,
     /// Full-screen player extras: backdrop, full-window visualizer, related songs, sleep popover.
     pub fs: fullscreen_state::FullscreenState,
+    /// The full-screen About tab's song card.
+    pub about: about::AboutState,
     /// Left sidebar: folded sections, playlist folders, drags and popups.
     pub sb: sidebar_state::SidebarState,
     /// Signed in via `--login`: never persist config or secrets.
@@ -862,6 +867,7 @@ pub enum Message {
     /// The AI DJ button in the queue panel.
     ToggleAiDj,
     Fullscreen(fullscreen_state::FullscreenMsg),
+    About(about::AboutMsg),
     Sidebar(sidebar_state::SidebarMsg),
     Logout,
     OpenAlbum(String),
@@ -1135,6 +1141,7 @@ impl Listen {
             level: levelling::LevelState::default(),
             sleep_timer: None,
             fs: Default::default(),
+            about: Default::default(),
             sb: Default::default(),
             accent_input: String::new(),
             import_path: String::new(),
@@ -2177,6 +2184,7 @@ impl Listen {
             self.queue_track_changed(),
             waveform,
             self.related_track_changed(),
+            self.about_track_changed(),
         ])
     }
 
@@ -4193,9 +4201,10 @@ impl Listen {
                 if !self.fs_visualizer_in_panel() && !self.queue_visualizer_visible() {
                     self.spectrum = None;
                 }
-                return self.scroll_lyrics();
+                return Task::batch([self.scroll_lyrics(), self.about_track_changed()]);
             }
             Message::Fullscreen(m) => return self.on_fullscreen(m),
+            Message::About(m) => return self.on_about(m),
             Message::Sidebar(m) => return self.on_sidebar(m),
             Message::LyricsLoaded(id, lyrics) => {
                 return self.on_lyrics(lyrics_state::LyricsMsg::Loaded(id, lyrics.into_iter().collect()));

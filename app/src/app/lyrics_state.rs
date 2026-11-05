@@ -549,7 +549,7 @@ impl Listen {
         !s.translation_api_provider.is_empty() && !s.translation_api_key.trim().is_empty()
     }
 
-    fn gemini_key(&self) -> Option<String> {
+    pub(crate) fn gemini_key(&self) -> Option<String> {
         self.dj.key.clone().filter(|k| !k.trim().is_empty())
     }
 

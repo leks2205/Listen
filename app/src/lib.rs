@@ -80,6 +80,9 @@ Options:
                          the first two spoken breaks as WAV, then exit; --request
                          (calmer, more_energy, no_ballads, … or free text) is told
                          to the DJ before round 2
+  --song-card <TITLE> <ARTIST> [--album A] [--year Y] [--lang de|en]
+                         Build the full-screen About card (Gemini with Google
+                         Search, MusicBrainz credits), print it as JSON, then exit
   --weekly-stats [--history PATH] [--now UNIX]
                          Print the Statistics page's Last 4 weeks numbers as
                          JSON (default: this computer's history), then exit

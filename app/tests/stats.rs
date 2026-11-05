@@ -7,6 +7,8 @@ use listen::{Args, FONTS};
 use listen_core::history::{self, Entry};
 use listen_core::model::ArtistRef;
 
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn settings() -> iced::Settings {
     iced::Settings {
         fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
@@ -16,6 +18,7 @@ fn settings() -> iced::Settings {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
+    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
     let mut ui = Simulator::with_size(settings(), iced::Size::new(1400.0, 1000.0), s.view());
     ui.find(text).is_ok()
 }

@@ -18,7 +18,7 @@ When nothing is playing, the window says "Nothing is playing."
 
 ## What you see
 
-The top-left corner has two buttons: **Minimize** and **Configure** (the gear, see [below](#settings-of-the-full-screen-player)). The top-right corner has four tab buttons:
+The top-left corner has two buttons: **Minimize** and **Configure** (the gear, see [below](#settings-of-the-full-screen-player)). The top-right corner has five tab buttons:
 
 | Tab | Content |
 |---|---|
@@ -26,6 +26,7 @@ The top-left corner has two buttons: **Minimize** and **Configure** (the gear, s
 | **Related** | Songs similar to the playing one (up to 50), when the song's server can provide them. Right-click or use the menu on a row as usual. |
 | **Lyrics** | The [lyrics](lyrics.md) with their buttons. |
 | **Visualizer** | The [visualizer](visualizer.md) (spectrum, or Milkdrop where available). |
+| **About** | Facts about the playing song and its credits, see [below](#about-this-song). |
 
 Click a tab to open its panel; click it again to close the panel, and the cover moves to the middle. One panel is open at a time.
 
@@ -34,6 +35,14 @@ On the left are the cover (or the music video) and, under it, the title, the art
 The background takes its colour from the cover and changes with each song.
 
 The visualizer tab has an **Expand visualizer** button at its top right that fills the whole window with the visualizer, with the song name in a corner. Use **Shrink visualizer** or `Esc` to go back.
+
+## About this song
+
+The **About** tab shows three to five short facts about the playing song (what the title and the lyrics mean, how it was made, its release and how it was received), in the app language. Gemini writes them with Google Search, using the AI DJ's key and text model (see [Gemini key](../dj/gemini-key.md)); without a key the tab says so. Every fact carries links to the web pages it rests on, and a fact without such a link is left out. If nothing with a source is found, the tab says so instead of showing a card. **Searched for** links the searches Gemini made to Google.
+
+Under the facts are the **Credits** (writer, composer, lyricist, arranger, producer, mixing, engineer) from MusicBrainz, with a link to the recording there. Listen uses the song's MusicBrainz recording id when your server has it, and otherwise searches MusicBrainz by title and artist. Many recordings, K-pop especially, have no credits there yet; then this part is missing.
+
+The card is fetched when the tab is open (and again when the song changes while it is open), then kept for 30 days per song and language. **Look it up again** fetches a fresh one. One card costs up to three Gemini requests: when Gemini's answer comes back without source links, Listen asks again.
 
 In a narrow window (768 px or less) Listen uses a phone-style layout instead: a header, the cover, the details, a progress bar and the transport buttons, and a bottom row with shuffle, repeat, queue and lyrics. The queue and the lyrics replace the cover while they are open.
 
