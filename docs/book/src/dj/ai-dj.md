@@ -18,6 +18,8 @@ The song you start from becomes the seed: the mood the DJ tries to keep. Songs y
 
 While the AI DJ is on, Listen plans one set at a time. When the last song of a set starts, it asks Gemini for the next set and a line to say. Gemini chooses the songs from a list of about 40 candidates taken from your music server: songs similar to the seed, some similar to the current song, songs similar to your latest manual picks and a few random ones. Songs that played this session, are in the queue or were picked recently are left out.
 
+With the listening history on, up to 5 of the candidates come from it: songs from your heavy rotation of the last 30 days (not ones played today) and favourites you have not played for two months, the ones that flow best from the current song. Each candidate also tells the DJ what you know of it: how often you played it and when you last did, or that it is new to you (and whether its artist is). The DJ mixes familiar songs with new ones, and when it talks before a set that has a song new to you, it introduces one of them with a short line about it. It is told to state only facts it is sure of and otherwise to talk about the sound. "New to you" is only used once the history covers at least two weeks and 100 plays, so a fresh install does not call every song new. These tags go to Gemini with the song titles (see [Privacy](../more/privacy.md)).
+
 The break is spoken with a voice model and placed at random where it fits:
 
 - **between songs**, in the silence after the current song;
@@ -29,7 +31,7 @@ The music is turned down while the voice speaks and back up afterwards. Breaks a
 
 ### How it uses the analysis
 
-If songs are analysed, the DJ knows more than titles. Each candidate is described with tempo, key and energy, and the DJ is told how the mix engine would bring it in after the current song. The candidate list is ordered by how well the songs flow from the current one, so the DJ is offered songs that mix well. The DJ can also mention its mixes, and it keeps a talk-over shorter than the instrumental intro of the next song so that it never talks over a singer.
+If songs are analysed, the DJ knows more than titles. Each candidate is described with tempo, key and energy, plus a short conclusion of how it follows the current song (keys compatible or clashing, tempo close or a big jump, energy up or down), and the DJ is told how the mix engine would bring it in after the current song. The candidate list is ordered by how well the songs flow from the current one, so the DJ is offered songs that mix well. The DJ can also mention its mixes, and it keeps a talk-over shorter than the instrumental intro of the next song so that it never talks over a singer.
 
 Without analysis the DJ still works; it then relies on the server's own similarity and the server's BPM tag.
 

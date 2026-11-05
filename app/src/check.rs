@@ -325,10 +325,44 @@ async fn mpv_opens(url: &str) -> Result<(), String> {
     Err(reason)
 }
 
-/// `listen --check-ai-dj [--no-voice]`: two AI DJ rounds against Gemini on a fixed song pool; prints picks,
-/// lines, timings and tokens, saves the spoken breaks as WAVs in the temp dir. Key: `$LISTEN_GEMINI_API_KEY`
-/// or the app's keyring entry. Costs 2 text + 2 speech requests (no speech with `--no-voice`).
-pub fn ai_dj(voice: bool) -> i32 {
+/// What `listen --check-ai-dj` does.
+#[derive(Debug, Clone, Copy)]
+pub struct AiDjCheck {
+    /// Speak the first two breaks (`--no-voice` = never).
+    pub voice: bool,
+    /// Planning rounds (`--rounds N`, default 2).
+    pub rounds: usize,
+    /// Grade every break with a second model call (`--no-judge` = off).
+    pub judge: bool,
+    /// Print each round's prompt (`--dump-prompt`).
+    pub dump: bool,
+}
+
+impl AiDjCheck {
+    pub fn from_args(args: &[String]) -> Self {
+        let rounds = args
+            .iter()
+            .position(|a| a == "--rounds")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(2usize)
+            .clamp(1, 50);
+        Self {
+            voice: !args.iter().any(|a| a == "--no-voice"),
+            rounds,
+            judge: !args.iter().any(|a| a == "--no-judge"),
+            dump: args.iter().any(|a| a == "--dump-prompt"),
+        }
+    }
+}
+
+/// `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt]`: AI DJ rounds against
+/// Gemini on a fixed song pool with listening-history tags and measured tempo/key/energy; prints picks,
+/// lines, timings and tokens, grades every break with a judge call, saves the first two spoken breaks as
+/// WAVs in the temp dir. Key: `$LISTEN_GEMINI_API_KEY` or the app's keyring entry. Costs one text request
+/// per round, one more per round with the judge, and up to 2 speech requests. Fails when a break fails
+/// the judge.
+pub fn ai_dj(check: AiDjCheck) -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
@@ -336,7 +370,7 @@ pub fn ai_dj(voice: bool) -> i32 {
             return 1;
         }
     };
-    rt.block_on(run_ai_dj(voice)).map_or_else(
+    rt.block_on(run_ai_dj(check)).map_or_else(
         |e| {
             eprintln!("✗ {e}");
             1
@@ -383,7 +417,25 @@ fn check_song(n: usize, title: &str, artist: &str, year: i32, genre: &str) -> li
     }
 }
 
-async fn run_ai_dj(voice: bool) -> Result<(), String> {
+/// Sample analysis for the check pool (bpm, Camelot number, minor, energy 0..1).
+fn check_flow(bpm: f32, key: u8, minor: bool, energy: f32) -> listen_core::analysis::FlowFeatures {
+    listen_core::analysis::FlowFeatures {
+        bpm: Some(bpm),
+        bpm_confidence: 0.9,
+        key: Some((listen_core::analysis::Camelot { number: key, minor }, 0.8)),
+        lufs: -10.0,
+        mood: listen_core::analysis::Mood { energy, danceability: 0.5, brightness: 0.5 },
+        timbre: vec![],
+        mixable_in: true,
+        mixable_out: true,
+    }
+}
+
+/// A check pool song: title, artist, year, genre, (bpm, Camelot number, minor, energy), history tag.
+type CheckSong = (&'static str, &'static str, i32, &'static str, (f32, u8, bool, f32), &'static str);
+
+async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
+    use std::collections::{HashMap, HashSet};
     let key = std::env::var("LISTEN_GEMINI_API_KEY").ok().filter(|k| !k.trim().is_empty()).or_else(|| {
         let paths = listen_core::config::Paths::discover().ok()?;
         crate::secrets::Secrets::new(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
@@ -398,33 +450,53 @@ async fn run_ai_dj(voice: bool) -> Result<(), String> {
         listen_dj::Persona::by_id(&std::env::var("LISTEN_AI_DJ_PERSONA").unwrap_or(settings.persona.clone()));
     let http = reqwest::Client::new();
     let gemini = listen_dj::Gemini::new(http, key).map_err(|e| e.to_string())?;
-    let songs = [
-        ("Teardrop", "Massive Attack", 1998, "Trip-Hop"),
-        ("Roads", "Portishead", 1994, "Trip-Hop"),
-        ("Angel", "Massive Attack", 1998, "Trip-Hop"),
-        ("Hyperballad", "Björk", 1995, "Electronic"),
-        ("Cherry Blossom Girl", "Air", 2004, "Downtempo"),
-        ("Intro", "The xx", 2009, "Indie"),
-        ("Breathe", "Télépopmusik", 2001, "Downtempo"),
-        ("Midnight City", "M83", 2011, "Synthpop"),
-        ("Mr. Brightside", "The Killers", 2004, "Rock"),
-        ("Strobe", "deadmau5", 2009, "Progressive House"),
-        ("Holocene", "Bon Iver", 2011, "Indie Folk"),
-        ("Nightcall", "Kavinsky", 2010, "Synthwave"),
-        ("Kids", "MGMT", 2007, "Indie"),
-        ("Sour Times", "Portishead", 1994, "Trip-Hop"),
-        ("Sweet Disposition", "The Temper Trap", 2008, "Indie Rock"),
-        ("Bloodstream", "Stateless", 2007, "Trip-Hop"),
-        ("Porcelain", "Moby", 1999, "Downtempo"),
-        ("Smells Like Teen Spirit", "Nirvana", 1991, "Grunge"),
-        ("Unfinished Sympathy", "Massive Attack", 1991, "Trip-Hop"),
-        ("Glory Box", "Portishead", 1994, "Trip-Hop"),
+    // Title, artist, year, genre, (bpm, Camelot, minor, energy), what the listener knows.
+    #[rustfmt::skip]
+    let songs: [CheckSong; 20] = [
+        ("Teardrop", "Massive Attack", 1998, "Trip-Hop", (77.0, 4, true, 0.35), "favourite, plays 23, last played 2 days ago"),
+        ("Roads", "Portishead", 1994, "Trip-Hop", (69.0, 6, true, 0.25), "plays 6, last played 12 days ago"),
+        ("Angel", "Massive Attack", 1998, "Trip-Hop", (78.0, 4, true, 0.45), "new to you"),
+        ("Hyperballad", "Björk", 1995, "Electronic", (120.0, 7, false, 0.55), "new to you, new artist"),
+        ("Cherry Blossom Girl", "Air", 2004, "Downtempo", (92.0, 9, true, 0.3), "plays 3, not heard for 4 months"),
+        ("Intro", "The xx", 2009, "Indie", (100.0, 6, true, 0.45), "favourite, plays 31, last played yesterday"),
+        ("Breathe", "Télépopmusik", 2001, "Downtempo", (78.0, 3, true, 0.35), "new to you, new artist"),
+        ("Midnight City", "M83", 2011, "Synthpop", (105.0, 4, false, 0.75), "plays 9, last played 20 days ago"),
+        ("Mr. Brightside", "The Killers", 2004, "Rock", (148.0, 1, false, 0.9), "plays 2, last played 40 days ago"),
+        ("Strobe", "deadmau5", 2009, "Progressive House", (128.0, 9, false, 0.6), "new to you, new artist"),
+        ("Holocene", "Bon Iver", 2011, "Indie Folk", (74.0, 10, false, 0.25), "favourite, plays 15, not heard for 3 months"),
+        ("Nightcall", "Kavinsky", 2010, "Synthwave", (91.0, 8, true, 0.5), "new to you"),
+        ("Kids", "MGMT", 2007, "Indie", (123.0, 12, false, 0.7), "plays 4, last played 8 days ago"),
+        ("Sour Times", "Portishead", 1994, "Trip-Hop", (100.0, 9, true, 0.4), "new to you"),
+        ("Sweet Disposition", "The Temper Trap", 2008, "Indie Rock", (126.0, 2, false, 0.75), "plays 1, last played 3 days ago"),
+        ("Bloodstream", "Stateless", 2007, "Trip-Hop", (75.0, 5, true, 0.35), "new to you, new artist"),
+        ("Porcelain", "Moby", 1999, "Downtempo", (96.0, 8, true, 0.3), "plays 5, not heard for 6 months"),
+        ("Smells Like Teen Spirit", "Nirvana", 1991, "Grunge", (117.0, 4, true, 0.95), "plays 2, last played 25 days ago"),
+        ("Unfinished Sympathy", "Massive Attack", 1991, "Trip-Hop", (100.0, 7, true, 0.5), "favourite, plays 11, last played 6 days ago"),
+        ("Glory Box", "Portishead", 1994, "Trip-Hop", (60.0, 4, true, 0.3), "new to you"),
     ];
     let all: Vec<_> = songs.iter().enumerate().map(|(n, s)| check_song(n, s.0, s.1, s.2, s.3)).collect();
+    let flow: HashMap<String, listen_core::analysis::FlowFeatures> = songs
+        .iter()
+        .zip(&all)
+        .map(|(s, song)| (song.id.clone(), check_flow(s.4.0, s.4.1, s.4.2, s.4.3)))
+        .collect();
+    let familiar: HashMap<String, String> =
+        songs.iter().zip(&all).map(|(s, song)| (song.id.clone(), s.5.to_string())).collect();
     let seed = all[0].clone();
+    // The judge may be a stronger model than the DJ's (`LISTEN_AI_DJ_JUDGE_MODEL`).
+    let judge_model = std::env::var("LISTEN_AI_DJ_JUDGE_MODEL")
+        .ok()
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| settings.text_model.clone());
+    let language = crate::i18n::english_name(crate::i18n::dj_language(&settings.language));
     println!(
-        "persona: {} (voice {}), text {}, speech {}",
-        persona.name, persona.voice, settings.text_model, settings.tts_model
+        "persona: {} (voice {}), text {}, speech {}, {} rounds, judge {} ({judge_model})",
+        persona.name,
+        persona.voice,
+        settings.text_model,
+        settings.tts_model,
+        check.rounds,
+        if check.judge { "on" } else { "off" }
     );
     println!("seed: {} – {}", seed.title, seed.artist_line());
 
@@ -432,10 +504,22 @@ async fn run_ai_dj(voice: bool) -> Result<(), String> {
     let mut current = seed.clone();
     let (mut mood, mut last_line) = (None::<String>, None::<String>);
     let mut seed_mood = None::<String>;
-    let mut used: std::collections::HashSet<String> = [seed.id.clone()].into();
-    let notes = std::collections::HashMap::new();
-    for round in 1..=2 {
-        let pool: Vec<_> = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
+    let mut used: HashSet<String> = [seed.id.clone()].into();
+    let (mut plan_tokens, mut judge_tokens) = (listen_dj::Usage::default(), listen_dj::Usage::default());
+    let (mut failed, mut new_sets, mut introduced, mut named_new) = (0usize, 0usize, 0usize, 0usize);
+    for round in 1..=check.rounds {
+        let mut pool: Vec<_> = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
+        // Long runs: the pool starts over (except the song playing now).
+        if pool.len() < settings.set_max as usize + 3 {
+            used = [current.id.clone()].into();
+            pool = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
+        }
+        let now = flow.get(&current.id);
+        let mut notes: HashMap<String, String> =
+            all.iter().map(|s| (s.id.clone(), flow[&s.id].describe())).collect();
+        for s in &pool {
+            notes.insert(s.id.clone(), listen_dj::facts::candidate_note(&flow[&s.id], now));
+        }
         let req = listen_dj::PlanRequest {
             persona,
             seed: &seed,
@@ -448,31 +532,33 @@ async fn run_ai_dj(voice: bool) -> Result<(), String> {
             last_line: last_line.as_deref(),
             candidates: &pool,
             notes: &notes,
+            familiar: &familiar,
             set_min: settings.set_min as usize,
             set_max: settings.set_max as usize,
             first: round == 1,
             mode: listen_dj::BreakMode::ALL[round % 4],
-            // Two-host shows: the co-host joins in the second round.
-            duo: round == 2,
-            show: listen_dj::Show {
-                language: crate::i18n::english_name(crate::i18n::dj_language(&settings.language)),
-                location: &settings.location,
-                notes: &settings.notes,
-            },
+            // Two-host shows: the co-host joins every other round.
+            duo: round % 2 == 0,
+            show: listen_dj::Show { language, location: &settings.location, notes: &settings.notes },
         };
+        if check.dump {
+            println!("\n— prompt {round}:\n{}", listen_dj::prompt::user_prompt(&req));
+        }
         let t = std::time::Instant::now();
         let (plan, usage) =
             gemini.plan(&settings.text_model, &req).await.map_err(|e| format!("plan: {e}"))?;
+        plan_tokens = add_usage(plan_tokens, usage);
         println!("\n— round {round}: plan in {:.1}s ({usage})", t.elapsed().as_secs_f32());
         println!("break: {}", req.mode.name());
         println!("mood: {}", plan.mood);
         for &i in &plan.picks {
-            println!("  ♪ {} – {}", pool[i].title, pool[i].artist_line());
+            let tag = familiar.get(&pool[i].id).map(|t| format!(" [{t}]")).unwrap_or_default();
+            println!("  ♪ {} – {}{tag}", pool[i].title, pool[i].artist_line());
         }
         for t in &plan.turns {
             println!("{}: {}  [{}]", if t.speaker.is_empty() { "line" } else { &t.speaker }, t.text, t.style);
         }
-        if voice {
+        if check.voice && round <= 2 {
             let t = std::time::Instant::now();
             let (wav, usage) = gemini
                 .speak(&settings.tts_model, persona, &plan.turns, settings.place_pronunciation().as_slice())
@@ -490,6 +576,58 @@ async fn run_ai_dj(voice: bool) -> Result<(), String> {
                 out.display()
             );
         }
+        if check.judge && !plan.turns.is_empty() {
+            let line_of = |s: &listen_core::model::Song| {
+                let tag = familiar.get(&s.id).map(|t| format!(" [{t}]")).unwrap_or_default();
+                format!(
+                    "{} – {} ({}, {}){tag}",
+                    s.title,
+                    s.artist_line(),
+                    s.year.unwrap_or(0),
+                    s.genres.join("/")
+                )
+            };
+            let line = plan.line();
+            let case = listen_dj::judge::Case {
+                persona: persona.brief,
+                language,
+                hosts: match &persona.cohost {
+                    Some(co) if req.duo => format!("Both {} and {} talk this break.", persona.host, co.name),
+                    Some(_) => format!("Only {} talks this break.", persona.host),
+                    None => String::new(),
+                },
+                played: played.iter().map(|p| &p.song).chain([&current]).map(line_of).collect(),
+                set: plan.picks.iter().map(|&i| line_of(&pool[i])).collect(),
+                line: &line,
+                previous_line: last_line.as_deref(),
+            };
+            let (verdict, usage) =
+                gemini.judge(&judge_model, &case).await.map_err(|e| format!("judge: {e}"))?;
+            judge_tokens = add_usage(judge_tokens, usage);
+            let pass = verdict.passed(&case);
+            if case.has_new() {
+                new_sets += 1;
+                introduced += usize::from(verdict.introduces_new);
+            }
+            failed += usize::from(!pass);
+            println!("judge: {} {} ({usage})", if pass { "PASS" } else { "FAIL" }, verdict.summary(&case));
+            if case.has_new() {
+                // Did the model name a new-to-you song of its set as the one it introduces?
+                let said = plan.introduces.to_lowercase();
+                let named = plan.picks.iter().map(|&i| &pool[i]).find(|s| {
+                    let title = s.title.to_lowercase();
+                    !said.is_empty() && (said.contains(&title) || title.contains(&said))
+                });
+                let new =
+                    named.is_some_and(|s| familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")));
+                named_new += usize::from(new);
+                println!(
+                    "introduces: “{}”{}",
+                    plan.introduces,
+                    if new { "" } else { " (not a new-to-you song of the set)" }
+                );
+            }
+        }
         // The set "plays"; the last song of it is playing when the next plan is made.
         let picks: Vec<_> = plan.picks.iter().map(|&i| pool[i].clone()).collect();
         for s in &picks {
@@ -504,8 +642,35 @@ async fn run_ai_dj(voice: bool) -> Result<(), String> {
         last_line = Some(plan.line());
         mood = Some(plan.mood);
     }
+    let n = check.rounds as u64;
+    println!(
+        "\ntokens per plan: {} in / {} out (total {plan_tokens}){}",
+        plan_tokens.input / n,
+        plan_tokens.output / n,
+        if check.judge { format!("; judge total {judge_tokens}") } else { String::new() }
+    );
+    if check.judge {
+        println!(
+            "judge: {}/{} breaks passed; {introduced}/{new_sets} sets with a new-to-you song introduced one \
+             ({named_new} named it in `introduces`)",
+            check.rounds - failed,
+            check.rounds
+        );
+        // Single breaks vary from run to run: the check wants 80 % of breaks and of introductions.
+        let short = |ok: usize, of: usize| ok * 5 < of * 4;
+        if short(check.rounds - failed, check.rounds) || short(introduced, new_sets) {
+            return Err(format!(
+                "below 80 %: {failed} of {} breaks failed the judge, {introduced}/{new_sets} introductions",
+                check.rounds
+            ));
+        }
+    }
     println!("\n✓ AI DJ works");
     Ok(())
+}
+
+fn add_usage(a: listen_dj::Usage, b: listen_dj::Usage) -> listen_dj::Usage {
+    listen_dj::Usage { input: a.input + b.input, output: a.output + b.output, thought: a.thought + b.thought }
 }
 
 /// `listen --check-cd`: what CD ripping would do, without ripping — tools,

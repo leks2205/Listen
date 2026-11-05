@@ -74,8 +74,8 @@ fn main() -> iced::Result {
                 tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "warn".into()),
             )
             .init();
-        let voice = !std::env::args().any(|a| a == "--no-voice");
-        std::process::exit(listen::check::ai_dj(voice));
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(listen::check::ai_dj(listen::check::AiDjCheck::from_args(&args)));
     }
     if std::env::args().nth(1).as_deref() == Some("--check-analysis") {
         tracing_subscriber::fmt()

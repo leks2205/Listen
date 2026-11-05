@@ -116,6 +116,9 @@ pub struct PlanRequest<'a> {
     /// Candidates may end in "; mix from now: …": how the mix engine would
     /// bring them in after the song playing now.
     pub notes: &'a HashMap<String, String>,
+    /// What the listener knows of a song, by id ("new to you", "plays 12, last played 3 days ago"); from
+    /// the listening history (`familiarity::Listening::tags`). Shown for candidates.
+    pub familiar: &'a HashMap<String, String>,
     pub set_min: usize,
     pub set_max: usize,
     /// First set after switching the DJ on (the line is an intro).
@@ -157,6 +160,8 @@ pub struct Plan {
     pub mood: String,
     /// The break: one turn, or a short exchange between two hosts.
     pub turns: Vec<Turn>,
+    /// Title of the new-to-you song the break introduces (asked for when the pool has one), as answered.
+    pub introduces: String,
 }
 
 impl Plan {
@@ -188,6 +193,8 @@ struct RawPlan {
     style: String,
     #[serde(default)]
     turns: Vec<RawTurn>,
+    #[serde(default)]
+    introduces: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,6 +280,15 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
          fades, tempo or keys in your line — that's your craft, not your topic). When your line \
          airs over the start of your set's first song, keep it shorter than that song's \
          instrumental intro (\"intro … s\" in its note) so you never talk over the singer.\n\
+         What the listener knows: candidates may carry a tag from their listening history — \
+         \"new to you\" (never played here; \"new artist\" = no song of that artist either) or \
+         \"plays N, last played …\" (\"favourite\" = played a lot). Mix a few familiar songs with new \
+         ones. When your set has a new-to-you song and you speak, introduce one of them with one short \
+         story line (where it comes from, what it is about, why it fits now) so it lands; use only facts \
+         you are sure of — if you know nothing certain about it, describe its sound and mood instead. The \
+         year in a song's line is its release year: use it rather than guessing an era. \
+         Never read out play counts; \"one you haven't played in a while\" is fine. A candidate's \
+         \"from now:\" states how it fits the song playing now (keys, tempo, energy): trust it.\n\
          3. `style`: a short English direction for the voice (emotion, pace) that suits this line \
          and the persona.\n\
          4. `mood`: a few words describing the mood you are keeping.",
@@ -310,6 +326,11 @@ fn song_line(out: &mut String, song: &Song, notes: &HashMap<String, String>, mix
     if !extra.is_empty() {
         let _ = write!(out, " ({})", extra.join(", "));
     }
+}
+
+/// Some candidate is tagged new to the listener (the break should introduce one, the schema asks which).
+pub fn offers_new(r: &PlanRequest<'_>) -> bool {
+    r.candidates.iter().any(|s| r.familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")))
 }
 
 /// The per-set prompt.
@@ -403,13 +424,48 @@ pub fn user_prompt(r: &PlanRequest<'_>) -> String {
     for (i, song) in r.candidates.iter().enumerate() {
         let _ = write!(p, "{i}. ");
         song_line(&mut p, song, r.notes, true);
+        if let Some(tag) = r.familiar.get(&song.id) {
+            let _ = write!(p, " [{tag}]");
+        }
         p.push('\n');
+    }
+    let new: Vec<String> = r
+        .candidates
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| r.familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")))
+        .map(|(i, _)| i.to_string())
+        .collect();
+    if !new.is_empty() {
+        let _ = writeln!(
+            p,
+            "\nNew to the listener: candidates {}. Put at least one of them in your set. Your break MUST \
+             introduce one of THESE (not a familiar song): name it and give one short, concrete line about it \
+             — where it comes from, what it is about, or (when you aren't sure of facts) how it sounds — not \
+             just its title. Write its title in `introduces`. Keep it within the time limit.",
+            new.join(", ")
+        );
     }
     p
 }
 
 /// JSON schema of the answer (two-host personas answer in `turns`).
-pub fn response_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
+/// `new` adds the required `introduces` field (the new-to-you song the break introduces; see [`offers_new`]).
+pub fn response_schema(persona: &Persona, set_min: usize, set_max: usize, new: bool) -> Value {
+    let mut schema = base_schema(persona, set_min, set_max);
+    if new {
+        schema["properties"]["introduces"] = json!({
+            "type": "string",
+            "description": "Title of the new-to-you song your break introduces"
+        });
+        if let Some(req) = schema["required"].as_array_mut() {
+            req.push(json!("introduces"));
+        }
+    }
+    schema
+}
+
+fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
     if let Some(co) = &persona.cohost {
         return json!({
             "type": "object",
@@ -505,7 +561,12 @@ pub fn parse_plan(text: &str, pool: usize, set_min: usize, set_max: usize) -> Re
             style: raw.style.trim().to_string(),
         });
     }
-    Ok(Plan { picks, mood: raw.mood.trim().to_string(), turns })
+    Ok(Plan {
+        picks,
+        mood: raw.mood.trim().to_string(),
+        turns,
+        introduces: raw.introduces.trim().to_string(),
+    })
 }
 
 /// Strips markdown/emoji-ish leftovers and collapses whitespace.
@@ -595,6 +656,10 @@ mod tests {
             last_line: Some("Das war Teardrop."),
             candidates: &pool,
             notes: &notes,
+            familiar: &HashMap::from([
+                ("roads".to_string(), "new to you".to_string()),
+                ("angel".to_string(), "plays 4, last played 3 days ago".to_string()),
+            ]),
             set_min: 2,
             set_max: 5,
             first: false,
@@ -623,7 +688,12 @@ mod tests {
         assert!(p.contains("Glory Box – Portishead (1994, Trip-Hop) [skipped by the listener]"));
         assert!(p.contains("Your previous break was: \"Das war Teardrop.\""));
         assert!(p.contains("pick 2–2 by number"));
-        assert!(p.contains("0. Roads – Portishead (1994, Trip-Hop, 76 bpm, 4A, energy 3/10, dark)"));
+        assert!(p.contains(
+            "0. Roads – Portishead (1994, Trip-Hop, 76 bpm, 4A, energy 3/10, dark) [new to you]\n"
+        ));
+        assert!(p.contains("16-bar beat blend) [plays 4, last played 3 days ago]\n"));
+        assert!(offers_new(&req) && p.contains("New to the listener: candidates 0. Put at least one"));
+        assert!(!p.contains("- Roads – Portishead (1994, Trip-Hop, 76 bpm, 4A, energy 3/10, dark) [new"));
         assert!(
             system_instruction(&PERSONAS[0], &Show { language: "German", ..Show::default() })
                 .contains("Camelot")
@@ -637,6 +707,7 @@ mod tests {
         let sys = system_instruction(&PERSONAS[0], &Show { language: "German", ..Show::default() });
         assert!(sys.contains("mix from now") && sys.contains("never talk about the mixing"));
         assert!(sys.contains("instrumental intro"));
+        assert!(sys.contains("introduce one of them with one short story line") && sys.contains("from now:"));
         assert!(
             system_instruction(&PERSONAS[0], &Show { language: "German", ..Show::default() })
                 .contains("German")
@@ -666,6 +737,9 @@ mod tests {
         assert_eq!(plan.picks, vec![3, 1, 0]);
         assert_eq!(plan.mood, "ruhig");
         assert_eq!(plan.line(), "Das war schön.");
+        assert_eq!(plan.introduces, "");
+        let intro = parse_plan(r#"{"picks": [0], "line": "x", "introduces": " Roads "}"#, 2, 1, 2).unwrap();
+        assert_eq!(intro.introduces, "Roads");
 
         let few = parse_plan(r#"{"picks": [2], "mood": "", "line": "x", "style": ""}"#, 4, 3, 5).unwrap();
         assert_eq!(few.picks, vec![2, 0, 1]);
@@ -678,11 +752,16 @@ mod tests {
 
     #[test]
     fn schema_bounds() {
-        let s = response_schema(&PERSONAS[0], 2, 5);
+        let s = response_schema(&PERSONAS[0], 2, 5, false);
+        assert!(s["properties"].get("introduces").is_none());
+        let n = response_schema(&PERSONAS[0], 2, 5, true);
+        assert_eq!(n["properties"]["introduces"]["type"], "string");
+        assert!(n["required"].as_array().unwrap().contains(&json!("introduces")));
         assert_eq!(s["properties"]["picks"]["minItems"], 2);
         assert_eq!(s["properties"]["picks"]["maxItems"], 5);
         let duo = crate::persona::Persona::by_id("hamburg_duo");
-        let s = response_schema(duo, 2, 5);
+        let s = response_schema(duo, 2, 5, true);
+        assert!(s["required"].as_array().unwrap().contains(&json!("introduces")));
         assert_eq!(
             s["properties"]["turns"]["items"]["properties"]["speaker"]["enum"],
             json!(["Hauke", "Merle"])

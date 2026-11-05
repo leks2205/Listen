@@ -21,6 +21,10 @@ use std::time::{Duration, Instant, SystemTime};
 const KEY_ENTRY: &str = "gemini-api-key";
 /// Songs offered to the model per set.
 const POOL: usize = 40;
+/// Of those, at most this many come from the listening history (heavy rotation, not heard for a while).
+const HISTORY_SLOTS: usize = 5;
+/// History songs looked at per bucket before keeping the ones that fit the moment.
+const HISTORY_LOOKUP: usize = 30;
 /// Voice level before the user's offset (music with ReplayGain sits around here).
 const VOICE_DBFS: f32 = -17.0;
 /// Don't put the clip in the next slot this close to the end of a song
@@ -697,6 +701,16 @@ impl Listen {
             .chain(self.session_played.iter().cloned())
             .collect();
         let picks = self.dj.listener_picks.clone();
+        // What the listener knows (tags in the prompt) and favourites from the history for the pool.
+        let now_secs = listen_core::history::now_secs();
+        let listening = listen_dj::Listening::new(&self.history.entries, now_secs);
+        let (heavy, rediscover) =
+            listen_dj::familiarity::history_candidates(&self.history.entries, now_secs, HISTORY_LOOKUP);
+        let connected = |s: &Song| self.sources.contains_key(&s.server_id);
+        let from_history: (Vec<Song>, Vec<Song>) = (
+            heavy.into_iter().filter(connected).collect(),
+            rediscover.into_iter().filter(connected).collect(),
+        );
         let lookup = self.flow_lookup();
         let flow_ctx = self.flow_ctx(&lookup);
         let mix_preview = self.dj_mix_preview(mode, voice);
@@ -723,7 +737,8 @@ impl Listen {
             async move {
                 let gemini = Gemini::new(http, key)?;
                 let (pool, similar) =
-                    candidates(source, &seed, &current, &picks, &exclude, &lookup, &flow_ctx).await;
+                    candidates(source, &seed, &current, &picks, from_history, &exclude, &lookup, &flow_ctx)
+                        .await;
                 // Nothing queued by the Auto-DJ to learn from: take what it would
                 // have picked (the seed's similar songs, in order).
                 let looked_up = if seed_context.is_empty() {
@@ -750,6 +765,14 @@ impl Listen {
                     .chain(played.iter().map(|p| &p.song))
                     .filter_map(|s| lookup(s).map(|f| (s.id.clone(), f.describe())))
                     .collect();
+                // Candidates: how each fits the song playing now, as conclusions ("keys compatible").
+                let here = lookup(&current);
+                for s in &pool {
+                    if let Some(f) = lookup(s) {
+                        notes.insert(s.id.clone(), listen_dj::facts::candidate_note(&f, here.as_ref()));
+                    }
+                }
+                let familiar = listening.tags(pool.iter());
                 // How each candidate would be mixed in, so the DJ knows its craft.
                 if let Some(preview) = &mix_preview {
                     preview.annotate(&pool, &mut notes);
@@ -766,6 +789,7 @@ impl Listen {
                     last_line: last_line.as_deref(),
                     candidates: &pool,
                     notes: &notes,
+                    familiar: &familiar,
                     set_min: s.set_min.max(1) as usize,
                     set_max: s.set_max.max(s.set_min).max(1) as usize,
                     first,
@@ -1119,13 +1143,16 @@ fn lead_secs(mode: BreakMode, clip_secs: f32) -> f32 {
     }
 }
 
-/// Library songs around the seed, the listener's picks and the current song, minus anything played this
-/// session or queued (by version key); one version per song (radio edits preferred), shuffled.
+/// Library songs around the seed, the listener's picks and the current song, plus a few from the listening
+/// history (heavy rotation and forgotten favourites that fit the current song best), minus anything played
+/// this session or queued (by version key); one version per song (radio edits preferred), shuffled.
+#[allow(clippy::too_many_arguments)]
 async fn candidates(
     source: std::sync::Arc<dyn listen_source::MusicSource>,
     seed: &Song,
     current: &Song,
     picks: &[Song],
+    from_history: (Vec<Song>, Vec<Song>),
     exclude: &HashSet<String>,
     lookup: &super::flow::FlowLookup,
     flow_ctx: &listen_mix::score::FlowCtx,
@@ -1168,7 +1195,27 @@ async fn candidates(
         fused.sort();
         pool = fused.into_iter().map(|(_, i)| annotated[i].0.clone()).collect();
     }
-    pool.truncate(POOL - 6);
+    // From the history: the heavy-rotation and forgotten songs that flow best from the current one.
+    let fitting = |songs: Vec<Song>| -> Vec<Song> {
+        let songs = dedupe_versions(songs.into_iter().filter(usable).collect());
+        match lookup(current) {
+            Some(here) => {
+                let annotated: Vec<(Song, Option<listen_core::analysis::FlowFeatures>)> =
+                    songs.iter().map(|s| (s.clone(), lookup(s))).collect();
+                listen_mix::score::rank((current, Some(&here)), &annotated, flow_ctx)
+                    .into_iter()
+                    .map(|i| annotated[i].0.clone())
+                    .collect()
+            }
+            None => songs,
+        }
+    };
+    let history =
+        listen_dj::familiarity::mix_buckets(fitting(from_history.0), fitting(from_history.1), HISTORY_SLOTS);
+    let history_keys: HashSet<String> = history.iter().map(song_key).collect();
+    pool.retain(|s| !history_keys.contains(&song_key(s)));
+    pool.truncate(POOL - 6 - history.len());
+    pool.extend(history);
     let mut keys: HashSet<String> = pool.iter().map(song_key).collect();
     let random = dedupe_versions(c.unwrap_or_default().into_iter().filter(usable).collect());
     pool.extend(random.into_iter().filter(|s| keys.insert(song_key(s))).take(POOL - pool.len()));

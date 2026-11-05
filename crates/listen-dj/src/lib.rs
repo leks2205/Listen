@@ -2,12 +2,16 @@
 //! pool and writes a radio-style line for the break, one [`gemini::Gemini::plan`] call per set;
 //! [`gemini::Gemini::speak`] turns the line into a WAV clip (Gemini TTS).
 
+pub mod facts;
+pub mod familiarity;
 pub mod gemini;
+pub mod judge;
 pub mod persona;
 pub mod prompt;
 pub mod quota;
 pub mod wav;
 
+pub use familiarity::{Familiarity, Listening};
 pub use gemini::{DjError, Gemini, Usage};
 pub use persona::{PERSONAS, Persona};
 pub use prompt::{BreakMode, Plan, PlanRequest, Played, Show};

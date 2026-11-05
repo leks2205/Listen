@@ -75,7 +75,7 @@ impl Gemini {
             "response_format": {
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": prompt::response_schema(req.persona, req.set_min, req.set_max),
+                "schema": prompt::response_schema(req.persona, req.set_min, req.set_max, prompt::offers_new(req)),
             },
             // No sampling parameters: ignored since 3.6 Flash, and newer models reject them (400).
             "generation_config": { "thinking_level": "minimal" },
@@ -94,6 +94,30 @@ impl Gemini {
             plan.mood
         );
         Ok((plan, usage))
+    }
+
+    /// Grades a break (`listen --check-ai-dj`): one text call with the judge's prompt.
+    pub async fn judge(
+        &self,
+        model: &str,
+        case: &crate::judge::Case<'_>,
+    ) -> Result<(crate::judge::Verdict, Usage), DjError> {
+        let body = json!({
+            "model": model,
+            "system_instruction": crate::judge::system_instruction(),
+            "input": crate::judge::user_prompt(case),
+            "response_format": {
+                "type": "text",
+                "mime_type": "application/json",
+                "schema": crate::judge::response_schema(),
+            },
+            "generation_config": { "thinking_level": "low" },
+            "store": false,
+        });
+        let reply = self.post(&body, Duration::from_secs(60)).await?;
+        let usage = usage(&reply);
+        let text = outputs(&reply, "text").filter_map(|c| c["text"].as_str()).collect::<String>();
+        Ok((crate::judge::parse(&text).map_err(DjError::Api)?, usage))
     }
 
     /// Speaks the break (one voice, or host and co-host in one request). Returns WAV bytes.

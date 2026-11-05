@@ -36,7 +36,7 @@ These commands do their job in the terminal and exit; they never open the window
 | Command | What it does |
 |---|---|
 | `listen --check-youtube-music` | Signs in to YouTube Music the way the app does (with your browser's session) and prints what Listen sees of your library: counts and page titles only, never cookies. Also checks that a stream can be resolved with yt-dlp. |
-| `listen --check-ai-dj [--no-voice]` | Runs two AI DJ rounds against Gemini with a sample song pool and saves the spoken breaks as WAV files. `--no-voice` skips the speech. Needs a Gemini key (saved in Settings or in `LISTEN_GEMINI_API_KEY`). It uses your Gemini quota. |
+| `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt]` | Runs AI DJ rounds (2 by default) against Gemini with a sample song pool that carries play counts, "new to you" tags and tempo/key/energy, and saves the first two spoken breaks as WAV files. A second Gemini call grades every break (no invented facts, persona, language, no repeats, no talk about the mixing, a new-to-you song gets introduced); the command fails if fewer than 80 % of the breaks pass or fewer than 80 % of the sets with a new song introduce one. `--no-voice` skips the speech, `--no-judge` the grading, `--dump-prompt` prints each prompt. At the end it prints the tokens per plan. Needs a Gemini key (saved in Settings or in `LISTEN_GEMINI_API_KEY`). It uses your Gemini quota: one text request per round, one more for the grade, and up to two speech requests. |
 | `listen --check-cd` | Checks CD ripping without ripping: tools, drive and read offset, the disc's table of contents and MusicBrainz match, the music folder and Navidrome. See [CD ripping](../more/cd-ripping.md). |
 | `listen --check-analysis [N \| FILE-OR-URL \| ytm:ID \| ytm [N]]` | Analyses N random Navidrome songs (default 20) and compares the tempo with BPM tags, or prints the full analysis of one file, URL or YouTube Music song. |
 | `listen --analyze-library [--jobs N]` | Analyses every not-yet-analysed Navidrome song, N at a time (default 3), into the analysis folder, outside the app. It writes under its own name, so a running Listen does not collide with it. |
@@ -87,6 +87,7 @@ You will not need these in normal use.
 | Variable | Effect |
 |---|---|
 | `LISTEN_AI_DJ_PERSONA` | Persona id for `--check-ai-dj`. |
+| `LISTEN_AI_DJ_JUDGE_MODEL` | Text model that grades the breaks in `--check-ai-dj` (default: the AI DJ's text model). |
 | `LISTEN_AI_DJ_MODES` | Forces the order of AI DJ break types, for example `outro,intro,across,between`. |
 | `LISTEN_AUTOPLAY_ALBUM` | With `--autoplay`, plays the first search result for this album name instead of the first home album. |
 | `LISTEN_CHECK_STREAMS`, `LISTEN_CHECK_ALL`, `LISTEN_CHECK_SHAPE` | Extend `--check-youtube-music`: open N random tracks in a silent mpv, open every playlist and album instead of a few, and print the page structure of the first album that fails to open. |
