@@ -47,6 +47,17 @@ Anything unexpected (a late deck, a skip, a seek, a pause) cancels the blend and
 
 In the prototype, the two decks stayed aligned with a median error below 0.1 ms and a 95th percentile below 1 ms once the lock converged. The design target was a median of 10 ms or less. The end-to-end test (`tools/dj-e2e.sh`, described in [Tests](tests.md)) checks real blends for gaps, level and doubled beats.
 
+## Tempo matching (Android)
+
+The Android app's heart-rate mode uses `listen_mix::tempo`: a reading (heart beats or steps per minute
+from a Wear OS watch, a Bluetooth strap or the phone's step detector) is smoothed with a 30-second time
+constant and turned into a tempo target clamped to 70–180 BPM, ± 8 BPM, with half and double time
+counting (85 BPM fits 170). When the target has moved more than 5 BPM since the last time, the upcoming
+automatic queue items are re-ranked: songs within 4 BPM stay, closest first, the others make room for
+tempo-targeted Auto-DJ picks. Songs added by hand and the playing song are never touched. Music does not
+measurably change heart rate during exercise; the mode picks music that fits the effort, it is not
+training guidance.
+
 ## Where to read more
 
 The full notes explain why each choice was made, with results for the analyser benchmark, key detection, the mpv deck prototype and the end-to-end run:

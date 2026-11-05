@@ -25,6 +25,7 @@ pub mod plan;
 pub mod render;
 pub mod score;
 pub mod sequence;
+pub mod tempo;
 pub mod verify;
 
 pub use loudness::{GainDb, GainSource, Levelling, RgTag, track_gain};
