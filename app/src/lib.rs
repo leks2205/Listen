@@ -78,6 +78,9 @@ Options:
                          Run AI DJ rounds (default 2) against Gemini with a sample
                          song pool, grade every break with a judge call and save
                          the first two spoken breaks as WAV, then exit
+  --weekly-stats [--history PATH] [--now UNIX]
+                         Print the Statistics page's Last 4 weeks numbers as
+                         JSON (default: this computer's history), then exit
   --check-cd             CD ripping check without ripping: tools, drive and read
                          offset, the disc's TOC and MusicBrainz match, the music
                          folder and Navidrome, then exit

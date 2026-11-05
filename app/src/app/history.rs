@@ -19,6 +19,8 @@ pub enum HistoryMsg {
     PlayMix(usize),
     /// Statistics year (`None` = all time).
     Year(Option<i32>),
+    /// Statistics: the rolling last 4 weeks.
+    Weeks,
     ConfirmClear(bool),
     Clear,
     Export(bool),
@@ -40,6 +42,9 @@ pub struct HistoryView {
     pub mix_counts: Vec<(MixKind, usize)>,
     pub stats: history::Stats,
     pub year: Option<i32>,
+    /// Statistics shows the rolling 4 weeks instead of `year`.
+    pub weeks: bool,
+    pub weekly: listen_core::weekly::Weekly,
     pub confirm_clear: bool,
     /// "Don't record this session": never saved, off again on the next start.
     pub private: bool,
@@ -54,6 +59,7 @@ pub struct HistoryView {
 impl Listen {
     pub(super) fn history_boot(&mut self) {
         self.history_view.year = Some(history::current_year(history::local_offset()));
+        self.history_view.weeks = true;
         self.history_view.last_prune = history::now_secs();
         if let Some(days) = self.config.settings.history.retention.max_age_days()
             && let Err(e) = self.history.prune(Some(days), history::now_secs())
@@ -186,6 +192,7 @@ impl Listen {
             v.year = Some(newest);
             v.stats = history::stats(entries, v.year, tz, TOP);
         }
+        v.weekly = listen_core::weekly::weekly(entries, now, tz, TOP);
         v.mix_counts = MixKind::ALL.into_iter().map(|k| (k, mix(k).len())).collect();
         v.mix = match &self.route {
             Route::Mix(kind) => mix(*kind).iter().map(Entry::to_song).collect(),
@@ -212,7 +219,12 @@ impl Listen {
         match msg {
             HistoryMsg::PlayRecent(i) => return self.play_picked(self.history_view.recent.clone(), i),
             HistoryMsg::PlayMix(i) => return self.play_picked(self.history_view.mix.clone(), i),
+            HistoryMsg::Weeks => {
+                self.history_view.weeks = true;
+                self.refresh_history_views();
+            }
             HistoryMsg::Year(year) => {
+                self.history_view.weeks = false;
                 self.history_view.year = year;
                 self.refresh_history_views();
             }
@@ -369,6 +381,27 @@ mod tests {
         s.refresh_history_views();
         assert_eq!(s.history_view.year, Some(2020));
         assert_eq!(s.history_view.stats.plays, 2);
+    }
+
+    #[test]
+    fn statistics_open_on_the_rolling_weeks_and_years_switch_away() {
+        let mut s = rig();
+        s.history_boot();
+        s.record_play();
+        s.record_play();
+        let mut old = s.history.entries[0].clone();
+        old.ts = history::now_secs() - 10 * DAY;
+        s.history.entries.push(old);
+        s.refresh_history_views();
+        let w = &s.history_view.weekly;
+        assert!(s.history_view.weeks);
+        assert_eq!((w.this_week.plays, w.last_week.plays, w.four_weeks.plays), (2, 1, 3));
+        // The artist was heard last week already: not new.
+        assert!(w.new_artists.is_empty());
+        let _ = s.on_history(HistoryMsg::Year(None));
+        assert!(!s.history_view.weeks);
+        let _ = s.on_history(HistoryMsg::Weeks);
+        assert!(s.history_view.weeks);
     }
 
     #[test]

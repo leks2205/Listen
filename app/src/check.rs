@@ -1321,6 +1321,53 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// `listen --weekly-stats [--history PATH] [--now UNIX]`: prints the Statistics page's
+/// "Last 4 weeks" numbers as JSON (for recounting against `history.jsonl`).
+pub fn weekly_stats(args: &[String]) -> i32 {
+    use listen_core::history;
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let path = match opt("--history") {
+        Some(p) => std::path::PathBuf::from(p),
+        None => match listen_core::config::Paths::discover() {
+            Ok(p) => p.data_dir.join(history::FILE_NAME),
+            Err(e) => {
+                eprintln!("no data folder: {e}");
+                return 1;
+            }
+        },
+    };
+    let now = opt("--now").and_then(|n| n.parse().ok()).unwrap_or_else(history::now_secs);
+    let h = history::History::load(&path);
+    let w = listen_core::weekly::weekly(&h.entries, now, history::local_offset(), 10);
+    println!("{}", serde_json::to_string_pretty(&weekly_json(&w, now)).unwrap_or_default());
+    0
+}
+
+/// The rolling stats as JSON (shared by the CLI check and its test).
+pub fn weekly_json(w: &listen_core::weekly::Weekly, now: i64) -> serde_json::Value {
+    use serde_json::json;
+    let totals = |t: &listen_core::weekly::Totals| {
+        json!({"plays": t.plays, "listening_secs": t.listening_secs, "skips": t.skips,
+               "songs": t.songs, "artists": t.artists})
+    };
+    let ranked = |v: &[listen_core::history::Ranked]| -> Vec<serde_json::Value> {
+        v.iter()
+            .map(|r| json!({"name": r.name, "detail": r.detail, "plays": r.plays, "secs": r.secs, "skips": r.skips}))
+            .collect()
+    };
+    let f = &w.four_weeks;
+    json!({
+        "now": now,
+        "this_week": totals(&w.this_week),
+        "last_week": totals(&w.last_week),
+        "four_weeks": {"plays": f.plays, "listening_secs": f.listening_secs, "skips": f.skips,
+                       "songs": ranked(&f.songs), "artists": ranked(&f.artists), "albums": ranked(&f.albums)},
+        "new_artists": ranked(&w.new_artists),
+        "new_artists_total": w.new_artists_total,
+        "most_skipped": ranked(&w.most_skipped),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

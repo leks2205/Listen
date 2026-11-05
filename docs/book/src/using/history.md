@@ -58,7 +58,7 @@ Turn it on or off in any of these places; they all control the same switch:
 
 ## Statistics
 
-**Statistics** summarises what you listened to. Buttons at the top choose the period: **All time**, or one of the years that have entries. Listen starts on the current year, or on the newest year with entries if this year has none. The heading reads "Your 2026 in music" for a year and "Your listening, all time" otherwise; this is the year review.
+**Statistics** summarises what you listened to. Buttons at the top choose the period: **Last 4 weeks**, **All time**, or one of the years that have entries. Listen opens on **Last 4 weeks**; picking a year shows that year, or the newest year with entries if the chosen one has none. The heading reads "Your 2026 in music" for a year and "Your listening, all time" otherwise; this is the year review.
 
 The page shows:
 
@@ -68,6 +68,15 @@ The page shows:
 - **Top songs**, **Top artists** and **Top albums**: ten each, with play counts. Songs and albums also show their artist; the others show the listening time. Where a song, artist or album was also skipped in the period, the row adds "N skipped".
 
 The ranking breaks ties by listening time and then by name. The artist chart counts every credited artist of a play, so a song with two artists counts for both.
+
+### Last 4 weeks
+
+The rolling view compares this week with last week. The periods are rolling and end now: **this week** is the last 7 days, **last week** the 7 days before that, and **4 weeks** the last 28 days.
+
+- Four tiles for this week: **songs played**, **listening time**, **different songs** and **different artists**, each with the change against last week ("+25 % vs last week"). When last week had nothing, the tile says "nothing last week".
+- **New artists this week**: artists with a play this week and no play at all before it, most played first, with the first song you heard from them. A skip alone does not count as having heard an artist.
+- **Skipped most (4 weeks)**: the songs you skipped most often in the 28 days, with how often you skipped and played them.
+- **The last 4 weeks**: plays, listening time and skips of the 28 days, then the top songs, artists and albums of that period, counted the same way as the year view.
 
 ## Mixes
 

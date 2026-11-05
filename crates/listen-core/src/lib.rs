@@ -12,3 +12,4 @@ pub mod settings;
 pub mod substitute;
 pub mod theme;
 pub mod versions;
+pub mod weekly;

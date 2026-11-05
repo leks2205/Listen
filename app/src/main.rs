@@ -77,6 +77,10 @@ fn main() -> iced::Result {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::ai_dj(listen::check::AiDjCheck::from_args(&args)));
     }
+    if std::env::args().nth(1).as_deref() == Some("--weekly-stats") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(listen::check::weekly_stats(&args));
+    }
     if std::env::args().nth(1).as_deref() == Some("--check-analysis") {
         tracing_subscriber::fmt()
             .with_env_filter(
