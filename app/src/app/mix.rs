@@ -215,6 +215,8 @@ pub struct MixState {
     pub(super) idle_last_sent: Option<f32>,
     /// The song that came in through a mix (gets no fade-in of its own).
     pub entered_uid: Option<u64>,
+    /// That mix was an echo-out: the song's own way out may not be one too.
+    pub entered_echo: bool,
 }
 
 impl MixState {
@@ -320,6 +322,11 @@ impl Listen {
         p + ahead * self.mix.speed[deck].max(0.5)
     }
 
+    /// Song `uid` (the current one) came in through an echo-out: its own way out is no echo-out.
+    pub(super) fn came_in_by_echo(&self, uid: u64) -> bool {
+        self.mix.entered_uid == Some(uid) && self.mix.entered_echo
+    }
+
     /// Plans a mix into the next song (after a track or queue change, or a new analysis), and looks up
     /// the lyrics of both songs for the planner.
     pub(super) fn mix_consider(&mut self) -> Task<Message> {
@@ -389,6 +396,7 @@ impl Listen {
             // the copy that plays: an own-server copy of a YouTube Music song has the genre tags
             out_genres: &cur_song.genres,
             in_genres: &next_song.genres,
+            no_echo: self.came_in_by_echo(cur.uid),
         };
         let plan = if next.bridge.is_some() {
             listen_mix::bridge::plan_into(fa, fb, &ctx)
@@ -533,6 +541,7 @@ impl Listen {
             eq: [neutral; 2],
             unpause_latency: latency,
             entered_uid: self.mix.entered_uid,
+            entered_echo: self.mix.entered_echo,
             live: self.mix.live.clone(),
             in_audio_end: Some(f64::from(fb.audio_end)),
             fetch: std::mem::take(&mut self.mix.fetch),
@@ -920,6 +929,8 @@ impl Listen {
         self.decks.active = in_deck;
         std::mem::swap(&mut self.fader.last_sent, &mut self.mix.idle_last_sent);
         self.mix.entered_uid = Some(self.mix.in_uid);
+        self.mix.entered_echo =
+            self.mix.plan.as_ref().is_some_and(|p| matches!(p.kind, Kind::EchoOut { .. }));
         self.bump_token();
         self.playback.position = Duration::from_secs_f64(self.deck_now(in_deck).max(0.0));
         self.playback.duration =
@@ -972,10 +983,11 @@ impl Listen {
         let filters = self.reset_deck_filters(in_deck);
         self.mix.nudge = 0.0;
         let speed = self.set_deck_speed(in_deck, 1.0);
-        let entered = self.mix.entered_uid;
+        let (entered, entered_echo) = (self.mix.entered_uid, self.mix.entered_echo);
         self.log_phase_summary();
         self.mix = MixState {
             entered_uid: entered,
+            entered_echo,
             unpause_latency: self.mix.unpause_latency,
             pos: self.mix.pos,
             speed: self.mix.speed,
@@ -1032,6 +1044,7 @@ impl Listen {
             skip: self.mix.skip,
             // Before the handover it still marks the current song: no fade-in dip now.
             entered_uid: self.mix.entered_uid,
+            entered_echo: self.mix.entered_echo,
             unpause_latency: self.mix.unpause_latency,
             pos: self.mix.pos,
             speed: self.mix.speed,

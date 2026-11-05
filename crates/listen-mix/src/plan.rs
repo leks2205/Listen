@@ -225,6 +225,9 @@ pub struct PlanCtx<'a> {
     /// Genres of the outgoing and incoming song (empty when unknown), for the vocal edge rule.
     pub out_genres: &'a [String],
     pub in_genres: &'a [String],
+    /// The outgoing song itself came in through an echo-out: no second one in a row (a cut, a blend or a
+    /// fade instead).
+    pub no_echo: bool,
 }
 
 /// Sources whose decks play the exact file that was analysed: Navidrome (raw file) and YouTube Music
@@ -534,7 +537,7 @@ fn echo_tail(delay: f64) -> f64 {
 /// The best echo-out or cut: the outgoing stops on a phrase downbeat (or after a sung phrase / at a
 /// breakdown late in the song) and the incoming starts on its first phrase downbeat or, with lyrics, right
 /// on a verse or chorus entry. An echo suits a loud or sung bar before the stop, a cut a quiet one.
-/// Every echo-out and cut candidate, best first.
+/// Every echo-out and cut candidate, best first; no echo-outs when `ctx.no_echo`.
 fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
@@ -594,7 +597,7 @@ fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
             // The repeats need the outgoing file to run on (a deck stops at its end, echo and all).
             let room = o.t(m as f64) + echo_tail(delay) <= end + 0.05;
             for (is_echo, score) in [(true, echo), (false, cut_score)] {
-                if is_echo && !room {
+                if is_echo && (!room || ctx.no_echo) {
                     continue;
                 }
                 all.push(Hand { echo: is_echo, m, i: inb, score });
@@ -1043,7 +1046,14 @@ mod tests {
     }
 
     fn ctx(s: &Mixing, now: f64) -> PlanCtx<'_> {
-        PlanCtx { settings: s, out_position_s: now, voice_break: None, out_genres: &[], in_genres: &[] }
+        PlanCtx {
+            settings: s,
+            out_position_s: now,
+            voice_break: None,
+            out_genres: &[],
+            in_genres: &[],
+            no_echo: false,
+        }
     }
 
     fn assert_in_downbeats(f: &Features, t: f64) {
@@ -1327,6 +1337,14 @@ mod tests {
         assert_in_downbeats(&inn, p.in_mix_start_s);
         assert_eq!((p.in_speed, p.out_ramp, p.in_settle), (1.0, None, None));
 
+        // The outgoing came in through an echo-out itself: never two in a row, a cut instead (and no echo
+        // among the alternatives render-and-verify may fall back to).
+        let after_echo = PlanCtx { no_echo: true, ..ctx(&s, 30.0) };
+        let p = plan(&out, &inn, &after_echo);
+        assert_eq!(p.kind, Kind::Cut, "{}", p.reason);
+        let alts = alternatives(&out, &inn, &after_echo, 8);
+        assert!(alts.len() > 1 && alts.iter().all(|a| !matches!(a.kind, Kind::EchoOut { .. })), "{alts:?}");
+
         // Only instrumental bars in reach: a cut on a phrase downbeat.
         let long_outro = FeatBuilder::new(120.0, 96).intro(8).outro(48).build();
         let p = plan(&long_outro, &inn, &ctx(&s, 30.0));
@@ -1390,6 +1408,7 @@ mod tests {
             voice_break: Some(VoiceBreak { mode: VoiceMode::Across, clip_secs: 40.0 }),
             out_genres: &[],
             in_genres: &[],
+            no_echo: false,
         };
         let p = plan(&out, &inn, &c);
         assert!(matches!(p.kind, Kind::BeatBlend { bars: 32, .. }), "lengthened: {}", p.reason);

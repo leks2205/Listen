@@ -77,11 +77,13 @@ impl Listen {
             voice_break: None,
             out_genres: &cur_song.genres,
             in_genres: &next_song.genres,
+            no_echo: self.came_in_by_echo(cur.uid),
         };
         let direct = listen_mix::plan::plan(fa, fb, &ctx);
         let Some(why) = listen_mix::bridge::gap(fa, fb, &direct, &settings) else { return false };
+        // A pair that would echo out, cut or fade always tries a bridge; the chance thins out the others.
         let chance = f64::from(settings.bridge_chance_pct.min(100)) / 100.0;
-        if !rand::random_bool(chance) {
+        if !listen_mix::bridge::always_try(&direct) && !rand::random_bool(chance) {
             tracing::info!(
                 "bridge: “{}” → “{}” are apart ({why}); no bridge this time",
                 cur.song.title,
@@ -94,7 +96,7 @@ impl Listen {
         if feats.len() != songs.len() {
             return false;
         }
-        let Some(choice) = listen_mix::bridge::choose(fa, fb, &feats, &ctx) else {
+        let Some(choice) = listen_mix::bridge::choose(fa, fb, &direct, &feats, &ctx) else {
             tracing::info!(
                 "bridge: “{}” → “{}” are apart ({why}); none of {} analysed candidates fits",
                 cur.song.title,

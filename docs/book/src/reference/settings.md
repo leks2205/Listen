@@ -386,7 +386,7 @@ See [Song analysis](../dj/analysis.md) and [DJ transitions](../dj/transitions.md
 | Bass swap | Swaps the basslines on a downbeat so only one plays at a time. | On | `settings.mixing.bass_swap` |
 | Mix queued songs | Also mixes into songs added with Add to queue while a DJ is on. | On | `settings.mixing.mix_manual_queue` |
 | Bridge songs | Plays a short instrumental part of an analysed song between two songs that are far apart and mixes through it. | On | `settings.mixing.bridges` |
-| How often to bridge | Share of far-apart pairs that get a bridge when one fits, 10 to 100 %. | 50 | `settings.mixing.bridge_chance_pct` |
+| How often to bridge | Share of far-apart pairs that get a bridge when one fits, 10 to 100 %. Pairs that cannot be beat-matched (echo-out, cut or fade otherwise) always try one. | 50 | `settings.mixing.bridge_chance_pct` |
 
 Other keys without a row: `settings.mixing.fallback_fade_secs` (plain fade length, default 4) and `settings.analysis.threads` (0 means automatic).
 

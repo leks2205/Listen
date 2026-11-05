@@ -632,6 +632,7 @@ mod tests {
             voice_break: None,
             out_genres: &[],
             in_genres: &[],
+            no_echo: false,
         };
         let p = plan(&a, &b, &ctx);
         assert!(!matches!(p.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless), "{}", p.reason);

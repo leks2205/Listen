@@ -28,7 +28,7 @@ const OUT_PLANNED_AT_BAR: f64 = 12.0;
 const FAR_COST: f32 = 1.5;
 /// Tempo gaps above this many percent want a bridge even when they can still be beat-matched.
 const FAR_TEMPO_PCT: f64 = 4.0;
-/// Each leg must be at least this much cheaper than the direct join.
+/// Each leg must be at least this much cheaper than a direct join that can be beat-matched.
 const MIN_GAIN: f32 = 0.25;
 /// Vocal level (0..1) the blend zones of a stretch must stay under (the planner's "instrumental" bar).
 const EDGE_VOCAL: f32 = 0.4;
@@ -40,7 +40,8 @@ pub fn gap(out: &Features, inn: &Features, direct: &TransitionPlan, settings: &M
     let (o, i) = (Side::new(out)?, Side::new(inn)?);
     let (a, c) = (FlowFeatures::of(out), FlowFeatures::of(inn));
     match direct.kind {
-        Kind::Fade { .. } | Kind::Gapless => {
+        // Echo-outs and cuts too: a bridge is preferred to them, so every pair that would get one tries it.
+        Kind::Fade { .. } | Kind::Gapless | Kind::EchoOut { .. } | Kind::Cut => {
             return Some(format!("no beat-matched join ({})", direct.reason));
         }
         // Vocals that can't be kept apart are a matter of the two songs' edges, not of distance: a bridge
@@ -72,10 +73,26 @@ pub struct Choice {
     pub reason: String,
 }
 
+/// Whether a far pair tries a bridge every time, whatever the "how often" setting: when the direct join
+/// can't be beat-matched (an echo-out, cut or fade otherwise), a bridge is the preferred way; the setting
+/// only thins out bridges between pairs that would blend anyway.
+pub fn always_try(direct: &TransitionPlan) -> bool {
+    !beat_matched(direct)
+}
+
 /// Picks the bridge for `out` → `inn` from analysed `candidates`: the one whose legs both flow better than
 /// the direct join and both plan as beat-matched blends, with the best instrumental stretch. `None` if
-/// nothing fits. `ctx.out_position_s` is where `out` plays now.
-pub fn choose(out: &Features, inn: &Features, candidates: &[&Features], ctx: &PlanCtx) -> Option<Choice> {
+/// nothing fits. `ctx.out_position_s` is where `out` plays now. `direct` is the plan for the direct join:
+/// when it isn't beat-matched, legs that flow no worse than the direct pair are enough (a bridge beats an
+/// echo-out or a cut); otherwise each leg must be [`MIN_GAIN`] better.
+pub fn choose(
+    out: &Features,
+    inn: &Features,
+    direct_plan: &TransitionPlan,
+    candidates: &[&Features],
+    ctx: &PlanCtx,
+) -> Option<Choice> {
+    let min_gain = if always_try(direct_plan) { 0.0 } else { MIN_GAIN };
     let (a, c) = (FlowFeatures::of(out), FlowFeatures::of(inn));
     let flows: Vec<Option<FlowFeatures>> =
         candidates.iter().map(|f| Side::new(f).map(|_| FlowFeatures::of(f))).collect();
@@ -92,7 +109,7 @@ pub fn choose(out: &Features, inn: &Features, candidates: &[&Features], ctx: &Pl
             continue;
         }
         let (ab, bc) = (pair_cost(&a, b, &fctx), pair_cost(b, &c, &fctx));
-        if direct - ab.max(bc) < MIN_GAIN {
+        if direct - ab.max(bc) < min_gain {
             continue;
         }
         let Some((cut, cut_score)) = find_cut(f) else { continue };
@@ -238,7 +255,14 @@ mod tests {
     use listen_core::analysis::Camelot;
 
     fn ctx(s: &Mixing, now: f64) -> PlanCtx<'_> {
-        PlanCtx { settings: s, out_position_s: now, voice_break: None, out_genres: &[], in_genres: &[] }
+        PlanCtx {
+            settings: s,
+            out_position_s: now,
+            voice_break: None,
+            out_genres: &[],
+            in_genres: &[],
+            no_echo: false,
+        }
     }
 
     /// A song whose bars 32..64 are an instrumental groove (vocals elsewhere in the body).
@@ -334,7 +358,8 @@ mod tests {
             f
         };
         let cands = [&too_fast, &sung, &between];
-        let choice = choose(&a, &c, &cands, &ctx(&s, 10.0)).expect("a bridge");
+        let direct = plan(&a, &c, &ctx(&s, 10.0));
+        let choice = choose(&a, &c, &direct, &cands, &ctx(&s, 10.0)).expect("a bridge");
         assert_eq!(choice.index, 2, "{}", choice.reason);
         assert!(choice.cut.start_bar >= 32);
     }
@@ -345,6 +370,34 @@ mod tests {
         let a = FeatBuilder::new(120.0, 96).intro(8).outro(16).build();
         let c = FeatBuilder::new(133.0, 96).intro(16).outro(8).build();
         let too_fast = with_groove(150.0, 8);
-        assert_eq!(choose(&a, &c, &[&too_fast], &ctx(&s, 10.0)), None);
+        let direct = plan(&a, &c, &ctx(&s, 10.0));
+        assert_eq!(choose(&a, &c, &direct, &[&too_fast], &ctx(&s, 10.0)), None);
+    }
+    #[test]
+    fn a_pair_that_would_echo_out_tries_a_bridge_first() {
+        // Close in tempo and key, but sung up to the end and from the start: the direct join is an echo-out
+        // or cut. That counts as far apart (whatever the chance setting), and a bridge that flows no worse
+        // than the direct pair is taken.
+        let s = Mixing::default();
+        let mut a = FeatBuilder::new(124.0, 96).intro(8).outro(0).build();
+        let mut c = FeatBuilder::new(125.0, 96).intro(0).outro(8).build();
+        a.bars.vocal.iter_mut().skip(8).for_each(|v| *v = 255);
+        c.bars.vocal.iter_mut().take(88).for_each(|v| *v = 255);
+        let direct = plan(&a, &c, &ctx(&s, 10.0));
+        assert!(
+            matches!(direct.kind, Kind::EchoOut { .. } | Kind::Cut),
+            "{:?}: {}",
+            direct.kind,
+            direct.reason
+        );
+        assert!(always_try(&direct));
+        let why = gap(&a, &c, &direct, &s).expect("an echo-out pair tries a bridge");
+        assert!(why.contains("beat-matched"), "{why}");
+        let between = with_groove(124.5, 8);
+        let choice = choose(&a, &c, &direct, &[&between], &ctx(&s, 10.0)).expect("a bridge");
+        assert_eq!(choice.index, 0, "{}", choice.reason);
+        // A pair that blends anyway keeps the stricter rule and the chance setting.
+        let blend = plan(&with_groove(124.0, 8), &with_groove(124.5, 8), &ctx(&s, 10.0));
+        assert!(!always_try(&blend), "{}", blend.reason);
     }
 }

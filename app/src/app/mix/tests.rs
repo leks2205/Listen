@@ -1183,3 +1183,49 @@ fn an_echo_out_opens_the_send_before_the_start_then_rings_on_at_full_level() {
     s.forget_deck_filters(out);
     assert_eq!(s.mix.echo[out], None);
 }
+
+#[test]
+fn a_song_that_came_in_by_echo_out_does_not_echo_out_again() {
+    // 120 → 131 → 142 bpm without tempo ramps or bridges: each pair is too far apart to beat-match.
+    let (a, c, d) = (song(0, 0), song(1, 0), song(2, 0));
+    let mut s = rig(a.clone(), vec![c.clone(), d.clone()], true);
+    let m = &mut s.config.settings.mixing;
+    m.tempo_ramps = false;
+    m.bridges = false;
+    let handle = crate::app::analysis::AnalysisHandle::default();
+    let (rc, rd) = (record_at(&c, 131.0, false), record_at(&d, 142.0, false));
+    handle.insert([record_at(&a, 120.0, false), rc.clone(), rd.clone()]);
+    s.analysis = Some(handle);
+    plan(&mut s);
+    let p = plan_of(&s);
+    assert!(matches!(p.kind, Kind::EchoOut { .. }), "{:?}: {}", p.kind, p.reason);
+    let c_uid = uid(&s, 1);
+
+    run(&mut s);
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    pos(&mut s, inn, p.in_mix_start_s + 1.0);
+    pos(&mut s, out, p.handover_out_s + 0.01);
+    tick(&mut s);
+    assert_eq!(s.queue.current().unwrap().uid, c_uid);
+    assert!(s.came_in_by_echo(c_uid));
+    pos(&mut s, inn, p.in_mix_start_s + p.blend_s + 1.0);
+    pos(&mut s, out, p.out_stop_s + 0.01);
+    tick(&mut s);
+
+    // The way out of C is planned at once: by itself it would echo out too, after this one it doesn't.
+    let (fc, fd) = (rc.features().unwrap(), rd.features().unwrap());
+    let mixing = s.config.settings.mixing.clone();
+    let ctx = listen_mix::plan::PlanCtx {
+        settings: &mixing,
+        out_position_s: 0.0,
+        voice_break: None,
+        out_genres: &[],
+        in_genres: &[],
+        no_echo: false,
+    };
+    let alone = listen_mix::plan::plan(fc, fd, &ctx);
+    assert!(matches!(alone.kind, Kind::EchoOut { .. }), "{:?}: {}", alone.kind, alone.reason);
+    assert_eq!(s.mix.pair(), Some((c_uid, uid(&s, 1))));
+    let p2 = plan_of(&s);
+    assert!(!matches!(p2.kind, Kind::EchoOut { .. }), "two echo-outs in a row: {}", p2.reason);
+}

@@ -56,6 +56,7 @@ impl MixPreview {
                 voice_break: None,
                 out_genres: &self.from.genres,
                 in_genres: &song.genres,
+                no_echo: false,
             };
             let plan = listen_mix::plan::plan(out, inn, &ctx);
             let phrase = format!(

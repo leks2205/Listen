@@ -25,7 +25,7 @@ Listen looks at both songs and picks the best way to join them. It prefers to st
 | **Long blend** | A beat-matched crossfade over 8 or 16 bars (see **Long blends**), used where both songs have instrumental parts. With **Bass swap** on, the bass of the outgoing song is cut halfway through, exactly on a downbeat, while the incoming bass comes in, so the two basslines never play together. |
 | **Short blend** | A beat-matched crossfade of a few bars, placed so the vocals do not overlap. |
 | **Filter-out** | The outgoing song is filtered away (its low end disappears first) while the next one starts on a downbeat. |
-| **Echo-out** | The last beat of a phrase of the outgoing song is repeated four times, each repeat half as loud and thinner, while the next song starts on the downbeat right after. The two songs never play their own sound at the same time, so the tempos need not match and the voices don't clash. Used when both edges are sung, or the tempos are too far apart for a blend, and the outgoing song ends a phrase loudly or with a sung line. |
+| **Echo-out** | The last beat of a phrase of the outgoing song is repeated four times, each repeat half as loud and thinner, while the next song starts on the downbeat right after. The two songs never play their own sound at the same time, so the tempos need not match and the voices don't clash. Used when both edges are sung, or the tempos are too far apart for a blend, and the outgoing song ends a phrase loudly or with a sung line. A bridge song is tried first (see [Bridge songs](#bridge-songs)), and a song that came in with an echo-out never leaves with one: its way out is a cut, a blend or a fade. |
 | **Cut** | A hard switch on a phrase downbeat (with a few milliseconds of fade so it doesn't click), each song at its own tempo. Used in the same cases as an echo-out when the bar before is quiet. |
 | **Fade** | A plain crossfade, used when one song has no steady beat, or while the AI DJ talks over the join. |
 | **Gapless** | No mixing at all. |
@@ -57,12 +57,12 @@ Some pairs a DJ picked do not join well: the tempos are too far apart to beat-ma
 With **Bridge songs** on, Listen does the same with a song that has already been analysed:
 
 1. When the next song is far from the current one (no beat-matched join, a tempo gap of more than 4 %, clashing keys, or a large difference in sound), Listen looks for a bridge among your analysed songs: first the ones the DJs were recently offered, then your listening history, then every other analysed YouTube Music song. Only a few songs have a mostly instrumental stretch at a tempo between the two, so the whole collection is searched. Songs in the queue and songs played this session are not used.
-2. The bridge must be closer to both songs than they are to each other, and both joins, into the bridge and out of it, must be beat-matched blends.
+2. The bridge must be closer to both songs than they are to each other, and both joins, into the bridge and out of it, must be beat-matched blends. When the two songs could only be joined with an echo-out, a cut or a fade, a bridge that is no further from either song than they are from each other is enough: a beat-matched way through a third song is preferred to those.
 3. Only a short part of the bridge plays: 24 bars (about 45 seconds at 125 BPM) that start on a phrase and have no singing where they are blended, usually an instrumental groove, a break or a long intro. Listen blends into it with a short blend of up to 8 bars, glides it back to its own tempo, lets it play alone for a few bars, and blends out of it into the next song.
 
 The bridge shows in the queue with the tag **Bridge**. It does not count as played: it is not scrobbled and not added to the listening history. If its mix cannot be prepared, the bridge is removed and the two songs join as before; if nothing mixes out of it, the next song starts when its part ends.
 
-**How often to bridge** sets the share of far-apart pairs that get a bridge, so it stays an occasional move rather than a pattern.
+**How often to bridge** sets the share of far-apart pairs that get a bridge, so it stays an occasional move rather than a pattern. It applies only to pairs that could still be blended directly; a pair that would otherwise get an echo-out, a cut or a fade tries a bridge every time.
 
 ## Order by flow
 
@@ -89,7 +89,7 @@ Everything is in **Settings → Playback → DJ transitions & song analysis**.
 | **Bass swap** | On | on/off | Swap the basslines on a downbeat so only one plays at a time. |
 | **Mix queued songs** | On | on/off | Also mix into songs you added with **Add to queue** while a DJ is on. |
 | **Bridge songs** | On | on/off | Put a short part of an analysed song between two songs that are far apart and mix through it (see [Bridge songs](#bridge-songs)). |
-| **How often to bridge** | 50 % | 10 to 100 % | Share of far-apart pairs that get a bridge when one fits. |
+| **How often to bridge** | 50 % | 10 to 100 % | Share of far-apart pairs that get a bridge when one fits. Pairs that cannot be beat-matched always try one. |
 
 One more value has no switch in the window. Set it in the `[mixing]` section of the settings file (see [Files and folders](../reference/files.md)) or with the `set_settings` [MCP tool](../reference/mcp-tools.md):
 

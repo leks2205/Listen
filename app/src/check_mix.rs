@@ -81,6 +81,7 @@ async fn check(
         voice_break: None,
         out_genres: &[],
         in_genres: &[],
+        no_echo: false,
     };
     // As the player plans: render-and-verify on the analysis curves, with the levelling gains.
     let p = &config.settings.playback;

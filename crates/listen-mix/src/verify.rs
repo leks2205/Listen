@@ -443,7 +443,14 @@ mod tests {
     use listen_core::settings::Mixing;
 
     fn ctx(s: &Mixing) -> PlanCtx<'_> {
-        PlanCtx { settings: s, out_position_s: 0.0, voice_break: None, out_genres: &[], in_genres: &[] }
+        PlanCtx {
+            settings: s,
+            out_position_s: 0.0,
+            voice_break: None,
+            out_genres: &[],
+            in_genres: &[],
+            no_echo: false,
+        }
     }
 
     /// Sung from the first bar to the last, with synced-lyric cues (no line ends unless set).
