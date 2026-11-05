@@ -71,7 +71,14 @@ impl Listen {
     /// The radio of the (single) album or artist, played / queued as `how`.
     fn radio_target(&mut self, target: MenuTarget, how: PlayHow) -> Task<Message> {
         let play = how.action();
-        let done = move |r| Message::Menu(MenuMsg::Songs(play.clone(), r));
+        // Radio is an automatic pick: snoozed and "Not interested" songs stay out.
+        let blocked = self.auto_blocked();
+        let done = move |r: Result<Vec<listen_core::model::Song>, String>| {
+            let r = r.map(|v| {
+                v.into_iter().filter(|s| !blocked.contains(&listen_core::versions::song_key(s))).collect()
+            });
+            Message::Menu(MenuMsg::Songs(play.clone(), r))
+        };
         match target {
             MenuTarget::Albums(albums) if albums.len() == 1 => {
                 let album = albums[0].clone();

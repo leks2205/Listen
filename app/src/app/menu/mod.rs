@@ -210,6 +210,12 @@ pub enum MenuAction {
     InsertBefore(u64),
     CopyLink(String),
     RemoveFromHistory,
+    /// Keep the songs out of the DJs' picks for 30 days.
+    Snooze,
+    /// Keep the songs out of the DJs' picks for good (YouTube Music: also a dislike).
+    NotInterested,
+    /// Hide (`true`) or show again the songs in the playlist with this id.
+    HideInPlaylist(String, bool),
     /// Open the page of the (single) target.
     Open,
     /// Download for offline play.
@@ -547,6 +553,15 @@ impl Listen {
                 }
                 if removed { self.refresh_next() } else { Task::none() }
             }
+            (MenuAction::Snooze, MenuTarget::Songs { songs, .. }) => {
+                self.on_exclude(super::exclude::ExcludeMsg::Snooze(songs))
+            }
+            (MenuAction::NotInterested, MenuTarget::Songs { songs, .. }) => {
+                self.on_exclude(super::exclude::ExcludeMsg::NotInterested(songs))
+            }
+            (MenuAction::HideInPlaylist(id, on), MenuTarget::Songs { songs, .. }) => {
+                self.on_exclude(super::exclude::ExcludeMsg::HideIn(id, songs, on))
+            }
             (MenuAction::RemoveFromHistory, MenuTarget::Songs { mut history_entries, .. }) => {
                 // Highest index first: each removal shifts the ones after it.
                 history_entries.sort_unstable_by(|a, b| b.cmp(a));
@@ -610,7 +625,8 @@ impl Listen {
         // (source, what to fetch from it)
         enum Fetch {
             Album(String),
-            Playlist(String),
+            /// (id, the song keys hidden in it)
+            Playlist(String, std::collections::HashSet<String>),
             Artist(Box<listen_core::model::Artist>),
             Genre(String),
             Folder(String),
@@ -621,9 +637,25 @@ impl Listen {
             MenuTarget::Albums(v) => work.extend(
                 v.iter().filter_map(|a| Some((source_of(&a.server_id)?, Fetch::Album(a.id.clone())))),
             ),
-            MenuTarget::Playlists(v) => work.extend(
-                v.iter().filter_map(|p| Some((source_of(&p.server_id)?, Fetch::Playlist(p.id.clone())))),
-            ),
+            MenuTarget::Playlists(v) => work.extend(v.iter().filter_map(|p| {
+                // Playing a playlist leaves out the songs hidden in it (copying it does not).
+                let plays = matches!(
+                    action,
+                    MenuAction::Play
+                        | MenuAction::PlayDefault
+                        | MenuAction::Shuffle
+                        | MenuAction::PlaySmooth
+                        | MenuAction::PlayNext
+                        | MenuAction::AddToQueue
+                        | MenuAction::PlayNextShuffled
+                        | MenuAction::AddToQueueShuffled
+                );
+                let hidden: std::collections::HashSet<String> = match plays {
+                    true => self.exclusions.set.hidden_keys(&p.id).cloned().collect(),
+                    false => Default::default(),
+                };
+                Some((source_of(&p.server_id)?, Fetch::Playlist(p.id.clone(), hidden)))
+            })),
             MenuTarget::Artists(v) => work.extend(
                 v.iter().filter_map(|a| Some((source_of(&a.server_id)?, Fetch::Artist(Box::new(a.clone()))))),
             ),
@@ -643,7 +675,14 @@ impl Listen {
                 for (source, fetch) in work {
                     match fetch {
                         Fetch::Album(id) => songs.extend(source.album(&id).await.map_err(err)?.songs),
-                        Fetch::Playlist(id) => songs.extend(source.playlist_songs(&id).await.map_err(err)?),
+                        Fetch::Playlist(id, hidden) => songs.extend(
+                            source
+                                .playlist_songs(&id)
+                                .await
+                                .map_err(err)?
+                                .into_iter()
+                                .filter(|s| !hidden.contains(&listen_core::versions::song_key(s))),
+                        ),
                         Fetch::Artist(a) => songs.extend(source.artist_songs(&a).await.map_err(err)?),
                         Fetch::Genre(g) => {
                             songs.extend(super::library_extra::genre_songs(&*source, &g).await?)

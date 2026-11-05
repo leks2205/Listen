@@ -166,6 +166,14 @@ impl Listen {
         let tz = history::local_offset();
         let now = history::now_secs();
         let entries = &self.history.entries;
+        // The mixes are automatic picks: snoozed and "Not interested" songs stay out.
+        let blocked = self.auto_blocked();
+        let mix = |kind| {
+            let mut m = history::mix(entries, kind, now, tz, MIX_LIMIT + blocked.len());
+            m.retain(|e| !blocked.contains(&listen_core::versions::song_key(&e.to_song())));
+            m.truncate(MIX_LIMIT);
+            m
+        };
         let v = &mut self.history_view;
         let recent = self.history.recent(RECENT_LIMIT);
         v.recent_idx = recent.iter().map(|(i, _)| *i).collect();
@@ -178,14 +186,9 @@ impl Listen {
             v.year = Some(newest);
             v.stats = history::stats(entries, v.year, tz, TOP);
         }
-        v.mix_counts = MixKind::ALL
-            .into_iter()
-            .map(|k| (k, history::mix(entries, k, now, tz, MIX_LIMIT).len()))
-            .collect();
+        v.mix_counts = MixKind::ALL.into_iter().map(|k| (k, mix(k).len())).collect();
         v.mix = match &self.route {
-            Route::Mix(kind) => {
-                history::mix(entries, *kind, now, tz, MIX_LIMIT).iter().map(Entry::to_song).collect()
-            }
+            Route::Mix(kind) => mix(*kind).iter().map(Entry::to_song).collect(),
             _ => Vec::new(),
         };
     }
@@ -481,6 +484,12 @@ mod tests {
         // Ends below the scrobble point (seeked to the end), then the user starts another song.
         let mut s = playing_at(10);
         let _ = s.update(Message::Deck(0, PlayerMsg::Event(PlayerEvent::Ended)));
+        let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
+        let _ = s.update(Message::PlayQueueItem(uid));
+        assert!(s.history.entries.is_empty(), "{:?}", s.history.entries);
+        // Same after Stop.
+        let mut s = playing_at(10);
+        let _ = s.update(Message::Stop);
         let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
         let _ = s.update(Message::PlayQueueItem(uid));
         assert!(s.history.entries.is_empty(), "{:?}", s.history.entries);

@@ -796,6 +796,11 @@ pub trait MusicSource: Send + Sync {
 
     // User data
     async fn set_favorite(&self, song_ids: &[String], favorite: bool) -> Result<()>;
+    /// Marks songs as disliked (`true`) or takes the dislike back (YouTube Music; "Not interested").
+    async fn set_disliked(&self, song_ids: &[String], disliked: bool) -> Result<()> {
+        let _ = (song_ids, disliked);
+        Err(SourceError::Unsupported)
+    }
     /// Favourites songs, albums or artists; non-song kinds need [`Capabilities::FAVORITE_ITEMS`].
     async fn set_favorite_items(&self, kind: ItemKind, ids: &[String], favorite: bool) -> Result<()> {
         match kind {

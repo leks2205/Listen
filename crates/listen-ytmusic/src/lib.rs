@@ -1405,6 +1405,20 @@ impl MusicSource for YouTubeMusic {
         Ok(())
     }
 
+    async fn set_disliked(&self, song_ids: &[String], disliked: bool) -> Result<()> {
+        if self.guest {
+            return Err(SourceError::Unsupported);
+        }
+        let status = if disliked { LikeStatus::Disliked } else { LikeStatus::Indifferent };
+        // A liked song that gets disliked leaves Liked Music.
+        self.forget_playlist(LIKED_PLAYLIST).await;
+        *self.songs.lock().await = None;
+        for id in song_ids {
+            yt!(self, yt => yt.rate_song(VideoID::from_raw(id.clone()), status.clone()).await)?;
+        }
+        Ok(())
+    }
+
     /// Songs are liked; albums are saved to the library (their audio playlist
     /// is liked); artists are subscribed to.
     async fn set_favorite_items(&self, kind: ItemKind, ids: &[String], favorite: bool) -> Result<()> {

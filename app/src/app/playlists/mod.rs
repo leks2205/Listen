@@ -539,7 +539,10 @@ impl Listen {
     /// Plays or queues the playlist per the header buttons.
     fn playlist_play(&mut self, kind: PagePlay) -> Task<Message> {
         self.playlist_page.play_menu = false;
-        let mut songs = self.playlist_rows(&self.playlist_page.id.clone().unwrap_or_default()).to_vec();
+        let id = self.playlist_page.id.clone().unwrap_or_default();
+        let songs = self.playlist_rows(&id).to_vec();
+        // Songs hidden in this playlist do not play with it.
+        let (mut songs, _) = self.without_hidden(&id, songs, 0, false);
         if songs.is_empty() {
             return Task::none();
         }

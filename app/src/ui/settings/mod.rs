@@ -176,6 +176,7 @@ fn tab_sections(state: &Listen, tab: SettingsTab) -> Vec<Element<'_, Message>> {
         SettingsTab::Advanced => {
             v.push(advanced::updates(state));
             v.push(advanced::history(state));
+            v.push(advanced::hidden_songs(state));
             if cfg!(target_os = "linux") && !state.demo {
                 v.push(advanced::ripping(state));
             }

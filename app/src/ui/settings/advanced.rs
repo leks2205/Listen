@@ -278,6 +278,82 @@ pub(super) fn history(state: &Listen) -> Element<'_, Message> {
     section(state, "Listening history", rows)
 }
 
+/// Settings → Hidden songs: snoozed, "Not interested" and hidden-in-a-playlist songs, each with Undo.
+pub(super) fn hidden_songs(state: &Listen) -> Element<'_, Message> {
+    use crate::app::exclude::ExcludeMsg;
+    let t = state.tokens;
+    let now = listen_core::history::now_secs();
+    let set = &state.exclusions.set;
+    let playlist_name = |id: &str| {
+        state
+            .library
+            .playlists
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| id.to_string())
+    };
+    // (title — artist, what, undo)
+    let mut items: Vec<(String, String, Message)> = Vec::new();
+    for (key, s) in set.snoozed.iter().filter(|(_, s)| s.until > now) {
+        let (title, artist) = state.exclude_name(key);
+        let days = ((s.until - now) as f64 / 86_400.0).ceil() as i64;
+        let what = crate::i18n::trf("Snoozed, {} days left", &[&days]);
+        items.push((song_line(&title, &artist), what, Message::Exclude(ExcludeMsg::Unsnooze(key.clone()))));
+    }
+    for key in set.not_interested.iter().filter(|(_, m)| m.on).map(|(k, _)| k) {
+        let (title, artist) = state.exclude_name(key);
+        let what = crate::i18n::tr("Not interested").to_string();
+        items.push((song_line(&title, &artist), what, Message::Exclude(ExcludeMsg::Restore(key.clone()))));
+    }
+    for (id, marks) in &set.hidden_in {
+        for key in marks.iter().filter(|(_, m)| m.on).map(|(k, _)| k) {
+            let (title, artist) = state.exclude_name(key);
+            let what = crate::i18n::trf("Hidden in “{}”", &[&playlist_name(id)]);
+            let undo = Message::Exclude(ExcludeMsg::Unhide(id.clone(), key.clone()));
+            items.push((song_line(&title, &artist), what, undo));
+        }
+    }
+    let list: Element<'_, Message> = if items.is_empty() {
+        label("None", metrics::font_md(), t.muted).into()
+    } else {
+        column(items.into_iter().map(|(song, what, undo)| {
+            row![
+                column![
+                    label(song, metrics::font_md(), t.foreground),
+                    label(what, metrics::font_sm(), t.muted)
+                ]
+                .width(iced::Length::Fixed(320.0)),
+                small(state, "Undo", Some(undo)),
+            ]
+            .spacing(metrics::space_sm())
+            .align_y(Alignment::Center)
+            .into()
+        }))
+        .spacing(metrics::space_sm())
+        .into()
+    };
+    let rows = vec![
+        line(
+            state,
+            "Hidden songs",
+            "Songs you snoozed (30 days), marked Not interested or hid in a playlist. The DJs, radio and the mixes leave them out; they still play when you pick them yourself. Undo brings a song back.",
+            list,
+        ),
+        line(
+            state,
+            "Dislike on YouTube Music",
+            "Not interested on a YouTube Music song also dislikes it there, so YouTube Music's own suggestions learn from it. Undo takes the dislike back.",
+            switch(state.config.settings.history.dislike_not_interested, Setting::HistoryDislike),
+        ),
+    ];
+    section(state, "Hidden songs", rows)
+}
+
+fn song_line(title: &str, artist: &str) -> String {
+    if artist.is_empty() { title.to_string() } else { format!("{title} — {artist}") }
+}
+
 fn small<'a>(state: &Listen, text: &'a str, msg: Option<Message>) -> Element<'a, Message> {
     let t = state.tokens;
     button(label_w(text, metrics::font_md(), t.foreground, Weight::Semibold))

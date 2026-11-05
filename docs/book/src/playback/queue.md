@@ -150,7 +150,19 @@ Dragging a row into the Up Next block adds it to the block; dragging it elsewher
 
 ### Player filters
 
-**Settings → Playback → Player filters** keeps unwanted songs out of the queue. Press **Add rule**, then choose a field (title, artist, genre, year, play count, rating and others), an operator (for example **contains**, **is**, **starts with**, **matches regex**) and a value. A song that matches an active rule is left out when you play or queue it, and Listen says how many were kept out. Songs the Auto-DJ and AI DJ add are not filtered. Each rule has an on/off switch.
+**Settings → Playback → Player filters** keeps unwanted songs out of the queue. Press **Add rule**, then choose a field (title, artist, genre, year, play count, rating and others), an operator (for example **contains**, **is**, **starts with**, **matches regex**) and a value. A song that matches an active rule is left out when you play or queue it, and Listen says how many were kept out. Songs the Auto-DJ and AI DJ add are not filtered by these rules (use **Snooze** or **Not interested** for that, below). Each rule has an on/off switch.
+
+### Snooze, Not interested and Hide in this playlist
+
+The menu of a song (in a list, in the queue and in the player bar) has three entries that keep it out of what Listen picks for you:
+
+- **Snooze 30 days**: for 30 days the Auto-DJ, the AI DJ, song, album and artist radio, DJ bridges and the mixes (Daylist, Heavy rotation, Rediscover, All-time favourites) leave the song out. Then it comes back by itself.
+- **Not interested**: the same, for good. For a YouTube Music song it also sends a dislike to YouTube Music, so its own suggestions learn from it (switch this off in **Settings → Advanced → Hidden songs → Dislike on YouTube Music**).
+- **Hide in this playlist** (only in a playlist): the song is left out when you play that playlist; other playlists, albums and the DJs are not affected. **Show in this playlist** takes it back.
+
+Every version of a song counts (the single, the album track, the music video). A song you pick yourself always plays, even when it is snoozed, not wanted or hidden; double-clicking a hidden song in its playlist plays it. Upcoming songs a DJ already queued go from the queue when you snooze or reject them; the song playing now plays on.
+
+**Settings → Advanced → Hidden songs** lists every snoozed (with the days left), not wanted and hidden song with an **Undo** button.
 
 ## Queue restore
 

@@ -50,6 +50,27 @@ pub fn library_block(cx: &Ctx, songs: &[Song], out: &mut Vec<Entry>) {
     out.push(entry::rating_submenu(cx, rating).when(rateable));
     out.push(Entry::divider());
 
+    // Keep songs out of the DJs' picks (they still play when picked by hand), or out of this playlist.
+    out.push(Entry::action(Icon::LuTimer, "Snooze 30 days", MenuAction::Snooze));
+    out.push(Entry::action(Icon::RiSubtractLine, "Not interested", MenuAction::NotInterested));
+    if let Some(crate::app::list::ListId::Playlist(id)) = cx.list {
+        let hidden =
+            songs.iter().all(|s| state.exclusions.set.is_hidden_in(id, &listen_core::versions::song_key(s)));
+        out.push(match hidden {
+            false => Entry::action(
+                Icon::LuX,
+                "Hide in this playlist",
+                MenuAction::HideInPlaylist(id.clone(), true),
+            ),
+            true => Entry::action(
+                Icon::LuPlus,
+                "Show in this playlist",
+                MenuAction::HideInPlaylist(id.clone(), false),
+            ),
+        });
+    }
+    out.push(Entry::divider());
+
     // Download / share (Listen: offline copy, YouTube Music link).
     if songs.iter().all(|s| state.downloaded(s)) {
         out.push(Entry::action(Icon::LuTrash2, "Remove download", MenuAction::RemoveDownload));

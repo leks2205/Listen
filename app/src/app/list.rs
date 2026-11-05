@@ -1003,7 +1003,12 @@ impl Listen {
                         let from = index.saturating_sub(50);
                         let to = (index + 51).min(songs.len());
                         let window = songs[from..to].to_vec();
-                        self.play_picked(window, index - from)
+                        // In a playlist, the songs hidden in it are left out (the clicked one plays).
+                        let (window, start) = match id {
+                            ListId::Playlist(p) => self.without_hidden(p, window, index - from, true),
+                            _ => (window, index - from),
+                        };
+                        self.play_picked(window, start)
                     }
                     other => {
                         let song = songs[index].clone();

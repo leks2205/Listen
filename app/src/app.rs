@@ -33,6 +33,7 @@ pub mod decks;
 mod dj;
 mod dj_mix;
 pub mod dlna;
+pub mod exclude;
 mod fade;
 mod flow;
 pub mod fullscreen_state;
@@ -436,6 +437,8 @@ pub struct Listen {
     pub paths: Option<Paths>,
     pub history: listen_core::history::History,
     pub history_view: history::HistoryView,
+    /// Snoozed, not wanted and hidden-in-a-playlist songs.
+    pub exclusions: exclude::ExcludeState,
     /// What the other devices play, and taking the music over from them.
     pub handoff: handoff::Handoff,
     pub adv: advanced::AdvancedState,
@@ -928,6 +931,7 @@ pub enum Message {
     /// DJ transitions.
     Mix(mix::MixMsg),
     History(history::HistoryMsg),
+    Exclude(exclude::ExcludeMsg),
     Handoff(handoff::HandoffMsg),
     Radio(radio::RadioMsg),
     Dlna(dlna::DlnaMsg),
@@ -1001,8 +1005,15 @@ impl Listen {
         );
         let substitutes = substitute::Substitutes::default();
         substitutes.set_enabled(config.settings.playback.prefer_own_servers);
+        let exclusions = exclude::ExcludeState::load(
+            paths
+                .as_ref()
+                .filter(|_| !(args.demo || args.login.is_some() || args.ephemeral))
+                .map(|p| p.data_dir.as_path()),
+        );
         let mut state = Self {
             history,
+            exclusions,
             history_view: history::HistoryView::default(),
             handoff: handoff::Handoff::default(),
             adv: advanced::AdvancedState::default(),
@@ -2228,6 +2239,8 @@ impl Listen {
             Ok(AutoDjFill { songs, similar, seed }) => {
                 use listen_core::versions::{dedupe_versions, song_key};
                 self.bridge_pool_add(&songs);
+                // Snoozed and "Not interested" songs never come back through the Auto-DJ.
+                let blocked = self.auto_blocked();
                 let s = &self.config.settings.auto_dj;
                 let queued: std::collections::HashSet<String> =
                     self.queue.iter().map(|i| song_key(&i.song)).collect();
@@ -2236,7 +2249,10 @@ impl Listen {
                 // that already played this session.
                 for song in dedupe_versions(songs) {
                     let key = song_key(&song);
-                    if !self.session_played.contains(&key) && (s.allow_duplicates || !queued.contains(&key)) {
+                    if !self.session_played.contains(&key)
+                        && !blocked.contains(&key)
+                        && (s.allow_duplicates || !queued.contains(&key))
+                    {
                         picked.push(song);
                     }
                 }
@@ -3190,6 +3206,8 @@ impl Listen {
             }
             Message::Stop => {
                 self.playback.position = Duration::ZERO;
+                // Stopped by hand: starting another song afterwards is not a skip of this one.
+                self.playback.last_pos = None;
                 if self.mock_playback() {
                     self.playback.playing = false;
                     return Task::none();
@@ -3957,6 +3975,7 @@ impl Listen {
                 self.refresh_genres_view();
             }
             Message::History(m) => return self.on_history(m),
+            Message::Exclude(m) => return self.on_exclude(m),
             Message::Handoff(m) => return self.on_handoff(m),
             Message::Radio(m) => return self.on_radio(m),
             Message::Dlna(m) => return self.on_dlna(m),

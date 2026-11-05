@@ -52,6 +52,8 @@ pub struct HistorySettings {
     /// Show what the other devices play and take it over (Play here, or a new audio output) through
     /// the same listen-server (`docs/handoff.md`).
     pub handoff: bool,
+    /// "Not interested" on a YouTube Music song also dislikes it there (taking it back removes the dislike).
+    pub dislike_not_interested: bool,
 }
 
 impl Default for HistorySettings {
@@ -62,6 +64,7 @@ impl Default for HistorySettings {
             sync: false,
             sync_server: String::new(),
             handoff: true,
+            dislike_not_interested: true,
         }
     }
 }

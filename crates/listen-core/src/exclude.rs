@@ -104,6 +104,22 @@ impl Exclusions {
         !self.allows_key(key, Ctx::Playlist { id: playlist })
     }
 
+    /// Song keys automatic picks leave out at `now` (running snoozes and "Not interested").
+    pub fn blocked_keys(&self, now: i64) -> impl Iterator<Item = &String> {
+        let snoozed = self.snoozed.iter().filter(move |(_, s)| s.until > now).map(|(k, _)| k);
+        snoozed.chain(self.not_interested.iter().filter(|(_, m)| m.on).map(|(k, _)| k))
+    }
+
+    /// Song keys hidden in the playlist `id`.
+    pub fn hidden_keys(&self, id: &str) -> impl Iterator<Item = &String> {
+        self.hidden_in.get(id).into_iter().flatten().filter(|(_, m)| m.on).map(|(k, _)| k)
+    }
+
+    /// Whether anything is set (a running snooze, "Not interested" or a hidden song) at `now`.
+    pub fn any_set(&self, now: i64) -> bool {
+        self.blocked_keys(now).next().is_some() || self.hidden_in.values().flatten().any(|(_, m)| m.on)
+    }
+
     /// Snoozes `song` for [`SNOOZE_DAYS`] from `now`.
     pub fn snooze(&mut self, song: &Song, now: i64) {
         self.snoozed.insert(song_key(song), Snooze { until: now + SNOOZE_DAYS * DAY, at: now });
@@ -232,6 +248,21 @@ mod tests {
         assert!(!x.allows(&a, Ctx::Playlist { id: "p" }));
         assert!(x.allows(&a, Ctx::Playlist { id: "q" }) && x.allows(&a, Ctx::Auto { now: NOW }));
         assert!(x.is_hidden_in("p", &k));
+        assert_eq!(x.hidden_keys("p").collect::<Vec<_>>(), [&k]);
+        assert_eq!(x.hidden_keys("q").count(), 0);
+    }
+
+    #[test]
+    fn blocked_keys_are_running_snoozes_and_not_interested() {
+        let mut x = Exclusions::default();
+        assert!(!x.any_set(NOW));
+        x.snooze(&song("S", "A"), NOW);
+        x.set_not_interested("n|a", true, NOW);
+        x.set_not_interested("c|a", false, NOW);
+        let keys: std::collections::BTreeSet<_> = x.blocked_keys(NOW).cloned().collect();
+        assert_eq!(keys, [song_key(&song("S", "A")), "n|a".to_string()].into());
+        assert_eq!(x.blocked_keys(NOW + 31 * DAY).count(), 1, "the snooze ran out");
+        assert!(x.any_set(NOW));
     }
 
     #[test]

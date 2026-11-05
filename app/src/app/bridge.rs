@@ -126,6 +126,7 @@ impl Listen {
         let mut skip: HashSet<String> = self.queue.iter().map(|i| song_key(&i.song)).collect();
         skip.extend(self.queue.iter().map(|i| listen_analysis::record_key(&i.song)));
         skip.extend(self.session_played.iter().cloned());
+        skip.extend(self.auto_blocked());
         let known = self
             .bridge
             .pool

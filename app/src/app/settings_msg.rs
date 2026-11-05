@@ -35,6 +35,7 @@ pub enum Setting {
     HistorySync(bool),
     HistorySyncServer(String),
     HistoryHandoff(bool),
+    HistoryDislike(bool),
     TrackFade(f32),
     FadeOnPause(bool),
     PreferOwnServers(bool),
@@ -173,6 +174,7 @@ impl Listen {
             Setting::HistorySync(v) => s.history.sync = v,
             Setting::HistorySyncServer(v) => s.history.sync_server = v,
             Setting::HistoryHandoff(v) => s.history.handoff = v,
+            Setting::HistoryDislike(v) => s.history.dislike_not_interested = v,
             Setting::HistoryPrivate(v) => {
                 return Task::done(Message::Integrations(super::integrations::IntegrationsMsg::SetPrivate(
                     v,

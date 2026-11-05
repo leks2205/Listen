@@ -701,6 +701,7 @@ impl Listen {
             .map(|i| song_key(&i.song))
             .chain(self.dj.history.iter().cloned())
             .chain(self.session_played.iter().cloned())
+            .chain(self.auto_blocked())
             .collect();
         let picks = self.dj.listener_picks.clone();
         // What the listener knows (tags in the prompt) and favourites from the history for the pool.

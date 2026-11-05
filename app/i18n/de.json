@@ -2629,5 +2629,21 @@
 "Loud": "Laut",
 "Play every song equally loud: Quiet −19, Normal −14, Loud −11 LUFS. Uses the analysis, YouTube's loudness or ReplayGain tags; a limiter keeps boosted songs from clipping. Replaces ReplayGain while on.": "Jeden Titel gleich laut abspielen: Leise −19, Normal −14, Laut −11 LUFS. Nutzt die Analyse, die Lautheit von YouTube oder ReplayGain-Tags; ein Limiter verhindert, dass angehobene Titel übersteuern. Ersetzt ReplayGain, solange er an ist.",
 "Normalize loudness with ReplayGain tags (when Volume levelling is off).": "Lautstärke mit ReplayGain-Tags normalisieren (wenn der Lautstärkeausgleich aus ist).",
-"(loudness unknown)": "(Lautheit unbekannt)"
+"(loudness unknown)": "(Lautheit unbekannt)",
+"Snooze 30 days": "30 Tage pausieren",
+"Not interested": "Kein Interesse",
+"Hide in this playlist": "In dieser Playlist ausblenden",
+"Show in this playlist": "In dieser Playlist wieder zeigen",
+"Snoozed for 30 days: the DJs leave it out.": "30 Tage pausiert: Die DJs lassen den Titel weg.",
+"Snoozed for 30 days: the DJs leave them out.": "30 Tage pausiert: Die DJs lassen die Titel weg.",
+"The DJs won't pick it again. Undo in Settings → Hidden songs.": "Die DJs wählen das nicht mehr. Rückgängig in Einstellungen → Ausgeblendete Titel.",
+"Hidden in this playlist: it is skipped when the playlist plays.": "In dieser Playlist ausgeblendet: Beim Abspielen der Playlist wird der Titel übersprungen.",
+"Shown in this playlist again.": "Wird in dieser Playlist wieder gezeigt.",
+"Snoozed, {} days left": "Pausiert, noch {} Tage",
+"Hidden in “{}”": "Ausgeblendet in „{}“",
+"Undo": "Rückgängig",
+"Hidden songs": "Ausgeblendete Titel",
+"Songs you snoozed (30 days), marked Not interested or hid in a playlist. The DJs, radio and the mixes leave them out; they still play when you pick them yourself. Undo brings a song back.": "Titel, die du pausiert (30 Tage), mit Kein Interesse markiert oder in einer Playlist ausgeblendet hast. Die DJs, das Radio und die Mixe lassen sie weg; wenn du sie selbst auswählst, laufen sie trotzdem. Rückgängig holt einen Titel zurück.",
+"Dislike on YouTube Music": "Auf YouTube Music als „Mag ich nicht“ markieren",
+"Not interested on a YouTube Music song also dislikes it there, so YouTube Music's own suggestions learn from it. Undo takes the dislike back.": "Kein Interesse bei einem YouTube-Music-Titel markiert ihn dort auch mit „Mag ich nicht“, damit die Vorschläge von YouTube Music daraus lernen. Rückgängig nimmt das zurück."
 }
