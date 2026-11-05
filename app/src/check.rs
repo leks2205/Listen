@@ -444,6 +444,7 @@ fn check_flow(bpm: f32, key: u8, minor: bool, energy: f32) -> listen_core::analy
         timbre: vec![],
         mixable_in: true,
         mixable_out: true,
+        vocal: None,
     }
 }
 
@@ -1516,6 +1517,101 @@ pub fn memory(args: &[String]) -> i32 {
     let h = history::History::load(&path);
     let m = memory::Memory::new(&h.entries, now);
     println!("{}", serde_json::to_string_pretty(&memory_json(&m, limit)).unwrap_or_default());
+    0
+}
+
+/// `listen --focus [--history PATH] [--store DIR] [--fills N] [--per-fill N] [--pool N] [--seed N]`: focus mode
+/// on the user's own data. The history's analysed songs are shuffled (fixed seed) into Auto-DJ-sized
+/// candidate pools; each fill takes `per-fill` songs as an ordinary fill would (in pool order) and as
+/// focus mode does ([`listen_mix::pick::focus_pool`]). Prints the mean sung-bar share of both and the
+/// ratio as JSON (the acceptance: focus ≤ 50 % of normal).
+pub fn focus(args: &[String]) -> i32 {
+    use listen_core::analysis::FlowFeatures;
+    use listen_core::history;
+    use listen_core::model::Song;
+    use rand::SeedableRng;
+    use rand::seq::SliceRandom;
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let num = |name: &str, d: usize| opt(name).and_then(|n| n.parse().ok()).unwrap_or(d);
+    let (fills, per_fill, pool_n) = (num("--fills", 8), num("--per-fill", 5), num("--pool", 30));
+    let paths = match listen_core::config::Paths::discover() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("no data folder: {e}");
+            return 1;
+        }
+    };
+    let config = listen_core::config::Config::load(&paths.config_file()).unwrap_or_default();
+    let hist = opt("--history")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| paths.data_dir.join(history::FILE_NAME));
+    let dir = opt("--store").map(std::path::PathBuf::from).unwrap_or_else(|| shared_dir(&config, &paths));
+    let store = match listen_analysis::store::ShardStore::open(&dir, &listen_analysis::store::machine_id()) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("analysis store {}: {e}", dir.display());
+            return 1;
+        }
+    };
+    let h = history::History::load(&hist);
+    let mut seen = std::collections::HashSet::new();
+    let mut pool: Vec<(Song, Option<FlowFeatures>)> = Vec::new();
+    for e in h.entries.iter().rev() {
+        let song = e.to_song();
+        if !seen.insert(listen_core::versions::song_key(&song)) {
+            continue;
+        }
+        let file = listen_core::analysis::FileId::of(&song);
+        let f = store
+            .lookup(&listen_analysis::record_key(&song), &file)
+            .and_then(|r| r.features().map(FlowFeatures::of))
+            .filter(|f| f.vocal.is_some());
+        if let Some(f) = f {
+            pool.push((song, Some(f)));
+        }
+    }
+    let mut rng = rand::rngs::StdRng::seed_from_u64(num("--seed", 13) as u64);
+    pool.shuffle(&mut rng);
+    let vocal = |f: &Option<FlowFeatures>| f.as_ref().and_then(|f| f.vocal).unwrap_or(0.0);
+    // As the app: each fill's candidates are a fetched pool plus the 30 least sung songs from the history;
+    // nothing comes twice.
+    let (mut normal, mut focused) = (Vec::new(), Vec::new());
+    let mut used = std::collections::HashSet::new();
+    for chunk in pool.chunks(pool_n).take(fills) {
+        normal.extend(chunk.iter().take(per_fill).map(|c| (c.0.clone(), vocal(&c.1))));
+        let mut cands: Vec<(Song, Option<FlowFeatures>)> =
+            chunk.iter().filter(|c| !used.contains(&c.0.id)).cloned().collect();
+        let rest: Vec<(Song, Option<FlowFeatures>)> = pool
+            .iter()
+            .filter(|c| !used.contains(&c.0.id) && !cands.iter().any(|x| x.0.id == c.0.id))
+            .cloned()
+            .collect();
+        let extra = listen_mix::pick::focus_extras(&rest, 30);
+        cands.extend(extra.into_iter().map(|i| rest[i].clone()));
+        let order = listen_mix::pick::focus_pool(&cands, per_fill);
+        for i in order.into_iter().take(per_fill) {
+            used.insert(cands[i].0.id.clone());
+            focused.push((cands[i].0.clone(), vocal(&cands[i].1)));
+        }
+    }
+    let mean = |v: &[(Song, f32)]| {
+        if v.is_empty() { 0.0 } else { v.iter().map(|x| x.1).sum::<f32>() / v.len() as f32 }
+    };
+    let (mn, mf) = (mean(&normal), mean(&focused));
+    let rows = |v: &[(Song, f32)]| -> Vec<serde_json::Value> {
+        v.iter()
+            .map(|(s, x)| serde_json::json!({"title": s.title, "artist": s.artist_line(), "vocal": (f64::from(*x) * 100.0).round() / 100.0}))
+            .collect()
+    };
+    let out = serde_json::json!({
+        "analysed_history_songs": pool.len(),
+        "songs": {"normal": normal.len(), "focus": focused.len()},
+        "mean_vocal": {"normal": (f64::from(mn) * 1000.0).round() / 1000.0, "focus": (f64::from(mf) * 1000.0).round() / 1000.0},
+        "ratio": if mn > 0.0 { (f64::from(mf / mn) * 1000.0).round() / 1000.0 } else { 0.0 },
+        "focus_songs": rows(&focused),
+        "normal_songs": rows(&normal),
+    });
+    println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
     0
 }
 

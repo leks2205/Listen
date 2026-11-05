@@ -2697,5 +2697,9 @@
 "{} % known": "{} % bekannt",
 "Share of this song's Korean words you know in Lute. New words are green, words you are learning light green.": "Anteil der koreanischen Wörter dieses Songs, die du in Lute kennst. Neue Wörter sind grün, Wörter, die du lernst, hellgrün.",
 "In Lute: learning": "In Lute: am Lernen",
-"The vocab-hub did not answer.": "Der vocab-hub hat nicht geantwortet."
+"The vocab-hub did not answer.": "Der vocab-hub hat nicht geantwortet.",
+"Focus is on: little singing, instrumental versions, no DJ talk": "Fokus ist an: wenig Gesang, Instrumentalversionen, keine DJ-Ansagen",
+"Focus: the DJs pick songs with little singing and keep quiet": "Fokus: Die DJs wählen Songs mit wenig Gesang und sagen nichts an",
+"Focus off: the DJs pick as usual again.": "Fokus aus: Die DJs wählen wieder wie gewohnt.",
+"Focus on: songs with little singing, instrumental versions, no DJ talk.": "Fokus an: Songs mit wenig Gesang, Instrumentalversionen, keine DJ-Ansagen."
 }

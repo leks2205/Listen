@@ -46,6 +46,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 | `previous` | Go to the previous song (or the start of this one). | none |
 | `seek` | Jump to a position in the playing song. | `seconds` (number, required): position in seconds |
 | `set_volume` | Set the volume. | `volume` (integer, required): 0 to 100 |
+| `set_focus` | Focus mode on or off: the DJs pick songs with little singing and calm energy, swap sung picks for instrumental versions, and the AI DJ doesn't talk. | `on` (boolean, required) |
 | `set_play_mode` | What happens when the queue runs out. `ai_dj` needs a Gemini key. | `mode` (string, required): `off`, `shuffle`, `auto_dj`, `ai_dj` |
 | `set_repeat` | Repeat nothing, the whole queue or the current song. | `repeat` (string, required): `off`, `all`, `one` |
 | `set_speed` | Playback speed. | `speed` (number, required): 0.5 to 2.0, 1.0 is normal |

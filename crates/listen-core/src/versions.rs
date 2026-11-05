@@ -124,6 +124,43 @@ pub fn dedupe_versions(songs: Vec<Song>) -> Vec<Song> {
     out
 }
 
+/// An instrumental version: "(Inst.)", "Instrumental", "(MR)", "Off Vocal" in the title.
+pub fn is_instrumental(song: &Song) -> bool {
+    let t = song.title.to_lowercase();
+    ["inst.", "(inst)", "[inst]", "instrumental", "(mr)", "[mr]", "off vocal", "off-vocal", "karaoke"]
+        .iter()
+        .any(|m| t.contains(m))
+}
+
+/// The instrumental version of `song` among search `results`: same song key (title without extras,
+/// main artist) and an instrumental title. An instrumental `song` stands for itself.
+pub fn instrumental_of(song: &Song, results: &[Song]) -> Option<Song> {
+    let key = song_key(song);
+    results.iter().find(|r| is_instrumental(r) && song_key(r) == key && r.id != song.id).cloned()
+}
+
+/// What to search for to find the instrumental version of `song`.
+pub fn instrumental_query(song: &Song) -> String {
+    let artist = song.artists.first().map(|a| a.name.clone()).unwrap_or_else(|| song.artist_line());
+    format!("{} {} inst.", strip_extras(&song.title), artist)
+}
+
+/// The title without bracketed extras ("Love (Radio Edit)" -> "Love").
+fn strip_extras(title: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0usize;
+    for c in title.chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let out = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    if out.is_empty() { title.to_string() } else { out }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,6 +223,23 @@ mod tests {
         assert_eq!(song_key(&song("(Intro)", "X")), "intro|x");
         // Korean titles survive the folding.
         assert_eq!(song_key(&song("봄날 (Spring Day)", "BTS")), "봄날|bts");
+    }
+
+    #[test]
+    fn instrumental_versions_are_found() {
+        let love = song("LOVE (Radio Edit)", "StayC");
+        let results = vec![
+            song("LOVE", "StayC"),
+            song("LOVE (Inst.)", "Other Band"),
+            song("Another Song (Inst.)", "StayC"),
+            song("LOVE (Inst.)", "StayC"),
+            song("LOVE - Instrumental", "StayC"),
+        ];
+        assert_eq!(instrumental_of(&love, &results).map(|s| s.id), Some("LOVE (Inst.)/StayC".into()));
+        assert!(instrumental_of(&love, &results[..3]).is_none());
+        assert!(is_instrumental(&song("봄날 (MR)", "BTS")) && is_instrumental(&song("X - Off Vocal", "Y")));
+        assert!(!is_instrumental(&song("Institution", "Y")) && !is_instrumental(&love));
+        assert_eq!(instrumental_query(&love), "LOVE StayC inst.");
     }
 
     #[test]

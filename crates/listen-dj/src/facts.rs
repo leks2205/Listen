@@ -71,6 +71,7 @@ mod tests {
             timbre: vec![],
             mixable_in: true,
             mixable_out: true,
+            vocal: None,
         }
     }
 

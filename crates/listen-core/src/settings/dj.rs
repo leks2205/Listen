@@ -15,6 +15,9 @@ pub struct AutoDj {
     pub strategy: String,
     /// One pick in [`FAMILIAR_EVERY`] is a forgotten favourite from the history (`listen_core::memory`).
     pub forgotten_favourites: bool,
+    /// Focus mode: automatic picks prefer little lead vocal, calm energy and instrumental versions;
+    /// the AI DJ doesn't talk.
+    pub focus: bool,
 }
 
 /// The Auto-DJ's forgotten-favourite slot: one pick in this many.
@@ -22,8 +25,9 @@ pub const FAMILIAR_EVERY: u8 = 8;
 
 impl AutoDj {
     /// What the Auto-DJ aims for beyond flow (the forgotten-favourite slot).
+    /// None in focus mode (a forgotten favourite is rarely a quiet one).
     pub fn familiar_slot(&self) -> Option<u8> {
-        self.forgotten_favourites.then_some(FAMILIAR_EVERY)
+        (self.forgotten_favourites && !self.focus).then_some(FAMILIAR_EVERY)
     }
 }
 
@@ -36,6 +40,7 @@ impl Default for AutoDj {
             allow_duplicates: false,
             strategy: "similar".into(),
             forgotten_favourites: true,
+            focus: false,
         }
     }
 }

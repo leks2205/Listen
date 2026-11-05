@@ -357,7 +357,18 @@ impl Queue {
         Some(self.items[i].uid)
     }
 
-    /// Advances to the next track (the automatic "track ended" path).
+    /// Swaps the song of item `uid` for another version of it (focus mode's instrumental), keeping its
+    /// place and flags. False when the item is gone.
+    pub fn replace_song(&mut self, uid: u64, song: Song) -> bool {
+        match self.items.iter_mut().find(|i| i.uid == uid) {
+            Some(item) => {
+                item.song = song;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Sets the reason of the item `uid` ("Why this song?"); false when it is not in the queue.
     pub fn set_why(&mut self, uid: u64, why: Option<Why>) -> bool {
         match self.items.iter_mut().find(|it| it.uid == uid) {
@@ -369,6 +380,7 @@ impl Queue {
         }
     }
 
+    /// Advances to the next track (the automatic "track ended" path).
     pub fn advance(&mut self) -> Option<&QueueItem> {
         self.position = self.next_position();
         self.current()

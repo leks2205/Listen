@@ -54,6 +54,7 @@ pub fn flow(bpm: Option<f32>, key: Option<Camelot>, energy: f32) -> FlowFeatures
         timbre: vec![],
         mixable_in: false,
         mixable_out: false,
+        vocal: None,
     }
 }
 

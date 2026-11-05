@@ -70,3 +70,19 @@ Three more options exist that have no control in the settings window. They live 
 | `strategy` | `"similar"` | `"similar"` asks for similar songs first; `"random"` only adds random songs. |
 
 Edit the file only while Listen is closed.
+
+## Focus
+
+**Focus** is for working or reading while music plays: songs with lyrics distract most there. The **Focus** button sits next to the play-mode button at the top of the queue (and on the Now Playing page). It shows in Auto-DJ and AI DJ mode, and always while Focus is on. A green button means Focus is on; Listen remembers it.
+
+With Focus on:
+
+- The Auto-DJ and the AI DJ prefer songs with little lead vocal and calm energy. Listen knows how much of a song is sung from the [analysis](../dj/analysis.md) (the vocal level of every bar). Besides the similar songs, the Auto-DJ also looks at the least sung analysed songs in your [history](../using/history.md), so each fill finds quiet songs even when the similar ones are all sung. Songs without an analysis come last.
+- A sung song the Auto-DJ picked is swapped for its instrumental version when its source has one (for example "Love (Inst.)" on YouTube Music, or an instrumental track on a Navidrome album). Listen searches for "title artist inst." for up to three songs per fill. The swapped song keeps its place in the queue, and its reason reads "Good for focus".
+- The AI DJ does not talk: no voiced breaks, not even planned ones. It still chooses and mixes the songs.
+- No forgotten-favourite slot (a forgotten favourite is rarely a quiet one).
+- Turning Focus on removes upcoming DJ songs that are sung, except the next one (it may already be mixing in). Songs you queued yourself stay.
+
+Songs you start yourself always play as they are. Turn Focus off and the next fill is an ordinary one again. The MCP server's `set_focus` tool switches it, and `get_state` reports it as `focus`.
+
+`listen --focus` checks Focus on your own data: it splits your history's analysed songs into Auto-DJ-sized candidate pools and prints, as JSON, the mean sung share of eight ordinary five-song fills and of eight Focus fills, and their ratio (`--history FILE`, `--store DIR`, `--fills N`, `--per-fill N`, `--pool N`, `--seed N`). Instrumental swaps come on top of that number.

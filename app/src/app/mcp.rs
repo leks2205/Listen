@@ -461,6 +461,7 @@ impl Listen {
                 PlayMode::AutoDj => "auto_dj",
                 PlayMode::AiDj => "ai_dj",
             },
+            "focus": self.focus_on(),
             "repeat": match self.queue.repeat {
                 Repeat::Off => "off",
                 Repeat::All => "all",
@@ -574,6 +575,11 @@ impl Listen {
                 };
                 let t = msg(self, Message::SetPlayMode(mode));
                 done(&reply, t, json!({ "mode": arg_str(args, "mode") }))
+            }
+            "set_focus" => {
+                let on = args.get("on").and_then(Value::as_bool).ok_or("on is missing")?;
+                let t = msg(self, Message::Focus(crate::app::focus::FocusMsg::Set(on)));
+                done(&reply, t, json!({ "focus": on }))
             }
             "set_repeat" => {
                 self.queue.repeat = match arg_str(args, "repeat").unwrap_or("") {

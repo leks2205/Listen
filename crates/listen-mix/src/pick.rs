@@ -2,6 +2,8 @@
 //! slot for a forgotten favourite. One [`Targets`] value goes into every automatic picker (Auto-DJ, the AI
 //! DJ candidate filter, [`crate::score::order`]); `Targets::default()` means "pick as before".
 
+use listen_core::analysis::FlowFeatures;
+use listen_core::model::Song;
 use serde::{Deserialize, Serialize};
 
 /// Aim song tempos at `bpm` (± `tol` BPM). With `half_double`, half and double time count as a match
@@ -55,6 +57,56 @@ impl Targets {
     }
 }
 
+/// Focus mode: songs with at most this share of sung bars are focus-friendly.
+pub const FOCUS_MAX_VOCAL: f32 = 0.35;
+/// Focus mode: energy above this (0..1) counts against a song (no big pushes while working).
+const FOCUS_CALM_ENERGY: f32 = 0.7;
+/// What a song without a vocal curve counts as (unknown: after every measured song).
+const FOCUS_UNKNOWN: f32 = 2.0;
+
+/// How badly a song suits focus (lower is better): its sung share, plus energy above
+/// [`FOCUS_CALM_ENERGY`]; instrumental versions count as 0, songs without analysis come last.
+pub fn focus_cost(song: &Song, f: Option<&FlowFeatures>) -> f32 {
+    let energy = f.map_or(0.0, |f| (f.mood.energy - FOCUS_CALM_ENERGY).max(0.0));
+    if listen_core::versions::is_instrumental(song) {
+        return energy;
+    }
+    match f.and_then(|f| f.vocal) {
+        Some(v) => v + energy,
+        None => FOCUS_UNKNOWN,
+    }
+}
+
+/// Focus mode: the candidates fit for focus, best first (indices into `cands`). Every
+/// focus-friendly one (cost up to [`FOCUS_MAX_VOCAL`]) is kept; when fewer than `want` are, the
+/// least sung others fill up to `want` (unanalysed songs last), so a fill never comes back empty.
+pub fn focus_pool(cands: &[(Song, Option<FlowFeatures>)], want: usize) -> Vec<usize> {
+    let mut ranked: Vec<(usize, f32)> =
+        cands.iter().enumerate().map(|(i, (s, f))| (i, focus_cost(s, f.as_ref()))).collect();
+    ranked.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let friendly = ranked.iter().filter(|(_, c)| *c <= FOCUS_MAX_VOCAL).count();
+    ranked.into_iter().take(friendly.max(want)).map(|(i, _)| i).collect()
+}
+
+/// Focus mode: the `n` least sung analysed songs of `songs` (indices, best first) — what joins an
+/// Auto-DJ fill's pool from the listening history. Songs without a vocal curve never join.
+pub fn focus_extras(songs: &[(Song, Option<FlowFeatures>)], n: usize) -> Vec<usize> {
+    let mut ranked: Vec<(usize, f32)> = songs
+        .iter()
+        .enumerate()
+        .map(|(i, (s, f))| (i, focus_cost(s, f.as_ref())))
+        .filter(|(_, c)| *c < FOCUS_UNKNOWN)
+        .collect();
+    ranked.sort_by(|a, b| a.1.total_cmp(&b.1));
+    ranked.into_iter().take(n).map(|(i, _)| i).collect()
+}
+
+/// Focus mode: a song worth swapping for its instrumental version (sung or not analysed).
+pub fn wants_instrumental(song: &Song, f: Option<&FlowFeatures>) -> bool {
+    !listen_core::versions::is_instrumental(song)
+        && f.and_then(|f| f.vocal).is_none_or(|v| v > FOCUS_MAX_VOCAL)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +131,34 @@ mod tests {
         assert!(!Targets::default().familiar_at(0));
         assert!(!Targets { familiar_slot: Some(0), ..Default::default() }.familiar_at(0));
         assert!(Targets::default().is_neutral() && !t.is_neutral());
+    }
+
+    #[test]
+    fn focus_prefers_little_singing_and_calm_songs() {
+        use crate::testutil::{flow, song};
+        let with = |vocal: Option<f32>, energy: f32| {
+            let mut f = flow(Some(120.0), None, energy);
+            f.vocal = vocal;
+            Some(f)
+        };
+        let cands = vec![
+            (song("sung", "A", None, None), with(Some(0.8), 0.5)),
+            (song("calm", "A", None, None), with(Some(0.1), 0.4)),
+            (song("unknown", "A", None, None), None),
+            (song("loud instrumental", "A", None, None), with(Some(0.05), 0.95)),
+            (song("half", "A", None, None), with(Some(0.3), 0.5)),
+            (song("Sung (Inst.)", "A", None, None), None),
+        ];
+        // calm 0.1, Inst. 0, half 0.3 are friendly; the loud one costs 0.3 too.
+        assert_eq!(focus_pool(&cands, 2), [5, 1, 3, 4]);
+        // Too few friendly songs: the least sung others fill up, unanalysed last.
+        assert_eq!(focus_pool(&cands, 6), [5, 1, 3, 4, 0, 2]);
+        assert_eq!(focus_extras(&cands, 3), [5, 1, 3]);
+        assert_eq!(focus_extras(&cands, 9), [5, 1, 3, 4, 0]);
+        assert!(wants_instrumental(&cands[0].0, cands[0].1.as_ref()));
+        assert!(wants_instrumental(&cands[2].0, None));
+        assert!(!wants_instrumental(&cands[1].0, cands[1].1.as_ref()));
+        assert!(!wants_instrumental(&cands[5].0, None));
     }
 
     #[test]

@@ -18,6 +18,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 /// Keyring entry of the Gemini API key.
+/// Focus mode: at least this many candidates stay in the AI DJ's pool.
+const FOCUS_POOL: usize = 12;
 const KEY_ENTRY: &str = "gemini-api-key";
 /// Songs offered to the model per set.
 const POOL: usize = 40;
@@ -317,7 +319,7 @@ impl Listen {
         self.dj.quota.roll(quota::pacific_day(SystemTime::now()));
     }
 
-    fn drop_break(&mut self) {
+    pub(super) fn drop_break(&mut self) {
         match std::mem::take(&mut self.dj.brk) {
             Break::Armed { clip: Some(clip), .. } | Break::Airing { clip } => {
                 let _ = std::fs::remove_file(clip);
@@ -712,7 +714,9 @@ impl Listen {
         self.roll_quota();
         let s = self.config.settings.ai_dj.clone();
         let talk = self.dj.sets_since_talk + 1 >= s.talk_every.max(1);
-        let voice = talk && !self.dlna_casting() && self.dj.quota.can_voice(quota::unix_now());
+        // Focus mode: the DJ keeps quiet (no voiced breaks).
+        let focus = self.focus_on();
+        let voice = talk && !focus && !self.dlna_casting() && self.dj.quota.can_voice(quota::unix_now());
         self.dj.quota.planned += 1;
         if voice {
             self.dj.quota.voiced += 1;
@@ -816,6 +820,8 @@ impl Listen {
                     &flow_ctx,
                 )
                 .await;
+                // Focus mode: the least sung, calmest candidates (instrumentals first).
+                let pool = if focus { super::focus::focus_songs(pool, &lookup, FOCUS_POOL) } else { pool };
                 // Tell the DJ: keep the candidates that fit the requests (energy, tempo, what the listener knows).
                 let pool = if requests.is_empty() {
                     pool

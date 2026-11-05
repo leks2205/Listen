@@ -81,6 +81,13 @@ pub fn definitions() -> Vec<Value> {
             &["mode"],
         ),
         tool(
+            "set_focus",
+            "Focus mode on or off: the Auto-DJ and AI DJ pick songs with little singing and calm energy, swap \
+             sung picks for instrumental versions where the source has one, and the AI DJ doesn't talk.",
+            json!({ "on": { "type": "boolean", "description": "Focus on (true) or off (false)" } }),
+            &["on"],
+        ),
+        tool(
             "set_repeat",
             "Repeat nothing, the whole queue or the current song.",
             json!({ "repeat": one_of(&["off", "all", "one"], "Repeat mode") }),

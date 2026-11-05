@@ -524,7 +524,30 @@ pub fn mode_switcher(state: &Listen) -> Element<'_, Message> {
     .style(style::icon_button(t, on))
     .on_press(Message::ToggleShuffle);
     let hint = super::tip::play_mode_tip(state);
-    super::tip::tip_raw(state, b, &hint, Some("toggleShuffle"), super::tip::Position::Bottom)
+    let mode_button =
+        super::tip::tip_raw(state, b, &hint, Some("toggleShuffle"), super::tip::Position::Bottom);
+    // Focus applies to the DJs' picks: offered in Auto-DJ and AI DJ (and while on, so it can be switched off).
+    let focus = state.focus_on();
+    if !focus && !matches!(mode, PlayMode::AutoDj | PlayMode::AiDj) {
+        return mode_button;
+    }
+    let color = if focus { t.primary } else { t.muted };
+    let chip = button(label_w("Focus", metrics::font_sm(), color, Weight::Semibold))
+        .padding(Padding::from([metrics::space_xs(), metrics::space_sm()]))
+        .style(style::icon_button(t, focus))
+        .on_press(Message::Focus(crate::app::focus::FocusMsg::Toggle));
+    let chip = super::tip::tip(
+        state,
+        chip,
+        if focus {
+            "Focus is on: little singing, instrumental versions, no DJ talk"
+        } else {
+            "Focus: the DJs pick songs with little singing and keep quiet"
+        },
+        None,
+        super::tip::Position::Bottom,
+    );
+    row![mode_button, chip].spacing(metrics::space_xs()).align_y(Alignment::Center).into()
 }
 
 fn header_row(state: &Listen) -> Element<'_, Message> {

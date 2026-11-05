@@ -38,6 +38,7 @@ pub mod dlna;
 pub mod exclude;
 mod fade;
 mod flow;
+pub mod focus;
 pub mod fullscreen_state;
 pub mod handoff;
 pub mod helpers;
@@ -965,6 +966,7 @@ pub enum Message {
     Mix(mix::MixMsg),
     History(history::HistoryMsg),
     Exclude(exclude::ExcludeMsg),
+    Focus(focus::FocusMsg),
     /// Tell the DJ (requests for the AI DJ).
     Steer(dj_steer::SteerMsg),
     Handoff(handoff::HandoffMsg),
@@ -2299,6 +2301,9 @@ impl Listen {
                 }
                 // Best flow from the current song first (tempo, key, energy), when analysed.
                 let n = s.item_count.max(1) as usize;
+                // Focus mode: only the least sung, calmest songs (low-vocal history songs join the pool).
+                let focus = s.focus;
+                let picked = if focus { self.focus_fill(picked, &queued, &blocked, n) } else { picked };
                 let picked = match self.queue.current().map(|i| i.song.clone()) {
                     Some(current) => self.flow_order(&current, picked, n),
                     None => picked.into_iter().take(n).collect(),
@@ -2320,7 +2325,14 @@ impl Listen {
                     .into_iter()
                     .map(|song| {
                         let seed = similar.contains(&song.id).then_some(seed.as_str());
-                        let why = listen_dj::why::auto_dj(&listening.of(&song), seed, now);
+                        let why = if focus && self.focus_friendly(&song) {
+                            listen_core::queue::Why::new(
+                                listen_core::history::Picker::AutoDj,
+                                listen_core::queue::WhyCode::FocusFriendly,
+                            )
+                        } else {
+                            listen_dj::why::auto_dj(&listening.of(&song), seed, now)
+                        };
                         (song, why)
                     })
                     .collect();
@@ -2328,8 +2340,10 @@ impl Listen {
                 let skip: std::collections::HashSet<String> =
                     queued.iter().chain(&self.session_played).chain(&blocked).cloned().collect();
                 let picked = self.with_forgotten(picked, &skip);
-                self.queue.add_picked(picked);
-                let images = self.request_images(refs.iter().map(Some));
+                let uids = self.queue.add_picked(picked);
+                // Focus mode: sung picks are swapped for their instrumental version when the source has one.
+                let instrumentals = if focus { self.focus_instrumentals(&uids) } else { Task::none() };
+                let images = Task::batch([self.request_images(refs.iter().map(Some)), instrumentals]);
                 if let Some(play) = self.dj_after_fill() {
                     return Task::batch([images, play]);
                 }
@@ -4028,6 +4042,7 @@ impl Listen {
             }
             Message::History(m) => return self.on_history(m),
             Message::Exclude(m) => return self.on_exclude(m),
+            Message::Focus(m) => return self.on_focus(m),
             Message::Steer(m) => return self.on_steer(m),
             Message::Handoff(m) => return self.on_handoff(m),
             Message::Radio(m) => return self.on_radio(m),

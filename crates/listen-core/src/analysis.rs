@@ -338,6 +338,23 @@ pub struct FlowFeatures {
     /// Has an instrumental start / end to mix over.
     pub mixable_in: bool,
     pub mixable_out: bool,
+    /// Share of the song's bars with a lead vocal (0..1; `None` without a vocal curve). Focus mode prefers
+    /// low values.
+    pub vocal: Option<f32>,
+}
+
+/// A bar's vocal level (0–255) from which it counts as sung. The curve is normalised within each song, so a
+/// high bar is needed: on the analysis store, 200 puts instrumental versions at a median share of 0.37 against
+/// 0.82 for all songs (102, the mix planner's limit, gives 0.58 against 0.91).
+const SUNG_BAR: u8 = 200;
+
+/// Share of bars with a lead vocal, `None` when the curve is empty.
+pub fn vocal_share(bars: &BarCurves) -> Option<f32> {
+    if bars.vocal.is_empty() {
+        return None;
+    }
+    let sung = bars.vocal.iter().filter(|&&v| v >= SUNG_BAR).count();
+    Some(sung as f32 / bars.vocal.len() as f32)
 }
 
 impl FlowFeatures {
@@ -351,6 +368,7 @@ impl FlowFeatures {
             timbre: f.timbre.clone(),
             mixable_in: f.grid.is_some() && f.intro_instrumental_bars >= 8,
             mixable_out: f.grid.is_some() && f.outro_instrumental_bars >= 8,
+            vocal: vocal_share(&f.bars),
         }
     }
 
@@ -409,6 +427,13 @@ mod beat_codec {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn vocal_share_counts_sung_bars() {
+        let bars = BarCurves { vocal: vec![0, 50, 199, 102, 255, 200, 10, 210], ..Default::default() };
+        assert_eq!(vocal_share(&bars), Some(3.0 / 8.0));
+        assert_eq!(vocal_share(&BarCurves::default()), None);
+    }
+
     use super::*;
 
     fn grid(bpm: f32, n: usize, offset: f32) -> BeatGrid {
