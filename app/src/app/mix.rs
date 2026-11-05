@@ -699,6 +699,15 @@ impl Listen {
         Task::batch(tasks)
     }
 
+    /// After the decks' chains were rebuilt (headphone switch) while the incoming deck waits:
+    /// both decks' filters are unknown again, the incoming one gets its starting EQ back.
+    pub(super) fn mix_restore_deck_filters(&mut self) -> Task<Message> {
+        self.mix.eq = [[f32::NAN; 3]; 2];
+        self.mix.echo = [None, None];
+        self.mix.eq_done.iter_mut().for_each(|d| *d = false);
+        self.mix_deck_ready()
+    }
+
     /// A stopped deck has no filter chain; its next file starts from scratch (see `mix_deck_ready`).
     fn forget_deck_filters(&mut self, deck: usize) {
         self.mix.eq[deck] = [f32::NAN; 3];

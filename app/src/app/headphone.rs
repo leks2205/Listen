@@ -2,8 +2,10 @@
 //! first stage of every deck's `af` chain (`listen_core::peq::mpv_filter`). With the audio device
 //! on "auto" the system's default sink is the output (polled with `pactl get-default-sink` every
 //! 0.5 s while a profile is bound), so plugging in or connecting headphones switches the profile
-//! within a second. A switch rebuilds the decks' chains (not during a DJ blend; then right after).
+//! within a second. A switch rebuilds the decks' chains (not while a DJ blend loads or plays; then
+//! right after, for the output current then).
 
+use super::mix::Phase;
 use super::{Listen, Message};
 use iced::Task;
 use listen_core::peq::{self, Profile};
@@ -50,6 +52,13 @@ fn default_sink() -> Option<String> {
     let out = std::process::Command::new("pactl").arg("get-default-sink").output().ok()?;
     let name = String::from_utf8(out.stdout).ok()?.trim().to_string();
     (out.status.success() && !name.is_empty()).then_some(name)
+}
+
+/// Whether a switch waits: only while the incoming song loads and while the blend plays (a new
+/// chain would reset the decks' mix filters mid-transition). A merely planned transition, or one
+/// whose incoming deck is ready and paused, does not hold it up.
+fn headphone_defers(phase: Phase) -> bool {
+    matches!(phase, Phase::Preloading | Phase::Starting | Phase::Running | Phase::Settling)
 }
 
 impl Listen {
@@ -105,7 +114,7 @@ impl Listen {
         if stage == self.headphone.applied && !self.headphone.pending {
             return Task::none();
         }
-        if self.mix.phase != super::mix::Phase::Idle {
+        if headphone_defers(self.mix.phase) {
             self.headphone.pending = true;
             return Task::none();
         }
@@ -113,22 +122,31 @@ impl Listen {
         let name = self.headphone_profile().map_or("none".to_string(), |p| p.name.clone());
         tracing::info!("headphone correction: output {} → {name}", self.headphone_output());
         self.headphone.applied = stage;
-        self.apply_audio()
+        let rebuild = self.apply_audio();
+        if self.mix.phase == Phase::Ready {
+            // The incoming deck waits with its starting EQ (e.g. a bass cut), which the new chain
+            // dropped: set it again once the chains are in place.
+            let restore = self.mix_restore_deck_filters();
+            return rebuild.chain(restore);
+        }
+        rebuild
     }
 
     pub(super) fn on_headphone(&mut self, msg: HeadphoneMsg) -> Task<Message> {
         match msg {
             HeadphoneMsg::Poll => {
-                if self.headphone.pending {
-                    return self.headphone_reapply();
-                }
+                // A deferred switch goes through as soon as the blend allows; the output is still
+                // watched meanwhile, so the switch uses the output that plays then.
+                let deferred = if self.headphone.pending { self.headphone_reapply() } else { Task::none() };
                 if self.headphone.polling {
-                    return Task::none();
+                    return deferred;
                 }
                 self.headphone.polling = true;
-                Task::perform(async { tokio::task::spawn_blocking(default_sink).await.ok().flatten() }, |s| {
-                    Message::Headphone(HeadphoneMsg::DefaultSink(s))
-                })
+                let poll = Task::perform(
+                    async { tokio::task::spawn_blocking(default_sink).await.ok().flatten() },
+                    |s| Message::Headphone(HeadphoneMsg::DefaultSink(s)),
+                );
+                Task::batch([deferred, poll])
             }
             HeadphoneMsg::DefaultSink(sink) => {
                 self.headphone.polling = false;
@@ -209,6 +227,45 @@ mod tests {
         let _ = s.on_headphone(HeadphoneMsg::DefaultSink(Some("bluez_output.AA_BB.1".into())));
         let _ = s.on_headphone(HeadphoneMsg::Enabled(false));
         assert!(s.headphone_profile().is_none());
+    }
+
+    /// Bug 58: a merely planned (or ready) transition does not hold the switch up.
+    #[test]
+    fn a_planned_transition_does_not_defer_the_switch() {
+        for phase in [Phase::Planned, Phase::Ready] {
+            let mut s = app();
+            let xm5 = peq::search("WH-1000XM5", 1)[0].profile.clone();
+            s.config.settings.playback.headphone_profiles.insert("bluez_output.AA_BB.1".into(), xm5.clone());
+            s.mix.phase = phase;
+            let _ = s.on_headphone(HeadphoneMsg::DefaultSink(Some("bluez_output.AA_BB.1".into())));
+            assert_eq!(s.headphone.applied, peq::mpv_filter(&xm5), "{phase:?}: applied at once");
+            assert!(!s.headphone.pending);
+        }
+    }
+
+    /// Bug 58: during a blend the switch waits, the output is still polled, and the switch made
+    /// after the blend uses the output current then.
+    #[test]
+    fn a_deferred_switch_uses_the_output_current_after_the_blend() {
+        let mut s = app();
+        let xm5 = peq::search("WH-1000XM5", 1)[0].profile.clone();
+        let hd600 = peq::search("Sennheiser HD 600", 1)[0].profile.clone();
+        let p = &mut s.config.settings.playback.headphone_profiles;
+        p.insert("bluez_output.AA_BB.1".into(), xm5);
+        p.insert("alsa_output.usb-dac".into(), hd600.clone());
+        s.mix.phase = Phase::Running;
+        let _ = s.on_headphone(HeadphoneMsg::DefaultSink(Some("bluez_output.AA_BB.1".into())));
+        assert!(s.headphone.pending, "deferred during the blend");
+        assert_eq!(s.headphone.applied, "");
+        // The poll still asks for the output while a switch is pending.
+        let _ = s.on_headphone(HeadphoneMsg::Poll);
+        assert!(s.headphone.polling, "a pactl query was started");
+        let _ = s.on_headphone(HeadphoneMsg::DefaultSink(Some("alsa_output.usb-dac".into())));
+        assert_eq!(s.headphone.applied, "", "still deferred");
+        s.mix.phase = Phase::Idle;
+        let _ = s.on_headphone(HeadphoneMsg::Poll);
+        assert!(!s.headphone.pending);
+        assert_eq!(s.headphone.applied, peq::mpv_filter(&hd600), "the output current after the blend");
     }
 
     #[test]
