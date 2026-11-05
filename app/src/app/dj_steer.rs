@@ -103,4 +103,35 @@ mod tests {
         let _ = s.on_steer(SteerMsg::Remove(0));
         assert!(s.dj.requests.is_empty());
     }
+
+    #[test]
+    fn requests_survive_a_restart_of_the_app() {
+        let dir = std::env::temp_dir().join(format!("listen-steer-restart-{}", std::process::id()));
+        let paths = listen_core::config::Paths {
+            config_dir: dir.join("config"),
+            cache_dir: dir.join("cache"),
+            data_dir: dir.join("data"),
+        };
+        std::fs::create_dir_all(&paths.data_dir).unwrap();
+        let mut s = rig();
+        s.paths = Some(paths.clone());
+        s.demo = false;
+        s.config.settings.ai_dj.enabled = true;
+        let _ = s.on_steer(SteerMsg::Chip(Chip::Calmer));
+        assert!(paths.data_dir.join("ai-dj-requests.json").exists());
+        // A new start reads them back (dj_boot), until they are removed.
+        let mut t = rig();
+        t.paths = Some(paths.clone());
+        t.demo = false;
+        t.dj_boot();
+        assert!(t.dj.requests.has(Chip::Calmer));
+        t.config.settings.ai_dj.enabled = true;
+        let _ = t.on_steer(SteerMsg::Remove(0));
+        let mut u = rig();
+        u.paths = Some(paths);
+        u.demo = false;
+        u.dj_boot();
+        assert!(u.dj.requests.is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
