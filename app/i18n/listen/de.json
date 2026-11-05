@@ -2260,5 +2260,17 @@
 "Describe the music, e.g. slow 90s Korean ballad": "Beschreib die Musik, z. B. langsame koreanische Ballade aus den 90ern",
 "Describe what you want to hear and press Enter: a mood, an era, a scene, a singer.": "Beschreib, was du hören willst, und drück Enter: eine Stimmung, eine Zeit, eine Szene, eine Stimme.",
 "listen-server is too old for Describe it (needs 0.8)": "listen-server ist zu alt für Beschreiben (braucht 0.8)",
-"No songs are indexed for Describe it yet (listen-embed).": "Für Beschreiben sind noch keine Songs erfasst (listen-embed)."
+"No songs are indexed for Describe it yet (listen-embed).": "Für Beschreiben sind noch keine Songs erfasst (listen-embed).",
+"Headphone correction": "Kopfhörer-Korrektur",
+"Corrects your headphones to a neutral sound (AutoEq profiles, applied before the equalizer). The profile belongs to an output: it switches when you change between Bluetooth and wired.": "Korrigiert deine Kopfhörer zu einem neutralen Klang (AutoEq-Profile, vor dem Equalizer). Das Profil gehört zu einem Ausgang: Es wechselt, wenn du zwischen Bluetooth und Kabel wechselst.",
+"This output": "Dieser Ausgang",
+"No profile": "Kein Profil",
+"Headphone model, or paste a ParametricEQ.txt": "Kopfhörermodell, oder eine ParametricEQ.txt einfügen",
+"Use pasted profile": "Eingefügtes Profil verwenden",
+"Find your headphones": "Deine Kopfhörer finden",
+"About 6000 models from AutoEq (oratory1990 and crinacle first). Picking one binds it to this output.": "Etwa 6000 Modelle von AutoEq (oratory1990 und crinacle zuerst). Die Auswahl gilt für diesen Ausgang.",
+"Other outputs": "Andere Ausgänge",
+"Profiles that apply when these outputs play.": "Profile, die gelten, wenn diese Ausgänge spielen.",
+"System default output": "Standardausgang des Systems",
+"Imported profile": "Importiertes Profil"
 }

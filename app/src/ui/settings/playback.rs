@@ -22,6 +22,7 @@ pub(super) fn playback(state: &Listen) -> Vec<Element<'_, Message>> {
         replay_gain(state),
         mpv(state),
         equalizer(state),
+        headphone(state),
         compressor(state),
     ];
     if state.transcoding_available() {
@@ -451,6 +452,98 @@ fn equalizer(state: &Listen) -> Element<'_, Message> {
         .into(),
     ];
     section(state, "Equalizer", rows)
+}
+
+/// Headphone correction: the AutoEq profile of the output playing now, a search over the bundled
+/// index (or a pasted `ParametricEQ.txt`), and the profiles bound to other outputs.
+fn headphone(state: &Listen) -> Element<'_, Message> {
+    use crate::app::headphone::HeadphoneMsg as H;
+    use listen_core::peq;
+    let t = state.tokens;
+    let p = &state.config.settings.playback;
+    let hp = |m: H| Message::Headphone(m);
+    let output = state.headphone_output();
+    let output_label = state.headphone_device_label(&output);
+    let mut rows = vec![line(
+        state,
+        "Headphone correction",
+        "Corrects your headphones to a neutral sound (AutoEq profiles, applied before the equalizer). \
+         The profile belongs to an output: it switches when you change between Bluetooth and wired.",
+        toggler(p.headphone_eq).on_toggle(move |v| hp(H::Enabled(v))).size(20).into(),
+    )];
+    let current: Element<'_, Message> = match p.headphone_profiles.get(&output) {
+        Some(prof) => row![
+            label(format!("{} ({})", prof.name, prof.source), metrics::font_md(), t.foreground),
+            small_button(state, "Remove", Some(hp(H::Remove(output.clone())))),
+        ]
+        .spacing(metrics::space_sm())
+        .align_y(Alignment::Center)
+        .into(),
+        None => label(crate::i18n::tr("No profile").to_string(), metrics::font_md(), t.muted).into(),
+    };
+    rows.push(line(
+        state,
+        "This output",
+        "",
+        column![label(output_label.clone(), metrics::font_sm(), t.muted), current].spacing(2).into(),
+    ));
+    let query = state.headphone.query.trim();
+    let mut search = column![
+        text_input(crate::i18n::tr("Headphone model, or paste a ParametricEQ.txt"), &state.headphone.query)
+            .size(metrics::font_md())
+            .padding(Padding::from([6.0, 8.0]))
+            .style(style::input(t))
+            .width(320)
+            .on_input(move |v| hp(H::Query(v))),
+    ]
+    .spacing(metrics::space_sm());
+    let hits: Vec<&peq::Entry> = if query.is_empty() {
+        peq::suggest(&output_label).into_iter().collect()
+    } else if peq::parse_parametric_eq(query).is_some() {
+        search = search.push(small_button(state, "Use pasted profile", Some(hp(H::UsePasted))));
+        Vec::new()
+    } else {
+        peq::search(query, 8)
+    };
+    for e in hits {
+        search = search.push(
+            button(label(
+                format!("{} · {} · {}", e.name, e.kind, e.source),
+                metrics::font_sm(),
+                t.foreground,
+            ))
+            .padding(Padding::from([4.0, 8.0]))
+            .style(style::default_button(t))
+            .on_press(hp(H::Use(e.name.clone()))),
+        );
+    }
+    rows.push(line(
+        state,
+        "Find your headphones",
+        "About 6000 models from AutoEq (oratory1990 and crinacle first). Picking one binds it to this output.",
+        search.into(),
+    ));
+    let others: Vec<(&String, &peq::Profile)> =
+        p.headphone_profiles.iter().filter(|(k, _)| **k != output).collect();
+    if !others.is_empty() {
+        let mut list = column![].spacing(metrics::space_sm());
+        for (key, prof) in others {
+            list = list.push(
+                row![
+                    label(
+                        format!("{}: {}", state.headphone_device_label(key), prof.name),
+                        metrics::font_sm(),
+                        t.foreground
+                    ),
+                    small_button(state, "Remove", Some(hp(H::Remove(key.clone())))),
+                ]
+                .spacing(metrics::space_sm())
+                .align_y(Alignment::Center),
+            );
+        }
+        rows.push(line(state, "Other outputs", "Profiles that apply when these outputs play.", list.into()));
+    }
+    section(state, "Headphone correction", rows)
 }
 
 fn compressor(state: &Listen) -> Element<'_, Message> {

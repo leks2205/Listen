@@ -186,6 +186,11 @@ pub struct Playback {
     /// loudness, ReplayGain tags), with a limiter at the end of the chain. On replaces mpv's
     /// ReplayGain.
     pub levelling: Levelling,
+    /// "Headphone correction": the AutoEq profile bound to the output that plays now is applied
+    /// (before the equalizer).
+    pub headphone_eq: bool,
+    /// Headphone correction per output device, keyed by [`crate::peq::device_key`].
+    pub headphone_profiles: BTreeMap<String, crate::peq::Profile>,
     /// mpv `audio-exclusive`.
     pub audio_exclusive: bool,
     /// mpv `audio-samplerate`; below 8000 = the device's default.
@@ -231,6 +236,8 @@ impl Default for Playback {
             microtonal_pitch: false,
             replay_gain_fallback_db: 0.0,
             levelling: Levelling::Normal,
+            headphone_eq: true,
+            headphone_profiles: BTreeMap::new(),
             audio_exclusive: false,
             sample_rate_hz: 0,
             audio_format: String::new(),

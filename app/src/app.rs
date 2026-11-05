@@ -42,6 +42,7 @@ mod flow;
 pub mod focus;
 pub mod fullscreen_state;
 pub mod handoff;
+pub mod headphone;
 pub mod helpers;
 pub mod history;
 pub mod history_sync;
@@ -627,6 +628,7 @@ pub struct Listen {
     /// Volume moves: song fades, the DJ's ducking, pause fades.
     fader: fade::Fader,
     level: levelling::LevelState,
+    pub headphone: headphone::HeadphoneState,
     /// Text of the accent field on the settings page.
     pub accent_input: String,
     /// Path typed into "Import from Feishin".
@@ -742,6 +744,8 @@ pub enum Message {
     YtmLoudness(String, Result<Option<f32>, String>),
     /// mpv's answer to a levelling `af-command` (deck, dB).
     LevelSent(u8, f32, Result<(), String>),
+    /// Headphone correction (AutoEq per output device).
+    Headphone(headphone::HeadphoneMsg),
     /// A file was dropped onto the window (cookies file / Feishin settings).
     FileDropped(std::path::PathBuf),
     Navigate(Route),
@@ -1172,6 +1176,7 @@ impl Listen {
             voice: None,
             fader: fade::Fader::default(),
             level: levelling::LevelState::default(),
+            headphone: headphone::HeadphoneState::default(),
             sleep_timer: None,
             fs: Default::default(),
             about: Default::default(),
@@ -4048,6 +4053,7 @@ impl Listen {
             Message::Focus(m) => return self.on_focus(m),
             Message::Steer(m) => return self.on_steer(m),
             Message::Handoff(m) => return self.on_handoff(m),
+            Message::Headphone(m) => return self.on_headphone(m),
             Message::Radio(m) => return self.on_radio(m),
             Message::Dlna(m) => return self.on_dlna(m),
             Message::Servers(m) => return self.on_servers(m),
@@ -4324,6 +4330,9 @@ impl Listen {
             subs.push(
                 iced::time::every(history_sync::EVERY).map(|_| Message::History(history::HistoryMsg::Sync)),
             );
+        }
+        if let Some(every) = self.headphone_poll_every() {
+            subs.push(iced::time::every(every).map(|_| Message::Headphone(headphone::HeadphoneMsg::Poll)));
         }
         if self.handoff_on() {
             subs.push(iced::time::every(handoff::TICK).map(|_| Message::Handoff(handoff::HandoffMsg::Tick)));

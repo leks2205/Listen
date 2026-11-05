@@ -8,6 +8,7 @@ pub mod exclude;
 pub mod history;
 pub mod memory;
 pub mod model;
+pub mod peq;
 pub mod platform;
 pub mod queue;
 pub mod releases;

@@ -189,6 +189,12 @@ impl Listen {
         } else {
             settings::mpv_audio_filters(s)
         };
+        // Headphone correction comes first, before the user's EQ.
+        let chain = match self.headphone_stage() {
+            hp if hp.is_empty() => chain,
+            hp if chain.is_empty() => hp,
+            hp => format!("{hp},{chain}"),
+        };
         listen_player::AudioSettings {
             gapless: s.gapless.clone(),
             // Volume levelling reads the ReplayGain tags itself.

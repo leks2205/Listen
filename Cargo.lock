@@ -3990,6 +3990,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "directories",
+ "flate2",
  "rand 0.9.5",
  "regex",
  "serde",

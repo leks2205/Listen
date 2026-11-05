@@ -2,9 +2,9 @@
 
 Listen plays through [mpv](https://mpv.io), so most sound settings map directly to mpv features. This page covers the output device, gapless playback, volume levelling, ReplayGain, the equalizer and compressor, speed and pitch, fades, streaming quality and transcoding, extra mpv options, and the server jukebox.
 
-Most of these settings are in **Settings → Playback**, in the sections **Playback**, **Audio output**, **Volume levelling**, **ReplayGain**, **mpv**, **Equalizer**, **Compressor** and **Transcoding**. Output device, speed and pitch are also in the **Player options** popover (the sliders icon in the player bar).
+Most of these settings are in **Settings → Playback**, in the sections **Playback**, **Audio output**, **Volume levelling**, **ReplayGain**, **mpv**, **Equalizer**, **Headphone correction**, **Compressor** and **Transcoding**. Output device, speed and pitch are also in the **Player options** popover (the sliders icon in the player bar).
 
-> **Note:** Equalizer, compressor, volume levelling, ReplayGain, speed, pitch and fades are applied by mpv on this computer. They have no effect while you [cast to a device](casting.md) or use the server [jukebox](#jukebox-mode).
+> **Note:** Equalizer, headphone correction, compressor, volume levelling, ReplayGain, speed, pitch and fades are applied by mpv on this computer. They have no effect while you [cast to a device](casting.md) or use the server [jukebox](#jukebox-mode).
 
 ## Output device
 
@@ -87,6 +87,22 @@ To use it:
 The built-in presets are Acoustic, Bass Boost, Bass Cut, Classical, Electronic, Flat, Hip-Hop, Jazz, Loudness, Pop, Rock, Treble Boost, Treble Cut, V-Shape and Vocal Boost. Choosing a preset sets the bands and resets the preamp to 0.
 
 To save your own preset, set the bands, type a name into **Save current as…** and press **Save**. A saved preset appears in the list after the built-in ones, can be deleted with **Delete**, and takes precedence over a built-in preset of the same name. **Reset** sets all bands and the preamp back to 0.
+
+## Headphone correction
+
+Headphone correction bends your headphones' sound toward a neutral target, using the measured profiles of [AutoEq](https://github.com/jaakkopasanen/AutoEq) (MIT licence). About 6000 headphone models are built into Listen, one profile per model (measurements by oratory1990 first, then crinacle, then the other sources), so nothing is downloaded. The correction runs first in the sound chain, before the equalizer, so the equalizer stays your own taste on top of a neutral sound.
+
+A profile belongs to an **output**, not to Listen as a whole:
+
+1. Play through your headphones (connect them, or pick them as the **Audio device**).
+2. Open **Settings → Playback → Headphone correction**. **This output** names the output that plays now.
+3. Type the model into **Find your headphones** (for example `WH-1000XM5` or `HD 600`; hyphens and case don't matter) and pick it. When the output's name already says which headphones it is (Bluetooth headphones usually do), Listen suggests the profile before you type.
+
+From then on the profile is applied whenever that output plays, and taken off when another one does. With the audio device on **Autoselect**, Listen follows the system's default output (on Linux: `pactl get-default-sink`, checked twice a second), so connecting Bluetooth headphones or plugging in a wired pair switches the profile within a second. During a DJ transition the switch waits until the blend has ended.
+
+You can also paste the text of an AutoEq or Equalizer APO `ParametricEQ.txt` into the search box and choose **Use pasted profile**. **Other outputs** lists the profiles bound to outputs that don't play now; **Remove** takes one away. **Headphone correction** (on by default) turns all of them off without forgetting them.
+
+Every profile keeps its preamp, lowered further when a band boosts more than it leaves room for, so the correction itself never clips; volume levelling's limiter comes after it as usual.
 
 ## Compressor
 

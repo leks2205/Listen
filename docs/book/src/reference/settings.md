@@ -243,6 +243,16 @@ See [Sound](../playback/sound.md).
 | Presets | Built-in presets (Acoustic, Bass Boost, Bass Cut, Classical, Electronic, Flat, Hip-Hop, Jazz, Loudness, Pop, Rock, Treble Boost, Treble Cut, V-Shape and more) and your own: set the bands, type a name and save. **Reset** sets all bands to 0. | none | `settings.playback.equalizer_preset`, `settings.playback.custom_eq_presets` |
 | Band sliders | A preamp and 12 bands, each -12 to +12 dB in half-dB steps. | 0 | `settings.playback.equalizer_preamp`, `[[settings.playback.equalizer]]` (`freq`, `gain`) |
 
+### Headphone correction
+
+See [Sound](../playback/sound.md#headphone-correction).
+
+| Row | What it does | Default | Key |
+| --- | --- | --- | --- |
+| Headphone correction | Applies the AutoEq profile bound to the output that plays now. | On | `settings.playback.headphone_eq` |
+| This output / Find your headphones | The output playing now and its profile; search the built-in AutoEq index (or paste a `ParametricEQ.txt`) to bind one. | none | `settings.playback.headphone_profiles` (output → `name`, `source`, `preamp`, `filters`) |
+| Other outputs | Profiles bound to outputs that don't play now. | none | same |
+
 ### Compressor
 
 | Row | What it does | Default | Key |
