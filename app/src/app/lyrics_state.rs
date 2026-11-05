@@ -111,7 +111,6 @@ pub struct LyricsUi {
     pub gloss_word: Option<String>,
     /// Lute word statuses from the vocab-hub (loaded once per session).
     pub vocab: Option<listen_lyrics::vocab::Words>,
-    pub lute_busy: bool,
     /// Gemini results for the current song (`key`), mirrored to the cache dir.
     ai_cache: listen_lyrics::gemini::SongCache,
     ai_cache_key: String,
@@ -153,7 +152,6 @@ impl LyricsUi {
             words_mode: false,
             gloss_word: None,
             vocab: None,
-            lute_busy: false,
             ai_cache: Default::default(),
             ai_cache_key: String::new(),
             search: None,
@@ -334,9 +332,6 @@ pub enum LyricsMsg {
     /// A word was clicked in words mode.
     Word(String),
     Vocab(Option<listen_lyrics::vocab::Words>),
-    /// Add the open gloss's dictionary form to Lute.
-    AddToLute,
-    AddedToLute(String, Result<listen_lyrics::vocab::Added, String>),
     SearchOpen,
     SearchClose,
     SearchName(String),
@@ -829,46 +824,6 @@ impl Listen {
                     self.learn.vocab_at = Some(std::time::Instant::now());
                 }
                 self.lyrics_ui.vocab = words;
-            }
-            LyricsMsg::AddToLute => {
-                let ui = &self.lyrics_ui;
-                let base = self.config.settings.lyrics.vocab_hub_url.trim().to_string();
-                let Some(word) = ui.gloss_word.clone() else { return Task::none() };
-                if base.is_empty() || ui.lute_busy {
-                    return Task::none();
-                }
-                let (lemma, meaning) = match ui.glosses.get(&word) {
-                    Some(g) => (g.lemma.clone(), g.meaning.clone()),
-                    None => (word, String::new()),
-                };
-                self.lyrics_ui.lute_busy = true;
-                let http = self.http.clone();
-                return Task::perform(
-                    async move {
-                        let r = listen_lyrics::vocab::add_term(&http, &base, &lemma, &meaning).await;
-                        (lemma, r)
-                    },
-                    |(lemma, r)| Message::Lyrics(LyricsMsg::AddedToLute(lemma, r)),
-                );
-            }
-            LyricsMsg::AddedToLute(lemma, result) => {
-                use listen_lyrics::vocab::Added;
-                self.lyrics_ui.lute_busy = false;
-                match result {
-                    Ok(Added::Created) => {
-                        if let Some(v) = &mut self.lyrics_ui.vocab {
-                            v.terms.insert(lemma.clone(), 1);
-                        }
-                        self.toast_info(crate::i18n::trf("Added “{}” to Lute.", &[&lemma]));
-                    }
-                    Ok(Added::Exists(_)) => {
-                        self.toast_info(crate::i18n::trf("“{}” is already in Lute.", &[&lemma]))
-                    }
-                    Ok(Added::Unsupported) => self.toast_error(
-                        crate::i18n::tr("The vocab-hub cannot add words yet (it needs an update).").into(),
-                    ),
-                    Err(e) => self.toast_error(crate::i18n::trf("Adding to Lute did not work: {}", &[&e])),
-                }
             }
             LyricsMsg::SearchOpen => {
                 let (name, artist) = self

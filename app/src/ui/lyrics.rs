@@ -739,8 +739,8 @@ fn export_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
     Some((body, vec![close, save]))
 }
 
-/// The gloss of the clicked word: dictionary form, part of speech, meaning, Lute status and
-/// "Add to Lute".
+/// The gloss of the clicked word: dictionary form, part of speech, meaning and Lute status (read
+/// only: decision round 1 keeps Listen from writing to Lute).
 fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_, Message>>)> {
     use listen_lyrics::vocab::Knowledge;
     let t = state.tokens;
@@ -774,14 +774,13 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
         None => body = body.push(label("No meaning for this word.", metrics::font_md(), t.muted)),
     }
     let hub = !state.config.settings.lyrics.vocab_hub_url.trim().is_empty();
-    let mut known = false;
     if hub && let Some(words) = &ui.vocab {
         let lemma = gloss.map(|g| g.lemma.as_str());
         let k = match Knowledge::from_status(words.status(word, lemma), 5) {
             Knowledge::New => state.learn_word_class(words, word, lemma),
             k => k,
         };
-        known = matches!(k, Knowledge::Known | Knowledge::Ignored);
+        let known = matches!(k, Knowledge::Known | Knowledge::Ignored);
         let text = match k {
             Knowledge::Known => crate::i18n::tr("In Lute: known").to_string(),
             Knowledge::Learning(0) => crate::i18n::tr("In Lute: learning").to_string(),
@@ -793,10 +792,5 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
     }
     let close =
         action(t, "Close", Some(Message::Overlay(crate::app::overlay::OverlayMsg::CloseModal)), false);
-    let mut actions = vec![close];
-    if hub {
-        let add = (!ui.lute_busy && !known).then(|| msg(LyricsMsg::AddToLute));
-        actions.push(action(t, if ui.lute_busy { "Adding…" } else { "Add to Lute" }, add, true));
-    }
-    Some((body.into(), actions))
+    Some((body.into(), vec![close]))
 }

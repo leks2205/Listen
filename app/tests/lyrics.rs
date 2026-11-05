@@ -380,17 +380,14 @@ fn words_mode_opens_a_gloss_with_the_lute_status() {
     let msgs = click(&mut s, "골랐다는");
     assert!(msgs.iter().any(|m| matches!(m, Message::Lyrics(LyricsMsg::Word(w)) if w == "골랐다는")));
     assert!(has_text(&s, "to choose") && has_text(&s, "고르다 · Verb"));
-    // No hub set: no Lute line and no button.
-    assert!(!has_text(&s, "Add to Lute"));
+    // No hub set: no Lute line.
+    assert!(!has_text(&s, "In Lute: learning (3/5)"));
     s.config.settings.lyrics.vocab_hub_url = "https://hub.example".into();
     let words = listen_lyrics::vocab::parse_words(r#"{"version":"v","terms":{"고르다":3}}"#).unwrap();
     let _ = s.update(Message::Lyrics(LyricsMsg::Vocab(Some(words))));
     assert!(has_text(&s, "In Lute: learning (3/5)"));
-    assert!(has_text(&s, "Add to Lute"));
-    let _ = s.update(Message::Lyrics(LyricsMsg::AddedToLute(
-        "고르다".into(),
-        Ok(listen_lyrics::vocab::Added::Exists(3)),
-    )));
+    // Listen never writes to Lute (decision round 1): no Add to Lute button.
+    assert!(!has_text(&s, "Add to Lute"));
     // A word without a gloss says so.
     let _ = s.update(Message::Lyrics(LyricsMsg::Word("노래".into())));
     assert!(has_text(&s, "No meaning for this word."));

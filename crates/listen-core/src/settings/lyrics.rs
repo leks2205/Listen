@@ -40,7 +40,7 @@ pub struct LyricsSettings {
     pub translation_api_provider: String,
     pub translation_api_key: String,
     pub translation_target_language: String,
-    /// vocab-hub address (`https://…`) for Lute word statuses and "Add to Lute"; empty = off.
+    /// vocab-hub address (`https://…`) for Lute word statuses (read only); empty = off.
     pub vocab_hub_url: String,
 }
 
