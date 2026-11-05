@@ -553,7 +553,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         if asked {
             let before = pool.len();
             pool = listen_dj::steer::filter_pool(pool, energy_of, requests, first_energy);
-            println!("requests: {} candidates of {before} fit", pool.len());
+            println!("requests: {} of {before} candidates kept", pool.len());
         }
         let now = flow.get(&current.id);
         let mut notes: HashMap<String, String> =

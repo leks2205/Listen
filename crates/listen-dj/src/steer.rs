@@ -13,6 +13,10 @@ pub const MAX_TEXT: usize = 120;
 /// The pool filters never leave fewer candidates than this (the DJ needs room to pick a flowing set).
 pub const MIN_POOL: usize = 8;
 
+/// Calmer / More energy keep only the songs on the requested side of the bar once at least this many are
+/// there (a short set beats one that breaks the request); with fewer, the best-fitting [`MIN_POOL`] stay.
+pub const MIN_STEERED: usize = 3;
+
 /// A quick request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -273,8 +277,8 @@ fn median(mut v: Vec<f32>) -> Option<f32> {
 }
 
 /// Keeps the candidates that fit the requests, in their order. Each filter applies only when it leaves
-/// at least [`MIN_POOL`] songs; an energy request that would leave fewer keeps the [`MIN_POOL`] that fit
-/// it best. `reference`: the energy to beat for Calmer / More energy (the replaced songs' mean, else the
+/// at least [`MIN_POOL`] songs; an energy request keeps every song on its side of the bar when at least
+/// [`MIN_STEERED`] are, else the [`MIN_POOL`] that fit it best. `reference`: the energy to beat for Calmer / More energy (the replaced songs' mean, else the
 /// song playing now); without one, the pool's median. Songs without analysis never pass an energy filter
 /// when enough analysed ones do.
 pub fn filter_pool<T: Clone>(
@@ -300,10 +304,10 @@ pub fn filter_pool<T: Clone>(
                 let fits = |e: f32| if calmer { e < bar } else { e > bar };
                 let kept: Vec<(T, Facts)> =
                     pool.iter().filter(|(_, f)| f.energy.is_some_and(fits)).cloned().collect();
-                if kept.len() >= MIN_POOL {
+                if kept.len() >= MIN_STEERED {
                     pool = kept;
                 } else {
-                    // The best-fitting analysed songs, then the rest in order.
+                    // Too few on the right side: the best-fitting analysed songs, then the rest in order.
                     let mut ranked: Vec<usize> =
                         (0..pool.len()).filter(|&i| pool[i].1.energy.is_some()).collect();
                     ranked.sort_by(|&a, &b| {
@@ -372,8 +376,32 @@ mod tests {
         let kept = ids(filter_pool(pool(&energies), |s| s.1, &with(&[Chip::Calmer]), Some(0.6)));
         assert_eq!(kept, (0..12).collect::<Vec<_>>());
         let kept = ids(filter_pool(pool(&energies), |s| s.1, &with(&[Chip::MoreEnergy]), Some(0.6)));
-        // Only 7 songs above 0.6: the 8 most energetic stay.
-        assert_eq!(kept, (12..20).collect::<Vec<_>>());
+        // Only 7 songs above 0.6: those 7, not the song at the bar.
+        assert_eq!(kept, (13..20).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_thin_pool_never_admits_songs_on_the_wrong_side_of_the_bar() {
+        // The QA case: 16 candidates, only three below the replaced set's 0.32.
+        let e: Vec<Option<f32>> =
+            [0.5, 0.3, 0.5, 0.4, 0.6, 0.3, 0.7, 0.5, 0.3, 0.8, 0.6, 0.45, 0.9, 0.55, 0.65, 0.7]
+                .into_iter()
+                .map(Some)
+                .collect();
+        let kept = ids(filter_pool(pool(&e), |s| s.1, &with(&[Chip::Calmer]), Some(0.32)));
+        assert_eq!(kept, vec![1, 5, 8]);
+        // Every pool with enough songs on the requested side has its mean on that side.
+        for bar in [0.2f32, 0.35, 0.5, 0.65, 0.8] {
+            for (chip, below) in [(Chip::Calmer, true), (Chip::MoreEnergy, false)] {
+                let kept = filter_pool(pool(&e), |s| s.1, &with(&[chip]), Some(bar));
+                let side = e.iter().flatten().filter(|&&x| if below { x < bar } else { x > bar }).count();
+                if side < MIN_STEERED {
+                    continue;
+                }
+                let mean = kept.iter().map(|s| s.1.energy.unwrap()).sum::<f32>() / kept.len() as f32;
+                assert!(if below { mean < bar } else { mean > bar }, "{chip:?} bar {bar}: mean {mean}");
+            }
+        }
     }
 
     #[test]

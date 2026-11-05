@@ -265,16 +265,23 @@ impl Listen {
             self.drop_break();
         }
         self.queue.remove_many(&uids);
-        tracing::info!(
-            "Tell the DJ: {} request(s); {} queued DJ songs replaced, planning a new set",
-            self.dj.requests.items.len(),
-            uids.len()
-        );
+        // The DJ song a running mix keeps doesn't hold the new set back: it is planned behind it now.
+        let kept = self.queue.iter().skip(start).take_while(|i| i.auto).count().min(usize::from(keep_next));
         // A plan already under way was made without the change: drop it when it lands.
         self.dj.generation += 1;
         self.dj.busy = false;
         self.dj.stalled = false;
-        Task::batch([self.refresh_next(), self.dj_maybe_plan()])
+        let blocker = self.dj_plan_blocker(kept);
+        tracing::info!(
+            "Tell the DJ: {} request(s); {} queued DJ songs replaced, {}",
+            self.dj.requests.items.len(),
+            uids.len(),
+            match blocker {
+                None => "planning a new set".to_string(),
+                Some(why) => format!("new set later ({why})"),
+            }
+        );
+        Task::batch([self.refresh_next(), self.dj_plan_past(kept)])
     }
 
     fn quota_file(&self) -> Option<PathBuf> {
@@ -685,9 +692,23 @@ impl Listen {
 
     /// Plans the next set when the current song is the last one queued.
     pub(super) fn dj_maybe_plan(&mut self) -> Task<Message> {
-        if let Some(why) =
-            plan_blocker(self.ai_dj_on(), self.dj.busy, self.queue.upcoming(), self.backing_off())
-        {
+        self.dj_plan_past(0)
+    }
+
+    /// Why no set is planned now, not counting the first `kept` upcoming songs (see [`Self::dj_plan_past`]).
+    pub(super) fn dj_plan_blocker(&self, kept: usize) -> Option<&'static str> {
+        plan_blocker(
+            self.ai_dj_on(),
+            self.dj.busy,
+            self.queue.upcoming().saturating_sub(kept),
+            self.backing_off(),
+        )
+    }
+
+    /// Plans a set unless something blocks it; the first `kept` upcoming songs don't count as "still
+    /// queued" (Tell the DJ: the next DJ song a mix keeps, the new set goes behind it).
+    pub(super) fn dj_plan_past(&mut self, kept: usize) -> Task<Message> {
+        if let Some(why) = self.dj_plan_blocker(kept) {
             if why == "backing off" {
                 tracing::debug!("AI DJ: backing off after an error; Auto-DJ fills in");
                 return self.fetch_autodj();
@@ -838,7 +859,7 @@ impl Listen {
                         }
                     };
                     let pool = listen_dj::steer::filter_pool(pool, facts, &requests, steer_energy);
-                    tracing::info!("AI DJ requests: {} of {before} candidates fit", pool.len());
+                    tracing::info!("AI DJ requests: {} of {before} candidates kept", pool.len());
                     pool
                 };
                 // Nothing queued by the Auto-DJ to learn from: take what it would

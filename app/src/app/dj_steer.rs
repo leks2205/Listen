@@ -105,6 +105,45 @@ mod tests {
     }
 
     #[test]
+    fn a_request_plans_a_new_set_behind_the_dj_song_a_mix_keeps() {
+        let mut s = rig();
+        let songs = demo::album_songs(0);
+        s.queue.set(vec![songs[0].clone()], 0);
+        let why = listen_core::queue::Why::new(
+            listen_core::queue::Picker::AiDj,
+            listen_core::queue::WhyCode::AiDj { note: String::new() },
+        );
+        s.queue.add_picked(songs[1..4].iter().map(|x| (x.clone(), why.clone())).collect());
+        s.demo = false;
+        s.config.settings.ai_dj.enabled = true;
+        s.dj.key = Some("test-key".into());
+        let fake = crate::app::substitute::tests::Fake::new(listen_core::model::SourceKind::Subsonic, vec![]);
+        s.sources.insert(songs[0].server_id.clone(), std::sync::Arc::new(fake));
+        // The handover into the next DJ song is planned: that song stays.
+        s.mix.phase = crate::app::mix::Phase::Planned;
+        assert_eq!(s.dj_plan_blocker(0), Some("songs still queued"));
+        let _ = s.on_steer(SteerMsg::Chip(Chip::Calmer));
+        let left: Vec<String> = s.queue.iter().map(|i| i.song.id.clone()).collect();
+        assert_eq!(
+            left,
+            vec![songs[0].id.clone(), songs[1].id.clone()],
+            "current and the mixed-into song stay"
+        );
+        assert_eq!(s.dj_plan_blocker(1), Some("already planning"), "the new set is being planned at once");
+        // Own songs still queued behind it hold the new set back until they have played.
+        let mut t = rig();
+        t.queue.set(vec![songs[0].clone()], 0);
+        t.queue.add_picked(vec![(songs[1].clone(), why.clone())]);
+        t.queue.add_last(vec![songs[5].clone()], false);
+        t.demo = false;
+        t.config.settings.ai_dj.enabled = true;
+        t.dj.key = Some("test-key".into());
+        t.mix.phase = crate::app::mix::Phase::Planned;
+        let _ = t.on_steer(SteerMsg::Chip(Chip::MoreEnergy));
+        assert_eq!(t.dj_plan_blocker(1), Some("songs still queued"));
+    }
+
+    #[test]
     fn requests_survive_a_restart_of_the_app() {
         let dir = std::env::temp_dir().join(format!("listen-steer-restart-{}", std::process::id()));
         let paths = listen_core::config::Paths {

@@ -4,7 +4,7 @@ use listen_source::{AlbumQuery, Capabilities, ListQuery, StreamSource};
 use std::sync::atomic::AtomicUsize;
 
 /// A server with a fixed library: `search` answers after `delay`, `stream` gives `Kind://id`.
-struct Fake {
+pub(crate) struct Fake {
     kind: SourceKind,
     library: Vec<Song>,
     delay: Duration,
@@ -13,7 +13,7 @@ struct Fake {
 }
 
 impl Fake {
-    fn new(kind: SourceKind, library: Vec<Song>) -> Fake {
+    pub(crate) fn new(kind: SourceKind, library: Vec<Song>) -> Fake {
         Fake { kind, library, delay: Duration::ZERO, searches: 0.into(), broken: false }
     }
 }
