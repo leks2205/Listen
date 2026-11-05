@@ -121,6 +121,8 @@ When the lyrics contain Korean and the AI DJ has a Gemini key, the lyrics contro
 
 **Lute.** Enter your vocab-hub address under **Settings → Playback → Lyrics → vocab-hub address** (empty = off). The word dialog then shows whether Lute knows the word (known, learning with its level, ignored, or not in Lute yet), and **Add to Lute** adds the dictionary form with its meaning as a new term at level 1. A word Lute already has is never changed. The hub needs the term route for this; an older hub answers that it cannot add words yet.
 
+**Known words.** With the vocab-hub set, **WORDS** also colours the Korean words by their Lute status: new words in green, words you are learning in light green, known and ignored words in the normal text colour. Next to **WORDS** the controls show how many of the song's sung words you know (*95 % known*; every time a word is sung counts, ignored words are left out). Listen looks a word up as written, by its dictionary form and with particles cut off (사람들은 → 사람); words that are still unknown then are asked from the hub one by one, which finds conjugated forms the way Lute does (보낼게요 → 보내다). The percentage is the hub's own count of the song (the same number the Lute Coverage extension shows). Lute changes show up within five minutes.
+
 ## Exporting lyrics
 
 **EXPORT** opens a preview of the file Listen would write. For synchronized lyrics you can keep **Synchronized (.lrc)** on (with an **Offset (ms)** written into the file) or switch it off to get plain text. The file is saved to your Downloads folder as `Artist - Title.lrc` or `.txt`, and the dialog shows the exact name. Word timings and translations are kept in the `.lrc` file.

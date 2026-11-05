@@ -86,6 +86,10 @@ fn main() -> iced::Result {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::song_card(&args));
     }
+    if std::env::args().nth(1).as_deref() == Some("--known-words") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(listen::check::known_words(&args));
+    }
     if std::env::args().nth(1).as_deref() == Some("--weekly-stats") {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::weekly_stats(&args));

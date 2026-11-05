@@ -635,7 +635,7 @@ impl Listen {
         if let Some(hit) = self.ai_cache().glossary(lang, &lines).cloned() {
             tracing::info!("Gemini lyric glosses ({lang}) from the cache");
             self.lyrics_ui.glosses = hit;
-            return Task::none();
+            return self.learn_record_shown();
         }
         let model = self.config.settings.ai_dj.text_model.clone();
         let http = self.http.clone();
@@ -652,20 +652,7 @@ impl Listen {
     }
 
     fn load_vocab(&mut self) -> Task<Message> {
-        let base = self.config.settings.lyrics.vocab_hub_url.trim().to_string();
-        if base.is_empty() || self.lyrics_ui.vocab.is_some() {
-            return Task::none();
-        }
-        let http = self.http.clone();
-        Task::perform(
-            async move {
-                listen_lyrics::vocab::words(&http, &base)
-                    .await
-                    .map_err(|e| tracing::warn!("vocab-hub word list: {e}"))
-                    .ok()
-            },
-            |w| Message::Lyrics(LyricsMsg::Vocab(w)),
-        )
+        self.learn_vocab()
     }
 
     fn translate_lyrics(&mut self) -> Task<Message> {
@@ -713,6 +700,7 @@ impl Listen {
                 if self.lyrics_ui.words_mode && self.glosses_available() {
                     tasks.push(self.load_glosses());
                 }
+                tasks.push(self.learn_record_shown());
                 return Task::batch(tasks);
             }
             LyricsMsg::OffsetStep(delta) => {
@@ -808,7 +796,7 @@ impl Listen {
                 let ui = &mut self.lyrics_ui;
                 ui.words_mode = !ui.words_mode;
                 if ui.words_mode {
-                    return Task::batch([self.load_glosses(), self.load_vocab()]);
+                    return Task::batch([self.load_glosses(), self.load_vocab(), self.learn_shown_words()]);
                 }
             }
             LyricsMsg::Glossed(id, lang, result) => {
@@ -822,6 +810,7 @@ impl Listen {
                         self.ai_cache().put_glosses(&lang, &lines, words.clone());
                         self.save_ai_cache();
                         self.lyrics_ui.glosses = words;
+                        return self.learn_record_shown();
                     }
                     Err(e) => {
                         tracing::warn!("Gemini lyric glosses failed: {e}");
@@ -835,7 +824,12 @@ impl Listen {
                 self.open_modal(GLOSS_MODAL);
                 return Task::batch([self.load_glosses(), self.load_vocab()]);
             }
-            LyricsMsg::Vocab(words) => self.lyrics_ui.vocab = words,
+            LyricsMsg::Vocab(words) => {
+                if words.is_some() {
+                    self.learn.vocab_at = Some(std::time::Instant::now());
+                }
+                self.lyrics_ui.vocab = words;
+            }
             LyricsMsg::AddToLute => {
                 let ui = &self.lyrics_ui;
                 let base = self.config.settings.lyrics.vocab_hub_url.trim().to_string();

@@ -91,6 +91,10 @@ The rolling view compares this week with last week. The periods are rolling and 
 
 A mix without enough history behind it is greyed out and says "Not enough history yet". Mixes change as you listen. They are made on your computer and need no server feature.
 
+### Learnable songs
+
+With a vocab-hub address set (see [Lyrics: known words](../playback/lyrics.md#word-meanings-korean)), Mixes also shows **Learnable songs**: your liked songs where you know 90 to 98 % of the Korean words, the easiest first. Enough to follow the song, with a few new words to pick up. Songs with fewer than 20 Korean words are left out. Opening the mix loads your liked songs and looks up the lyrics of those not seen yet, a few at a time (the page shows how far it is); songs you played with lyrics are counted already. Songs without Korean lyrics are looked at again after 30 days. Every song's words are kept in the cache folder (`lyrics-words.json`), so when you learn words in Lute the mix is counted again from there, without fetching lyrics again. Snoozed and "Not interested" songs stay out.
+
 The artist page's **Top songs → Personal** view uses the same history; see [Library pages](library.md#artist-page).
 
 ## Related

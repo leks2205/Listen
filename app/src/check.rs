@@ -1539,6 +1539,124 @@ pub fn memory_json(m: &listen_core::memory::Memory, limit: usize) -> serde_json:
     })
 }
 
+/// `listen --known-words <TITLE> <ARTIST> [--lrc FILE] [--hub URL]`: the song's Korean words with
+/// their Lute status (vocab-hub) and the share of known words, as JSON — what the lyrics' words
+/// mode colours and the Learnable songs mix counts.
+pub fn known_words(args: &[String]) -> i32 {
+    use listen_lyrics::known;
+    use listen_lyrics::vocab::Knowledge;
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let lrc = opt("--lrc");
+    let (title, artist) =
+        (args.first().filter(|a| !a.starts_with("--")), args.get(1).filter(|a| !a.starts_with("--")));
+    if lrc.is_none() && (title.is_none() || artist.is_none()) {
+        eprintln!("usage: listen --known-words <TITLE> <ARTIST> [--lrc FILE] [--hub URL]");
+        return 2;
+    }
+    let hub = opt("--hub").or_else(|| {
+        let p = listen_core::config::Paths::discover().ok()?;
+        let c = listen_core::config::Config::load(&p.config_file()).ok()?;
+        Some(c.settings.lyrics.vocab_hub_url).filter(|u| !u.trim().is_empty())
+    });
+    let Some(hub) = hub else {
+        eprintln!("no vocab-hub: pass --hub URL or set it in Settings → Lyrics");
+        return 1;
+    };
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    };
+    let http = reqwest::Client::new();
+    let lines: Vec<String> = match &lrc {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(t) => listen_lyrics::parse_lrc(&t).lines.into_iter().map(|l| l.text).collect(),
+            Err(e) => {
+                eprintln!("{path}: {e}");
+                return 1;
+            }
+        },
+        None => {
+            let q = listen_lyrics::providers::Query {
+                name: title.cloned().unwrap_or_default(),
+                artist: artist.cloned().unwrap_or_default(),
+                album: String::new(),
+                duration_secs: 0.0,
+            };
+            let opts = listen_lyrics::fetch::Options::default();
+            let sources = [listen_lyrics::providers::Source::Lrclib];
+            let found = rt.block_on(async {
+                for hit in listen_lyrics::fetch::search_all(&http, &q, &sources).await {
+                    if let Some(l) = listen_lyrics::fetch::get(&http, &hit, &opts).await {
+                        return Some(l);
+                    }
+                }
+                None
+            });
+            match found {
+                Some(l) => l.lines.into_iter().map(|l| l.text).collect(),
+                None => {
+                    eprintln!("no lyrics found");
+                    return 1;
+                }
+            }
+        }
+    };
+    let words = match rt.block_on(listen_lyrics::vocab::words(&http, &hub)) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("vocab-hub: {e}");
+            return 1;
+        }
+    };
+    let lemmas = rt.block_on(known::hub_lemmas(&http, &hub, &lines)).ok().flatten();
+    let resolved = lemmas.is_some();
+    let tokens = known::tokens(&lines, &lemmas.unwrap_or_default());
+    let local = known::coverage(&words, &tokens, 5);
+    let mut store = known::Store::default();
+    store.record("song", &lines, &std::collections::HashMap::new(), 0);
+    let text = store.songs.get("song").map(|s| s.text()).unwrap_or_default();
+    let hub_cov = rt.block_on(known::hub_coverage(&http, &hub, &text, 5));
+    let name = |k: Knowledge| match k {
+        Knowledge::Known => "known",
+        Knowledge::Learning(_) => "learning",
+        Knowledge::New => "new",
+        Knowledge::Ignored => "ignored",
+    };
+    let list: Vec<serde_json::Value> = tokens
+        .iter()
+        .map(|t| {
+            let status = known::status_of(&words, &t.form, t.lemma.as_deref());
+            // As the lyrics show it: words the list does not have are classed by the hub.
+            let shown = match status {
+                Some(_) => Knowledge::from_status(status, 5),
+                None => rt
+                    .block_on(known::hub_coverage(&http, &hub, &t.form, 5))
+                    .map(|c| known::class_of(&c))
+                    .unwrap_or(Knowledge::New),
+            };
+            serde_json::json!({ "word": t.form, "lemma": t.lemma, "count": t.count, "status": status,
+                "shown": name(shown) })
+        })
+        .collect();
+    let cov = hub_cov.as_ref().copied().unwrap_or(local);
+    let out = serde_json::json!({
+        "lines": lines.len(),
+        "hub_resolve": resolved,
+        "word_list_version": words.version,
+        "coverage": cov,
+        "counted_by": if hub_cov.is_ok() { "hub" } else { "word list" },
+        "percent": cov.percent(),
+        "word_list_percent": local.percent(),
+        "learnable": cov.learnable(),
+        "words": list,
+    });
+    println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

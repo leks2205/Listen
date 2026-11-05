@@ -187,6 +187,12 @@ fn ruby_line<'a>(
     container(r.wrap().align_x(align)).width(Length::Fill).align_x(align).into()
 }
 
+/// `base` moved towards `accent` by `k` (0..1), keeping `base`'s transparency.
+fn tint(base: Color, accent: Color, k: f32) -> Color {
+    let mix = |a: f32, b: f32| a + (b - a) * k;
+    Color { r: mix(base.r, accent.r), g: mix(base.g, accent.g), b: mix(base.b, accent.b), a: base.a }
+}
+
 /// A line in words mode: every Korean word is a button that opens its gloss (a word with a gloss
 /// loaded is shown in the accent colour while hovered).
 fn word_line<'a>(
@@ -196,14 +202,28 @@ fn word_line<'a>(
     color: Color,
     align: Horizontal,
 ) -> Element<'a, Message> {
+    use listen_lyrics::vocab::Knowledge;
     let t = state.tokens;
     let font = ui::font(Weight::Semibold);
+    let ui = &state.lyrics_ui;
     let mut r = Row::new();
     for p in listen_lyrics::gemini::pieces(text) {
+        // Lute colours: new words in the accent, learning ones half way, known ones plain.
+        let shade = match (&ui.vocab, p.word) {
+            (Some(words), true) => {
+                let lemma = ui.glosses.get(p.text).map(|g| g.lemma.as_str());
+                match state.learn_word_class(words, p.text, lemma) {
+                    Knowledge::New => tint(color, t.primary, 1.0),
+                    Knowledge::Learning(_) => tint(color, t.primary, 0.5),
+                    Knowledge::Known | Knowledge::Ignored => color,
+                }
+            }
+            _ => color,
+        };
         let base = ui::text_in(p.text, ui::font_for(p.text, font))
             .size(size)
             .line_height(LINE_HEIGHT)
-            .color(color)
+            .color(shade)
             .wrapping(iced::widget::text::Wrapping::None);
         if p.word {
             r = r.push(
@@ -446,6 +466,16 @@ fn controls(state: &Listen) -> Element<'_, Message> {
             if ui.words_mode { "Stop looking up words" } else { "Click a Korean word for its meaning" },
             crate::ui::tip::Position::Top,
         ));
+        if ui.words_mode
+            && let Some(pct) = state.learn_shown_coverage().and_then(|c| c.percent())
+        {
+            top = top.push(crate::ui::tip::tip_plain(
+                t,
+                label(crate::i18n::trf("{} % known", &[&pct]), metrics::font_sm(), t.muted),
+                "Share of this song's Korean words you know in Lute. New words are green, words you are learning light green.",
+                crate::ui::tip::Position::Top,
+            ));
+        }
     }
     top = top.push(crate::ui::tip::tip_plain(
         t,
@@ -746,11 +776,15 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
     let hub = !state.config.settings.lyrics.vocab_hub_url.trim().is_empty();
     let mut known = false;
     if hub && let Some(words) = &ui.vocab {
-        let status = words.status(word, gloss.map(|g| g.lemma.as_str()));
-        let k = Knowledge::from_status(status, 5);
+        let lemma = gloss.map(|g| g.lemma.as_str());
+        let k = match Knowledge::from_status(words.status(word, lemma), 5) {
+            Knowledge::New => state.learn_word_class(words, word, lemma),
+            k => k,
+        };
         known = matches!(k, Knowledge::Known | Knowledge::Ignored);
         let text = match k {
             Knowledge::Known => crate::i18n::tr("In Lute: known").to_string(),
+            Knowledge::Learning(0) => crate::i18n::tr("In Lute: learning").to_string(),
             Knowledge::Learning(n) => crate::i18n::trf("In Lute: learning ({}/5)", &[&n]),
             Knowledge::Ignored => crate::i18n::tr("In Lute: ignored").to_string(),
             Knowledge::New => crate::i18n::tr("Not in Lute yet").to_string(),

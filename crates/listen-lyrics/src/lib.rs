@@ -7,6 +7,7 @@ pub mod fetch;
 pub mod furigana;
 mod gate;
 pub mod gemini;
+pub mod known;
 mod lrc;
 pub mod providers;
 pub mod rank;

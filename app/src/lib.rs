@@ -83,6 +83,9 @@ Options:
   --song-card <TITLE> <ARTIST> [--album A] [--year Y] [--lang de|en]
                          Build the full-screen About card (Gemini with Google
                          Search, MusicBrainz credits), print it as JSON, then exit
+  --known-words <TITLE> <ARTIST> [--lrc FILE] [--hub URL]
+                         Print the song's Korean words with their Lute status
+                         (vocab-hub) and the share of known words as JSON, then exit
   --weekly-stats [--history PATH] [--now UNIX]
                          Print the Statistics page's Last 4 weeks numbers as
                          JSON (default: this computer's history), then exit

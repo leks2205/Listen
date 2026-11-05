@@ -25,6 +25,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         Route::Stats => super::history::stats(state),
         Route::Mixes => super::history::mixes(state),
         Route::Mix(kind) => super::history::mix(state, *kind),
+        Route::Learnable => super::history::learnable(state),
         Route::Genres => super::browse::genres(state),
         Route::Genre(_) => super::browse::genre(state),
         Route::Folders | Route::Folder(_) => super::browse::folder(state),

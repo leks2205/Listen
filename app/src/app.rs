@@ -48,6 +48,7 @@ pub mod hotkeys;
 pub mod integrations;
 pub mod item;
 pub mod lastfm;
+pub mod learnable;
 mod levelling;
 pub mod library_extra;
 pub mod list;
@@ -123,6 +124,8 @@ pub enum Route {
     Stats,
     Mixes,
     Mix(listen_core::history::MixKind),
+    /// Liked songs at 90-98 % known Korean words (Lute, via the vocab-hub).
+    Learnable,
     /// Internet radio stations.
     Radio,
 }
@@ -172,7 +175,7 @@ impl Route {
             Route::Settings => "Settings",
             Route::Recent => "Recently Played",
             Route::Stats => "Statistics",
-            Route::Mixes | Route::Mix(_) => "Mixes",
+            Route::Mixes | Route::Mix(_) | Route::Learnable => "Mixes",
             Route::Radio => "Radio",
         }
     }
@@ -670,6 +673,8 @@ pub struct Listen {
     pub fs: fullscreen_state::FullscreenState,
     /// The full-screen About tab's song card.
     pub about: about::AboutState,
+    /// Known words in Korean lyrics and the Learnable songs mix.
+    pub learn: learnable::LearnState,
     /// Left sidebar: folded sections, playlist folders, drags and popups.
     pub sb: sidebar_state::SidebarState,
     /// Signed in via `--login`: never persist config or secrets.
@@ -888,6 +893,7 @@ pub enum Message {
     ToggleAiDj,
     Fullscreen(fullscreen_state::FullscreenMsg),
     About(about::AboutMsg),
+    Learn(learnable::LearnMsg),
     Sidebar(sidebar_state::SidebarMsg),
     Logout,
     OpenAlbum(String),
@@ -1164,6 +1170,7 @@ impl Listen {
             sleep_timer: None,
             fs: Default::default(),
             about: Default::default(),
+            learn: Default::default(),
             sb: Default::default(),
             accent_input: String::new(),
             import_path: String::new(),
@@ -1968,6 +1975,7 @@ impl Listen {
         let songs = match self.route {
             Route::Recent => &self.history_view.recent,
             Route::Mix(_) => &self.history_view.mix,
+            Route::Learnable => &self.learn.songs,
             Route::Playlist(_) => return self.playlist_list_visible(),
             _ => return Task::none(),
         };
@@ -2794,6 +2802,9 @@ impl Listen {
             Route::Recent | Route::Stats | Route::Mixes | Route::Mix(_) => {
                 self.refresh_history_views();
                 Task::batch([self.reset_list_scroll(), self.list_visible()])
+            }
+            Route::Learnable => {
+                Task::batch([self.reset_list_scroll(), self.learn_enter(), self.list_visible()])
             }
             Route::Genres | Route::Genre(_) | Route::Favorites | Route::Folders | Route::Folder(_) => {
                 self.extra_enter(route)
@@ -4235,6 +4246,7 @@ impl Listen {
             }
             Message::Fullscreen(m) => return self.on_fullscreen(m),
             Message::About(m) => return self.on_about(m),
+            Message::Learn(m) => return self.on_learn(m),
             Message::Sidebar(m) => return self.on_sidebar(m),
             Message::LyricsLoaded(id, lyrics) => {
                 return self.on_lyrics(lyrics_state::LyricsMsg::Loaded(id, lyrics.into_iter().collect()));

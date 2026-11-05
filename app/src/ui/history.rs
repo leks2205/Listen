@@ -53,6 +53,59 @@ pub fn mix(state: &Listen, kind: MixKind) -> Element<'_, Message> {
     )
 }
 
+const LEARNABLE_BLURB: &str = "Liked songs where you know 90–98 % of the Korean words (Lute)";
+
+/// The Learnable songs mix: liked songs at 90–98 % known words, easiest first.
+pub fn learnable(state: &Listen) -> Element<'_, Message> {
+    let l = &state.learn;
+    let status = if let Some(e) = &l.error {
+        crate::i18n::trf("Could not build the mix: {}", &[e])
+    } else if l.loading && l.to_check > 0 {
+        crate::i18n::trf(
+            "Looking at the lyrics of your liked songs: {} of {}",
+            &[&l.checked.min(l.to_check), &l.to_check],
+        )
+    } else if l.loading {
+        crate::i18n::tr("Loading your liked songs and Lute words…").to_string()
+    } else {
+        String::new()
+    };
+    if l.songs.is_empty() {
+        let t = state.tokens;
+        let text = if status.is_empty() {
+            crate::i18n::tr(
+                "No liked song has 90–98 % known words yet. Songs count once their lyrics were found.",
+            )
+            .to_string()
+        } else {
+            status
+        };
+        return container(
+            column![
+                label_w("Learnable songs", 36.0, t.foreground, Weight::Bold),
+                label(LEARNABLE_BLURB, metrics::font_md(), t.muted),
+                label(text, metrics::font_md(), t.muted),
+            ]
+            .spacing(metrics::space_md()),
+        )
+        .padding(Padding { top: 80.0, right: 32.0, bottom: 32.0, left: 32.0 })
+        .into();
+    }
+    let mut sub = crate::i18n::trf(
+        "{} % to {} % known words • ",
+        &[
+            &l.cov.last().and_then(|c| c.percent()).unwrap_or(0),
+            &l.cov.first().and_then(|c| c.percent()).unwrap_or(0),
+        ],
+    );
+    if !status.is_empty() {
+        sub = format!("{status} • {sub}");
+    }
+    song_list(state, "MIX", "Learnable songs", sub, None, &l.songs, |i| {
+        Message::Learn(crate::app::learnable::LearnMsg::Play(i))
+    })
+}
+
 pub fn mixes(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let mut page = Column::new()
@@ -78,6 +131,21 @@ pub fn mixes(state: &Listen) -> Element<'_, Message> {
             .padding(metrics::space_md())
             .style(style::default_button(t))
             .on_press_maybe(enabled.then(|| Message::Navigate(Route::Mix(*kind)))),
+        );
+    }
+    if state.learn_available() {
+        page = page.push(
+            button(
+                column![
+                    label_w("Learnable songs", metrics::font_lg(), t.foreground, Weight::Semibold),
+                    label(LEARNABLE_BLURB, metrics::font_sm(), t.muted),
+                ]
+                .spacing(metrics::space_xs()),
+            )
+            .width(Length::Fill)
+            .padding(metrics::space_md())
+            .style(style::default_button(t))
+            .on_press(Message::Navigate(Route::Learnable)),
         );
     }
     scrollable(

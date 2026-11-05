@@ -2240,5 +2240,16 @@
 "Forgotten favourites": "Vergessene Lieblingssongs",
 "One song in eight is a favourite you haven't played for a while.": "Jeder achte Titel ist ein Lieblingssong, den du länger nicht gehört hast.",
 "New from your artists": "Neu von deinen Künstlern",
-"Shows new albums and singles of the artists you follow and play most at the top of Home (YouTube Music; needs the listen-server of Merge with other devices)": "Zeigt neue Alben und Singles der Künstler, denen du folgst und die du am meisten hörst, oben auf der Startseite (YouTube Music; braucht den listen-server von „Mit anderen Geräten zusammenführen“)"
+"Shows new albums and singles of the artists you follow and play most at the top of Home (YouTube Music; needs the listen-server of Merge with other devices)": "Zeigt neue Alben und Singles der Künstler, denen du folgst und die du am meisten hörst, oben auf der Startseite (YouTube Music; braucht den listen-server von „Mit anderen Geräten zusammenführen“)",
+"Learnable songs": "Lernbare Songs",
+"Liked songs where you know 90–98 % of the Korean words (Lute)": "Lieblingssongs, von deren koreanischen Wörtern du 90–98 % kennst (Lute)",
+"Could not build the mix: {}": "Der Mix ließ sich nicht erstellen: {}",
+"Looking at the lyrics of your liked songs: {} of {}": "Songtexte deiner Lieblingssongs werden angesehen: {} von {}",
+"Loading your liked songs and Lute words…": "Lieblingssongs und Lute-Wörter werden geladen …",
+"No liked song has 90–98 % known words yet. Songs count once their lyrics were found.": "Noch kein Lieblingssong hat 90–98 % bekannte Wörter. Songs zählen, sobald ihr Songtext gefunden wurde.",
+"{} % to {} % known words • ": "{} % bis {} % bekannte Wörter • ",
+"{} % known": "{} % bekannt",
+"Share of this song's Korean words you know in Lute. New words are green, words you are learning light green.": "Anteil der koreanischen Wörter dieses Songs, die du in Lute kennst. Neue Wörter sind grün, Wörter, die du lernst, hellgrün.",
+"In Lute: learning": "In Lute: am Lernen",
+"The vocab-hub did not answer.": "Der vocab-hub hat nicht geantwortet."
 }
