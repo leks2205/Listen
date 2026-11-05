@@ -10,7 +10,7 @@ use iced::widget::{
     button, column, container, pick_list, row, slider, text_editor, text_input, toggler, vertical_slider,
 };
 use iced::{Alignment, Element, Padding};
-use listen_core::settings::{self, ReplayGain, StreamQuality, TransitionEdges};
+use listen_core::settings::{self, ReplayGain, SkipParts, StreamQuality, TransitionEdges};
 
 /// Audio sections of the Playback tab: playback, output, ReplayGain, mpv, EQ, compressor, transcoding.
 pub(super) fn playback(state: &Listen) -> Vec<Element<'_, Message>> {
@@ -1104,6 +1104,17 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
         ),
         line(
             state,
+            "Transitions may skip parts of songs",
+            "Free: a mix may start after the last sung line of a song or at a breakdown, and the next song may \
+             start right before its verse or chorus. Short: at most 16 seconds of either. Never: mixes stay in \
+             the outro and the next song starts at its beginning.",
+            pick_list(SkipParts::ALL.map(SkipChoice), Some(SkipChoice(m.skip_parts)), |c| {
+                Message::Setting(Setting::MixSkipParts(c.0))
+            })
+            .into(),
+        ),
+        line(
+            state,
             "Tempo ramps",
             "Glide the tempo between songs instead of jumping.",
             switch(m.tempo_ramps, Setting::MixTempoRamps),
@@ -1166,6 +1177,21 @@ impl std::fmt::Display for EdgeChoice {
             TransitionEdges::Always => tr("Always"),
             TransitionEdges::Instrumental => tr("Instrumental only"),
             TransitionEdges::Smart => tr("Smart"),
+        })
+    }
+}
+
+/// An entry of the "skip parts of songs" picker, shown translated.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SkipChoice(SkipParts);
+
+impl std::fmt::Display for SkipChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use crate::i18n::tr;
+        f.write_str(match self.0 {
+            SkipParts::Never => tr("Never"),
+            SkipParts::Short => tr("Short"),
+            SkipParts::Free => tr("Free"),
         })
     }
 }

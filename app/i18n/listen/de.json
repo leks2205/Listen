@@ -1,4 +1,9 @@
 {
+"Transitions may skip parts of songs": "Übergänge dürfen Teile von Songs auslassen",
+"Free: a mix may start after the last sung line of a song or at a breakdown, and the next song may start right before its verse or chorus. Short: at most 16 seconds of either. Never: mixes stay in the outro and the next song starts at its beginning.": "Frei: Ein Mix darf nach der letzten gesungenen Zeile eines Songs oder an einem Breakdown beginnen, und der nächste Song darf direkt vor seiner Strophe oder seinem Refrain einsetzen. Kurz: jeweils höchstens 16 Sekunden. Nie: Mixe bleiben im Outro, und der nächste Song beginnt am Anfang.",
+"Never": "Nie",
+"Short": "Kurz",
+"Free": "Frei",
 "Similar to “{}”": "Ähnlich wie „{}“",
 "A favourite, not played for {} months": "Ein Lieblingssong, seit {} Monaten nicht gehört",
 "A favourite you haven't played for a while": "Ein Lieblingssong, den du länger nicht gehört hast",

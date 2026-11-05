@@ -246,3 +246,18 @@ fn mpv_extra_parameters_are_edited_line_by_line() {
     )))));
     assert_eq!(s.config.settings.playback.mpv_extra_args, ["--audio-channels=stereo", "--gapless-audio=yes"]);
 }
+
+#[test]
+fn skip_parts_of_songs_is_a_dj_transition_setting() {
+    use listen_core::settings::{SettingsTab, SkipParts};
+    let mut s = state();
+    let _ = s.update(Message::WindowResized(iced::Size::new(1600.0, 9000.0)));
+    let _ = s.update(Message::Navigate(listen::app::Route::Settings));
+    let _ = s.update(Message::Shell(listen::app::settings_shell::ShellMsg::Tab(SettingsTab::Playback)));
+    assert!(has_text(&s, "Transitions may skip parts of songs"));
+    assert_eq!(s.config.settings.mixing.skip_parts, SkipParts::Free, "allowed by default");
+    let _ = s.update(Message::Setting(listen::app::Setting::MixSkipParts(SkipParts::Never)));
+    assert_eq!(s.config.settings.mixing.skip_parts, SkipParts::Never);
+    let _ = s.update(Message::Setting(listen::app::Setting::MixSkipParts(SkipParts::Short)));
+    assert_eq!(s.config.settings.mixing.skip_parts, SkipParts::Short);
+}

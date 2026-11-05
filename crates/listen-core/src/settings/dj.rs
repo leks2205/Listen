@@ -106,6 +106,34 @@ impl std::fmt::Display for TransitionEdges {
     }
 }
 
+/// How much of a song a DJ transition may leave out to land on a cleaner mix point: the end of the outgoing
+/// song after its last sung phrase or at a breakdown, the incoming song's intro up to its verse or chorus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkipParts {
+    /// Mixes stay in the outgoing song's outro and start the incoming song at its first phrase.
+    Never,
+    /// At most a few seconds (`listen_mix::plan::SHORT_SKIP_S`) on either side.
+    Short,
+    /// Wherever the join is clearly better (each skipped second still costs score).
+    #[default]
+    Free,
+}
+
+impl SkipParts {
+    pub const ALL: [SkipParts; 3] = [Self::Never, Self::Short, Self::Free];
+}
+
+impl std::fmt::Display for SkipParts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Never => "Never",
+            Self::Short => "Short",
+            Self::Free => "Free",
+        })
+    }
+}
+
 /// DJ transitions between songs the Auto-DJ / AI DJ picked (Navidrome).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -129,6 +157,8 @@ pub struct Mixing {
     pub bridges: bool,
     /// How often (percent) a far-apart pair gets a bridge.
     pub bridge_chance_pct: u8,
+    /// Whether transitions may cut the outgoing song short or skip part of the incoming intro.
+    pub skip_parts: SkipParts,
 }
 
 impl Default for Mixing {
@@ -145,6 +175,7 @@ impl Default for Mixing {
             transition_edges: TransitionEdges::default(),
             bridges: true,
             bridge_chance_pct: 50,
+            skip_parts: SkipParts::default(),
         }
     }
 }

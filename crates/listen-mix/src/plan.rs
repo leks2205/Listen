@@ -11,7 +11,7 @@ use crate::score::octave_match;
 use listen_core::analysis::{BeatGrid, Features, SectionKind, cue};
 use listen_core::model::SourceKind;
 use listen_core::queue::QueueItem;
-use listen_core::settings::Mixing;
+use listen_core::settings::{Mixing, SkipParts};
 use serde::{Deserialize, Serialize};
 
 /// Minimum lead before a mix point, so the app can load and line up the second deck.
@@ -35,6 +35,9 @@ const EARLY_OUT_FRAC: f64 = 0.6;
 /// Cue-ins before a verse or chorus entry within this part (and this many seconds) of the incoming song.
 const EARLY_IN_FRAC: f64 = 0.4;
 const EARLY_IN_MAX_S: f64 = 90.0;
+/// With "Transitions may skip parts of songs: short", the most an early cue-out may cut off the outgoing
+/// song before its outro, and the most of the incoming intro a cue-in may skip (s).
+pub const SHORT_SKIP_S: f64 = 16.0;
 /// Score per second of the outgoing song cut off, and of the incoming intro skipped.
 const CUT_PER_S: f32 = 0.02;
 const SKIP_PER_S: f32 = 0.01;
@@ -244,6 +247,43 @@ pub struct PlanCtx<'a> {
     /// The outgoing song itself came in through an echo-out: no second one in a row (a cut, a blend or a
     /// fade instead).
     pub no_echo: bool,
+}
+
+/// Earliest file time of the outgoing song where a cue anchor (sung phrase end, breakdown) may start a
+/// mix-out, as the "skip parts" setting allows (`end` = audio end, `outro_t` = outro start or end).
+fn early_out_from(s: &Mixing, end: f64, outro_t: f64) -> f64 {
+    match s.skip_parts {
+        SkipParts::Never => f64::INFINITY,
+        SkipParts::Short => (EARLY_OUT_FRAC * end).max(outro_t - SHORT_SKIP_S),
+        SkipParts::Free => EARLY_OUT_FRAC * end,
+    }
+}
+
+/// Latest file time of the incoming song where a verse or chorus entry may be a cue-in, as the "skip
+/// parts" setting allows (`first_bar_t` = its first downbeat with audio); `None` = no cue-ins.
+fn early_in_until(s: &Mixing, end: f64, first_bar_t: f64) -> Option<f64> {
+    let hi = (EARLY_IN_FRAC * end).min(EARLY_IN_MAX_S);
+    match s.skip_parts {
+        SkipParts::Never => None,
+        SkipParts::Short => Some(hi.min(first_bar_t + SHORT_SKIP_S)),
+        SkipParts::Free => Some(hi),
+    }
+}
+
+/// Where the incoming song may start at the earliest, and the file time of its first downbeat with audio
+/// (what the "skip parts" setting measures skipped intro from). Free: its first phrase downbeat with audio;
+/// Short: that phrase when it is at most `SHORT_SKIP_S` in, else the first downbeat; Never: the first downbeat.
+fn first_in(i: &Side, s: &Mixing) -> Option<(usize, f64)> {
+    let audio_start = f64::from(i.f.audio_start);
+    let first_bar = (0..i.bars).find(|&b| i.t(b as f64) >= audio_start - 0.05)?;
+    let bar_t = i.t(first_bar as f64);
+    let phrase = (first_bar..i.bars).find(|&b| i.on_phrase(b));
+    let bar = match (s.skip_parts, phrase) {
+        (SkipParts::Free, p) => p?,
+        (SkipParts::Short, Some(p)) if i.t(p as f64) <= bar_t + SHORT_SKIP_S + 1e-6 => p,
+        _ => first_bar,
+    };
+    Some((bar, bar_t))
 }
 
 /// Sources whose decks play the exact file that was analysed: Navidrome (raw file) and YouTube Music
@@ -555,9 +595,9 @@ fn echo_tail(delay: f64) -> f64 {
 }
 
 /// The best echo-out or cut: the outgoing stops on a phrase downbeat (or after a sung phrase / at a
-/// breakdown late in the song) and the incoming starts on its first phrase downbeat or, with lyrics, right
-/// on a verse or chorus entry. An echo suits a loud or sung bar before the stop, a cut a quiet one.
-/// Every echo-out and cut candidate, best first; no echo-outs when `ctx.no_echo`.
+/// breakdown late in the song) and the incoming starts on its first phrase downbeat (see `first_in`) or,
+/// with lyrics, right on a verse or chorus entry. An echo suits a loud or sung bar before the stop, a cut a
+/// quiet one. Every echo-out and cut candidate, best first; no echo-outs when `ctx.no_echo`.
 fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
@@ -565,7 +605,7 @@ fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
     let outro_t = outro.map_or(end, |b| o.t(b as f64));
     let delay = echo_delay(o);
     let lo_t = o.t(outro.unwrap_or(o.bars) as f64 - 16.0).max(end - 90.0).max(earliest + delay);
-    let early_lo = (EARLY_OUT_FRAC * end).max(earliest + delay);
+    let early_lo = early_out_from(ctx.settings, end, outro_t).max(earliest + delay);
     let outs: Vec<usize> = (1..=o.bars)
         .filter(|&b| {
             let t = o.t(b as f64);
@@ -575,13 +615,12 @@ fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
         })
         .collect();
 
-    let audio_start = f64::from(i.f.audio_start);
-    let Some(first_in) = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05) else {
+    let Some((first_in, first_bar_t)) = first_in(i, ctx.settings) else {
         return Vec::new();
     };
     let mut ins = vec![first_in];
-    if i.has_lyrics() {
-        let hi = (EARLY_IN_FRAC * f64::from(i.f.audio_end)).min(EARLY_IN_MAX_S);
+    let cue_in_hi = early_in_until(ctx.settings, f64::from(i.f.audio_end), first_bar_t);
+    if let Some(hi) = cue_in_hi.filter(|_| i.has_lyrics()) {
         ins.extend(
             (first_in + 1..i.bars)
                 .filter(|&b| i.t(b as f64) <= hi && i.cue(b) & (cue::ENTRY | cue::CHORUS) != 0),
@@ -811,7 +850,7 @@ fn candidates(o: &Side, i: &Side, k: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand
     let lo_t = o.t(outro.unwrap_or(o.bars) as f64 - 16.0).max(end - 90.0).max(earliest);
     // DJustify-style cue anchors earlier in the last 40 %: the bar after a sung phrase (when a gap
     // follows) and breakdowns. Cutting the song short costs `CUT_PER_S` per second.
-    let early_lo = (EARLY_OUT_FRAC * end).max(earliest);
+    let early_lo = early_out_from(s, end, outro_t).max(earliest);
     let outs: Vec<usize> = (0..o.bars)
         .filter(|&b| {
             let t = o.t(b as f64);
@@ -820,19 +859,28 @@ fn candidates(o: &Side, i: &Side, k: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand
         })
         .collect();
 
-    // Mix-in: the first phrase downbeat with audio, plus the next phrase for a very long intro.
-    let audio_start = f64::from(i.f.audio_start);
-    let Some(first_in) = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05) else {
+    // Mix-in: the first phrase downbeat with audio (see `first_in`), plus the next phrase for a very long
+    // intro.
+    let Some((first_in, first_bar_t)) = first_in(i, s) else {
         return Vec::new();
     };
     let mut ins = vec![first_in];
-    if i.f.intro_instrumental_bars > 32 && first_in + i.phrase() < i.bars {
+    let skip_ok = |t: f64| match s.skip_parts {
+        SkipParts::Never => false,
+        SkipParts::Short => t <= first_bar_t + SHORT_SKIP_S + 1e-6,
+        SkipParts::Free => true,
+    };
+    if i.f.intro_instrumental_bars > 32
+        && i.on_phrase(first_in)
+        && first_in + i.phrase() < i.bars
+        && skip_ok(i.t((first_in + i.phrase()) as f64))
+    {
         ins.push(first_in + i.phrase());
     }
     // With lyrics: 1, 2 or 4 bars before a verse or chorus entry early in the song, so a short blend
     // hands over right where the singing starts (the rest of the intro is skipped).
-    if i.has_lyrics() {
-        let hi = (EARLY_IN_FRAC * f64::from(i.f.audio_end)).min(EARLY_IN_MAX_S);
+    let cue_in_hi = early_in_until(s, f64::from(i.f.audio_end), first_bar_t);
+    if let Some(hi) = cue_in_hi.filter(|_| i.has_lyrics()) {
         for e in (first_in + 1..i.bars).filter(|&b| i.t(b as f64) <= hi) {
             if i.cue(e) & (cue::ENTRY | cue::CHORUS) != 0 {
                 ins.extend([1, 2, 4].iter().filter(|&&d| e >= first_in + d).map(|&d| e - d));
@@ -1217,6 +1265,50 @@ mod tests {
         let early = with_lyrics(&out, &[(0, 40), (48, 96)], &[]);
         let p = plan(&early, &inn, &ctx(&s, 30.0));
         assert!(p.out_mix_start_s > f64::from(og.bar_time(56)), "{}", p.reason);
+    }
+
+    #[test]
+    fn skip_parts_setting_bounds_the_cut_and_the_skipped_intro() {
+        use listen_core::settings::SkipParts::{self, Free, Never, Short};
+        let with = |mode: SkipParts| Mixing { skip_parts: mode, ..settings() };
+        // Outgoing: sung to its end (2 s bars, no outro) except an 8-bar lyric gap at bars 64–72.
+        let out = FeatBuilder::new(120.0, 96).intro(0).outro(0).build();
+        let gap = with_lyrics(&out, &[(0, 64), (72, 96)], &[]);
+        let inn = FeatBuilder::new(120.0, 96).intro(24).outro(8).build();
+        let og = gap.grid.as_ref().unwrap();
+        let start = |m| plan(&gap, &inn, &ctx(&with(m), 30.0)).out_mix_start_s;
+        // Free: the gap 64 s before the end is a cue-out; Short: at most SHORT_SKIP_S early, so the regular
+        // window (16 bars before the end); Never: the regular window.
+        assert!((start(Free) - f64::from(og.bar_time(64))).abs() < 1e-3);
+        for m in [Short, Never] {
+            assert!(start(m) >= f64::from(og.bar_time(80)) - 1e-3, "{m:?}");
+        }
+
+        // Far apart in tempo (a handover): the incoming may start on its first sung chorus.
+        let sung = with_lyrics(&out, &[(0, 96)], &[]);
+        let entry = |intro: usize, m| {
+            let inn = FeatBuilder::new(90.0, 96).intro(intro).outro(8).build();
+            let inn = with_lyrics(&inn, &[(intro, 88)], &[(intro, intro + 16)]);
+            let p = plan(&sung, &inn, &ctx(&with(m), 30.0));
+            assert!(matches!(p.kind, Kind::EchoOut { .. }), "{}", p.reason);
+            let g = inn.grid.as_ref().unwrap();
+            ((p.in_mix_start_s - f64::from(g.bar_time(intro))).abs() < 1e-3, p.in_mix_start_s)
+        };
+        // 4 bars of intro (10.7 s): skipped unless Never.
+        assert!(entry(4, Free).0 && entry(4, Short).0);
+        assert!(entry(4, Never).1 < 1.0);
+        // 8 bars (21 s): longer than Short allows.
+        assert!(entry(8, Free).0);
+        assert!(entry(8, Short).1 < 1.0 && entry(8, Never).1 < 1.0);
+
+        // The phrase lattice starts 7 bars in (18.7 s): Free waits for it, Short and Never don't.
+        let mut late = FeatBuilder::new(90.0, 96).intro(0).outro(8).build();
+        (late.phrase_bars, late.phrase_offset) = (8, 7);
+        let g = late.grid.clone().unwrap();
+        for (m, bar) in [(Free, 7), (Short, 0), (Never, 0)] {
+            let p = plan(&sung, &late, &ctx(&with(m), 30.0));
+            assert!((p.in_mix_start_s - f64::from(g.bar_time(bar))).abs() < 1e-3, "{m:?}: {}", p.reason);
+        }
     }
 
     #[test]
