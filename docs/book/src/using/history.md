@@ -86,7 +86,7 @@ The rolling view compares this week with last week. The periods are rolling and 
 |---|---|
 | **Daylist** | Songs you usually play around this time of day (within an hour of now). |
 | **Heavy rotation** | Your most played songs of the last 30 days. |
-| **Rediscover** | Songs you played at least twice before but not at all in the last 60 days. |
+| **Rediscover** | Songs you played at least twice before but not at all in the last 60 days. The ones you loved most (many plays, often close together) and have drifted furthest from come first. |
 | **All-time favourites** | Your most played songs ever. |
 
 A mix without enough history behind it is greyed out and says "Not enough history yet". Mixes change as you listen. They are made on your computer and need no server feature.
@@ -97,3 +97,9 @@ The artist page's **Top songs → Personal** view uses the same history; see [Li
 
 - [Search and the command palette](search.md) lists the Statistics, Mixes and Recently played pages under **Go to page...**.
 - [Privacy and security](../more/privacy.md) summarises what stays on your computer.
+
+### How Listen tells a forgotten favourite
+
+Listen models how present each song is in your memory, after the ACT-R model from cognitive psychology: every play adds to a song's "activation", and the effect of a play fades with time (by the square root of its age). Many plays close together give a high peak; months of silence bring the activation down. A **forgotten favourite** has at least five plays, none in the last 30 days, and a large gap between its peak and its activation now. The Auto-DJ's forgotten-favourite slot, the AI DJ's song pool and the Rediscover mix use this ranking. A song you skipped again and again in the last week counts as worn out and rests from automatic picks for a while. Skips never count as plays.
+
+`listen --memory` prints the current top 20 forgotten favourites and the resting songs as JSON (`--history FILE`, `--now UNIX`, `--limit N`).

@@ -54,6 +54,7 @@ pub mod list;
 pub mod list_query;
 pub mod lyrics_state;
 pub mod mcp;
+pub mod memory;
 pub mod menu;
 pub mod mix;
 pub mod offline;
@@ -594,6 +595,8 @@ pub struct Listen {
     /// Version keys of every song played since Listen started: the Auto-DJ
     /// and the AI DJ don't pick them (or another version of them) again.
     session_played: std::collections::HashSet<String>,
+    /// Auto-DJ picks so far: every eighth is a forgotten favourite (`memory.rs`).
+    dj_picks_counted: usize,
     /// DJ bridges between far-apart songs.
     bridge: bridge::BridgeState,
     /// The AI DJ (Gemini).
@@ -1140,6 +1143,7 @@ impl Listen {
             modifiers: iced::keyboard::Modifiers::default(),
             seek_preview: None,
             session_played: Default::default(),
+            dj_picks_counted: 0,
             bridge: Default::default(),
             lastfm: Default::default(),
             menu: None,
@@ -2267,7 +2271,7 @@ impl Listen {
             Ok(AutoDjFill { songs, similar, seed }) => {
                 use listen_core::versions::{dedupe_versions, song_key};
                 self.bridge_pool_add(&songs);
-                // Snoozed and "Not interested" songs never come back through the Auto-DJ.
+                // Snoozed, "Not interested" and worn-out songs never come back through the Auto-DJ.
                 let blocked = self.auto_blocked();
                 let s = &self.config.settings.auto_dj;
                 let queued: std::collections::HashSet<String> =
@@ -2311,6 +2315,10 @@ impl Listen {
                         (song, why)
                     })
                     .collect();
+                // One pick in eight: a forgotten favourite from the history.
+                let skip: std::collections::HashSet<String> =
+                    queued.iter().chain(&self.session_played).chain(&blocked).cloned().collect();
+                let picked = self.with_forgotten(picked, &skip);
                 self.queue.add_picked(picked);
                 let images = self.request_images(refs.iter().map(Some));
                 if let Some(play) = self.dj_after_fill() {

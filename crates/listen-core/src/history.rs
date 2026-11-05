@@ -477,7 +477,8 @@ pub enum MixKind {
     Daylist,
     /// Most played in the last 30 days.
     HeavyRotation,
-    /// Played often before, not at all in the last 60 days.
+    /// Played often before, not at all in the last 60 days; most loved and most faded first
+    /// ([`crate::memory`]).
     Rediscover,
     /// All-time most played.
     AllTimeFavorites,
@@ -550,6 +551,14 @@ pub fn mix(entries: &[Entry], kind: MixKind, now: i64, tz: FixedOffset, limit: u
         .map(|(_, v)| v)
         .collect();
     v.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.ts.cmp(&a.1.ts)).then(a.1.title.cmp(&b.1.title)));
+    if kind == MixKind::Rediscover {
+        // Most loved and most faded first (the memory model's forgotten-favourite score).
+        let memory = crate::memory::Memory::new(entries, now);
+        let score = |e: &Entry| {
+            memory.get(&e.to_song()).map_or(f64::NEG_INFINITY, crate::memory::SongMemory::forgotten_score)
+        };
+        v.sort_by(|a, b| score(b.1).total_cmp(&score(a.1)));
+    }
     v.into_iter().take(limit).map(|(_, e)| e.clone()).collect()
 }
 

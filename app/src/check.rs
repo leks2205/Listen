@@ -1495,6 +1495,50 @@ pub fn weekly_json(w: &listen_core::weekly::Weekly, now: i64) -> serde_json::Val
     })
 }
 
+/// `--memory [--history FILE] [--now SECS] [--limit N]`: the memory model on a history file as JSON —
+/// the top forgotten favourites (Auto-DJ slot, AI DJ pool, Rediscover) and the worn-out songs rested
+/// from automatic picks now.
+pub fn memory(args: &[String]) -> i32 {
+    use listen_core::{history, memory};
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let path = match opt("--history") {
+        Some(p) => std::path::PathBuf::from(p),
+        None => match listen_core::config::Paths::discover() {
+            Ok(p) => p.data_dir.join(history::FILE_NAME),
+            Err(e) => {
+                eprintln!("no data folder: {e}");
+                return 1;
+            }
+        },
+    };
+    let now = opt("--now").and_then(|n| n.parse().ok()).unwrap_or_else(history::now_secs);
+    let limit = opt("--limit").and_then(|n| n.parse().ok()).unwrap_or(20);
+    let h = history::History::load(&path);
+    let m = memory::Memory::new(&h.entries, now);
+    println!("{}", serde_json::to_string_pretty(&memory_json(&m, limit)).unwrap_or_default());
+    0
+}
+
+/// [`memory`]'s JSON.
+pub fn memory_json(m: &listen_core::memory::Memory, limit: usize) -> serde_json::Value {
+    use serde_json::json;
+    let row = |s: &listen_core::memory::SongMemory| {
+        json!({"title": s.song.title, "artist": s.song.artist_line(), "plays": s.plays,
+               "last_played": s.last_played, "days_since": (m.now - s.last_played) / 86_400,
+               "activation": (s.activation * 100.0).round() / 100.0, "peak": (s.peak * 100.0).round() / 100.0,
+               "recent_skips": s.recent_skips, "score": (s.forgotten_score() * 100.0).round() / 100.0})
+    };
+    let mut worn: Vec<&listen_core::memory::SongMemory> =
+        m.songs.values().filter(|s| s.is_worn_out()).collect();
+    worn.sort_by(|a, b| b.recent_skips.cmp(&a.recent_skips).then(a.key.cmp(&b.key)));
+    json!({
+        "now": m.now,
+        "songs": m.songs.len(),
+        "forgotten": m.forgotten(limit).into_iter().map(row).collect::<Vec<_>>(),
+        "worn_out": worn.into_iter().map(row).collect::<Vec<_>>(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -44,6 +44,7 @@ pub enum Setting {
     EqPreamp(f32),
     AutoDj(bool),
     AutoDjCount(u32),
+    AutoDjForgotten(bool),
     Analysis(bool),
     AnalysisLibrary(bool),
     AnalysisOnBattery(bool),
@@ -205,6 +206,7 @@ impl Listen {
                 player_changed = true; // the decks' filter chain follows
             }
             Setting::AutoDjCount(v) => s.auto_dj.item_count = v,
+            Setting::AutoDjForgotten(v) => s.auto_dj.forgotten_favourites = v,
             Setting::Analysis(v) => s.analysis.enabled = v,
             Setting::AnalysisLibrary(v) => s.analysis.analyze_library = v,
             Setting::AnalysisOnBattery(v) => s.analysis.on_battery = v,

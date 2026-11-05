@@ -669,6 +669,12 @@ pub(super) fn auto_dj(state: &Listen) -> Element<'_, Message> {
                 .align_y(Alignment::Center)
                 .into(),
             ),
+            line(
+                state,
+                "Forgotten favourites",
+                "One song in eight is a favourite you haven't played for a while.",
+                switch(dj.forgotten_favourites, Setting::AutoDjForgotten),
+            ),
         ],
     )
 }

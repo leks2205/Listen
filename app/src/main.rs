@@ -90,6 +90,10 @@ fn main() -> iced::Result {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::weekly_stats(&args));
     }
+    if std::env::args().nth(1).as_deref() == Some("--memory") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(listen::check::memory(&args));
+    }
     if std::env::args().nth(1).as_deref() == Some("--check-analysis") {
         tracing_subscriber::fmt()
             .with_env_filter(

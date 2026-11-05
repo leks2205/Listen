@@ -66,9 +66,12 @@ impl Listen {
         self.exclusions.set.allows(song, listen_core::exclude::Ctx::Auto { now: now_secs() })
     }
 
-    /// Song keys every automatic pool leaves out now.
+    /// Song keys every automatic pool leaves out now: snoozed, "Not interested", and worn out (skipped
+    /// again and again lately, `memory.rs`).
     pub(super) fn auto_blocked(&self) -> HashSet<String> {
-        self.exclusions.set.blocked_keys(now_secs()).cloned().collect()
+        let mut keys: HashSet<String> = self.exclusions.set.blocked_keys(now_secs()).cloned().collect();
+        keys.extend(self.worn_out());
+        keys
     }
 
     /// Playlist playback: the songs of playlist `id` minus the ones hidden in it, with `start` moved to

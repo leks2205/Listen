@@ -5,6 +5,7 @@ pub mod analysis;
 pub mod config;
 pub mod exclude;
 pub mod history;
+pub mod memory;
 pub mod model;
 pub mod platform;
 pub mod queue;

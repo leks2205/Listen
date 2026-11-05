@@ -86,6 +86,9 @@ Options:
   --weekly-stats [--history PATH] [--now UNIX]
                          Print the Statistics page's Last 4 weeks numbers as
                          JSON (default: this computer's history), then exit
+  --memory [--history PATH] [--now UNIX] [--limit N]
+                         Print the memory model as JSON: the top forgotten
+                         favourites and the worn-out songs rested from DJ picks
   --check-cd             CD ripping check without ripping: tools, drive and read
                          offset, the disc's TOC and MusicBrainz match, the music
                          folder and Navidrome, then exit

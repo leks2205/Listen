@@ -47,6 +47,8 @@ Details:
 - Where a song exists in several versions (for example a studio version and a live version), one version is picked, preferring the radio edit.
 - If songs were [analysed](../dj/analysis.md), the picks are ordered so that tempo, key and energy follow on from the playing song. The Auto-DJ then looks at more candidates before choosing.
 - With [DJ transitions](../dj/transitions.md) on, songs the Auto-DJ picked are mixed into each other.
+- **Forgotten favourites:** every eighth song the Auto-DJ adds is one of your favourites that you have not played for at least 30 days (at least five plays in your [history](../using/history.md)). Of those, the one whose tempo, key and energy fit the playing song best is taken. Its reason in the queue reads "A favourite, not played for 5 months". Without such songs in your history the slot gets an ordinary pick.
+- **Worn-out songs rest:** a song you skipped three times in the last seven days (or twice, if you also played it a lot that week) is left out of the Auto-DJ, the AI DJ, radio, DJ bridges and the mixes until those skips are more than a week old. You can still play it yourself at any time.
 - What "similar" means depends on the server: Navidrome and Jellyfin use their similar-songs lists, YouTube Music uses its "watch next" list.
 
 ### Settings
@@ -57,6 +59,7 @@ Open **Settings → Playback → Auto-DJ**:
 |---|---|---|
 | **Enabled** | on | Switches the Auto-DJ on or off. Same as choosing the mode. |
 | **Songs to add** | 5 (1 to 20) | How many songs are added at a time. |
+| **Forgotten favourites** | on | One song in eight is a favourite you haven't played for a while (see above). |
 
 Three more options exist that have no control in the settings window. They live in the configuration file under `[settings.auto_dj]` (see [Files and folders](../reference/files.md)), can be changed through the MCP server's `set_settings` tool, and are filled in when you import your settings from Feishin:
 

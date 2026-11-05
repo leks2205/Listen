@@ -13,11 +13,30 @@ pub struct AutoDj {
     pub allow_duplicates: bool,
     /// `similar` or `random`.
     pub strategy: String,
+    /// One pick in [`FAMILIAR_EVERY`] is a forgotten favourite from the history (`listen_core::memory`).
+    pub forgotten_favourites: bool,
+}
+
+/// The Auto-DJ's forgotten-favourite slot: one pick in this many.
+pub const FAMILIAR_EVERY: u8 = 8;
+
+impl AutoDj {
+    /// What the Auto-DJ aims for beyond flow (the forgotten-favourite slot).
+    pub fn familiar_slot(&self) -> Option<u8> {
+        self.forgotten_favourites.then_some(FAMILIAR_EVERY)
+    }
 }
 
 impl Default for AutoDj {
     fn default() -> Self {
-        Self { enabled: true, item_count: 5, timing: 1, allow_duplicates: false, strategy: "similar".into() }
+        Self {
+            enabled: true,
+            item_count: 5,
+            timing: 1,
+            allow_duplicates: false,
+            strategy: "similar".into(),
+            forgotten_favourites: true,
+        }
     }
 }
 
