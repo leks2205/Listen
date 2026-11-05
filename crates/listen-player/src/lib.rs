@@ -246,9 +246,10 @@ impl Player {
         self.mpv.command(json!(["seek", position.as_secs_f64(), "absolute"])).await.map(|_| ())
     }
 
-    /// Volume in percent (0–100).
+    /// Volume in percent: 0–100 is the user's range; up to mpv's default
+    /// `volume-max` (130) for a DJ blend's equal-loudness boost on top.
     pub async fn set_volume(&self, volume: f32) -> Result<(), MpvError> {
-        self.mpv.set_property("volume", json!(volume.clamp(0.0, 100.0))).await
+        self.mpv.set_property("volume", json!(volume.clamp(0.0, MAX_VOLUME))).await
     }
 
     pub async fn set_muted(&self, muted: bool) -> Result<(), MpvError> {
@@ -389,6 +390,9 @@ pub fn split_icy_title(title: &str) -> (Option<&str>, &str) {
 fn secs(v: &Value) -> Option<Duration> {
     v.as_f64().filter(|s| s.is_finite() && *s >= 0.0).map(Duration::from_secs_f64)
 }
+
+/// mpv's default `volume-max`: the most `set_volume` sends.
+pub const MAX_VOLUME: f32 = 130.0;
 
 /// Position report interval; fades extrapolate 150 ms, the mix 250 ms past a report.
 pub const POSITION_INTERVAL: Duration = Duration::from_millis(100);

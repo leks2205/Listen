@@ -117,11 +117,15 @@ impl Listen {
     }
 
     /// Volume of a deck: the user's volume × song fade (active deck only) ×
-    /// DJ ducking × pause fade × the transition's gain for that deck.
+    /// DJ ducking × pause fade × the transition's gain for that deck. The
+    /// transition's gain includes the equal-loudness trim, which may lift two
+    /// quiet parts above unity (up to `BLEND_MAX_BOOST_DB`), as the renderer,
+    /// the verifier and the phone's mixer do.
     pub(super) fn deck_volume(&self, deck: usize) -> f32 {
         let track = if deck == self.decks.active { self.track_gain() } else { 1.0 };
         let gain = track * db_to_gain(self.fader.duck_db) * self.fader.pause * self.mix.gain(deck);
-        f32::from(self.playback.volume) * gain.clamp(0.0, 1.0).cbrt()
+        let max = db_to_gain(listen_mix::loudness::BLEND_MAX_BOOST_DB);
+        f32::from(self.playback.volume) * gain.clamp(0.0, max).cbrt()
     }
 
     /// Whether the volume is moving (the fade clock needs to tick).

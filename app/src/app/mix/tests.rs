@@ -546,7 +546,7 @@ fn incoming_deck_is_silent_until_it_starts_then_follows_the_envelope() {
         let trim = listen_mix::loudness::blend_trim(&p, t, g_out, g_in, 0.0, 0.0);
         assert!(p.levels.is_some(), "a beat blend between analysed songs carries levels");
         for (deck, g) in [(out, g_out), (inn, g_in)] {
-            let want = 100.0 * (g * trim).min(1.0).cbrt();
+            let want = 100.0 * (g * trim).min(MAX_BOOST).cbrt();
             // Positions are extrapolated by a few µs between report and tick.
             assert!(
                 (s.deck_volume(deck) - want).abs() < 0.5,
@@ -555,6 +555,60 @@ fn incoming_deck_is_silent_until_it_starts_then_follows_the_envelope() {
             );
         }
     }
+}
+
+/// Linear gain of the largest blend boost.
+const MAX_BOOST: f32 = 1.412_537_5;
+
+/// Bug 61: two quiet parts under loud edges are lifted above unity on the desktop too (the
+/// renderer, the verifier and the phone's mixer apply the same boost).
+#[test]
+fn a_quiet_overlap_is_boosted_above_unity() {
+    let mut s = auto_rig();
+    plan(&mut s);
+    // Both decks sit at -20 LUFS during the blend, the edges at -14: the trim wants +3 dB.
+    let mut p = plan_of(&s);
+    let n = (p.blend_s / listen_mix::loudness::LEVEL_STEP_S).ceil() as usize;
+    p.levels = Some(listen_mix::loudness::BlendLevels {
+        out_ref: -14.0,
+        in_ref: -14.0,
+        points: (0..=n).map(|i| (i as f64 * listen_mix::loudness::LEVEL_STEP_S, -20.0, -20.0)).collect(),
+    });
+    s.mix.plan = Some(Arc::new(p.clone()));
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    run(&mut s);
+    let mut boosted = 0;
+    for i in 1..20 {
+        let frac = f64::from(i) / 20.0;
+        let out_t = p.out_mix_start_s + frac * p.blend_s * s.mix.speed[out];
+        pos(&mut s, out, out_t);
+        tick(&mut s);
+        if s.mix.handed_over {
+            break;
+        }
+        let t = (out_t - p.out_mix_start_s) / s.mix.speed[out];
+        let (g_out, g_in) = p.gain.gains_at(t);
+        let trim = listen_mix::loudness::blend_trim(&p, t, g_out, g_in, 0.0, 0.0);
+        for (deck, g) in [(out, g_out), (inn, g_in)] {
+            let want = 100.0 * (g * trim).min(MAX_BOOST).cbrt();
+            assert!(
+                (s.deck_volume(deck) - want).abs() < 0.5,
+                "deck {deck} at {frac}: {} vs {want}",
+                s.deck_volume(deck)
+            );
+            if s.deck_volume(deck) > 100.5 {
+                boosted += 1;
+            }
+        }
+        // The summed level follows the line: both decks' power adds up to +3 dB over one at unity
+        // wherever the full trim applies.
+        if (trim - MAX_BOOST).abs() < 1e-3 {
+            let power: f32 = [out, inn].iter().map(|&d| (s.deck_volume(d) / 100.0).powi(6)).sum();
+            let model = (g_out * trim).powi(2) + (g_in * trim).powi(2);
+            assert!((power - model).abs() < 0.02 * model, "at {frac}: {power} vs {model}");
+        }
+    }
+    assert!(boosted > 0, "some moment of the blend plays a deck above unity");
 }
 
 #[test]

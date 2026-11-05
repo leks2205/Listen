@@ -191,7 +191,7 @@ pub const LOCAL_WINDOW_S: f64 = 3.0;
 pub const EDGE_REF_S: f64 = 4.0;
 /// Spacing of [`BlendLevels::points`].
 pub const LEVEL_STEP_S: f64 = 0.5;
-/// Largest blend trim boost (the deck stages clamp at unity on the desktop, the limiter takes peaks).
+/// Largest blend trim boost (the desktop's deck volume goes up to mpv's 130 % for it, the limiter takes peaks).
 pub const BLEND_MAX_BOOST_DB: f32 = 3.0;
 /// Largest blend trim cut.
 pub const BLEND_MAX_CUT_DB: f32 = -6.0;
