@@ -47,6 +47,7 @@ Under the lyrics are two rows of buttons:
 | **EXPORT** | Saves the lyrics to a file (see [below](#exporting-lyrics)). Shown when lyrics are loaded. |
 | Version list | Appears when more than one version was found (for example from the server and from a provider). Pick one; each entry names its provider and whether it is synced or plain. |
 | **TRANSLATION** | Shows or hides translations under each line. Appears when the lyrics carry a translation or when you set up an online translation service. |
+| **WORDS** | Korean lyrics with the Gemini key of the AI DJ: makes every Korean word clickable for its meaning (see [Word meanings](#word-meanings-korean)). |
 | **DISPLAY** | Opens the display settings. |
 | **SEARCH** | Opens the lyrics search. |
 | **−** / number / **+** | Moves the lyrics against the music in steps of 50 ms (tooltips "Lyrics earlier" and "Lyrics later"). You can also type a value. |
@@ -101,7 +102,7 @@ Both are off by default. Chinese text without kana is left alone.
 
 ## Translation
 
-There are two kinds of translation:
+There are three kinds of translation:
 
 1. **NetEase translations.** Switch on **NetEase translations** to fetch NetEase's own translation along with the lyrics and show it under each line.
 2. **Online translation with your own key.** Listen can send the lyrics to Microsoft Azure Translator or Google Cloud Translation. Set it up in **Settings → Playback → Lyrics**:
@@ -110,7 +111,15 @@ There are two kinds of translation:
    3. Choose **Translation language** (31 languages, English by default).
    4. Press **TRANSLATION** in the lyrics view to translate the playing song. Turn on **Automatic translation** to translate every song's lyrics as they load.
 
+3. **Gemini (the AI DJ's key).** Pick **Gemini** as **Translation provider**. It needs no key of its own: it uses the Gemini key you set up for the [AI DJ](../dj/ai-dj.md) and its text model. Only lines with non-Latin letters are sent, numbered, so the translation always lands under the right line and whole English lines (common in K-pop) stay as they are, with no translation under them. English words inside a Korean line are kept. There is no romanisation. Each song's translation is cached per language, so opening the song again needs no request; new lyrics for the song (another version) are translated afresh.
+
 The whole text of the lyrics goes to the provider you chose in one request, with your key, and nothing else. The key is stored in Listen's configuration file, so treat that file as private (see [Privacy and security](../more/privacy.md)). The provider may charge for usage under your account.
+
+## Word meanings (Korean)
+
+When the lyrics contain Korean and the AI DJ has a Gemini key, the lyrics controls show **WORDS**. Press it and every Korean word becomes clickable; click one to see its dictionary form (골랐다는 → 고르다), part of speech and a short meaning that fits the song, in the app language (German or English). All words of a song are looked up in one Gemini request the first time and cached, so later clicks open at once. Press **WORDS** again to make the lines clickable for seeking again.
+
+**Lute.** Enter your vocab-hub address under **Settings → Playback → Lyrics → vocab-hub address** (empty = off). The word dialog then shows whether Lute knows the word (known, learning with its level, ignored, or not in Lute yet), and **Add to Lute** adds the dictionary form with its meaning as a new term at level 1. A word Lute already has is never changed. The hub needs the term route for this; an older hub answers that it cannot add words yet.
 
 ## Exporting lyrics
 

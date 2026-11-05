@@ -273,6 +273,8 @@ pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) 
     ));
     let mut providers_list: Vec<String> = vec!["None".into()];
     providers_list.extend(PROVIDERS.iter().map(|p| p.to_string()));
+    providers_list.push(listen_lyrics::gemini::PROVIDER.to_string());
+    let gemini = s.translation_api_provider == listen_lyrics::gemini::PROVIDER;
     let current = if s.translation_api_provider.is_empty() {
         "None".to_string()
     } else {
@@ -280,26 +282,37 @@ pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) 
     };
     v.push(mk(
         "Translation provider",
-        "The online service for the Translation button (needs your own API key).",
+        "The online service for the Translation button (needs your own API key; Gemini uses the AI DJ's key and leaves English lines as they are).",
         pick_list(providers_list, Some(current), |p| {
             set(LyricsSetting::TranslationProvider(if p == "None" { String::new() } else { p }))
         })
         .into(),
     ));
-    v.push(mk(
-        "Translation API key",
-        "The key of the provider above. It is stored in Listen's config file.",
-        text_input(crate::i18n::tr("API key"), &s.translation_api_key)
-            .secure(true)
-            .on_input(|k| set(LyricsSetting::TranslationKey(k)))
-            .style(style::input(t))
-            .width(260)
-            .into(),
-    ));
+    if !gemini {
+        v.push(mk(
+            "Translation API key",
+            "The key of the provider above. It is stored in Listen's config file.",
+            text_input(crate::i18n::tr("API key"), &s.translation_api_key)
+                .secure(true)
+                .on_input(|k| set(LyricsSetting::TranslationKey(k)))
+                .style(style::input(t))
+                .width(260)
+                .into(),
+        ));
+    }
     v.push(mk(
         "Automatic translation",
         "Translate every song's lyrics when they load (needs the provider and key).",
         switch(s.enable_auto_translation, LyricsSetting::AutoTranslation),
+    ));
+    v.push(mk(
+        "vocab-hub address",
+        "Your vocab-hub (https://…) for Lute: words mode shows whether you know a word and adds new ones to Lute. Empty = off.",
+        text_input("https://…", &s.vocab_hub_url)
+            .on_input(|u| set(LyricsSetting::VocabHubUrl(u)))
+            .style(style::input(t))
+            .width(260)
+            .into(),
     ));
     v.extend(display_rows(state, mk));
     v

@@ -1,7 +1,7 @@
 //! The lyrics view (Feishin's `features/lyrics`): highlighted lines, karaoke words, translation and
 //! romaji, the controls below, and the search / export / display-settings dialogs.
 
-use crate::app::lyrics_state::{EXPORT_MODAL, LyricsMsg, SEARCH_MODAL, SETTINGS_MODAL};
+use crate::app::lyrics_state::{EXPORT_MODAL, GLOSS_MODAL, LyricsMsg, SEARCH_MODAL, SETTINGS_MODAL};
 use crate::app::{Listen, Message};
 use crate::style::{self, Tokens, metrics};
 use crate::ui::{self, label, label_w};
@@ -187,6 +187,38 @@ fn ruby_line<'a>(
     container(r.wrap().align_x(align)).width(Length::Fill).align_x(align).into()
 }
 
+/// A line in words mode: every Korean word is a button that opens its gloss (a word with a gloss
+/// loaded is shown in the accent colour while hovered).
+fn word_line<'a>(
+    state: &'a Listen,
+    text: &'a str,
+    size: f32,
+    color: Color,
+    align: Horizontal,
+) -> Element<'a, Message> {
+    let t = state.tokens;
+    let font = ui::font(Weight::Semibold);
+    let mut r = Row::new();
+    for p in listen_lyrics::gemini::pieces(text) {
+        let base = ui::text_in(p.text, ui::font_for(p.text, font))
+            .size(size)
+            .line_height(LINE_HEIGHT)
+            .color(color)
+            .wrapping(iced::widget::text::Wrapping::None);
+        if p.word {
+            r = r.push(
+                button(base)
+                    .padding(0)
+                    .style(style::bare_button(t))
+                    .on_press(msg(LyricsMsg::Word(p.text.to_string()))),
+            );
+        } else {
+            r = r.push(base);
+        }
+    }
+    container(r.wrap().align_x(align)).width(Length::Fill).align_x(align).into()
+}
+
 /// One lyric line: plain, or with its words lit up as they are sung.
 fn line_text<'a>(
     state: &'a Listen,
@@ -197,6 +229,9 @@ fn line_text<'a>(
     karaoke: bool,
 ) -> Element<'a, Message> {
     let font = ui::font(Weight::Semibold);
+    if state.lyrics_ui.words_mode && line.text.chars().any(listen_lyrics::gemini::is_hangul) {
+        return word_line(state, &line.text, size, color, align);
+    }
     if let Some(segments) = furigana_of(&state.config.settings.lyrics, &line.text) {
         return ruby_line(segments, size, color, align);
     }
@@ -380,8 +415,8 @@ fn controls(state: &Listen) -> Element<'_, Message> {
                 .padding(Padding::from([3.0, 8.0])),
         );
     }
-    let translatable = state.lyrics.as_ref().is_some_and(|l| ui.has_translation(l))
-        || (!s.translation_api_provider.is_empty() && !s.translation_api_key.trim().is_empty());
+    let translatable =
+        state.lyrics.as_ref().is_some_and(|l| ui.has_translation(l)) || state.translation_configured();
     if has_lyrics && translatable {
         let (text, on) =
             if ui.translating { ("TRANSLATING…", false) } else { ("TRANSLATION", ui.show_translation) };
@@ -393,6 +428,19 @@ fn controls(state: &Listen) -> Element<'_, Message> {
                 .style(style::bare_button(t))
                 .on_press_maybe((!ui.translating).then(|| msg(LyricsMsg::Translation))),
             if on { "Hide the translation" } else { "Show the translation" },
+            crate::ui::tip::Position::Top,
+        ));
+    }
+    if has_lyrics && state.glosses_available() {
+        let (text, on) = if ui.glossing { ("WORDS…", true) } else { ("WORDS", ui.words_mode) };
+        let color = if on { t.primary } else { t.foreground };
+        top = top.push(crate::ui::tip::tip_plain(
+            t,
+            button(label_w(text, metrics::font_sm(), color, Weight::Semibold))
+                .padding(Padding::from([4.0, 10.0]))
+                .style(style::bare_button(t))
+                .on_press(msg(LyricsMsg::WordsMode)),
+            if ui.words_mode { "Stop looking up words" } else { "Click a Korean word for its meaning" },
             crate::ui::tip::Position::Top,
         ));
     }
@@ -468,7 +516,7 @@ impl std::fmt::Display for VersionChoice {
 // ---- dialogs ----------------------------------------------------------------------
 
 pub fn is_modal(key: &str) -> bool {
-    matches!(key, SEARCH_MODAL | EXPORT_MODAL | SETTINGS_MODAL)
+    matches!(key, SEARCH_MODAL | EXPORT_MODAL | SETTINGS_MODAL | GLOSS_MODAL)
 }
 
 fn action<'a>(t: Tokens, text: &'static str, m: Option<Message>, primary: bool) -> Element<'a, Message> {
@@ -489,6 +537,10 @@ pub fn panel<'a>(state: &'a Listen, key: &str) -> Option<Element<'a, Message>> {
         EXPORT_MODAL => {
             let (body, actions) = export_dialog(state)?;
             ("Export lyrics", body, actions, 560.0)
+        }
+        GLOSS_MODAL => {
+            let (body, actions) = gloss_dialog(state)?;
+            ("Word", body, actions, 420.0)
         }
         SETTINGS_MODAL => {
             let rows = crate::ui::lyrics_settings::display_rows(state, &|name, hint, control| {
@@ -649,4 +701,62 @@ fn export_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
         action(t, "Close", Some(Message::Overlay(crate::app::overlay::OverlayMsg::CloseModal)), false);
     let save = action(t, "Export", Some(msg(LyricsMsg::ExportSave)), true);
     Some((body, vec![close, save]))
+}
+
+/// The gloss of the clicked word: dictionary form, part of speech, meaning, Lute status and
+/// "Add to Lute".
+fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_, Message>>)> {
+    use listen_lyrics::vocab::Knowledge;
+    let t = state.tokens;
+    let ui = &state.lyrics_ui;
+    let word = ui.gloss_word.as_ref()?;
+    let gloss = ui.glosses.get(word);
+    let mut body = Column::new().spacing(metrics::space_sm());
+    body = body.push(
+        ui::text_in(word.as_str(), ui::font_for(word, ui::font(Weight::Bold))).size(28.0).color(t.foreground),
+    );
+    match gloss {
+        Some(g) => {
+            let mut head = g.lemma.clone();
+            if !g.pos.is_empty() {
+                head = format!("{head} · {}", g.pos);
+            }
+            body = body
+                .push(
+                    ui::text_in(head, ui::font_for(&g.lemma, ui::font(Weight::Medium)))
+                        .size(metrics::font_lg())
+                        .color(t.muted),
+                )
+                .push(
+                    label(g.meaning.clone(), metrics::font_lg(), t.foreground)
+                        .wrapping(iced::widget::text::Wrapping::Word),
+                );
+        }
+        None if ui.glossing => {
+            body = body.push(label("Looking up the meaning…", metrics::font_md(), t.muted))
+        }
+        None => body = body.push(label("No meaning for this word.", metrics::font_md(), t.muted)),
+    }
+    let hub = !state.config.settings.lyrics.vocab_hub_url.trim().is_empty();
+    let mut known = false;
+    if hub && let Some(words) = &ui.vocab {
+        let status = words.status(word, gloss.map(|g| g.lemma.as_str()));
+        let k = Knowledge::from_status(status, 5);
+        known = matches!(k, Knowledge::Known | Knowledge::Ignored);
+        let text = match k {
+            Knowledge::Known => crate::i18n::tr("In Lute: known").to_string(),
+            Knowledge::Learning(n) => crate::i18n::trf("In Lute: learning ({}/5)", &[&n]),
+            Knowledge::Ignored => crate::i18n::tr("In Lute: ignored").to_string(),
+            Knowledge::New => crate::i18n::tr("Not in Lute yet").to_string(),
+        };
+        body = body.push(label(text, metrics::font_sm(), if known { t.primary } else { t.muted }));
+    }
+    let close =
+        action(t, "Close", Some(Message::Overlay(crate::app::overlay::OverlayMsg::CloseModal)), false);
+    let mut actions = vec![close];
+    if hub {
+        let add = (!ui.lute_busy && !known).then(|| msg(LyricsMsg::AddToLute));
+        actions.push(action(t, if ui.lute_busy { "Adding…" } else { "Add to Lute" }, add, true));
+    }
+    Some((body.into(), actions))
 }

@@ -36,10 +36,12 @@ pub struct LyricsSettings {
     pub enable_furigana: bool,
     pub enable_netease_translation: bool,
     pub enable_auto_translation: bool,
-    /// `Microsoft Azure`, `Google Cloud` or empty.
+    /// `Microsoft Azure`, `Google Cloud`, `Gemini` (the AI DJ's key) or empty.
     pub translation_api_provider: String,
     pub translation_api_key: String,
     pub translation_target_language: String,
+    /// vocab-hub address (`https://…`) for Lute word statuses and "Add to Lute"; empty = off.
+    pub vocab_hub_url: String,
 }
 
 impl Default for LyricsSettings {
@@ -70,6 +72,7 @@ impl Default for LyricsSettings {
             translation_api_provider: String::new(),
             translation_api_key: String::new(),
             translation_target_language: "en".into(),
+            vocab_hub_url: String::new(),
         }
     }
 }

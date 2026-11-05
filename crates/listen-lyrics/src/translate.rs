@@ -5,6 +5,7 @@
 use serde_json::{Value, json};
 use std::time::Duration;
 
+/// The providers with their own key; `gemini::PROVIDER` (the AI DJ key) is offered next to them.
 pub const PROVIDERS: [&str; 2] = ["Microsoft Azure", "Google Cloud"];
 
 /// Target languages offered in the settings: (code, name).

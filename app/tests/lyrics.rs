@@ -342,3 +342,56 @@ fn karaoke_words_light_up_with_the_playback_position() {
     at(&mut s, 12_500);
     assert_eq!(s.lyrics_ui.pos_ms, 12_500);
 }
+
+#[test]
+fn gemini_translation_lays_over_and_leaves_english_lines() {
+    let mut s = boot_with(listen_lyrics::parse_lrc(
+        "[00:01.00]I got you, baby\n[00:05.00]너를 사랑해\n[00:10.00]보고 싶어 baby",
+    ));
+    // Gemini needs no key of its own (it uses the AI DJ's); the demo has none, so no button.
+    s.config.settings.lyrics.translation_api_provider = listen_lyrics::gemini::PROVIDER.into();
+    assert!(!has_text(&s, "TRANSLATION"));
+    let id = s.queue.current().unwrap().song.id.clone();
+    let out = vec![None, Some("Ich liebe dich".to_string()), Some("Ich vermisse dich, baby".to_string())];
+    let _ = s.update(Message::Lyrics(LyricsMsg::GeminiTranslated(id.clone(), "de".into(), Ok(out))));
+    assert!(has_text(&s, "Ich liebe dich") && has_text(&s, "I got you, baby"));
+    // Another song's answer, or a failure, changes nothing.
+    let _ = s.update(Message::Lyrics(LyricsMsg::GeminiTranslated(
+        "other".into(),
+        "de".into(),
+        Ok(vec![None; 3]),
+    )));
+    let _ = s.update(Message::Lyrics(LyricsMsg::GeminiTranslated(id, "de".into(), Err("quota".into()))));
+    assert!(has_text(&s, "Ich vermisse dich, baby"));
+}
+
+#[test]
+fn words_mode_opens_a_gloss_with_the_lute_status() {
+    use listen_lyrics::gemini::Gloss;
+    let mut s = boot_with(listen_lyrics::parse_lrc("[00:01.00]내가 골랐다는 노래\n[00:05.00]Yeah yeah"));
+    let id = s.queue.current().unwrap().song.id.clone();
+    let _ = s.update(Message::Lyrics(LyricsMsg::WordsMode));
+    let mut g = std::collections::BTreeMap::new();
+    g.insert(
+        "골랐다는".to_string(),
+        Gloss { lemma: "고르다".into(), pos: "Verb".into(), meaning: "to choose".into() },
+    );
+    let _ = s.update(Message::Lyrics(LyricsMsg::Glossed(id, "en".into(), Ok(g))));
+    let msgs = click(&mut s, "골랐다는");
+    assert!(msgs.iter().any(|m| matches!(m, Message::Lyrics(LyricsMsg::Word(w)) if w == "골랐다는")));
+    assert!(has_text(&s, "to choose") && has_text(&s, "고르다 · Verb"));
+    // No hub set: no Lute line and no button.
+    assert!(!has_text(&s, "Add to Lute"));
+    s.config.settings.lyrics.vocab_hub_url = "https://hub.example".into();
+    let words = listen_lyrics::vocab::parse_words(r#"{"version":"v","terms":{"고르다":3}}"#).unwrap();
+    let _ = s.update(Message::Lyrics(LyricsMsg::Vocab(Some(words))));
+    assert!(has_text(&s, "In Lute: learning (3/5)"));
+    assert!(has_text(&s, "Add to Lute"));
+    let _ = s.update(Message::Lyrics(LyricsMsg::AddedToLute(
+        "고르다".into(),
+        Ok(listen_lyrics::vocab::Added::Exists(3)),
+    )));
+    // A word without a gloss says so.
+    let _ = s.update(Message::Lyrics(LyricsMsg::Word("노래".into())));
+    assert!(has_text(&s, "No meaning for this word."));
+}

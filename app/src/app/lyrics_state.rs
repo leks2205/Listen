@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 /// Keys of the modals (`ui::overlay`).
 pub const SEARCH_MODAL: &str = "lyrics-search";
 pub const EXPORT_MODAL: &str = "lyrics-export";
+pub const GLOSS_MODAL: &str = "lyrics-gloss";
 pub const SETTINGS_MODAL: &str = "lyrics-settings";
 const OVERRIDES_FILE: &str = "lyrics_overrides.json";
 
@@ -98,6 +99,19 @@ pub struct LyricsUi {
     pub translated: Vec<Option<String>>,
     pub translating: bool,
     pub show_translation: bool,
+    /// Word glosses (Gemini) for the shown lyrics: word form → gloss.
+    pub glosses: std::collections::BTreeMap<String, listen_lyrics::gemini::Gloss>,
+    pub glossing: bool,
+    /// Words mode: Korean words are buttons that open their gloss.
+    pub words_mode: bool,
+    /// The word whose gloss is open.
+    pub gloss_word: Option<String>,
+    /// Lute word statuses from the vocab-hub (loaded once per session).
+    pub vocab: Option<listen_lyrics::vocab::Words>,
+    pub lute_busy: bool,
+    /// Gemini results for the current song (`key`), mirrored to the cache dir.
+    ai_cache: listen_lyrics::gemini::SongCache,
+    ai_cache_key: String,
     pub search: Option<SearchState>,
     pub export: Option<ExportState>,
     /// Playback position plus offset, for the word highlight.
@@ -130,6 +144,14 @@ impl LyricsUi {
             translated: Vec::new(),
             translating: false,
             show_translation: true,
+            glosses: Default::default(),
+            glossing: false,
+            words_mode: false,
+            gloss_word: None,
+            vocab: None,
+            lute_busy: false,
+            ai_cache: Default::default(),
+            ai_cache_key: String::new(),
             search: None,
             export: None,
             pos_ms: 0,
@@ -202,6 +224,7 @@ pub enum LyricsSetting {
     TranslationProvider(String),
     TranslationKey(String),
     TranslationLanguage(String),
+    VocabHubUrl(String),
     DelayMs(i32),
     Alignment(String),
     FontSize(f32),
@@ -244,6 +267,7 @@ impl LyricsSetting {
             Self::TranslationProvider(v) => s.translation_api_provider = v,
             Self::TranslationKey(v) => s.translation_api_key = v,
             Self::TranslationLanguage(v) => s.translation_target_language = v,
+            Self::VocabHubUrl(v) => s.vocab_hub_url = v.trim().to_string(),
             Self::DelayMs(v) => s.delay_ms = v.clamp(-10_000, 10_000),
             Self::Alignment(v) => s.alignment = v,
             Self::FontSize(v) => s.font_size = v.clamp(8.0, 72.0).round(),
@@ -293,6 +317,17 @@ pub enum LyricsMsg {
     /// The Translation button.
     Translation,
     Translated(String, Option<Vec<Option<String>>>),
+    /// Gemini translation for (song, language): cached on success.
+    GeminiTranslated(String, String, Result<Vec<Option<String>>, String>),
+    /// The WORDS button: Korean words become buttons with their gloss.
+    WordsMode,
+    Glossed(String, String, Result<std::collections::BTreeMap<String, listen_lyrics::gemini::Gloss>, String>),
+    /// A word was clicked in words mode.
+    Word(String),
+    Vocab(Option<listen_lyrics::vocab::Words>),
+    /// Add the open gloss's dictionary form to Lute.
+    AddToLute,
+    AddedToLute(String, Result<listen_lyrics::vocab::Added, String>),
     SearchOpen,
     SearchClose,
     SearchName(String),
@@ -367,6 +402,9 @@ impl Listen {
         ui.selected = 0;
         ui.translated.clear();
         ui.translating = false;
+        ui.glosses.clear();
+        ui.glossing = false;
+        ui.gloss_word = None;
         ui.rev += 1;
         let s = &self.config.settings.lyrics;
         let ovr = ui.override_for(&key).cloned();
@@ -485,21 +523,151 @@ impl Listen {
             ui.selected = i;
             self.lyrics = Some(l.clone());
             ui.translated.clear();
+            ui.glosses.clear();
+            ui.gloss_word = None;
             ui.rev += 1;
             self.lyric_active = None;
         }
     }
 
-    fn translation_configured(&self) -> bool {
+    /// Whether the Translation button can translate: a provider with its key (Gemini uses the
+    /// AI DJ's key).
+    pub(crate) fn translation_configured(&self) -> bool {
         let s = &self.config.settings.lyrics;
+        if s.translation_api_provider == listen_lyrics::gemini::PROVIDER {
+            return self.gemini_key().is_some();
+        }
         !s.translation_api_provider.is_empty() && !s.translation_api_key.trim().is_empty()
     }
 
-    fn translate_lyrics(&mut self) -> Task<Message> {
-        let Some(lyrics) = &self.lyrics else { return Task::none() };
-        if self.demo || !self.translation_configured() || self.lyrics_ui.translating {
+    fn gemini_key(&self) -> Option<String> {
+        self.dj.key.clone().filter(|k| !k.trim().is_empty())
+    }
+
+    /// Whether words mode can be offered: Hangul in the lyrics and a Gemini key.
+    pub(crate) fn glosses_available(&self) -> bool {
+        !self.demo
+            && self.gemini_key().is_some()
+            && self.lyrics.as_ref().is_some_and(|l| {
+                listen_lyrics::gemini::has_hangul(&l.lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>())
+            })
+    }
+
+    fn ai_cache_dir(&self) -> Option<PathBuf> {
+        self.paths.as_ref().map(|p| p.cache_dir.join("lyrics-ai"))
+    }
+
+    /// The song's Gemini cache, loaded from disk when the song changed.
+    fn ai_cache(&mut self) -> &mut listen_lyrics::gemini::SongCache {
+        let key = self.lyrics_ui.key.clone();
+        if self.lyrics_ui.ai_cache_key != key {
+            self.lyrics_ui.ai_cache = match self.ai_cache_dir() {
+                Some(dir) => listen_lyrics::gemini::SongCache::load(&dir, &key),
+                None => Default::default(),
+            };
+            self.lyrics_ui.ai_cache_key = key;
+        }
+        &mut self.lyrics_ui.ai_cache
+    }
+
+    fn save_ai_cache(&self) {
+        if let Some(dir) = self.ai_cache_dir()
+            && let Err(e) = self.lyrics_ui.ai_cache.save(&dir, &self.lyrics_ui.ai_cache_key)
+        {
+            tracing::warn!("lyrics cache not saved: {e}");
+        }
+    }
+
+    fn shown_lines(&self) -> Vec<String> {
+        self.lyrics.as_ref().map(|l| l.lines.iter().map(|l| l.text.clone()).collect()).unwrap_or_default()
+    }
+
+    /// The glosses' language: the app language (German or English).
+    fn gloss_language() -> (&'static str, &'static str) {
+        if crate::i18n::language() == "de" { ("de", "German") } else { ("en", "English") }
+    }
+
+    fn translate_with_gemini(&mut self) -> Task<Message> {
+        let Some(key) = self.gemini_key() else { return Task::none() };
+        let lang = self.config.settings.lyrics.translation_target_language.clone();
+        let lines = self.shown_lines();
+        if let Some(hit) = self.ai_cache().translation(&lang, &lines).cloned() {
+            tracing::info!("Gemini lyric translation ({lang}) from the cache");
+            self.lyrics_ui.translated = hit;
+            self.lyrics_ui.show_translation = true;
             return Task::none();
         }
+        let language = listen_lyrics::translate::LANGUAGES
+            .iter()
+            .find(|(c, _)| *c == lang)
+            .map_or("English", |(_, n)| *n)
+            .to_string();
+        let model = self.config.settings.ai_dj.text_model.clone();
+        let http = self.http.clone();
+        let id = self.lyrics_song.clone().unwrap_or_default();
+        self.lyrics_ui.translating = true;
+        Task::perform(
+            async move {
+                listen_lyrics::gemini::translate(&http, &key, &model, &language, &lines)
+                    .await
+                    .map_err(|e| e.to_string())
+            },
+            move |r| Message::Lyrics(LyricsMsg::GeminiTranslated(id.clone(), lang.clone(), r)),
+        )
+    }
+
+    fn load_glosses(&mut self) -> Task<Message> {
+        let Some(key) = self.gemini_key() else { return Task::none() };
+        if self.lyrics_ui.glossing || !self.lyrics_ui.glosses.is_empty() {
+            return Task::none();
+        }
+        let (lang, language) = Self::gloss_language();
+        let lines = self.shown_lines();
+        if let Some(hit) = self.ai_cache().glossary(lang, &lines).cloned() {
+            tracing::info!("Gemini lyric glosses ({lang}) from the cache");
+            self.lyrics_ui.glosses = hit;
+            return Task::none();
+        }
+        let model = self.config.settings.ai_dj.text_model.clone();
+        let http = self.http.clone();
+        let id = self.lyrics_song.clone().unwrap_or_default();
+        self.lyrics_ui.glossing = true;
+        Task::perform(
+            async move {
+                listen_lyrics::gemini::glosses(&http, &key, &model, language, &lines)
+                    .await
+                    .map_err(|e| e.to_string())
+            },
+            move |r| Message::Lyrics(LyricsMsg::Glossed(id.clone(), lang.to_string(), r)),
+        )
+    }
+
+    fn load_vocab(&mut self) -> Task<Message> {
+        let base = self.config.settings.lyrics.vocab_hub_url.trim().to_string();
+        if base.is_empty() || self.lyrics_ui.vocab.is_some() {
+            return Task::none();
+        }
+        let http = self.http.clone();
+        Task::perform(
+            async move {
+                listen_lyrics::vocab::words(&http, &base)
+                    .await
+                    .map_err(|e| tracing::warn!("vocab-hub word list: {e}"))
+                    .ok()
+            },
+            |w| Message::Lyrics(LyricsMsg::Vocab(w)),
+        )
+    }
+
+    fn translate_lyrics(&mut self) -> Task<Message> {
+        if self.lyrics.is_none() || self.demo || !self.translation_configured() || self.lyrics_ui.translating
+        {
+            return Task::none();
+        }
+        if self.config.settings.lyrics.translation_api_provider == listen_lyrics::gemini::PROVIDER {
+            return self.translate_with_gemini();
+        }
+        let Some(lyrics) = &self.lyrics else { return Task::none() };
         let s = &self.config.settings.lyrics;
         let (provider, key, target) = (
             s.translation_api_provider.clone(),
@@ -598,6 +766,98 @@ impl Listen {
                     _ => self.toast_error(
                         "The translation did not work. Check the provider and the API key.".into(),
                     ),
+                }
+            }
+            LyricsMsg::GeminiTranslated(id, lang, result) => {
+                self.lyrics_ui.translating = false;
+                if self.lyrics_song.as_deref() != Some(id.as_str()) {
+                    return Task::none();
+                }
+                let lines = self.shown_lines();
+                match result {
+                    Ok(out) if out.len() == lines.len() => {
+                        self.ai_cache().put_translation(&lang, &lines, out.clone());
+                        self.save_ai_cache();
+                        self.lyrics_ui.translated = out;
+                        self.lyrics_ui.show_translation = true;
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::warn!("Gemini lyric translation failed: {e}");
+                        self.toast_error(crate::i18n::trf("The translation did not work: {}", &[&e]));
+                    }
+                }
+            }
+            LyricsMsg::WordsMode => {
+                let ui = &mut self.lyrics_ui;
+                ui.words_mode = !ui.words_mode;
+                if ui.words_mode {
+                    return Task::batch([self.load_glosses(), self.load_vocab()]);
+                }
+            }
+            LyricsMsg::Glossed(id, lang, result) => {
+                self.lyrics_ui.glossing = false;
+                if self.lyrics_song.as_deref() != Some(id.as_str()) {
+                    return Task::none();
+                }
+                match result {
+                    Ok(words) => {
+                        let lines = self.shown_lines();
+                        self.ai_cache().put_glosses(&lang, &lines, words.clone());
+                        self.save_ai_cache();
+                        self.lyrics_ui.glosses = words;
+                    }
+                    Err(e) => {
+                        tracing::warn!("Gemini lyric glosses failed: {e}");
+                        self.lyrics_ui.words_mode = false;
+                        self.toast_error(crate::i18n::trf("The word meanings did not load: {}", &[&e]));
+                    }
+                }
+            }
+            LyricsMsg::Word(w) => {
+                self.lyrics_ui.gloss_word = Some(w);
+                self.open_modal(GLOSS_MODAL);
+                return Task::batch([self.load_glosses(), self.load_vocab()]);
+            }
+            LyricsMsg::Vocab(words) => self.lyrics_ui.vocab = words,
+            LyricsMsg::AddToLute => {
+                let ui = &self.lyrics_ui;
+                let base = self.config.settings.lyrics.vocab_hub_url.trim().to_string();
+                let Some(word) = ui.gloss_word.clone() else { return Task::none() };
+                if base.is_empty() || ui.lute_busy {
+                    return Task::none();
+                }
+                let (lemma, meaning) = match ui.glosses.get(&word) {
+                    Some(g) => (g.lemma.clone(), g.meaning.clone()),
+                    None => (word, String::new()),
+                };
+                self.lyrics_ui.lute_busy = true;
+                let http = self.http.clone();
+                return Task::perform(
+                    async move {
+                        let r = listen_lyrics::vocab::add_term(&http, &base, &lemma, &meaning).await;
+                        (lemma, r)
+                    },
+                    |(lemma, r)| Message::Lyrics(LyricsMsg::AddedToLute(lemma, r)),
+                );
+            }
+            LyricsMsg::AddedToLute(lemma, result) => {
+                use listen_lyrics::vocab::Added;
+                self.lyrics_ui.lute_busy = false;
+                match result {
+                    Ok(Added::Created) => {
+                        if let Some(v) = &mut self.lyrics_ui.vocab {
+                            v.terms.insert(lemma.clone(), 1);
+                        }
+                        self.toast_info(crate::i18n::trf("Added “{}” to Lute.", &[&lemma]));
+                    }
+                    Ok(Added::Exists(_)) => {
+                        self.toast_info(crate::i18n::trf("“{}” is already in Lute.", &[&lemma]))
+                    }
+                    Ok(Added::Unsupported) => self.toast_error(
+                        crate::i18n::tr("The vocab-hub cannot add words yet (it needs an update).").into(),
+                    ),
+                    Err(e) => self.toast_error(crate::i18n::trf("Adding to Lute did not work: {}", &[&e])),
                 }
             }
             LyricsMsg::SearchOpen => {
