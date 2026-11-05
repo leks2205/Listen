@@ -31,6 +31,8 @@ pub enum ExcludeMsg {
     Unhide(String, String),
     /// The YouTube Music dislike (or taking it back) finished.
     Rated(Result<(), String>),
+    /// listen-server answered with the merged state of every device.
+    Synced(Result<Exclusions, String>),
 }
 
 #[derive(Debug, Default)]
@@ -38,6 +40,7 @@ pub struct ExcludeState {
     pub set: Exclusions,
     /// `None` for demo / ephemeral sessions: nothing is written.
     pub path: Option<PathBuf>,
+    pub syncing: bool,
     /// Title and artist per song key, for Settings → Hidden songs (from the songs marked this run and
     /// the history).
     pub names: std::collections::HashMap<String, (String, String)>,
@@ -48,7 +51,7 @@ impl ExcludeState {
         let path = dir.map(|d| d.join(FILE_NAME));
         let mut set = path.as_deref().map(Exclusions::load).unwrap_or_default();
         set.prune(now_secs(), KEEP_CLEARED_DAYS);
-        Self { set, path, names: Default::default() }
+        Self { set, path, syncing: false, names: Default::default() }
     }
 }
 
@@ -206,6 +209,21 @@ impl Listen {
                 self.exclusions.set.set_hidden_in(&id, &key, false, now);
                 Task::none()
             }
+            ExcludeMsg::Synced(result) => {
+                self.exclusions.syncing = false;
+                match result {
+                    Ok(theirs) => {
+                        if self.exclusions.set.merge(&theirs) {
+                            tracing::info!("merged the hidden songs of the other devices");
+                            self.exclude_save();
+                            self.exclude_prune_queue();
+                            self.refresh_history_views();
+                        }
+                    }
+                    Err(e) => tracing::warn!("merging the hidden songs: {e}"),
+                }
+                return Task::none();
+            }
             ExcludeMsg::Rated(Ok(())) => return Task::none(),
             ExcludeMsg::Rated(Err(e)) => {
                 tracing::warn!("YouTube Music dislike: {e}");
@@ -213,7 +231,40 @@ impl Listen {
             }
         };
         self.exclude_save();
-        task
+        Task::batch([task, self.exclude_sync()])
+    }
+
+    /// Sends the state to listen-server and merges what comes back (with "Merge with other devices"
+    /// on, the same address and token as the history). A server without `/v1/exclusions` only logs.
+    pub(super) fn exclude_sync(&mut self) -> Task<Message> {
+        let settings = &self.config.settings.history;
+        let base = settings.sync_server.trim();
+        if !settings.sync || base.is_empty() || self.exclusions.syncing || self.exclusions.path.is_none() {
+            return Task::none();
+        }
+        let Some(token) = self.history_sync_token() else { return Task::none() };
+        let url = format!("{}/v1/exclusions", base.trim_end_matches('/'));
+        let body = self.exclusions.set.clone();
+        self.exclusions.syncing = true;
+        Task::perform(
+            async move {
+                let http = reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(8))
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build()
+                    .map_err(|e| e.to_string())?;
+                let response = http
+                    .post(url)
+                    .bearer_auth(token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(|e| e.without_url().to_string())?;
+                let response = response.error_for_status().map_err(|e| e.without_url().to_string())?;
+                response.json::<Exclusions>().await.map_err(|e| e.without_url().to_string())
+            },
+            |r| Message::Exclude(ExcludeMsg::Synced(r)),
+        )
     }
 
     /// One row of Settings → Hidden songs: title and artist of a song key.
@@ -272,6 +323,21 @@ mod tests {
         let _ = s.on_exclude(ExcludeMsg::NotInterested(vec![picked.clone(), first.1.clone()]));
         assert!(!s.queue.iter().any(|i| song_key(&i.song) == song_key(&picked)));
         assert_eq!(s.queue.current().map(|i| i.uid), Some(first.0), "the current song stays");
+    }
+
+    #[test]
+    fn the_other_devices_state_merges_in() {
+        let mut s = rig();
+        let songs = demo::album_songs(0);
+        let mut theirs = Exclusions::default();
+        theirs.set_not_interested(&song_key(&songs[0]), true, now_secs());
+        theirs.set_hidden_in("p1", &song_key(&songs[1]), true, now_secs());
+        let _ = s.on_exclude(ExcludeMsg::Synced(Ok(theirs)));
+        assert!(!s.auto_allows(&songs[0]));
+        assert_eq!(s.without_hidden("p1", songs.clone(), 0, false).0.len(), songs.len() - 1);
+        // A failed sync changes nothing and allows the next one.
+        let _ = s.on_exclude(ExcludeMsg::Synced(Err("offline".into())));
+        assert!(!s.exclusions.syncing && !s.auto_allows(&songs[0]));
     }
 
     #[test]

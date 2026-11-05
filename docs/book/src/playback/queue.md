@@ -164,6 +164,8 @@ Every version of a song counts (the single, the album track, the music video). A
 
 **Settings → Advanced → Hidden songs** lists every snoozed (with the days left), not wanted and hidden song with an **Undo** button.
 
+With **Merge with other devices** on (Settings → Advanced → Listening history), the hidden songs go to your listen-server right after each change and with every history merge, so the phone and your other computers leave the same songs out. When two devices change the same song, the later change wins. This needs listen-server 0.6.0 or newer.
+
 ## Queue restore
 
 With **Save play queue** on, Listen writes the queue and the position of the playing song to disk every few seconds and when you quit. At the next start the queue is back, the playing song is selected and the position is remembered, but nothing plays by itself. Press Play to continue where you stopped. Shuffle and repeat are restored as well.

@@ -225,7 +225,7 @@ impl Listen {
                 }
                 self.refresh_history_views();
             }
-            HistoryMsg::Sync => return self.history_sync(),
+            HistoryMsg::Sync => return Task::batch([self.history_sync(), self.exclude_sync()]),
             HistoryMsg::Synced(result) => self.history_synced(result),
             HistoryMsg::SyncToken(token) => self.history_view.sync_token = token,
             HistoryMsg::SaveSyncToken => return self.history_sync_save_token(),
