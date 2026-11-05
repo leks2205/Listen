@@ -5,15 +5,18 @@
 //!   timbre, mixability, repetition) and a beam search that orders DJ picks.
 //! - [`plan`](mod@plan): where and how to mix two analysed songs ([`TransitionPlan`]),
 //!   and which queue pairs may be mixed at all ([`mix_eligible`]).
+//! - [`loudness`]: playback and blend gain from measured loudness (contract C5).
 //! - [`render`](mod@render): an offline mono preview of a plan (dev tool for
 //!   `listen --check-mix --render`).
 
 pub mod bridge;
 pub mod genre;
+pub mod loudness;
 pub mod plan;
 pub mod render;
 pub mod score;
 
+pub use loudness::{GainDb, GainSource, Levelling, RgTag, track_gain};
 pub use plan::{
     Envelope, EqEvent, EqTarget, Kind, PlanCtx, SpeedRamp, TransitionPlan, VoiceBreak, VoiceMode, Which,
     mix_eligible, mixable_source, plan,
