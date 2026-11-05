@@ -130,7 +130,7 @@ pub fn render_decks(
         let s_out = speed(plan.out_ramp, ramp_wall, wall, 1.0);
         let s_in = match stop_wall {
             Some(_) => speed(plan.in_settle, stop_wall, wall, plan.in_speed),
-            None => plan.in_speed,
+            None => plan.in_speed_at(mix_wall.map_or(0.0, |m| wall - m)),
         };
         out_pos += s_out * dt;
         if let Some(p) = &mut in_pos {
@@ -303,6 +303,7 @@ mod tests {
             out_stop_s: 6.0,
             in_speed: 1.0,
             out_ramp: None,
+            in_glide: None,
             in_settle: None,
             gain: Envelope { points: vec![(0.0, 1.0, 0.0), (2.0, 0.0, 1.0)] },
             eq,

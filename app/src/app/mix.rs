@@ -865,7 +865,9 @@ impl Listen {
                 let p = (started.elapsed().as_secs_f64() / r.secs.max(0.01)).min(1.0);
                 r.from + (r.to - r.from) * p
             }
-            _ => plan.in_speed,
+            // Through the blend, on the outgoing deck's clock (it plays at the end of its ramp by then).
+            _ => plan
+                .in_speed_at((out_t - plan.out_mix_start_s).max(0.0) / plan.out_ramp.map_or(1.0, |r| r.to)),
         };
         tasks.push(self.set_deck_speed(in_deck, base * (1.0 + self.mix.nudge)));
 

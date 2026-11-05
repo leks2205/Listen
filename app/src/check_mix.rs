@@ -102,13 +102,16 @@ async fn check(
         if verified.none_passed { " (no option passed; least bad)" } else { "" }
     );
     println!(
-        "\n{:?}: out {:.2}s → in {:.2}s (loaded at {:.2}s), blend {:.1}s, in speed {:.4}, handover {:.2}s, out stops {:.2}s, score {:.2}\n{}",
+        "\n{:?}: out {:.2}s → in {:.2}s (loaded at {:.2}s), blend {:.1}s, in speed {}, handover {:.2}s, out stops {:.2}s, score {:.2}\n{}",
         plan.kind,
         plan.out_mix_start_s,
         plan.in_mix_start_s,
         plan.in_load_at_s,
         plan.blend_s,
-        plan.in_speed,
+        match plan.in_glide {
+            Some(g) => format!("{:.4} → {:.4} (glide)", g.from, g.to),
+            None => format!("{:.4}", plan.in_speed),
+        },
         plan.handover_out_s,
         plan.out_stop_s,
         plan.score,

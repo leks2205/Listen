@@ -48,6 +48,8 @@ For a beat-matched blend the two songs must run at the same speed. Listen speeds
 
 Songs whose tempo is double or half of the other (for example 70 and 140 BPM) are matched at that ratio instead of being sped up a lot.
 
+The speeds are taken from the bars that actually overlap, not from each song's average tempo. Many songs drift a little (a slower intro, a live drummer), and a speed set from the average would let the beats slide apart by tens of milliseconds during a long blend. When the incoming song speeds up or slows down inside the blend, its speed glides along with it so the beats stay together. A mix point whose beats still wouldn't line up is passed over for a better one, or the songs join with an echo-out or a cut.
+
 > **Note:** Tempo changes use the rubberband library inside mpv. If your mpv was built without it, Listen uses a different method, which works but can make the beat wobble slightly while a song is not at its natural speed.
 
 ## Bridge songs

@@ -162,6 +162,11 @@ pub struct TransitionPlan {
     pub in_speed: f64,
     /// Outgoing speed change before the blend (towards the shared tempo).
     pub out_ramp: Option<SpeedRamp>,
+    /// Incoming speed glide through the blend (from the mix point, wall seconds) when the overlapping
+    /// beats drift apart at one constant speed; `in_speed` is then the best constant speed (for engines
+    /// without the glide) and `in_settle` starts from the glide's end. See [`TransitionPlan::in_speed_at`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_glide: Option<SpeedRamp>,
     /// Incoming back to 1.0× after the outgoing stops.
     pub in_settle: Option<SpeedRamp>,
     pub gain: Envelope,
@@ -190,11 +195,22 @@ impl TransitionPlan {
             out_stop_s: out_end_s,
             in_speed: 1.0,
             out_ramp: None,
+            in_glide: None,
             in_settle: None,
             gain: Envelope { points: vec![(0.0, 0.0, 1.0)] },
             eq: Vec::new(),
             voice_window: None,
             levels: None,
+        }
+    }
+
+    /// Incoming deck speed `blend_wall_s` wall seconds after the mix point, until the outgoing stops
+    /// (then `in_settle` takes over).
+    pub fn in_speed_at(&self, blend_wall_s: f64) -> f64 {
+        match self.in_glide {
+            Some(r) if r.secs > 0.0 => r.from + (r.to - r.from) * (blend_wall_s / r.secs).clamp(0.0, 1.0),
+            Some(r) => r.to,
+            None => self.in_speed,
         }
     }
 }
@@ -387,6 +403,10 @@ struct Cand {
     m: usize,
     i: usize,
     n: usize,
+    /// Outgoing bars per incoming bar (1, 2 or ½), from the overlapping bars.
+    k: f64,
+    /// Incoming/outgoing speed ratio at the blend's start and end ([`Local::glide`]).
+    glide: Option<(f64, f64)>,
     score: f32,
     tempo: Tempo,
     clash: f32,
@@ -438,9 +458,9 @@ fn plan_inner(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> Tran
             None => fade_plan(out, inn, ctx, &reason),
         };
     }
-    match (candidates(&o, &i, k, lr, ctx, opts).first().copied(), hand) {
+    match (candidates(&o, &i, k, ctx, opts).first().copied(), hand) {
         (Some(c), Some(h)) if h.score > c.score => build_handover(&o, &i, h, "vocals on both edges"),
-        (Some(c), _) => build(&o, &i, k, c, ctx, opts),
+        (Some(c), _) => build(&o, &i, c, ctx, opts),
         (None, Some(h)) => build_handover(&o, &i, h, "no beat-matched mix point left"),
         (None, None) => fade_plan(out, inn, ctx, "no beat-matched mix point left"),
     }
@@ -460,7 +480,7 @@ pub fn alternatives(out: &Features, inn: &Features, ctx: &PlanCtx, max: usize) -
     let (k, lr) = (f64::from(k), f64::from(lr));
     let max_lr = (1.0 + f64::from(ctx.settings.max_tempo_pct.max(0.0)) / 100.0).ln();
     let talk = ctx.voice_break.is_some_and(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
-    let cands = if lr.abs() <= max_lr { candidates(&o, &i, k, lr, ctx, Opts::NORMAL) } else { Vec::new() };
+    let cands = if lr.abs() <= max_lr { candidates(&o, &i, k, ctx, Opts::NORMAL) } else { Vec::new() };
     let hands = if talk { Vec::new() } else { handovers(&o, &i, ctx) };
     // Merged by score; on equal scores the blend first (as in `plan`).
     enum Opt {
@@ -482,7 +502,7 @@ pub fn alternatives(out: &Features, inn: &Features, ctx: &PlanCtx, max: usize) -
             break;
         }
         let mut p = match opt {
-            Opt::C(c) => build(&o, &i, k, c, ctx, Opts::NORMAL),
+            Opt::C(c) => build(&o, &i, c, ctx, Opts::NORMAL),
             Opt::H(h) => build_handover(&o, &i, h, "alternative"),
         };
         if plans.iter().any(|q| same(q, &p)) {
@@ -665,6 +685,7 @@ fn build_handover(o: &Side, i: &Side, h: Hand, why: &str) -> TransitionPlan {
         out_stop_s: stop + blend_s,
         in_speed: 1.0,
         out_ramp: None,
+        in_glide: None,
         in_settle: None,
         gain: Envelope { points: gain },
         eq,
@@ -697,8 +718,89 @@ fn tempo_for(o: &Side, m: usize, lr: f64, ctx: &PlanCtx) -> Option<Tempo> {
     (lr.abs() <= per_deck).then_some(full)
 }
 
+/// How the overlapping beats of one candidate line up (see [`local_match`]).
+#[derive(Debug, Clone, Copy)]
+struct Local {
+    /// Outgoing bars per incoming bar (1, 2 or ½).
+    k: f64,
+    /// Log tempo gap of the best constant speed, as in [`octave_match`]: the incoming plays at `e^-lr`
+    /// of the outgoing's speed.
+    lr: f64,
+    /// Incoming/outgoing speed ratio at the start and the end of the blend, when a glide keeps the beats
+    /// together better than the constant `e^-lr`.
+    glide: Option<(f64, f64)>,
+    /// Largest beat offset left inside the blend (s), with the glide if there is one.
+    drift_s: f64,
+}
+
+/// A glide is used when it takes this much drift off (s)...
+const GLIDE_MIN_GAIN_S: f64 = 0.002;
+/// ...and changes the incoming speed by at most this ratio over the blend.
+const GLIDE_MAX: f64 = 0.04;
+/// Score per second of beat drift left in a blend beyond [`DRIFT_FREE_S`].
+const DRIFT_PER_S: f32 = 20.0;
+const DRIFT_FREE_S: f64 = 0.004;
+
+/// Picks `k` from the `n` overlapping bars from out bar `m` and in bar `inb` (`k_song`, from the songs'
+/// average tempos, unless another octave is clearly closer), then fits the incoming beats to the
+/// outgoing ones by least squares, anchored at the shared first downbeat: once at one constant speed
+/// ratio, once with a linear glide. A grid whose tempo moves away from its average (a slow intro, a
+/// live drummer) would otherwise slide off by tens of ms per beat. `None` without room on the incoming
+/// side.
+fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) -> Option<Local> {
+    let (m, inb, nf) = (m as f64, inb as f64, n as f64);
+    let out_span = o.t(m + nf) - o.t(m);
+    let gap = |k: f64| {
+        let in_span = i.t(inb + nf / k) - i.t(inb);
+        (in_span > 0.0 && out_span > 0.0).then(|| (out_span / in_span).ln())
+    };
+    let k = [k_song, 1.0, 2.0, 0.5]
+        .into_iter()
+        .filter(|&k| inb + nf / k <= i.bars as f64)
+        .filter_map(|k| gap(k).map(|g| (k, g)))
+        .min_by(|a, b| {
+            let pen = |x: &(f64, f64)| x.1.abs() + if x.0 == k_song { 0.0 } else { 0.25f64.ln_1p() };
+            pen(a).total_cmp(&pen(b))
+        })?
+        .0;
+    // Every beat of the overlap (quarter bars): outgoing (x) and incoming (y) file time since the first
+    // downbeat.
+    let pts: Vec<(f64, f64)> = (1..=4 * n)
+        .map(|q| {
+            let f = q as f64 / 4.0;
+            (o.t(m + f) - o.t(m), i.t(inb + f / k) - i.t(inb))
+        })
+        .collect();
+    let sum = |f: &dyn Fn(f64, f64) -> f64| pts.iter().map(|&(x, y)| f(x, y)).sum::<f64>();
+    let (xx, xy) = (sum(&|x, _| x * x), sum(&|x, y| x * y));
+    // Incoming file seconds per outgoing file second.
+    let ratio = xy / xx.max(1e-12);
+    if ratio <= 0.0 {
+        return None;
+    }
+    let worst = |f: &dyn Fn(f64) -> f64| pts.iter().map(|&(x, y)| (y - f(x)).abs()).fold(0.0, f64::max);
+    let flat = worst(&|x| ratio * x);
+    // Below the grid's precision (f32 beat times): the same tempo.
+    let lr = if ratio.ln().abs() < 1e-5 { 0.0 } else { -ratio.ln() };
+    let mut local = Local { k, lr, glide: None, drift_s: flat };
+    // y = a·x + b·x²: the speed ratio glides from a to a + 2b·span.
+    let (x3, x4, x2y) = (sum(&|x, _| x.powi(3)), sum(&|x, _| x.powi(4)), sum(&|x, y| x * x * y));
+    let det = xx * x4 - x3 * x3;
+    if det > 1e-12 {
+        let a = (xy * x4 - x2y * x3) / det;
+        let b = (xx * x2y - x3 * xy) / det;
+        let end = a + 2.0 * b * out_span;
+        let curved = worst(&|x| a * x + b * x * x);
+        if a > 0.0 && end > 0.0 && (end / a).ln().abs() <= GLIDE_MAX && flat - curved > GLIDE_MIN_GAIN_S {
+            local.glide = Some((a, end));
+            local.drift_s = curved;
+        }
+    }
+    Some(local)
+}
+
 /// Every beat-matched candidate, best first.
-fn candidates(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand> {
+fn candidates(o: &Side, i: &Side, k: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand> {
     let s = ctx.settings;
     let earliest = ctx.out_position_s + MIN_LEAD_S;
     let end = f64::from(o.f.audio_end);
@@ -756,18 +858,27 @@ fn candidates(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) ->
     let mut all: Vec<Cand> = Vec::new();
     let mut consider = |c: Cand| all.push(c);
 
+    let max_lr = (1.0 + f64::from(s.max_tempo_pct.max(0.0)) / 100.0).ln();
     for &m in &outs {
-        let Some(tempo) = tempo_for(o, m, lr, ctx) else { continue };
         let phrase_pen = if o.on_phrase(m) || Some(m) == outro || o.after_phrase(m) { 0.0 } else { -0.25 };
         for &inb in &ins {
-            let in_bar = |j: f64| inb + (j / k).floor() as usize;
             let mut kinds: Vec<(CandKind, usize)> =
                 lengths.iter().map(|&n| (if n >= 8 { CandKind::Beat } else { CandKind::Short }, n)).collect();
             kinds.push((CandKind::Filter, 2));
             for (kind, n) in kinds {
-                if m + n > o.bars || in_bar(n as f64 - 1.0) >= i.bars {
+                if m + n > o.bars {
                     continue;
                 }
+                // The tempo of the bars that actually overlap, not the songs' averages.
+                let Some(local) = local_match(o, i, m, inb, n, k).filter(|l| l.lr.abs() <= max_lr) else {
+                    continue;
+                };
+                let (k, lr) = (local.k, local.lr);
+                let in_bar = |j: f64| inb + (j / k).floor() as usize;
+                if in_bar(n as f64 - 1.0) >= i.bars {
+                    continue;
+                }
+                let Some(tempo) = tempo_for(o, m, lr, ctx) else { continue };
                 let (mut clash, mut cover, mut raw_clash) = (0.0f32, 0.0f32, 0.0f32);
                 for j in 0..n {
                     let (vo, vi) = (o.vocal(m + j), i.vocal(in_bar(j as f64)));
@@ -791,8 +902,10 @@ fn candidates(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) ->
                 } else {
                     0.0
                 };
-                let mut score =
-                    0.15 * cover - 0.5 * jump - CUT_PER_S * cut - SKIP_PER_S * skipped + phrase_pen;
+                let drift = (local.drift_s - DRIFT_FREE_S).max(0.0) as f32;
+                let mut score = 0.15 * cover - 0.5 * jump - CUT_PER_S * cut - SKIP_PER_S * skipped
+                    + phrase_pen
+                    - DRIFT_PER_S * drift;
                 score += lyric_score(o, i, m, n, in_bar(n as f64));
                 score += match kind {
                     CandKind::Beat | CandKind::Short => -3.0 * clash,
@@ -808,7 +921,7 @@ fn candidates(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts) ->
                     score += 1.5 * (secs / v.clip_secs.max(1.0)).min(1.0) as f32;
                 }
                 let sampled = kind == CandKind::Beat && raw_clash > clash && raw_clash > 0.1 * n as f32;
-                consider(Cand { kind, m, i: inb, n, score, tempo, clash, sampled });
+                consider(Cand { kind, m, i: inb, n, k, glide: local.glide, score, tempo, clash, sampled });
             }
         }
     }
@@ -866,8 +979,9 @@ fn quiet_run(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k: f64, now: f6
     (o.t(best.0 as f64), o.t(best.1 as f64))
 }
 
-fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
+fn build(o: &Side, i: &Side, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
     let s = ctx.settings;
+    let k = c.k;
     let Tempo { s_out, s_in, out_ramp } = c.tempo;
     let (m, n) = (c.m as f64, c.n as f64);
     let out_mix_start_s = o.t(m);
@@ -932,12 +1046,19 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx, opts: Opts) -> Tran
     };
     eq.sort_by(|a, b| a.at_out_s.total_cmp(&b.at_out_s));
 
-    let in_settle = (s.tempo_ramps && (s_in - 1.0).abs() > 1e-4).then(|| SpeedRamp {
-        from: s_in,
+    let in_glide = c.glide.map(|(a, b)| SpeedRamp {
+        from: a * s_out,
+        to: b * s_out,
+        start_out_s: out_mix_start_s,
+        secs: blend_s,
+    });
+    let in_end = in_glide.map_or(s_in, |g| g.to);
+    let in_settle = (s.tempo_ramps && (in_end - 1.0).abs() > 1e-4).then(|| SpeedRamp {
+        from: in_end,
         to: 1.0,
         start_out_s: out_stop_s,
         // 16 bars, capped: a slow song's 16 bars can take a minute, blocking the next transition.
-        secs: (opts.settle_bars * i.bar_s / ((1.0 + s_in) / 2.0)).min(SETTLE_MAX_S),
+        secs: (opts.settle_bars * i.bar_s / ((1.0 + in_end) / 2.0)).min(SETTLE_MAX_S),
     });
     let (vw_a, vw_b) = quiet_run(o, i, c.m, c.i, c.n, k, ctx.out_position_s);
     let in_mix_start_s = i.t(c.i as f64);
@@ -962,6 +1083,7 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx, opts: Opts) -> Tran
         out_stop_s,
         in_speed: s_in,
         out_ramp,
+        in_glide,
         in_settle,
         gain: Envelope { points },
         eq,
@@ -1026,6 +1148,7 @@ fn fade_plan(out: &Features, inn: &Features, ctx: &PlanCtx, why: &str) -> Transi
         out_stop_s: start + secs,
         in_speed: 1.0,
         out_ramp: None,
+        in_glide: None,
         in_settle: None,
         gain: Envelope { points: vec![(0.0, 1.0, 0.0), (secs, 0.0, 1.0)] },
         eq: Vec::new(),
@@ -1543,5 +1666,84 @@ mod tests {
             false,
             &s
         ));
+    }
+
+    /// `f` with its beats replaced: beat `j` lasts `60 / bpm_at(j)` s (the grid's `bpm` field unchanged).
+    fn with_tempo(f: &Features, bpm_at: impl Fn(usize) -> f64) -> Features {
+        let mut f = f.clone();
+        let g = f.grid.as_mut().unwrap();
+        let mut t = f64::from(g.beats[0]);
+        for j in 1..g.beats.len() {
+            t += 60.0 / bpm_at(j - 1);
+            g.beats[j] = t as f32;
+        }
+        f.audio_end = g.beats.last().copied().unwrap() + 0.3;
+        f
+    }
+
+    /// Plays the blend as the engines do (no phase nudges, 1 ms steps) and returns the largest offset
+    /// (ms) between an outgoing beat and the incoming beat that should meet it (same tempo octave).
+    fn worst_drift_ms(p: &TransitionPlan, out: &Features, inn: &Features) -> f64 {
+        let (go, gi) = (out.grid.as_ref().unwrap(), inn.grid.as_ref().unwrap());
+        let s_out = p.out_ramp.map_or(1.0, |r| r.to);
+        let (bo, bi) =
+            (go.beat_at(p.out_mix_start_s as f32).round(), gi.beat_at(p.in_mix_start_s as f32).round());
+        let (mut w, mut pos, mut j, mut worst) = (0.0f64, p.in_mix_start_s, 0.0f32, 0.0f64);
+        let dt = 0.001;
+        while w <= p.blend_s {
+            let out_beat = (f64::from(go.time_of(bo + j)) - p.out_mix_start_s) / s_out;
+            if w >= out_beat {
+                let off = (f64::from(gi.time_of(bi + j)) - pos) / p.in_speed_at(w);
+                worst = worst.max(off.abs() * 1000.0);
+                j += 1.0;
+            }
+            pos += p.in_speed_at(w) * dt;
+            w += dt;
+        }
+        worst
+    }
+
+    #[test]
+    fn the_tempo_match_follows_the_overlapping_beats_not_the_song_average() {
+        let s = settings();
+        let out = FeatBuilder::new(120.0, 96).build();
+        // Claims 120 bpm, but its first 32 bars (where it mixes in) run at 116.
+        let inn = with_tempo(&FeatBuilder::new(120.0, 96).build(), |j| if j < 128 { 116.0 } else { 124.0 });
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        assert!(matches!(p.kind, Kind::BeatBlend { .. }), "{}", p.reason);
+        let s_out = p.out_ramp.map_or(1.0, |r| r.to);
+        assert!((p.in_speed / s_out - 120.0 / 116.0).abs() < 1e-3, "{} / {s_out}", p.in_speed);
+        assert!(p.in_glide.is_none());
+        assert!(worst_drift_ms(&p, &out, &inn) <= 4.0, "{:.1} ms", worst_drift_ms(&p, &out, &inn));
+    }
+
+    #[test]
+    fn an_incoming_song_speeding_up_through_the_blend_gets_a_glide() {
+        let s = settings();
+        let out = FeatBuilder::new(120.0, 96).build();
+        // Speeds up from 117 to 123 bpm over its first 16 bars: the incoming deck slows down through the blend.
+        let inn =
+            with_tempo(&FeatBuilder::new(120.0, 96).build(), |j| 117.0 + 6.0 * (j.min(64) as f64 / 64.0));
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        assert!(matches!(p.kind, Kind::BeatBlend { .. }), "{}", p.reason);
+        let g = p.in_glide.expect("glide");
+        assert!(g.to < g.from && g.secs == p.blend_s && g.start_out_s == p.out_mix_start_s, "{g:?}");
+        // The settle starts where the glide ends.
+        assert_eq!(p.in_settle.map(|r| r.from), Some(g.to));
+        let drift = worst_drift_ms(&p, &out, &inn);
+        assert!(drift <= 4.0, "{drift:.1} ms");
+        // One constant speed would drift apart.
+        let flat = TransitionPlan { in_glide: None, ..p.clone() };
+        assert!(worst_drift_ms(&flat, &out, &inn) > 2.0 * drift.max(1.0));
+    }
+
+    #[test]
+    fn in_speed_at_follows_the_glide() {
+        let mut p = TransitionPlan::gapless(100.0, "x");
+        p.in_speed = 1.02;
+        assert_eq!(p.in_speed_at(3.0), 1.02);
+        p.in_glide = Some(SpeedRamp { from: 1.0, to: 1.04, start_out_s: 90.0, secs: 10.0 });
+        assert!((p.in_speed_at(5.0) - 1.02).abs() < 1e-12);
+        assert_eq!((p.in_speed_at(-1.0), p.in_speed_at(20.0)), (1.0, 1.04));
     }
 }
