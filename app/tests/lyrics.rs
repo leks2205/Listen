@@ -395,3 +395,33 @@ fn words_mode_opens_a_gloss_with_the_lute_status() {
     let _ = s.update(Message::Lyrics(LyricsMsg::Word("노래".into())));
     assert!(has_text(&s, "No meaning for this word."));
 }
+
+#[test]
+fn the_translation_button_is_off_without_a_translation_and_a_request_carries_over() {
+    let mut s = boot();
+    s.config.settings.lyrics.translation_api_provider = "Google Cloud".into();
+    s.config.settings.lyrics.translation_api_key = "k".into();
+    // A new song starts with nothing translated: the button is not lit.
+    assert!(s.lyrics_ui.show_translation);
+    assert!(!s.lyrics_ui.translation_on(s.lyrics.as_ref()));
+    // Asking for a translation is remembered for the following songs ...
+    click(&mut s, "TRANSLATION");
+    assert!(s.lyrics_ui.want_translation);
+    let id = s.queue.current().unwrap().song.id.clone();
+    let lines = vec![Some("Eins".to_string()), None, Some("Drei".to_string()), None];
+    let _ = s.update(Message::Lyrics(LyricsMsg::Translated(id, Some(lines))));
+    assert!(s.lyrics_ui.translation_on(s.lyrics.as_ref()));
+    // ... until it is hidden again.
+    click(&mut s, "TRANSLATION");
+    assert!(!s.lyrics_ui.want_translation && !has_text(&s, "Eins"));
+    click(&mut s, "TRANSLATION");
+    assert!(s.lyrics_ui.want_translation && has_text(&s, "Eins"));
+}
+
+#[test]
+fn the_lyric_buttons_wrap_in_a_narrow_window() {
+    let s = boot_with(listen_lyrics::parse_lrc("[00:01.00]내가 골랐다는 노래\n[00:05.00]Yeah yeah"));
+    let _gpu = gpu();
+    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 800.0), s.view());
+    assert!(ui.find("DISPLAY").is_ok() && ui.find("EXPORT").is_ok());
+}

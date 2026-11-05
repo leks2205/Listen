@@ -99,6 +99,9 @@ pub struct LyricsUi {
     pub translated: Vec<Option<String>>,
     pub translating: bool,
     pub show_translation: bool,
+    /// The user asked for an online translation and has not hidden it since:
+    /// later songs get theirs too (this session).
+    pub want_translation: bool,
     /// Word glosses (Gemini) for the shown lyrics: word form → gloss.
     pub glosses: std::collections::BTreeMap<String, listen_lyrics::gemini::Gloss>,
     pub glossing: bool,
@@ -144,6 +147,7 @@ impl LyricsUi {
             translated: Vec::new(),
             translating: false,
             show_translation: true,
+            want_translation: false,
             glosses: Default::default(),
             glossing: false,
             words_mode: false,
@@ -199,6 +203,11 @@ impl LyricsUi {
     /// The translation to show under line `i` of `lyrics`.
     pub fn translation_of<'a>(&'a self, lyrics: &'a Lyrics, i: usize) -> Option<&'a str> {
         lyrics.lines.get(i).and_then(|l| self.shown_translation(l, i))
+    }
+
+    /// Whether the translation button shows as on: a translation is there and shown.
+    pub fn translation_on(&self, lyrics: Option<&Lyrics>) -> bool {
+        self.show_translation && lyrics.is_some_and(|l| self.has_translation(l))
     }
 
     /// Whether the lyrics have a translation to toggle (from the provider or online).
@@ -698,8 +707,11 @@ impl Listen {
                 let auto = self.config.settings.lyrics.enable_auto_translation;
                 let inline = self.lyrics.as_ref().is_some_and(listen_lyrics::has_translation);
                 let mut tasks = vec![self.scroll_lyrics()];
-                if auto && !inline {
+                if (auto || self.lyrics_ui.want_translation) && !inline {
                     tasks.push(self.translate_lyrics());
+                }
+                if self.lyrics_ui.words_mode && self.glosses_available() {
+                    tasks.push(self.load_glosses());
                 }
                 return Task::batch(tasks);
             }
@@ -743,8 +755,12 @@ impl Listen {
                 let has = self.lyrics.as_ref().is_some_and(|l| ui.has_translation(l));
                 if has {
                     ui.show_translation = !ui.show_translation;
+                    if !ui.translated.is_empty() {
+                        ui.want_translation = ui.show_translation;
+                    }
                 } else if self.translation_configured() {
                     self.lyrics_ui.show_translation = true;
+                    self.lyrics_ui.want_translation = true;
                     return self.translate_lyrics();
                 } else {
                     self.toast_info(

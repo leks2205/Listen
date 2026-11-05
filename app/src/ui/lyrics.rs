@@ -418,8 +418,11 @@ fn controls(state: &Listen) -> Element<'_, Message> {
     let translatable =
         state.lyrics.as_ref().is_some_and(|l| ui.has_translation(l)) || state.translation_configured();
     if has_lyrics && translatable {
-        let (text, on) =
-            if ui.translating { ("TRANSLATING…", false) } else { ("TRANSLATION", ui.show_translation) };
+        let (text, on) = if ui.translating {
+            ("TRANSLATING…", false)
+        } else {
+            ("TRANSLATION", ui.translation_on(state.lyrics.as_ref()))
+        };
         let color = if on { t.primary } else { t.foreground };
         top = top.push(crate::ui::tip::tip_plain(
             t,
@@ -494,6 +497,9 @@ fn controls(state: &Listen) -> Element<'_, Message> {
             crate::ui::tip::Position::Top,
         ));
     }
+    // The rows wrap so a narrow lyrics panel keeps every button reachable.
+    let top = top.wrap().vertical_spacing(metrics::space_xs()).align_x(Alignment::Center);
+    let bottom = bottom.wrap().vertical_spacing(metrics::space_xs()).align_x(Alignment::Center);
     container(column![top, bottom].spacing(metrics::space_xs()).align_x(Alignment::Center))
         .width(Length::Fill)
         .padding(Padding::from([6.0, 8.0]))
