@@ -61,3 +61,12 @@ Skip the sync while the history is switched off. A private session records nothi
 - Clear history: this device only, by design. It sends no removals, and the cursor stays, so the plays
   do not come back. A desktop's history must not be wiped by a tap on the phone.
 - The retention limit: this device only, for the same reason.
+
+## Release radar (listen-server 0.7.0)
+`GET /v1/releases` (same token) answers `{updated, artists, releases: [{id, title, kind, year?, image?,
+artist, artist_id, found, top}]}`: new albums and singles (YouTube Music `MPREb_…` ids) from the artists
+the listener subscribed to plus the 50 most played in the merged history of the last year, newest find
+first, kept 60 days. `top` marks the 10 most played artists (the phone notifies for those).
+`POST /v1/releases/scan` runs the job now (202). The job reads the pages once a day with the shared
+YouTube Music session, at most 200 requests a day; state in `releases.json` in the state dir. Rules:
+`listen_core::releases`.

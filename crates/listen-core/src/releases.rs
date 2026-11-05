@@ -263,8 +263,11 @@ impl Radar {
         let known = self.known.entry(artist_id.clone()).or_default();
         let keys = self.keys.entry(artist_id.clone()).or_default();
         let mut added = Vec::new();
-        // The page lists newest first; on the first read, the newest of several editions wins.
-        for r in listed {
+        // Of several editions the plain one (title = key) stands for the release, else the shortest
+        // title: a "Sped Up Edition" or "(Remixes)" listed before the original is a version of it.
+        let mut order: Vec<&Listed> = listed.iter().collect();
+        order.sort_by_cached_key(|r| (fold(&r.title) != release_key(&r.title), r.title.chars().count()));
+        for r in order {
             if !known.insert(r.id.clone()) {
                 continue;
             }
@@ -401,6 +404,14 @@ mod tests {
             r.ingest(&w, &[listed("c", "Ivy", 2026), listed("d", "IVY (Japanese Ver.)", 2026)], 3, 2026);
         assert_eq!(added.len(), 1);
         assert_eq!(r.releases.len(), 1);
+        // The plain edition stands for the release even when a version is listed first.
+        let mut r = Radar::default();
+        let page = [listed("s", "Hit (Sped Up Edition)", 2026), listed("h", "Hit", 2026)];
+        assert_eq!(r.ingest(&w, &page, 1, 2026).iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), ["h"]);
+        // Remixes of last year's single are no new release on the first read either.
+        let mut r = Radar::default();
+        let page = [listed("x", "Boom (Remixes)", 2026), listed("b", "Boom", 2025)];
+        assert!(r.ingest(&w, &page, 1, 2026).is_empty());
     }
 
     #[test]

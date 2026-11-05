@@ -25,6 +25,7 @@ You can turn off lyrics fetching, update checks, Discord, the AI DJ, song analys
 ## What stays on your computer
 
 - **Listening history.** Songs, server and time are saved in a file on your computer and never uploaded or shared. Switch **Record listening history** off or use **Don't record this session** in **Settings → Advanced → Listening history**. You can export or delete the history there. See [History, statistics and mixes](../using/history.md).
+- **New from your artists.** With **Merge with other devices** on, Home asks your own listen-server for the new releases it found. The server reads the YouTube Music pages of the artists you follow and play most, with the YouTube Music session the phone shared with it; nothing goes anywhere else. See [Home](../using/library.md#home).
 - **Song analysis results** (tempo, key, sections) are stored locally, or in a folder you choose and sync yourself.
 - **Settings, queue and caches** are plain files in Listen's folders; see [Files and folders](../reference/files.md).
 

@@ -68,6 +68,12 @@ pub(super) fn home(state: &Listen) -> Element<'_, Message> {
             )
             .into(),
         ),
+        line(
+            state,
+            "New from your artists",
+            "Shows new albums and singles of the artists you follow and play most at the top of Home (YouTube Music; needs the listen-server of Merge with other devices)",
+            switch(h.new_releases, ShellMsg::HomeNewReleases),
+        ),
     ];
     lines.push(line(
         state,

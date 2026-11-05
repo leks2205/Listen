@@ -65,6 +65,7 @@ pub mod play_mode;
 pub mod playlists;
 pub mod queue_ui;
 pub mod radio;
+pub mod releases;
 pub mod rip;
 pub mod sidebar_state;
 pub use settings_msg::Setting;

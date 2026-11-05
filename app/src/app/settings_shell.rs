@@ -28,6 +28,7 @@ pub enum ShellMsg {
     SidebarVisible(usize, bool),
     HomeFeature(bool),
     HomeFeatureStyle(HomeFeatureStyle),
+    HomeNewReleases(bool),
     TitleBarTrackInfo(bool),
     DiscordIdInput(String),
     DiscordIdSave,
@@ -102,6 +103,7 @@ impl Listen {
             }
             ShellMsg::HomeFeature(v) => s.home.feature = v,
             ShellMsg::HomeFeatureStyle(v) => s.home.feature_style = v,
+            ShellMsg::HomeNewReleases(v) => s.home.new_releases = v,
             ShellMsg::TitleBarTrackInfo(v) => s.window.title_bar_track_info = v,
             ShellMsg::DiscordIdInput(text) => {
                 self.discord_id_input = Some(text);

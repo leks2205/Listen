@@ -338,28 +338,20 @@ impl Listen {
         // The feed is asked again when the first answer is empty or does not come: right after a
         // connect it sometimes comes back without shelves, which left the page empty until the
         // next server switch re-ran the load.
+        let radar = self.releases_request();
         let feed = Task::perform(
             async move {
-                let mut last = Vec::new();
-                for attempt in 1..=2 {
-                    if attempt > 1 {
-                        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                let shelf = async move {
+                    match radar {
+                        Some(r) => super::releases::fetch(r).await,
+                        None => None,
                     }
-                    match tokio::time::timeout(HOME_FEED_TIMEOUT, source.home()).await {
-                        Ok(Ok(shelves)) if !shelves.is_empty() => return shelves,
-                        Ok(Ok(shelves)) => {
-                            tracing::info!("home feed: {} shelves (attempt {attempt})", shelves.len());
-                            last = shelves;
-                        }
-                        Ok(Err(listen_source::SourceError::Unsupported)) => return last,
-                        Ok(Err(e)) => tracing::warn!("home feed: {e} (attempt {attempt})"),
-                        Err(_) => tracing::warn!(
-                            "home feed: no answer within {} s (attempt {attempt})",
-                            HOME_FEED_TIMEOUT.as_secs()
-                        ),
-                    }
+                };
+                let (mut shelves, radar) = tokio::join!(feed_shelves(source), shelf);
+                if let Some(radar) = radar {
+                    shelves.insert(0, radar);
                 }
-                last
+                shelves
             },
             self.scoped(Message::HomeLoaded),
         );
@@ -741,6 +733,30 @@ impl Listen {
 }
 
 /// One page of a section from the source.
+/// The source's own feed, asked again when the first answer is empty or does not come.
+async fn feed_shelves(source: Arc<dyn MusicSource>) -> Vec<HomeShelf> {
+    let mut last = Vec::new();
+    for attempt in 1..=2 {
+        if attempt > 1 {
+            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        }
+        match tokio::time::timeout(HOME_FEED_TIMEOUT, source.home()).await {
+            Ok(Ok(shelves)) if !shelves.is_empty() => return shelves,
+            Ok(Ok(shelves)) => {
+                tracing::info!("home feed: {} shelves (attempt {attempt})", shelves.len());
+                last = shelves;
+            }
+            Ok(Err(listen_source::SourceError::Unsupported)) => return last,
+            Ok(Err(e)) => tracing::warn!("home feed: {e} (attempt {attempt})"),
+            Err(_) => tracing::warn!(
+                "home feed: no answer within {} s (attempt {attempt})",
+                HOME_FEED_TIMEOUT.as_secs()
+            ),
+        }
+    }
+    last
+}
+
 async fn fetch_section(
     source: Arc<dyn MusicSource>,
     section: Section,

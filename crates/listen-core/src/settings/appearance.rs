@@ -130,6 +130,8 @@ pub struct Home {
     pub feature_style: HomeFeatureStyle,
     /// Visible sections in order (`recentlyAdded`, `mostPlayed`, …).
     pub sections: Vec<String>,
+    /// The shelf "New from your artists" from listen-server's release radar (YouTube Music).
+    pub new_releases: bool,
 }
 
 impl Default for Home {
@@ -148,6 +150,7 @@ impl Default for Home {
             ]
             .map(String::from)
             .to_vec(),
+            new_releases: true,
         }
     }
 }

@@ -12,6 +12,8 @@ The home page is a feed of carousels.
 
 **The server's own feed.** YouTube Music has a home feed of its own, with shelves such as quick picks and mixes made for your account. Its shelves come first. The other sources have no feed of their own.
 
+**New from your artists.** With YouTube Music as the active server and your own listen-server set up (**Merge with other devices** in Settings → Advanced → Listening history), the first shelf shows the albums and singles that came out from the artists you follow on YouTube Music and the 50 artists you played most in the last year. The server reads their artist pages once a day with the YouTube Music session the phone shared, at most 200 requests a day, and lists a release from the day it first saw it for 60 days. The first time it reads an artist, only releases from this year count. A deluxe edition, repackage, remix release or other version of a release that is already known is not shown again. Click a card to open the album. The shelf needs listen-server 0.7.0 or newer; switch it off with **New from your artists** in Settings → General → Home.
+
 **Sections.** Below that come the sections, in this default order:
 
 | Section | Content |
