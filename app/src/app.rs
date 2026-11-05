@@ -2221,6 +2221,7 @@ impl Listen {
         if self.ai_dj_on()
             && let Some(song) = songs.get(start).cloned()
         {
+            self.note_skip();
             self.queue.set(vec![song], 0);
             self.dj_reseed();
             return self.start_current();
@@ -2232,6 +2233,7 @@ impl Listen {
         if songs.is_empty() {
             return Task::none();
         }
+        self.note_skip();
         self.queue.set(songs, start);
         self.start_current()
     }
@@ -3119,6 +3121,7 @@ impl Listen {
                 if done {
                     return mix;
                 }
+                self.note_skip();
                 self.dj_on_next();
                 if self.queue.skip_next().is_some() {
                     return self.start_current();
@@ -3130,7 +3133,9 @@ impl Listen {
                 if self.playback.position > Duration::from_secs(10) {
                     return self.update(Message::Seek(0.0));
                 }
-                self.queue.skip_previous();
+                self.step_skipping(|q| {
+                    q.skip_previous();
+                });
                 return self.start_current();
             }
             Message::SeekPreview(_)
@@ -3252,6 +3257,7 @@ impl Listen {
                 self.save_config();
             }
             Message::PlayQueueItem(uid) => {
+                self.note_skip();
                 self.queue.jump_to(uid);
                 return self.start_current();
             }

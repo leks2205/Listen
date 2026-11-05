@@ -2129,5 +2129,9 @@
 "Saved": "Gespeichert",
 "{} sent, {} received.": "{} gesendet, {} empfangen.",
 "Could not merge: {}": "Zusammenführen fehlgeschlagen: {}",
-"Runs every five minutes while merging is on.": "Läuft alle fünf Minuten, solange das Zusammenführen an ist."
+"Runs every five minutes while merging is on.": "Läuft alle fünf Minuten, solange das Zusammenführen an ist.",
+"{} plays • {} • {} skipped": "{} Wiedergaben • {} • {} übersprungen",
+"{} • {} plays • {} skipped": "{} • {} Wiedergaben • {} übersprungen",
+"songs skipped": "übersprungene Titel",
+"Listening time counts the full length of each song you played past the scrobble point. A song you leave for another one before that point counts as skipped, never as played.": "Die Hördauer zählt die volle Länge jedes Titels, den du über den Scrobble-Punkt hinaus gespielt hast. Ein Titel, den du vor diesem Punkt für einen anderen verlässt, zählt als übersprungen, nie als gespielt."
 }

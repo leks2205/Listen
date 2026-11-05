@@ -4,7 +4,7 @@
 
 use super::{Listen, Message, Route};
 use iced::Task;
-use listen_core::history::{self, Entry, MixKind};
+use listen_core::history::{self, Entry, MixKind, Picker, PlayCtx};
 use listen_core::model::Song;
 use listen_core::settings::HistoryRetention;
 
@@ -62,6 +62,82 @@ impl Listen {
         }
     }
 
+    /// Play mode, picker and device for a history entry of the current song.
+    pub(super) fn play_ctx(&self) -> PlayCtx {
+        use super::play_mode::PlayMode as M;
+        use listen_core::history::PlayMode;
+        let mode = match self.play_mode() {
+            M::Off => PlayMode::Off,
+            M::Shuffle => PlayMode::Shuffle,
+            M::AutoDj => PlayMode::AutoDj,
+            M::AiDj => PlayMode::AiDj,
+        };
+        let picker = match self.queue.current() {
+            Some(i) if i.bridge.is_some() => Picker::Bridge,
+            Some(i) if i.why.is_some() => i.why.as_ref().map_or(Picker::User, |w| w.picker),
+            Some(i) if i.ai => Picker::AiDj,
+            Some(i) if i.auto => Picker::AutoDj,
+            _ => Picker::User,
+        };
+        PlayCtx { mode, picker, device: listen_analysis::store::machine_id() }
+    }
+
+    /// The user leaves the current song for another one (Next, Previous, another song started by hand):
+    /// a skip when it started playing but has not counted as played yet. Automatic handovers (a DJ mix,
+    /// the end of the song, a failed stream) never call this; DJ breaks and bridges are not logged.
+    pub(super) fn note_skip(&mut self) {
+        if let Some(e) = self.pending_skip() {
+            self.commit_skip(e);
+        }
+    }
+
+    /// Moves in the queue with `step` and records the skip only when another song became current
+    /// (Previous on the first song just restarts it).
+    pub(super) fn step_skipping(&mut self, step: impl FnOnce(&mut listen_core::queue::Queue)) {
+        let before = self.queue.current().map(|i| i.uid);
+        let skip = self.pending_skip();
+        step(&mut self.queue);
+        if let Some(e) = skip
+            && self.queue.current().map(|i| i.uid) != before
+        {
+            self.commit_skip(e);
+        }
+    }
+
+    /// The skip entry for the current song, if leaving it now is a skip.
+    fn pending_skip(&self) -> Option<Entry> {
+        if !self.config.settings.history.enabled
+            || self.history_view.private
+            || self.playback.scrobbled
+            || self.playback.last_pos.is_none()
+            || self.restored.is_some()
+            || self.radio.active.is_some()
+            || self.bridge_playing()
+            || self.dj_airing()
+        {
+            return None;
+        }
+        let song = &self.queue.current()?.song;
+        let at = self.playback.position.as_secs_f32();
+        let mut entry = Entry::skipped(song, history::now_secs(), at, self.play_ctx());
+        if let Some(d) = self.playback.duration.filter(|d| !d.is_zero()) {
+            entry.frac = Some((at / d.as_secs_f32()).clamp(0.0, 1.0));
+        }
+        Some(entry)
+    }
+
+    fn commit_skip(&mut self, entry: Entry) {
+        tracing::info!("skipped “{}” at {:.0} s", entry.title, entry.at_s.unwrap_or(0.0));
+        // Counted once: a second skip path for the same song does nothing.
+        self.playback.scrobbled = true;
+        if let Err(e) = self.history.add(entry) {
+            tracing::warn!("saving the listening history: {e}");
+        }
+        if matches!(self.route, Route::Stats) {
+            self.refresh_history_views();
+        }
+    }
+
     /// The current song counts as played.
     pub(super) fn record_play(&mut self) {
         // A bridge only played a few bars.
@@ -69,6 +145,7 @@ impl Listen {
             return;
         }
         let Some(song) = self.queue.current().map(|i| i.song.clone()) else { return };
+        let ctx = self.play_ctx();
         let now = history::now_secs();
         if now - self.history_view.last_prune >= PRUNE_EVERY_SECS {
             self.history_view.last_prune = now;
@@ -76,7 +153,7 @@ impl Listen {
                 tracing::warn!("pruning the listening history: {e}");
             }
         }
-        if let Err(e) = self.history.add(Entry::new(&song, now)) {
+        if let Err(e) = self.history.add(Entry { ctx: Some(ctx), ..Entry::new(&song, now) }) {
             tracing::warn!("saving the listening history: {e}");
         }
         if matches!(self.route, Route::Recent | Route::Stats | Route::Mixes | Route::Mix(_)) {
@@ -302,5 +379,98 @@ mod tests {
         assert!(std::fs::read_to_string(json).unwrap().contains("\"song_id\""));
         assert!(std::fs::read_to_string(csv).unwrap().starts_with("timestamp,"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two songs queued, the first one playing `secs` seconds in (position events arrived).
+    fn playing_at(secs: u64) -> Listen {
+        let mut s = rig();
+        let mut b = dummy();
+        b.id = "2".into();
+        s.queue.set(vec![dummy(), b], 0);
+        s.playback.playing = true;
+        for p in 0..=secs {
+            s.playback.track_played(std::time::Duration::from_secs(p));
+        }
+        s.playback.position = std::time::Duration::from_secs(secs);
+        s
+    }
+
+    #[test]
+    fn next_before_the_scrobble_point_records_one_skip() {
+        use listen_core::history::{PlayMode, PlayStatus};
+        let mut s = playing_at(10);
+        s.config.settings.ai_dj.enabled = false;
+        s.config.settings.auto_dj.enabled = true;
+        if let Some(i) = s.queue.current_mut() {
+            i.auto = true;
+        }
+        let _ = s.update(Message::Next);
+        assert_eq!(s.history.entries.len(), 1);
+        let e = &s.history.entries[0];
+        assert_eq!((e.status, e.song_id.as_str()), (PlayStatus::Skipped, "1"));
+        assert!((e.at_s.unwrap() - 10.0).abs() < 0.5);
+        assert!((e.frac.unwrap() - 0.05).abs() < 0.01);
+        let ctx = e.ctx.as_ref().unwrap();
+        assert_eq!((ctx.mode, ctx.picker), (PlayMode::AutoDj, Picker::AutoDj));
+        assert!(!ctx.device.is_empty());
+        assert!(s.history.recent(10).is_empty(), "a skip is not a play");
+    }
+
+    #[test]
+    fn plays_handovers_and_unstarted_songs_are_not_skips() {
+        use listen_core::history::PlayStatus;
+        // Played past the scrobble point, then Next: one play, no skip.
+        let mut s = playing_at(150);
+        s.record_play();
+        s.playback.scrobbled = true;
+        let _ = s.update(Message::Next);
+        assert_eq!(s.history.entries.iter().map(|e| e.status).collect::<Vec<_>>(), [PlayStatus::Played]);
+        assert_eq!(s.history.entries[0].ctx.as_ref().map(|c| c.picker), Some(Picker::User));
+
+        // The song ends on its own (automatic handover): nothing.
+        let mut s = playing_at(10);
+        s.queue.advance();
+        let _ = s.start_current();
+        assert!(s.history.entries.is_empty());
+
+        // A song that never started (no position yet), or a restored queue: nothing.
+        let mut s = rig();
+        let _ = s.update(Message::Next);
+        assert!(s.history.entries.is_empty());
+        let mut s = playing_at(10);
+        s.restored = Some(std::time::Duration::from_secs(10));
+        s.note_skip();
+        assert!(s.history.entries.is_empty());
+
+        // History off or private: nothing; two skip paths for one song: one skip.
+        let mut s = playing_at(10);
+        s.history_view.private = true;
+        s.note_skip();
+        assert!(s.history.entries.is_empty());
+        let mut s = playing_at(10);
+        s.note_skip();
+        s.note_skip();
+        assert_eq!(s.history.entries.len(), 1);
+    }
+
+    #[test]
+    fn previous_and_picking_another_song_skip_too() {
+        // Previous on the first song only restarts it: no skip.
+        let mut s = playing_at(5);
+        let _ = s.update(Message::Previous);
+        assert!(s.history.entries.is_empty());
+        let mut s = playing_at(5);
+        s.queue.advance();
+        let _ = s.update(Message::Previous);
+        assert_eq!(s.history.entries.len(), 1);
+        assert_eq!(s.history.entries[0].song_id, "2");
+        // More than 10 s in, Previous restarts the song: no skip.
+        let mut s = playing_at(12);
+        let _ = s.update(Message::Previous);
+        assert!(s.history.entries.is_empty());
+        let mut s = playing_at(5);
+        let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
+        let _ = s.update(Message::PlayQueueItem(uid));
+        assert_eq!(s.history.entries.len(), 1);
     }
 }

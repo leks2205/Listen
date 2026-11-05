@@ -16,9 +16,15 @@ The rule is set under **Settings → General → Scrobble**:
 | **Minimum scrobble percentage** | 75 %, adjustable from 25 to 90 % |
 | **Minimum scrobble seconds** | 240 s, adjustable from 0 to 1200 s |
 
+### Skips
+
+When you leave a song for another one before it counts as played (**Next**, **Previous**, the album skip buttons, double-clicking another song in the queue, or starting another list), the history records a **skip** instead: the song, the position you left it at, the play mode and whether you or a DJ picked it. Leaving a song does not count as a skip when it was never really started (a restored queue you have not played yet), when **Previous** only restarts the song, or when the player moves on by itself: a DJ mix into the next song, the end of a song, or a song that failed to load. The AI DJ's breaks and bridge songs are not recorded.
+
+A skip is never a play: it does not count in the play numbers, the top lists, the mixes or **Recently played**, and it is never scrobbled. The Statistics page shows skips separately. A skip tells the DJs that a song did not fit at that moment.
+
 The history works independently of the **Scrobble** switch: that switch only controls whether plays are reported to your server (for example to Last.fm).
 
-Each entry stores the time, which server and song it was, the title, artists, album and length, and the cover address so that the list can be shown without asking the server. Songs from every source are recorded, including YouTube Music and local folders.
+Each entry stores the time, which server and song it was, whether it was played or skipped, the title, artists, album and length, and the cover address so that the list can be shown without asking the server. Newer entries also store the play mode, who picked the song (you, the Auto-DJ, the AI DJ) and which of your devices played it; skips store where in the song you left it. Songs from every source are recorded, including YouTube Music and local folders.
 
 ## Settings
 
@@ -32,7 +38,7 @@ Open **Settings → Advanced → History**.
 | **Export** | **JSON** or **CSV**. Writes the whole history to a new file in your Downloads folder, called `listen-history-<time>.json` or `.csv` (the time is a Unix timestamp). A notification shows the path. If there is no Downloads folder, the file goes into Listen's data folder. |
 | **Delete history** | **Delete all**, then confirm with **Yes, delete**. This removes every entry and with it the statistics and mixes. |
 
-The CSV file has the columns `timestamp` (Unix seconds), `server_id`, `source`, `song_id`, `status`, `title`, `artists` (separated by semicolons), `album` and `duration_secs`. Text that a spreadsheet would read as a formula gets a leading apostrophe. The JSON file holds the same entries as a list.
+The CSV file has the columns `timestamp` (Unix seconds), `server_id`, `source`, `song_id`, `status` (`played` or `skipped`), `title`, `artists` (separated by semicolons), `album` and `duration_secs`. Text that a spreadsheet would read as a formula gets a leading apostrophe. The JSON file holds the same entries as a list.
 
 The history itself is the file `history.jsonl` in Listen's data folder; see [Files and folders](../reference/files.md). You can back it up like any other file, and [Backup, logs and diagnostics](../more/backup.md) covers what else is worth keeping.
 
@@ -58,7 +64,8 @@ The page shows:
 
 - **songs played**: the number of plays in the period,
 - **listening time**: the full length of each song you played past the scrobble point, added up,
-- **Top songs**, **Top artists** and **Top albums**: ten each, with play counts. Songs and albums also show their artist; the others show the listening time.
+- **songs skipped**: the number of skips in the period,
+- **Top songs**, **Top artists** and **Top albums**: ten each, with play counts. Songs and albums also show their artist; the others show the listening time. Where a song, artist or album was also skipped in the period, the row adds "N skipped".
 
 The ranking breaks ties by listening time and then by name. The artist chart counts every credited artist of a play, so a song with two artists counts for both.
 

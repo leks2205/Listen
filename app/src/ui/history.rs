@@ -121,10 +121,11 @@ fn top_list<'a>(state: &'a Listen, title: &'static str, items: &'a [Ranked]) -> 
         col = col.push(label("Nothing yet", metrics::font_sm(), t.muted));
     }
     for (i, r) in items.iter().enumerate() {
-        let detail = if r.detail.is_empty() {
-            format!("{} plays • {}", r.plays, duration_text(r.secs))
-        } else {
-            format!("{} • {} plays", r.detail, r.plays)
+        let detail = match (r.detail.is_empty(), r.skips) {
+            (true, 0) => format!("{} plays • {}", r.plays, duration_text(r.secs)),
+            (true, n) => format!("{} plays • {} • {} skipped", r.plays, duration_text(r.secs), n),
+            (false, 0) => format!("{} • {} plays", r.detail, r.plays),
+            (false, n) => format!("{} • {} plays • {} skipped", r.detail, r.plays, n),
         };
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
@@ -176,6 +177,7 @@ pub fn stats(state: &Listen) -> Element<'_, Message> {
         row![
             tile(state, s.plays.to_string(), "songs played"),
             tile(state, duration_text(s.listening_secs), "listening time"),
+            tile(state, s.skips.to_string(), "songs skipped"),
         ]
         .spacing(metrics::space_md()),
         row![
@@ -185,7 +187,7 @@ pub fn stats(state: &Listen) -> Element<'_, Message> {
         ]
         .spacing(metrics::space_lg()),
         label(
-            "Listening time counts the full length of each song you played past the scrobble point.",
+            "Listening time counts the full length of each song you played past the scrobble point. A song you leave for another one before that point counts as skipped, never as played.",
             metrics::font_xs(),
             t.muted
         ),

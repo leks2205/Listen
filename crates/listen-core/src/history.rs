@@ -309,9 +309,9 @@ impl History {
         std::fs::rename(&tmp, path)
     }
 
-    /// Newest first.
+    /// The latest plays (skips left out), newest first.
     pub fn recent(&self, limit: usize) -> Vec<(usize, &Entry)> {
-        self.entries.iter().enumerate().rev().take(limit).collect()
+        self.entries.iter().enumerate().rev().filter(|(_, e)| e.played()).take(limit).collect()
     }
 
     pub fn export_json(&self) -> String {
@@ -354,12 +354,15 @@ pub struct Ranked {
     pub detail: String,
     pub plays: u32,
     pub secs: u64,
+    /// Skips in the same period (shown, never counted as plays).
+    pub skips: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Stats {
     pub plays: u32,
     pub listening_secs: u64,
+    pub skips: u32,
     pub songs: Vec<Ranked>,
     pub artists: Vec<Ranked>,
     pub albums: Vec<Ranked>,
@@ -380,8 +383,12 @@ pub fn stats(entries: &[Entry], year: Option<i32>, tz: FixedOffset, top: usize) 
     let mut songs: HashMap<(&ServerId, &str), Ranked> = HashMap::new();
     let mut artists: HashMap<&str, Ranked> = HashMap::new();
     let mut albums: HashMap<(&str, &str), Ranked> = HashMap::new();
-    for e in entries.iter().filter(|e| e.played()) {
+    for e in entries {
         if year.is_some() && local(e, tz).map(|d| d.year()) != year {
+            continue;
+        }
+        if !e.played() {
+            out.skips += 1;
             continue;
         }
         let secs = u64::from(e.duration_secs);
@@ -396,6 +403,24 @@ pub fn stats(entries: &[Entry], year: Option<i32>, tz: FixedOffset, top: usize) 
             bump(albums.entry((album, first)).or_insert_with(|| ranked(album, first)), secs);
         }
     }
+    // Skips of the songs, artists and albums that were played in the period.
+    for e in entries.iter().filter(|e| !e.played()) {
+        if year.is_some() && local(e, tz).map(|d| d.year()) != year {
+            continue;
+        }
+        let first = e.artists.first().map_or("", |a| a.name.as_str());
+        if let Some(r) = songs.get_mut(&e.key()) {
+            r.skips += 1;
+        }
+        for a in &e.artists {
+            if let Some(r) = artists.get_mut(a.name.as_str()) {
+                r.skips += 1;
+            }
+        }
+        if let Some(r) = e.album.as_deref().and_then(|al| albums.get_mut(&(al, first))) {
+            r.skips += 1;
+        }
+    }
     out.songs = top_n(songs.into_values(), top);
     out.artists = top_n(artists.into_values(), top);
     out.albums = top_n(albums.into_values(), top);
@@ -403,7 +428,7 @@ pub fn stats(entries: &[Entry], year: Option<i32>, tz: FixedOffset, top: usize) 
 }
 
 fn ranked(name: &str, detail: &str) -> Ranked {
-    Ranked { name: name.into(), detail: detail.into(), plays: 0, secs: 0 }
+    Ranked { name: name.into(), detail: detail.into(), plays: 0, secs: 0, skips: 0 }
 }
 
 fn bump(r: &mut Ranked, secs: u64) {
@@ -819,8 +844,9 @@ mod tests {
             ));
         }
         let st = stats(&entries, None, utc(), 10);
-        assert_eq!(st.plays, 3);
-        assert_eq!(st.songs.len(), 1);
+        assert_eq!((st.plays, st.skips), (3, 14));
+        assert_eq!((st.songs.len(), st.songs[0].plays, st.songs[0].skips), (1, 3, 7));
+        assert_eq!(st.artists[0].skips, 7);
         assert!(!st.songs.iter().any(|r| r.name == "T2"));
         let all = mix(&entries, MixKind::AllTimeFavorites, BASE + 20 * DAY, utc(), 10);
         assert_eq!(all.iter().map(|e| e.song_id.as_str()).collect::<Vec<_>>(), ["1"]);
@@ -835,5 +861,6 @@ mod tests {
         let mut h = History::in_memory();
         h.entries = old;
         assert!(h.export_csv().contains(",skipped,"));
+        assert_eq!(h.recent(10).iter().map(|(i, _)| *i).collect::<Vec<_>>(), [1, 0], "skips are not listed");
     }
 }

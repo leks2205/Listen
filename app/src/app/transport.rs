@@ -23,6 +23,7 @@ impl Listen {
             Message::PreviousClick if self.modifiers.alt() => return self.handle(Message::PreviousAlbum),
             Message::PreviousClick => return self.handle(Message::Previous),
             Message::NextAlbum => {
+                self.note_skip();
                 self.dj_on_next();
                 if self.queue.skip_next_album().is_some() {
                     return self.start_current();
@@ -34,7 +35,9 @@ impl Listen {
                 if self.playback.position > Duration::from_secs(10) {
                     return self.update(Message::Seek(0.0));
                 }
-                self.queue.skip_previous_album();
+                self.step_skipping(|q| {
+                    q.skip_previous_album();
+                });
                 return self.start_current();
             }
             Message::ShuffleAll => return self.shuffle_all(),

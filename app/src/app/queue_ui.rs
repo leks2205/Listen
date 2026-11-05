@@ -371,6 +371,7 @@ impl Listen {
         let Some(uid) = self.queue_row_pos(row).and_then(|p| self.queue.item_at(p)).map(|i| i.uid) else {
             return Task::none();
         };
+        self.note_skip();
         self.queue.jump_to(uid);
         self.start_current()
     }
