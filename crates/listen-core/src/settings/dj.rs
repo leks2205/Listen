@@ -212,9 +212,88 @@ pub const DECK_LOWPASS: &str = "lowpass@lp";
 /// The deck's echo (DJ echo-out): a send (`volume`) into four delay taps (`adelay`, `delays` in ms, live),
 /// mixed with the dry signal by `amix` (`weights` "dry tap1 … tap4", live). Idle: send 0, weights
 /// "1 0 0 0 0", delays 0 — bit-exact passthrough.
+///
+/// `amix` and `volume` change in one sample, which clicks, so the send and the dry signal are switched by
+/// `afade` gates instead ([`DECK_ECHO_OPEN`], [`DECK_ECHO_CLOSE`], [`DECK_ECHO_DRY`]): a command sets the
+/// gate's `start_time` to a file time (the deck's own pts, before the tempo filter) and the gate ramps
+/// over [`DECK_ECHO_GLIDE_S`] exactly there, as `listen_mix::echo` does. See [`deck_echo_commands`].
 pub const DECK_ECHO_SEND: &str = "volume@es";
 pub const DECK_ECHO_TAPS: [&str; 4] = ["adelay@e1", "adelay@e2", "adelay@e3", "adelay@e4"];
 pub const DECK_ECHO_MIX: &str = "amix@em";
+/// Fade-in gate of the send (closed until its `start_time`).
+pub const DECK_ECHO_OPEN: &str = "afade@eo";
+/// Fade-out gate of the send (open until its `start_time`).
+pub const DECK_ECHO_CLOSE: &str = "afade@ec";
+/// Fade-out gate of the dry signal (down to its `silence` level from its `start_time`).
+pub const DECK_ECHO_DRY: &str = "afade@ed";
+/// Length of the gates' ramps (s), the sample echo's glide.
+pub const DECK_ECHO_GLIDE_S: f64 = 0.005;
+/// `start_time` of a gate that never switches (s; `afade` passes frames before a fade-out untouched).
+const DECK_ECHO_NEVER: &str = "1000000";
+
+/// A deck echo's settings as the deck chain takes them (`listen_mix::echo::EchoParams` with its tap gains).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeckEcho {
+    pub delay_s: f32,
+    /// Level of each repeat relative to the send.
+    pub taps: [f32; 4],
+    pub send: f32,
+    pub dry: f32,
+}
+
+impl DeckEcho {
+    pub const IDLE: DeckEcho = DeckEcho { delay_s: 0.0, taps: [0.0; 4], send: 0.0, dry: 1.0 };
+}
+
+/// `af-command`s (target, option, value) on [`DECK_MIX_LABEL`] that take a deck's echo from `from` to
+/// `to` at file time `at_s` (sent ahead; the gates switch at `at_s` with a [`DECK_ECHO_GLIDE_S`] ramp).
+/// Delays and repeat levels change at once: they come first and while the send is still closed. The
+/// send opens once and closes once per echo; [`DeckEcho::IDLE`] resets every gate at once (the deck
+/// stops or the mix is cancelled).
+pub fn deck_echo_commands(
+    from: &DeckEcho,
+    to: &DeckEcho,
+    at_s: f64,
+) -> Vec<(&'static str, &'static str, String)> {
+    let mut c = Vec::new();
+    let weights = |e: &DeckEcho| {
+        std::iter::once(1.0).chain(e.taps).map(|g| format!("{g:.4}")).collect::<Vec<_>>().join(" ")
+    };
+    if *to == DeckEcho::IDLE {
+        for gate in [DECK_ECHO_OPEN, DECK_ECHO_CLOSE, DECK_ECHO_DRY] {
+            c.push((gate, "start_time", DECK_ECHO_NEVER.to_string()));
+        }
+        c.push((DECK_ECHO_MIX, "weights", weights(to)));
+        return c;
+    }
+    if (from.delay_s - to.delay_s).abs() > 1e-4 {
+        // adelay's `delays` command sets only the listed channels (`all` counts at init only): one entry
+        // per channel, up to 7.1.
+        for (k, tap) in DECK_ECHO_TAPS.into_iter().enumerate() {
+            let ms = format!("{:.1}", (k + 1) as f32 * to.delay_s * 1000.0);
+            c.push((tap, "delays", vec![ms; 8].join("|")));
+        }
+    }
+    if from.taps != to.taps {
+        c.push((DECK_ECHO_MIX, "weights", weights(to)));
+    }
+    let at = format!("{at_s:.6}");
+    if to.send > 0.0 && (to.send - from.send).abs() > 1e-6 {
+        c.push((DECK_ECHO_SEND, "volume", format!("{:.3}", to.send)));
+    }
+    if to.send > 0.0 && from.send <= 0.0 {
+        c.push((DECK_ECHO_OPEN, "start_time", at.clone()));
+    } else if to.send <= 0.0 && from.send > 0.0 {
+        c.push((DECK_ECHO_CLOSE, "start_time", at.clone()));
+    }
+    if to.dry < from.dry {
+        c.push((DECK_ECHO_DRY, "silence", format!("{:.4}", to.dry.max(0.0))));
+        c.push((DECK_ECHO_DRY, "start_time", at));
+    } else if to.dry > from.dry {
+        c.push((DECK_ECHO_DRY, "start_time", DECK_ECHO_NEVER.to_string()));
+    }
+    c
+}
 /// Tempo filter of a deck: rubberband R3 keeps beats in place off 1.0× (WSOLA shifts them ±5–7 ms).
 pub const DECK_TEMPO: &str = "rubberband=engine=finer";
 /// For mpv builds without librubberband: clean, but beats jitter off 1.0×.
@@ -231,10 +310,12 @@ pub fn deck_audio_filters_with(p: &Playback, tempo: &str) -> String {
     let [e1, e2, e3, e4] = DECK_ECHO_TAPS;
     // Bass shelf, echo (before the passes, so a high-pass sweep thins its repeats), high-pass, low-pass.
     let echo = format!(
-        "asplit=2[dry][wet];[wet]{DECK_ECHO_SEND}=0,asplit=4[t1][t2][t3][t4];\
+        "asplit=2[dry][wet];[dry]{DECK_ECHO_DRY}=t=out:st={DECK_ECHO_NEVER}:d={DECK_ECHO_GLIDE_S}[dg];\
+         [wet]{DECK_ECHO_SEND}=0,{DECK_ECHO_OPEN}=t=in:st={DECK_ECHO_NEVER}:d={DECK_ECHO_GLIDE_S},\
+         {DECK_ECHO_CLOSE}=t=out:st={DECK_ECHO_NEVER}:d={DECK_ECHO_GLIDE_S},asplit=4[t1][t2][t3][t4];\
          [t1]{e1}=delays=0:all=1[u1];[t2]{e2}=delays=0:all=1[u2];\
          [t3]{e3}=delays=0:all=1[u3];[t4]{e4}=delays=0:all=1[u4];\
-         [dry][u1][u2][u3][u4]{DECK_ECHO_MIX}=inputs=5:normalize=0:duration=first:weights=1 0 0 0 0"
+         [dg][u1][u2][u3][u4]{DECK_ECHO_MIX}=inputs=5:normalize=0:duration=first:weights=1 0 0 0 0"
     );
     let deck = format!(
         "@{DECK_MIX_LABEL}:lavfi=[{DECK_BASS}=g=0:f=120:w=0.7,{echo},{DECK_HIGHPASS}=f=10,{DECK_LOWPASS}=f=20000],@ts:{tempo}"

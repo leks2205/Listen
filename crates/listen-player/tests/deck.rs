@@ -2,8 +2,9 @@
 //! Skipped when no mpv binary is available (`LISTEN_MPV` overrides the path).
 
 use listen_core::settings::{
-    DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL, DECK_TEMPO_FALLBACK, LEVELLING_LABEL,
-    LEVELLING_TARGET, Playback, deck_audio_filters, deck_audio_filters_with, with_levelling,
+    DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL, DECK_TEMPO_FALLBACK, DeckEcho, LEVELLING_LABEL,
+    LEVELLING_TARGET, Playback, deck_audio_filters, deck_audio_filters_with, deck_echo_commands,
+    with_levelling,
 };
 use listen_player::{MpvOptions, Player, PlayerEvent, Track};
 use std::path::{Path, PathBuf};
@@ -20,7 +21,11 @@ fn mpv_binary() -> Option<PathBuf> {
 
 /// Writes a mono 16-bit 8 kHz PCM WAV with a quiet sine.
 fn write_wav(path: &Path, secs: f32) {
-    let rate = 8000u32;
+    write_wav_at(path, secs, 8000);
+}
+
+/// Writes a mono 16-bit PCM WAV at `rate` with a quiet 440 Hz sine.
+fn write_wav_at(path: &Path, secs: f32, rate: u32) {
     let n = (secs * rate as f32) as u32;
     let mut data = Vec::with_capacity(44 + n as usize * 2);
     let push32 = |d: &mut Vec<u8>, v: u32| d.extend_from_slice(&v.to_le_bytes());
@@ -219,4 +224,99 @@ async fn levelling_stage_takes_gain_live() {
 async fn audio_pts_is_none_when_idle() {
     let Some(f) = deck("idle").await else { return };
     assert_eq!(f.player.audio_pts().await.unwrap(), None);
+}
+
+/// Reads mpv's `--ao=pcm` output (float or 16-bit WAV): first channel, and its rate.
+fn read_pcm(path: &Path) -> (Vec<f32>, u32) {
+    let d = std::fs::read(path).expect("pcm output");
+    let (mut i, mut channels, mut rate, mut bits) = (12, 1usize, 0u32, 16u16);
+    let u16_at = |i: usize| u16::from_le_bytes([d[i], d[i + 1]]);
+    let u32_at = |i: usize| u32::from_le_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]);
+    while i + 8 <= d.len() {
+        let (id, len) = (&d[i..i + 4], u32_at(i + 4) as usize);
+        let body = i + 8;
+        if id == b"fmt " {
+            channels = u16_at(body + 2) as usize;
+            rate = u32_at(body + 4);
+            bits = u16_at(body + 14);
+        } else if id == b"data" {
+            let end = d.len().min(body + len.max(1));
+            let data = &d[body..if len == 0 || len == u32::MAX as usize { d.len() } else { end }];
+            let width = bits as usize / 8;
+            let x = data
+                .chunks_exact(width * channels)
+                .map(|f| match bits {
+                    32 => f32::from_le_bytes([f[0], f[1], f[2], f[3]]),
+                    _ => i16::from_le_bytes([f[0], f[1]]) as f32 / 32768.0,
+                })
+                .collect();
+            return (x, rate);
+        }
+        i = body + len;
+    }
+    panic!("no data chunk in {path:?}");
+}
+
+/// Echo-out on a live deck (bug 66): the send opens a repeat before the stop and the dry goes at the stop,
+/// both through the `afade` gates at their scheduled file time, so the stop has no sample step (the
+/// stepped `amix` weights jumped ~15x the signal's own slope there). Rendered by mpv to a file.
+#[tokio::test(flavor = "multi_thread")]
+async fn echo_out_gates_glide_at_their_file_time() {
+    let Some(binary) = mpv_binary() else { return };
+    let dir = std::env::temp_dir().join(format!("listen-deck-echo-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let (file, out) = (dir.join("song.wav"), dir.join("out.wav"));
+    write_wav_at(&file, 6.0, 48000);
+    let extra_args = vec!["--ao=pcm".into(), format!("--ao-pcm-file={}", out.display())];
+    let opts = MpvOptions { binary, extra_args, audio_buffer: Some(0.1), ..Default::default() };
+    let (player, mut rx) = Player::spawn(&opts).await.expect("mpv starts");
+    if player.set_af(&deck_audio_filters(&Playback::default())).await.is_err() {
+        let fallback = deck_audio_filters_with(&Playback::default(), DECK_TEMPO_FALLBACK);
+        player.set_af(&fallback).await.expect("deck chain accepted");
+    }
+    // The stop on a crest of the 440 Hz sine (a step there is half its amplitude); the repeats are in phase.
+    let (cue, stop, delay) = (1.0, 3.5 + 0.25 / 440.0, 0.5);
+    player.load(&Track::url(file.to_string_lossy()), Some(Duration::from_secs_f64(cue)), true).await.unwrap();
+    wait_for(&mut rx, &PlayerEvent::Restarted, &NOT_EXPECTED).await;
+    // As the app sends them: well before the deck's filter reaches either time.
+    let on = DeckEcho { delay_s: delay as f32, taps: [0.5, 0.25, 0.125, 0.0625], send: 1.0, dry: 1.0 };
+    let off = DeckEcho { send: 0.0, dry: 0.0, ..on };
+    let cmds = [deck_echo_commands(&DeckEcho::IDLE, &on, stop - delay), deck_echo_commands(&on, &off, stop)]
+        .concat();
+    for (target, cmd, arg) in &cmds {
+        player
+            .af_command(DECK_MIX_LABEL, cmd, arg, target)
+            .await
+            .unwrap_or_else(|e| panic!("{target} {cmd}: {e}"));
+    }
+    player.set_paused(false).await.unwrap();
+    wait_for(&mut rx, &PlayerEvent::Ended, &[]).await;
+    drop(player);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let (x, rate) = read_pcm(&out);
+    let _ = std::fs::remove_dir_all(&dir);
+    let at = |t: f64| (((t - cue) * rate as f64) as usize).min(x.len());
+    let slope = |a: f64, b: f64| x[at(a)..at(b)].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
+    let rms = |a: f64, b: f64| {
+        let s = &x[at(a)..at(b)];
+        (s.iter().map(|v| v * v).sum::<f32>() / s.len().max(1) as f32).sqrt()
+    };
+    assert!(x.len() as f64 > (5.0 - cue) * rate as f64, "rendered {} samples at {rate} Hz", x.len());
+    let natural = slope(1.5, 2.5);
+    let dry = rms(1.5, 2.5);
+    assert!(dry > 0.05, "dry level {dry}");
+    // No step at the stop nor where each repeat hands to the next.
+    for t in [stop - delay, stop, stop + delay, stop + 2.0 * delay] {
+        let edge = slope(t - 0.05, t + 0.05);
+        assert!(edge < 1.3 * natural, "step at {t} s: {edge:.4} vs the sine's own {natural:.4}");
+    }
+    // Dry alone before the stop, then the repeats at half, a quarter…
+    let (r0, r1, r2) = (
+        rms(2.6, 2.9),
+        rms(stop + 0.05, stop + delay - 0.05),
+        rms(stop + delay + 0.05, stop + 2.0 * delay - 0.05),
+    );
+    assert!((r0 / dry - 1.0).abs() < 0.05, "before the stop {r0} vs {dry}");
+    assert!((r1 / dry - 0.5).abs() < 0.05, "first repeat {r1} vs {dry}");
+    assert!((r2 / dry - 0.25).abs() < 0.05, "second repeat {r2} vs {dry}");
 }

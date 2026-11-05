@@ -10,7 +10,7 @@ use iced::Task;
 use listen_core::analysis::{BeatGrid, Features};
 use listen_core::model::Song;
 use listen_core::settings::{
-    DECK_BASS, DECK_ECHO_MIX, DECK_ECHO_SEND, DECK_ECHO_TAPS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL,
+    DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL, DeckEcho, deck_echo_commands,
 };
 use listen_mix::echo::EchoParams;
 use listen_mix::plan::{EqTarget, Kind, PlanCtx, TransitionPlan, Which};
@@ -31,6 +31,9 @@ const START_WINDOW_S: f64 = 1.5;
 /// Filter commands are heard about this long after they are sent
 /// (`--audio-buffer=0.1`), so they are sent this much early.
 const FILTER_LEAD_S: f64 = 0.24;
+/// Echo commands carry the file time they switch at ([`deck_echo_commands`]) and are sent this long
+/// (s, out-file time) ahead, so they reach the deck's filter before it decodes that far.
+const ECHO_LEAD_S: f64 = 1.5;
 /// Speed corrections settle the phase error over this long.
 const LOCK_SETTLE_S: f64 = 0.6;
 /// Largest speed nudge while the incoming deck is audible / still silent.
@@ -104,6 +107,11 @@ impl Filter {
     fn index(self) -> usize {
         self as usize
     }
+}
+
+/// An echo as the deck chain takes it.
+fn deck_echo(e: EchoParams) -> DeckEcho {
+    DeckEcho { delay_s: e.delay_s, taps: [1, 2, 3, 4].map(|k| e.tap_gain(k)), send: e.send, dry: e.dry }
 }
 
 /// The filter and value of an EQ target (`None` for the echo, see [`Listen::set_echo`]).
@@ -715,35 +723,20 @@ impl Listen {
         self.mix.ramps.retain(|r| r.deck != deck);
     }
 
-    /// Sets a deck's echo ([`DECK_ECHO_SEND`], [`DECK_ECHO_TAPS`], [`DECK_ECHO_MIX`]); only what changed
-    /// is sent, delays first so the taps are in place when the send opens.
-    fn set_echo(&mut self, deck: usize, to: EchoParams) -> Task<Message> {
+    /// Sets a deck's echo from file time `at_s` ([`deck_echo_commands`]: delays and repeat levels at once,
+    /// the send and dry gates ramp at `at_s`); only what changed is sent, in order.
+    fn set_echo(&mut self, deck: usize, to: EchoParams, at_s: f64) -> Task<Message> {
         let from = self.mix.echo[deck].unwrap_or(EchoParams::IDLE);
         if from == to {
             return Task::none();
         }
         self.mix.echo[deck] = (to != EchoParams::IDLE).then_some(to);
-        let delays: Vec<String> = if (from.delay_s - to.delay_s).abs() > 1e-4 {
-            // adelay's `delays` command sets only the listed channels (`all` counts at init only): one
-            // entry per channel, up to 7.1.
-            (1..=DECK_ECHO_TAPS.len())
-                .map(|k| vec![format!("{:.1}", k as f32 * to.delay_s * 1000.0); 8].join("|"))
-                .collect()
-        } else {
-            Vec::new()
-        };
-        let weights = std::iter::once(to.dry)
-            .chain((1..=DECK_ECHO_TAPS.len()).map(|k| to.tap_gain(k)))
-            .map(|g| format!("{g:.4}"))
-            .collect::<Vec<_>>()
-            .join(" ");
-        let send = format!("{:.3}", to.send);
+        let cmds = deck_echo_commands(&deck_echo(from), &deck_echo(to), at_s);
         self.deck_task(deck, move |p| async move {
-            for (ms, tap) in delays.iter().zip(DECK_ECHO_TAPS) {
-                p.af_command(DECK_MIX_LABEL, "delays", ms, tap).await?;
+            for (target, cmd, arg) in &cmds {
+                p.af_command(DECK_MIX_LABEL, cmd, arg, target).await?;
             }
-            p.af_command(DECK_MIX_LABEL, "weights", &weights, DECK_ECHO_MIX).await?;
-            p.af_command(DECK_MIX_LABEL, "volume", &send, DECK_ECHO_SEND).await
+            Ok(())
         })
     }
 
@@ -785,9 +778,12 @@ impl Listen {
     fn mix_eq_events(&mut self, plan: &TransitionPlan, out_t: f64, out_only: bool) -> Task<Message> {
         let (out_deck, in_deck) = (self.mix.out_deck, self.mix.in_deck);
         let lead = FILTER_LEAD_S * self.mix.speed[out_deck];
+        let echo_lead = ECHO_LEAD_S * self.mix.speed[out_deck];
         let mut tasks = Vec::new();
         for i in 0..plan.eq.len() {
             let ev = plan.eq[i];
+            // Echo gates switch at their own file time, so they go out well before the filter gets there.
+            let lead = if matches!(ev.target, EqTarget::Echo { .. }) { echo_lead } else { lead };
             if self.mix.eq_done[i] || out_t < ev.at_out_s - lead || (out_only && ev.deck != Which::Out) {
                 continue;
             }
@@ -795,7 +791,7 @@ impl Listen {
             let deck = if ev.deck == Which::Out { out_deck } else { in_deck };
             let Some((filter, to)) = eq_value(ev.target) else {
                 if let Some(echo) = EchoParams::of(ev.target) {
-                    tasks.push(self.set_echo(deck, echo));
+                    tasks.push(self.set_echo(deck, echo, ev.at_out_s));
                 }
                 continue;
             };
@@ -953,7 +949,7 @@ impl Listen {
         for f in [Filter::Bass, Filter::Highpass, Filter::Lowpass] {
             tasks.push(self.set_filter(deck, f, f.neutral()));
         }
-        tasks.push(self.set_echo(deck, EchoParams::IDLE));
+        tasks.push(self.set_echo(deck, EchoParams::IDLE, 0.0));
         Task::batch(tasks)
     }
 

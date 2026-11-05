@@ -203,6 +203,47 @@ mod tests {
     }
 
     #[test]
+    fn echo_commands_schedule_the_gates_at_the_plan_times() {
+        let on = DeckEcho { delay_s: 0.5, taps: [0.5, 0.25, 0.125, 0.0625], send: 1.0, dry: 1.0 };
+        let stop = DeckEcho { send: 0.0, dry: 0.0, ..on };
+        let open = deck_echo_commands(&DeckEcho::IDLE, &on, 99.5);
+        let names: Vec<_> = open.iter().map(|(t, o, _)| format!("{t} {o}")).collect();
+        assert_eq!(
+            names,
+            [
+                "adelay@e1 delays",
+                "adelay@e2 delays",
+                "adelay@e3 delays",
+                "adelay@e4 delays",
+                "amix@em weights",
+                "volume@es volume",
+                "afade@eo start_time"
+            ]
+        );
+        assert_eq!(open[1].2, ["1000.0"; 8].join("|"));
+        // The dry stays at weight 1: only the gates move it.
+        assert_eq!(open[4].2, "1.0000 0.5000 0.2500 0.1250 0.0625");
+        assert_eq!(open[6].2, "99.500000");
+        // The stop touches other filters than the opening (the two tasks may run in any order).
+        let close = deck_echo_commands(&on, &stop, 100.0);
+        assert_eq!(
+            close,
+            [
+                ("afade@ec", "start_time", "100.000000".to_string()),
+                ("afade@ed", "silence", "0.0000".to_string()),
+                ("afade@ed", "start_time", "100.000000".to_string()),
+            ]
+        );
+        assert!(open.iter().all(|(t, ..)| close.iter().all(|(u, ..)| t != u)));
+        assert!(deck_echo_commands(&on, &on, 1.0).is_empty());
+        // Idle resets every gate (dry back, send shut) and the repeat levels.
+        let idle = deck_echo_commands(&stop, &DeckEcho::IDLE, 0.0);
+        assert_eq!(idle.len(), 4);
+        assert!(idle[..3].iter().all(|(_, o, v)| *o == "start_time" && v == "1000000"));
+        assert_eq!(idle[3].2, "1.0000 0.0000 0.0000 0.0000 0.0000");
+    }
+
+    #[test]
     fn deck_chain_appends_mix_filters_to_the_user_eq() {
         let mut p = Playback::default();
         let deck = deck_audio_filters(&p);
@@ -217,6 +258,12 @@ mod tests {
         assert!(bass < echo && echo < hp, "{deck}");
         assert!(deck.contains("amix@em=inputs=5:normalize=0:duration=first:weights=1 0 0 0 0"), "{deck}");
         assert_eq!(deck.matches("=delays=0:all=1").count(), 4, "{deck}");
+        // Gates idle: dry open, send closed, both ramps 5 ms.
+        assert!(deck.contains("[dry]afade@ed=t=out:st=1000000:d=0.005[dg]"), "{deck}");
+        assert!(
+            deck.contains("volume@es=0,afade@eo=t=in:st=1000000:d=0.005,afade@ec=t=out:st=1000000"),
+            "{deck}"
+        );
         assert!(!deck.contains('\n') && !deck.contains("  "), "{deck}");
         assert!(deck_audio_filters_with(&p, DECK_TEMPO_FALLBACK).ends_with(",@ts:scaletempo2"));
         p.equalizer_enabled = true;

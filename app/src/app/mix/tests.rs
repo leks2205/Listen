@@ -1148,12 +1148,21 @@ fn an_echo_out_opens_the_send_before_the_start_then_rings_on_at_full_level() {
     event(&mut s, inn, PlayerEvent::Restarted);
     assert_eq!(s.mix.phase, Phase::Ready);
     assert_eq!(s.mix.echo[out], None, "idle until a repeat before the stop");
-    // One repeat before the stop the send opens, though the incoming deck hasn't started.
-    pos(&mut s, out, p.out_mix_start_s - 0.5);
+    // The gates switch at their file time, so their commands go out ECHO_LEAD_S ahead: one repeat before
+    // the stop the send opens, though the incoming deck hasn't started.
+    pos(&mut s, out, p.out_mix_start_s - 0.5 - ECHO_LEAD_S - 0.05);
+    tick(&mut s);
+    assert_eq!(s.mix.echo[out], None, "not yet");
+    pos(&mut s, out, p.out_mix_start_s - 0.5 - ECHO_LEAD_S + 0.05);
     tick(&mut s);
     let e = s.mix.echo[out].expect("echo on");
     assert_eq!((e.send, e.dry, e.delay_s), (1.0, 1.0, 0.5));
     assert_eq!(s.mix.echo[inn], None, "the incoming deck has no echo");
+    // The stop's gates (dry out, send shut) are scheduled ahead as well.
+    pos(&mut s, out, p.out_mix_start_s - 0.5);
+    tick(&mut s);
+    let e = s.mix.echo[out].expect("echo on");
+    assert_eq!((e.send, e.dry), (0.0, 0.0));
     if s.mix.phase == Phase::Starting {
         let token = s.mix.token;
         let _ = s.update(Message::Mix(MixMsg::Started(token, Ok(Instant::now()))));
