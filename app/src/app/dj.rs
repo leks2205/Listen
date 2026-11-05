@@ -175,6 +175,13 @@ fn busy_expired(busy: bool, since: Option<Instant>, now: Instant) -> bool {
 }
 
 impl Listen {
+    /// Whether the next planned set gets a voiced break: its turn by `talk_every`, not in Focus mode (the DJ
+    /// keeps quiet), not while casting, and within the voice quota.
+    pub(super) fn dj_voice_next(&self) -> bool {
+        let talk = self.dj.sets_since_talk + 1 >= self.config.settings.ai_dj.talk_every.max(1);
+        talk && !self.focus_on() && !self.dlna_casting() && self.dj.quota.can_voice(quota::unix_now())
+    }
+
     pub fn ai_dj_on(&self) -> bool {
         self.config.settings.ai_dj.enabled && !self.demo
     }
@@ -735,9 +742,9 @@ impl Listen {
         self.roll_quota();
         let s = self.config.settings.ai_dj.clone();
         let talk = self.dj.sets_since_talk + 1 >= s.talk_every.max(1);
-        // Focus mode: the DJ keeps quiet (no voiced breaks).
+        // Focus mode: the DJ keeps quiet (no voiced breaks) and picks from a focus-friendly pool.
         let focus = self.focus_on();
-        let voice = talk && !focus && !self.dlna_casting() && self.dj.quota.can_voice(quota::unix_now());
+        let voice = self.dj_voice_next();
         self.dj.quota.planned += 1;
         if voice {
             self.dj.quota.voiced += 1;

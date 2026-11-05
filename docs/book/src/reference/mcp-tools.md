@@ -47,6 +47,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 | `seek` | Jump to a position in the playing song. | `seconds` (number, required): position in seconds |
 | `set_volume` | Set the volume. | `volume` (integer, required): 0 to 100 |
 | `set_focus` | Focus mode on or off: the DJs pick songs with little singing and calm energy, swap sung picks for instrumental versions, and the AI DJ doesn't talk. | `on` (boolean, required) |
+| `find_instrumental` | Searches the instrumental version of a sung queue item right away (no per-fill limit) and, with Focus on, puts it in the item's place. Replies with the searched `uid`s and queries; the log has one `Focus: instrumental of …` line per search, found or not. In demo mode the demo library is searched ("Glass Cities" has one). | `uid` (integer): a queue item; without it every upcoming DJ pick |
 | `set_play_mode` | What happens when the queue runs out. `ai_dj` needs a Gemini key. | `mode` (string, required): `off`, `shuffle`, `auto_dj`, `ai_dj` |
 | `set_repeat` | Repeat nothing, the whole queue or the current song. | `repeat` (string, required): `off`, `all`, `one` |
 | `set_speed` | Playback speed. | `speed` (number, required): 0.5 to 2.0, 1.0 is normal |
@@ -56,7 +57,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_queue` | The queue. Each entry is a song object plus `uid`, `current` (true for the playing one) `auto` (added by a play mode) and, for a DJ's pick, `why` (the reason as a code: `{picker, code, args}`) and `why_text` (the reason as shown in the app). | none |
+| `get_queue` | The queue. Each entry is a song object plus `uid`, `current` (true for the playing one) `auto` (added by a play mode) and, for a DJ's pick, `why` (the reason as a code: `{picker, code, args}`) and `why_text` (the reason as shown in the app). Also `focus_chip`: `shown` (the Focus chip beside the play-mode button is on screen), `on`, `label`. | none |
 | `play_songs` | Play songs, albums, artists or playlists. | `refs` (array of strings, required); `how` (string): `now` (replace the queue and play, the default), `next` (play after the current song), `last` (add to the end); `shuffle` (boolean): shuffle them first |
 | `add_to_queue` | Add items to the end of the queue, or after the current song. | `refs` (array of strings, required); `next` (boolean): insert after the current song instead |
 | `play_queue_entry` | Jump to a queue entry. | `uid` (integer, required) |
@@ -104,7 +105,7 @@ Servers that cannot do an operation answer with an error such as `This server ca
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `voice_gain_db`, the active `requests` (Tell the DJ). Never the key itself. | none |
+| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `voice_next` (whether the next planned set gets a voiced break; never with Focus on), `focus_quiet`, `voice_gain_db`, the active `requests` (Tell the DJ). Never the key itself. | none |
 | `list_personas` | The AI DJ's personas with `id`, `name`, `description` and voices. | none |
 | `set_ai_dj` | Change the AI DJ. Only the given fields change; returns the new setup. | see below |
 | `tell_dj` | Tell the AI DJ what you want: a new request replans the queued, not yet started part of the set at once (the playing song goes on); the same request again changes nothing. Requests stay until removed. Returns the AI DJ setup with `requests` and `changed`. | `request` (string): `calmer`, `more_energy`, `more_new`, `only_favourites`, `focus`, `korean_only`, `no_ballads` or free text; `remove` (string): an active request; `clear` (boolean): remove all |

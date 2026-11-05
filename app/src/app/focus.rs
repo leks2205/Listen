@@ -44,9 +44,45 @@ pub(super) fn focus_songs(pool: Vec<Song>, lookup: &FlowLookup, want: usize) -> 
     focus_pool(&annotated, want).into_iter().map(|i| annotated[i].0.clone()).collect()
 }
 
+/// The instrumental version of `song` in the demo library (the YouTube Music demo album has one).
+fn demo_instrumental(song: &Song, query: &str) -> Option<Song> {
+    let library: Vec<Song> = (0..crate::demo::albums().len())
+        .flat_map(crate::demo::album_songs)
+        .chain(crate::demo::ytm_album().songs)
+        .collect();
+    let found = instrumental_of(song, &library);
+    log_instrumental(song, query, found.as_ref(), library.len());
+    found
+}
+
+/// One log line per instrumental search, found or not (QA reads these).
+fn log_instrumental(song: &Song, query: &str, found: Option<&Song>, results: usize) {
+    match found {
+        Some(inst) => tracing::info!(
+            "Focus: instrumental of “{}” found: “{}” (query “{query}”)",
+            song.title,
+            inst.title
+        ),
+        None => tracing::info!(
+            "Focus: no instrumental of “{}” among {results} results (query “{query}”)",
+            song.title
+        ),
+    }
+}
+
 impl Listen {
     pub fn focus_on(&self) -> bool {
         self.config.settings.auto_dj.focus
+    }
+
+    /// The Focus chip beside the play-mode button: offered in Auto-DJ and AI DJ, and while on (so it can be
+    /// switched off).
+    pub fn focus_chip_shown(&self) -> bool {
+        self.focus_on()
+            || matches!(
+                self.play_mode(),
+                super::play_mode::PlayMode::AutoDj | super::play_mode::PlayMode::AiDj
+            )
     }
 
     /// Little lead vocal (or an instrumental version) and calm.
@@ -96,10 +132,21 @@ impl Listen {
 
     /// Looks for instrumental versions of the sung songs among the queue items `uids` (a few per fill).
     pub(super) fn focus_instrumentals(&self, uids: &[u64]) -> Task<Message> {
+        self.instrumental_lookups(uids, INSTRUMENTAL_LOOKUPS).1
+    }
+
+    /// Searches instrumental versions for up to `cap` sung songs among the queue items `uids`; returns the
+    /// searched `(uid, query)` pairs. In demo mode the demo library is searched instead of a server.
+    pub(super) fn instrumental_lookups(
+        &self,
+        uids: &[u64],
+        cap: usize,
+    ) -> (Vec<(u64, String)>, Task<Message>) {
         let lookup = self.flow_lookup();
+        let mut searched = Vec::new();
         let mut tasks = Vec::new();
         for &uid in uids {
-            if tasks.len() == INSTRUMENTAL_LOOKUPS {
+            if tasks.len() == cap {
                 break;
             }
             let Some(song) = self.queue.iter().find(|i| i.uid == uid).map(|i| i.song.clone()) else {
@@ -108,16 +155,32 @@ impl Listen {
             if !wants_instrumental(&song, lookup(&song).as_ref()) {
                 continue;
             }
+            let query = instrumental_query(&song);
+            if self.demo {
+                let found = demo_instrumental(&song, &query);
+                searched.push((uid, query));
+                tasks.push(Task::done(Message::Focus(FocusMsg::Instrumental(uid, found.map(Box::new)))));
+                continue;
+            }
             let Some(source) = self.sources.get(&song.server_id).cloned() else { continue };
+            searched.push((uid, query.clone()));
             tasks.push(Task::perform(
                 async move {
-                    let results = source.search(&instrumental_query(&song), 10).await.ok()?;
-                    instrumental_of(&song, &results.songs).map(Box::new)
+                    let results = match source.search(&query, 10).await {
+                        Ok(r) => r.songs,
+                        Err(e) => {
+                            tracing::info!("Focus: instrumental search “{query}” failed: {e}");
+                            return None;
+                        }
+                    };
+                    let found = instrumental_of(&song, &results);
+                    log_instrumental(&song, &query, found.as_ref(), results.len());
+                    found.map(Box::new)
                 },
                 move |found| Message::Focus(FocusMsg::Instrumental(uid, found)),
             ));
         }
-        Task::batch(tasks)
+        (searched, Task::batch(tasks))
     }
 
     pub(super) fn on_focus(&mut self, msg: FocusMsg) -> Task<Message> {
@@ -223,5 +286,38 @@ mod tests {
         let _ = s.update(Message::Focus(FocusMsg::Set(false)));
         let _ = s.update(Message::Focus(FocusMsg::Instrumental(uids[0], Some(Box::new(inst)))));
         assert_ne!(s.queue.iter().find(|i| i.uid == uids[0]).unwrap().song.id, "inst");
+    }
+
+    #[test]
+    fn the_demo_library_gives_a_deterministic_instrumental_swap() {
+        let mut s = rig();
+        let ytm = demo::ytm_album().songs;
+        s.queue.set(ytm[1..2].to_vec(), 0);
+        let _ = s.update(Message::Focus(FocusMsg::Set(true)));
+        let uids = s.queue.add_picked(vec![(ytm[0].clone(), Why::new(Picker::AutoDj, WhyCode::NewToYou))]);
+        let (searched, _) = s.instrumental_lookups(&uids, 10);
+        assert_eq!(searched.len(), 1);
+        assert_eq!(searched[0].0, uids[0]);
+        let found = demo_instrumental(&ytm[0], &searched[0].1).expect("Glass Cities (Instrumental)");
+        assert_eq!(found.title, "Glass Cities (Instrumental)");
+        let _ = s.update(Message::Focus(FocusMsg::Instrumental(uids[0], Some(Box::new(found)))));
+        assert_eq!(
+            s.queue.iter().find(|i| i.uid == uids[0]).unwrap().song.title,
+            "Glass Cities (Instrumental)"
+        );
+        // An instrumental isn't searched again.
+        assert!(s.instrumental_lookups(&uids, 10).0.is_empty());
+    }
+
+    #[test]
+    fn with_focus_on_the_next_ai_dj_set_is_never_voiced() {
+        let mut s = rig();
+        s.config.settings.ai_dj.talk_every = 1;
+        let before = s.dj_voice_next();
+        let _ = s.update(Message::Focus(FocusMsg::Set(true)));
+        assert!(!s.dj_voice_next());
+        assert!(s.focus_chip_shown());
+        let _ = s.update(Message::Focus(FocusMsg::Set(false)));
+        assert_eq!(s.dj_voice_next(), before);
     }
 }

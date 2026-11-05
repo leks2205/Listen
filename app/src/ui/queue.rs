@@ -528,7 +528,7 @@ pub fn mode_switcher(state: &Listen) -> Element<'_, Message> {
         super::tip::tip_raw(state, b, &hint, Some("toggleShuffle"), super::tip::Position::Bottom);
     // Focus applies to the DJs' picks: offered in Auto-DJ and AI DJ (and while on, so it can be switched off).
     let focus = state.focus_on();
-    if !focus && !matches!(mode, PlayMode::AutoDj | PlayMode::AiDj) {
+    if !state.focus_chip_shown() {
         return mode_button;
     }
     let color = if focus { t.primary } else { t.muted };

@@ -88,6 +88,14 @@ pub fn definitions() -> Vec<Value> {
             &["on"],
         ),
         tool(
+            "find_instrumental",
+            "Searches the instrumental version of a sung queue item now (no per-fill limit) and, with Focus on, \
+             puts it in the item's place. Without uid: every upcoming DJ pick. The log shows each search and \
+             what was found; in demo mode the demo library is searched.",
+            json!({ "uid": { "type": "integer", "description": "Queue item uid (get_queue)" } }),
+            &[],
+        ),
+        tool(
             "set_repeat",
             "Repeat nothing, the whole queue or the current song.",
             json!({ "repeat": one_of(&["off", "all", "one"], "Repeat mode") }),

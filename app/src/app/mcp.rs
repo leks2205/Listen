@@ -491,6 +491,9 @@ impl Listen {
             "set_min": d.set_min,
             "set_max": d.set_max,
             "talk_every": d.talk_every,
+            // Keyless check of the next plan: whether it would be a voiced break (never with Focus on).
+            "voice_next": self.dj_voice_next(),
+            "focus_quiet": self.focus_on(),
             "voice_gain_db": d.voice_gain_db,
             "requests": self.dj.requests.items.iter().map(|r| match r {
                 listen_dj::Steer::Chip(c) => json!({ "chip": c.id(), "label": c.label() }),
@@ -581,6 +584,19 @@ impl Listen {
                 let t = msg(self, Message::Focus(crate::app::focus::FocusMsg::Set(on)));
                 done(&reply, t, json!({ "focus": on }))
             }
+            "find_instrumental" => {
+                let uids: Vec<u64> = match args.get("uid").and_then(Value::as_u64) {
+                    Some(uid) => vec![uid],
+                    None => {
+                        let current = self.queue.current_position().unwrap_or(0);
+                        self.queue.iter().skip(current + 1).filter(|i| i.auto).map(|i| i.uid).collect()
+                    }
+                };
+                let (searched, t) = self.instrumental_lookups(&uids, 10);
+                let searched: Vec<Value> =
+                    searched.into_iter().map(|(uid, q)| json!({ "uid": uid, "query": q })).collect();
+                done(&reply, t, json!({ "focus": self.focus_on(), "searched": searched }))
+            }
             "set_repeat" => {
                 self.queue.repeat = match arg_str(args, "repeat").unwrap_or("") {
                     "off" => Repeat::Off,
@@ -628,7 +644,12 @@ impl Listen {
                     .collect();
                 let songs: Vec<Item> = self.queue.iter().map(|i| Item::Song(i.song.clone())).collect();
                 self.remember(songs);
-                reply.ok(json!({ "entries": items }));
+                let chip = json!({
+                    "shown": self.focus_chip_shown(),
+                    "on": self.focus_on(),
+                    "label": crate::i18n::tr("Focus"),
+                });
+                reply.ok(json!({ "entries": items, "focus_chip": chip }));
                 Ok(None)
             }
             "play_songs" | "add_to_queue" => {
