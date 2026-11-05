@@ -9,6 +9,7 @@ pub mod memory;
 pub mod model;
 pub mod platform;
 pub mod queue;
+pub mod releases;
 pub mod settings;
 pub mod substitute;
 pub mod theme;

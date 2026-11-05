@@ -11,7 +11,7 @@ listen-source.workspace = true
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 aes-gcm = "0.10"
