@@ -191,12 +191,13 @@ pub fn resolve(setting: &str) -> &'static str {
     "en"
 }
 
-/// Makes `code` (a supported code, see [`resolve`]) the language of [`tr`].
-pub fn set_language(code: &str) {
-    let code = LANGUAGES.iter().find(|(c, _)| *c == code).map_or("en", |(c, _)| *c);
+/// The table for `code` from its catalog `json`. Patterns with `{}` holes go into `map` as
+/// well, so [`trf`] finds their translation however short the fixed text is; `templates`
+/// only serves texts that were filled before translation.
+fn build_table(code: &'static str, json: Option<&str>) -> Table {
     let mut map = HashMap::new();
     let mut templates = Vec::new();
-    if let Some(json) = source(code)
+    if let Some(json) = json
         && let Ok(parsed) = serde_json::from_str::<HashMap<String, String>>(json)
     {
         for (k, v) in parsed {
@@ -206,16 +207,22 @@ pub fn set_language(code: &str) {
             if k.contains("{}") && k.matches("{}").count() >= v.matches("{}").count() {
                 templates
                     .push(Template { english: k.split("{}").collect(), translated: v.split("{}").collect() });
-            } else {
-                map.insert(k, v);
             }
+            map.insert(k, v);
         }
     }
+    Table { code, map, templates }
+}
+
+/// Makes `code` (a supported code, see [`resolve`]) the language of [`tr`].
+pub fn set_language(code: &str) {
+    let code = LANGUAGES.iter().find(|(c, _)| *c == code).map_or("en", |(c, _)| *c);
+    let table = build_table(code, source(code));
     if let Ok(path) = std::env::var("LISTEN_I18N_COLLECT") {
         *COLLECT.lock().unwrap_or_else(|e| e.into_inner()) = Some((path.into(), Default::default()));
         COLLECTING.store(true, std::sync::atomic::Ordering::Relaxed);
     }
-    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(Table { code, map, templates });
+    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Some(table);
 }
 
 /// The active language code (`en` before [`set_language`]).
@@ -258,9 +265,14 @@ pub fn tr_cow(s: std::borrow::Cow<'_, str>) -> std::borrow::Cow<'_, str> {
 
 /// [`tr`] with `{}` placeholders filled in order: `trf("Added {} songs", &[&n])`.
 pub fn trf(pattern: &str, args: &[&dyn std::fmt::Display]) -> String {
+    fill(tr(pattern), args)
+}
+
+/// `pattern` with its `{}` holes filled in order (holes without an argument stay empty).
+fn fill(pattern: &str, args: &[&dyn std::fmt::Display]) -> String {
     let mut out = String::new();
     let mut args = args.iter();
-    let mut rest = tr(pattern);
+    let mut rest = pattern;
     while let Some(i) = rest.find("{}") {
         out.push_str(&rest[..i]);
         if let Some(a) = args.next() {
@@ -309,5 +321,18 @@ mod tests {
     fn placeholders_fill_in_order() {
         // English (and any text without a table entry) passes through.
         assert_eq!(trf("{} of {}", &[&1, &2]), "1 of 2");
+    }
+
+    #[test]
+    fn short_patterns_translate_with_text_holes() {
+        // "Playing on {}: {}" has 13 fixed characters: too short for the template rescue of
+        // filled texts, so the pattern itself must be looked up before filling.
+        let de = build_table("de", source("de"));
+        let pattern = de.map.get("Playing on {}: {}").copied().unwrap();
+        assert_eq!(fill(pattern, &[&"QA Handy", &"LOVE · StayC"]), "Läuft auf QA Handy: LOVE · StayC");
+        let cast = de.map.get("Casting to {}").copied().unwrap();
+        assert_eq!(fill(cast, &[&"Wohnzimmer"]), "Übertragung auf Wohnzimmer");
+        // Filled texts still translate through the templates when the holes are numbers.
+        assert!(de.templates.iter().any(|t| t.english == ["Playing on ", ": ", ""]));
     }
 }
