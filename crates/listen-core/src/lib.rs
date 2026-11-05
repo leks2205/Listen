@@ -3,6 +3,7 @@
 
 pub mod analysis;
 pub mod config;
+pub mod describe;
 pub mod exclude;
 pub mod history;
 pub mod memory;

@@ -1,0 +1,13 @@
+# CUDA wheels: pip install --index-url https://download.pytorch.org/whl/cu130 torch torchaudio
+torch>=2.14
+torchaudio>=2.11
+transformers>=4.57,<5
+accelerate>=1.15
+safetensors>=0.8
+soundfile>=0.14
+numpy>=2.5
+librosa>=1.0
+nnaudio>=0.3.4
+samplings>=0.1.7
+requests>=2.34
+tqdm>=4.70

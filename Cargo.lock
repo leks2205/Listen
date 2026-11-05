@@ -3987,6 +3987,7 @@ dependencies = [
 name = "listen-core"
 version = "0.40.2"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "directories",
  "rand 0.9.5",

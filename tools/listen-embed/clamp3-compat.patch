@@ -1,0 +1,25 @@
+diff --git a/preprocessing/audio/MERT_utils.py b/preprocessing/audio/MERT_utils.py
+index f5b970d..d1ee1d2 100644
+--- a/preprocessing/audio/MERT_utils.py
++++ b/preprocessing/audio/MERT_utils.py
+@@ -38,7 +38,7 @@ def load_audio(
+         torch.Tensor: waveform of shape (1, n_sample)
+     """
+     # TODO: deal with target_depth
+-    waveform, sample_rate = torchaudio.load(file_path)
++    import soundfile as _sf; _w, sample_rate = _sf.read(file_path, dtype="float32", always_2d=True); waveform = torch.from_numpy(_w.T.copy())
+     if waveform.shape[0] > 1:
+         if is_mono:
+             waveform = torch.mean(waveform, dim=0, keepdim=True)
+diff --git a/preprocessing/audio/configuration_musichubert.py b/preprocessing/audio/configuration_musichubert.py
+index 716e5f6..1726020 100644
+--- a/preprocessing/audio/configuration_musichubert.py
++++ b/preprocessing/audio/configuration_musichubert.py
+@@ -206,6 +206,7 @@ class MusicHubertConfig(PretrainedConfig):
+     ):
+         super().__init__(**kwargs, pad_token_id=pad_token_id, bos_token_id=bos_token_id, eos_token_id=eos_token_id)
+         self.hidden_size = hidden_size
++        self.conv_pos_batch_norm = kwargs.get("conv_pos_batch_norm", False)
+         self.feat_extract_norm = feat_extract_norm
+         self.feat_extract_activation = feat_extract_activation
+         self.conv_dim = list(conv_dim)
