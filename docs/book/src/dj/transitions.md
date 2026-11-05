@@ -40,6 +40,8 @@ The song analysis guesses from the sound where a singer is, and it often hears a
 
 Cutting a song short or skipping an intro costs the plan points for every second, so Listen only does it when the join is clearly better. Lyrics are not used when they do not fit the song: when they run past its end, or when the sound analysis hears singing mostly where the lyrics are silent, or the lyrics fit much better a few bars earlier or later (an offset, or the lyrics of another version). Plain (unsynced) lyrics are not used. A transition is planned at once with what is known; if the lyrics arrive later but well before the mix, it is planned again.
 
+While both songs play, Listen keeps the overall loudness steady: the sum of the two follows a straight line from the level of the outgoing song just before the mix to the level of the next song just after it. It knows how loud each part of a song is from the song analysis, so a blend over a quiet outro is lifted a little (at most 3 dB) and two loud choruses together are turned down (at most 6 dB). With **Volume levelling** on, each song's own gain is taken into account. Echo-outs and cuts have no overlap and are left as they are.
+
 For a beat-matched blend the two songs must run at the same speed. Listen speeds one or both songs up or down by a few percent without changing the pitch. With **Tempo ramps** on, the speed glides smoothly during the blend and returns to the natural speed of the new song afterwards. With it off, the tempo is matched for the whole blend at once, which can be heard on large differences.
 
 Songs whose tempo is double or half of the other (for example 70 and 140 BPM) are matched at that ratio instead of being sped up a lot.

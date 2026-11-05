@@ -169,6 +169,10 @@ pub struct TransitionPlan {
     pub eq: Vec<EqEvent>,
     /// Best stretch (outgoing file time) for the AI DJ to talk over: no lead vocal on either deck.
     pub voice_window: Option<(f64, f64)>,
+    /// Both decks' loudness across the blend for the equal-loudness trim
+    /// ([`crate::loudness::blend_trim`]); `None` for handovers or without analysed loudness.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub levels: Option<crate::loudness::BlendLevels>,
 }
 
 impl TransitionPlan {
@@ -190,6 +194,7 @@ impl TransitionPlan {
             gain: Envelope { points: vec![(0.0, 0.0, 1.0)] },
             eq: Vec::new(),
             voice_window: None,
+            levels: None,
         }
     }
 }
@@ -406,6 +411,12 @@ pub fn plan(out: &Features, inn: &Features, ctx: &PlanCtx) -> TransitionPlan {
 }
 
 pub(crate) fn plan_with(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
+    let mut p = plan_inner(out, inn, ctx, opts);
+    p.levels = crate::loudness::plan_levels(&p, out, inn);
+    p
+}
+
+fn plan_inner(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> TransitionPlan {
     let (Some(o), Some(i)) = (Side::new(out), Side::new(inn)) else {
         return fade_plan(out, inn, ctx, "no steady beat on one side");
     };
@@ -602,6 +613,7 @@ fn build_handover(o: &Side, i: &Side, h: Hand, why: &str) -> TransitionPlan {
         gain: Envelope { points: gain },
         eq,
         voice_window: None,
+        levels: None,
     }
 }
 
@@ -901,6 +913,7 @@ fn build(o: &Side, i: &Side, k: f64, c: Cand, ctx: &PlanCtx, opts: Opts) -> Tran
         gain: Envelope { points },
         eq,
         voice_window: (vw_b - vw_a > 0.5).then_some((vw_a, vw_b)),
+        levels: None,
     }
 }
 
@@ -964,6 +977,7 @@ fn fade_plan(out: &Features, inn: &Features, ctx: &PlanCtx, why: &str) -> Transi
         gain: Envelope { points: vec![(0.0, 1.0, 0.0), (secs, 0.0, 1.0)] },
         eq: Vec::new(),
         voice_window,
+        levels: None,
     }
 }
 

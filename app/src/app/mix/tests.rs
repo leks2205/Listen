@@ -542,9 +542,11 @@ fn incoming_deck_is_silent_until_it_starts_then_follows_the_envelope() {
         }
         let t = (out_t - p.out_mix_start_s) / s.mix.speed[out];
         let (g_out, g_in) = p.gain.gains_at(t);
-        let trim = if g_out > 0.0 && g_in > 0.0 { 0.85 } else { 1.0 };
+        // The equal-loudness trim from the plan's levels (levelling off: deck gains 0 dB).
+        let trim = listen_mix::loudness::blend_trim(&p, t, g_out, g_in, 0.0, 0.0);
+        assert!(p.levels.is_some(), "a beat blend between analysed songs carries levels");
         for (deck, g) in [(out, g_out), (inn, g_in)] {
-            let want = 100.0 * (g * trim).cbrt();
+            let want = 100.0 * (g * trim).min(1.0).cbrt();
             // Positions are extrapolated by a few µs between report and tick.
             assert!(
                 (s.deck_volume(deck) - want).abs() < 0.5,

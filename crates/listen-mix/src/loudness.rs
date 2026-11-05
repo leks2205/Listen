@@ -175,6 +175,238 @@ pub fn ramp_steps(from_db: f32, to_db: f32, step_s: f32) -> Vec<(f32, f32)> {
     out
 }
 
+// ---------------------------------------------------------------------------------------------
+// Blend gain: an equal-loudness crossfade (item 11).
+//
+// Two decks playing at once add up: a beat blend with both at full level is about +3 dB louder
+// than either, an equal-power fade over a quiet outro sounds like a hole. Instead of one fixed
+// trim, the plan carries the local loudness of both decks across the blend ([`BlendLevels`],
+// estimated from the song's integrated loudness and its per-bar energy curve, smoothed over 3 s
+// like EBU short-term loudness) and the engines trim both decks together so the summed loudness
+// follows a straight line from the outgoing level before the blend to the incoming level after it.
+
+/// Width of the loudness window (EBU short-term loudness).
+pub const LOCAL_WINDOW_S: f64 = 3.0;
+/// Reference stretch before / after the blend for its edge levels.
+pub const EDGE_REF_S: f64 = 4.0;
+/// Spacing of [`BlendLevels::points`].
+pub const LEVEL_STEP_S: f64 = 0.5;
+/// Largest blend trim boost (the deck stages clamp at unity on the desktop, the limiter takes peaks).
+pub const BLEND_MAX_BOOST_DB: f32 = 3.0;
+/// Largest blend trim cut.
+pub const BLEND_MAX_CUT_DB: f32 = -6.0;
+
+/// Per-bar loudness of a song in LUFS: the bar curve's dB shape anchored on the integrated loudness.
+#[derive(Debug, Clone)]
+pub struct LocalLevel {
+    /// Bar boundaries in file seconds (one more than `lufs`).
+    bounds: Vec<f64>,
+    lufs: Vec<f32>,
+}
+
+impl LocalLevel {
+    /// `None` without a plausible loudness. Without a bar curve the song is taken as flat.
+    pub fn new(f: &Features) -> Option<LocalLevel> {
+        if !plausible(f.lufs) {
+            return None;
+        }
+        if f.bars.energy.is_empty() {
+            let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
+            return Some(LocalLevel { bounds: vec![a, b.max(a + 1.0)], lufs: vec![f.lufs] });
+        }
+        // Same bars as the analyser's `bar_bounds`: the beat grid's bars, else 2 s windows.
+        let bounds: Vec<f64> = match f.grid.as_ref().filter(|g| g.bar_count() > 0) {
+            Some(g) => (0..=g.bar_count()).map(|b| f64::from(g.bar_time(b))).collect(),
+            None => {
+                let n = ((f.audio_end - f.audio_start) / 2.0).floor().max(0.0) as usize;
+                (0..=n).map(|b| f64::from(f.audio_start) + 2.0 * b as f64).collect()
+            }
+        };
+        let n = f.bars.energy.len().min(bounds.len().saturating_sub(1));
+        if n == 0 {
+            let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
+            return Some(LocalLevel { bounds: vec![a, b.max(a + 1.0)], lufs: vec![f.lufs] });
+        }
+        // The curve is 20·log10(rms / loudest bar) mapped −30..0 dB → 0..255.
+        let db: Vec<f32> = f.bars.energy[..n].iter().map(|&e| (f32::from(e) / 255.0 - 1.0) * 30.0).collect();
+        // Integrated loudness ≈ power mean of the bars above the relative gate (−10 LU, BS.1770).
+        let pmean = |v: &[f32]| v.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>() / v.len().max(1) as f32;
+        let ungated = 10.0 * pmean(&db).max(1e-12).log10();
+        let gated: Vec<f32> = db.iter().copied().filter(|&d| d > ungated - 10.0).collect();
+        let integrated = 10.0 * pmean(if gated.is_empty() { &db } else { &gated }).max(1e-12).log10();
+        let offset = f.lufs - integrated;
+        Some(LocalLevel { bounds: bounds[..=n].to_vec(), lufs: db.iter().map(|d| d + offset).collect() })
+    }
+
+    /// Loudness (LUFS) around file time `t`: power mean over [`LOCAL_WINDOW_S`], bars weighted by overlap.
+    /// Outside the analysed bars the nearest bar holds.
+    pub fn at(&self, t: f64) -> f32 {
+        let (a, b) = (t - LOCAL_WINDOW_S / 2.0, t + LOCAL_WINDOW_S / 2.0);
+        let (first, last) = (self.bounds[0], self.bounds[self.bounds.len() - 1]);
+        let (a, b) = if b <= first {
+            (first, first + 0.01)
+        } else if a >= last {
+            (last - 0.01, last)
+        } else {
+            (a.max(first), b.min(last))
+        };
+        let (mut p, mut w) = (0.0f64, 0.0f64);
+        for (i, l) in self.lufs.iter().enumerate() {
+            let ov = self.bounds[i + 1].min(b) - self.bounds[i].max(a);
+            if ov > 0.0 {
+                p += ov * 10f64.powf(f64::from(*l) / 10.0);
+                w += ov;
+            }
+        }
+        if w <= 0.0 { self.lufs[0] } else { (10.0 * (p / w).log10()) as f32 }
+    }
+
+    /// Mean loudness over file seconds `a..b` (power mean of [`Self::at`] every half second).
+    pub fn mean(&self, a: f64, b: f64) -> f32 {
+        let n = (((b - a) / LEVEL_STEP_S).ceil() as usize).max(1);
+        let p: f64 = (0..=n)
+            .map(|k| 10f64.powf(f64::from(self.at(a + (b - a) * k as f64 / n as f64)) / 10.0))
+            .sum::<f64>()
+            / (n + 1) as f64;
+        (10.0 * p.log10()) as f32
+    }
+}
+
+/// Both decks' local loudness across a blend, before the deck gains.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BlendLevels {
+    /// Outgoing level over the [`EDGE_REF_S`] before the blend (LUFS).
+    pub out_ref: f32,
+    /// Incoming level over the [`EDGE_REF_S`] after the blend.
+    pub in_ref: f32,
+    /// `(t, out, in)`: wall seconds from the blend start, both decks' loudness there (LUFS), every
+    /// [`LEVEL_STEP_S`]. Linear in between.
+    pub points: Vec<(f64, f32, f32)>,
+}
+
+impl BlendLevels {
+    /// Levels for a blend that starts at outgoing file time `out_start_s` and incoming `in_start_s`,
+    /// lasts `blend_s` wall seconds, with the decks at `out_speed` / `in_speed`.
+    pub fn new(
+        out: &Features,
+        inn: &Features,
+        out_start_s: f64,
+        in_start_s: f64,
+        blend_s: f64,
+        out_speed: f64,
+        in_speed: f64,
+    ) -> Option<BlendLevels> {
+        if blend_s <= 0.0 {
+            return None;
+        }
+        let (lo, li) = (LocalLevel::new(out)?, LocalLevel::new(inn)?);
+        let out_at = |t: f64| out_start_s + t * out_speed;
+        let in_at = |t: f64| in_start_s + t * in_speed;
+        let n = ((blend_s / LEVEL_STEP_S).ceil() as usize).max(1);
+        let points = (0..=n)
+            .map(|k| {
+                let t = blend_s * k as f64 / n as f64;
+                (t, lo.at(out_at(t)), li.at(in_at(t)))
+            })
+            .collect();
+        Some(BlendLevels {
+            out_ref: lo.mean(out_start_s - EDGE_REF_S * out_speed, out_start_s),
+            in_ref: li.mean(in_at(blend_s), in_at(blend_s) + EDGE_REF_S * in_speed),
+            points,
+        })
+    }
+
+    fn levels_at(&self, t: f64) -> (f32, f32) {
+        let p = &self.points;
+        let (Some(first), Some(last)) = (p.first(), p.last()) else { return (self.out_ref, self.in_ref) };
+        if t <= first.0 {
+            return (first.1, first.2);
+        }
+        if t >= last.0 {
+            return (last.1, last.2);
+        }
+        let i = p.partition_point(|q| q.0 <= t) - 1;
+        let (a, b) = (p[i], p[i + 1]);
+        let x = if b.0 > a.0 { ((t - a.0) / (b.0 - a.0)) as f32 } else { 1.0 };
+        (a.1 + (b.1 - a.1) * x, a.2 + (b.2 - a.2) * x)
+    }
+
+    /// Trim (dB) for both decks at wall second `t` of the blend, given the envelope gains there and
+    /// each deck's playback gain (levelling, 0 when off): the summed loudness then follows the line
+    /// from the outgoing edge level to the incoming one. Fades in and out with the overlap, so the
+    /// trim is 0 dB where only one deck sounds; clamped to [`BLEND_MAX_CUT_DB`]..[`BLEND_MAX_BOOST_DB`].
+    pub fn trim_db(&self, t: f64, g_out: f32, g_in: f32, gain_out_db: f32, gain_in_db: f32) -> f32 {
+        let blend_s = self.points.last().map_or(0.0, |p| p.0);
+        if g_out <= 0.0 || g_in <= 0.0 || blend_s <= 0.0 {
+            return 0.0;
+        }
+        let x = (t / blend_s).clamp(0.0, 1.0) as f32;
+        let from = self.out_ref + gain_out_db;
+        let to = self.in_ref + gain_in_db;
+        let target = from + (to - from) * x;
+        let (lo, li) = self.levels_at(t);
+        let (po, pi) = (g_out * g_out, g_in * g_in);
+        let sum = 10.0
+            * (po * 10f32.powf((lo + gain_out_db) / 10.0) + pi * 10f32.powf((li + gain_in_db) / 10.0))
+                .max(1e-12)
+                .log10();
+        overlap_weight(po, pi) * (target - sum).clamp(BLEND_MAX_CUT_DB, BLEND_MAX_BOOST_DB)
+    }
+}
+
+/// 1 where both decks are equally loud in the envelope, towards 0 where one fades out.
+fn overlap_weight(po: f32, pi: f32) -> f32 {
+    let s = po + pi;
+    if s <= 0.0 { 0.0 } else { (4.0 * po * pi / (s * s)).clamp(0.0, 1.0) }
+}
+
+/// Blend trim (linear) for one moment of a transition (contract C5): from the plan's
+/// [`BlendLevels`] when it has them, else equal-power (two decks at the same level). 1.0 for
+/// handovers (echo-out, cut: no overlapping dry signals) and where only one deck sounds.
+pub fn blend_trim(
+    plan: &crate::plan::TransitionPlan,
+    t: f64,
+    g_out: f32,
+    g_in: f32,
+    gain_out_db: f32,
+    gain_in_db: f32,
+) -> f32 {
+    use crate::plan::Kind;
+    if matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless) || g_out <= 0.0 || g_in <= 0.0 {
+        return 1.0;
+    }
+    let db = match &plan.levels {
+        Some(l) => l.trim_db(t, g_out, g_in, gain_out_db, gain_in_db),
+        None => {
+            let (po, pi) = (g_out * g_out, g_in * g_in);
+            overlap_weight(po, pi) * (-10.0 * (po + pi).log10()).clamp(BLEND_MAX_CUT_DB, BLEND_MAX_BOOST_DB)
+        }
+    };
+    db_to_factor(db)
+}
+
+/// The plan's [`BlendLevels`] from both songs' analyses (outgoing speed after its ramp).
+pub fn plan_levels(
+    plan: &crate::plan::TransitionPlan,
+    out: &Features,
+    inn: &Features,
+) -> Option<BlendLevels> {
+    use crate::plan::Kind;
+    if matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless) {
+        return None;
+    }
+    let out_speed = plan.out_ramp.map_or(1.0, |r| r.to);
+    BlendLevels::new(
+        out,
+        inn,
+        plan.out_mix_start_s,
+        plan.in_mix_start_s,
+        plan.blend_s,
+        out_speed,
+        plan.in_speed,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,5 +543,118 @@ mod tests {
     fn db_factor_roundtrip() {
         assert!((db_to_factor(-6.0206) - 0.5).abs() < 1e-4);
         assert!((factor_to_db(0.5) + 6.0206).abs() < 1e-3);
+    }
+
+    fn flat(lufs: f32, energy: u8) -> Features {
+        let mut f = feat(lufs);
+        f.bars.energy = vec![energy; f.bars.energy.len()];
+        f
+    }
+
+    fn levels(lo: f32, li: f32, blend_s: f64) -> BlendLevels {
+        BlendLevels::new(&flat(lo, 200), &flat(li, 200), 30.0, 10.0, blend_s, 1.0, 1.0).unwrap()
+    }
+
+    #[test]
+    fn local_level_follows_the_bar_curve() {
+        // Flat curve: the integrated loudness everywhere.
+        let l = LocalLevel::new(&flat(-9.0, 180)).unwrap();
+        for t in [0.0, 10.0, 33.3, 60.0, 500.0] {
+            assert!((l.at(t) + 9.0).abs() < 0.01, "{t}: {}", l.at(t));
+        }
+        // FeatBuilder: 8-bar intro/outro at 120 (−15.9 dB), body at 200 (−6.5 dB): 9.4 dB apart, the
+        // body (most of the song) near the integrated loudness.
+        let mut f = FeatBuilder::new(120.0, 96).build();
+        f.lufs = -9.0;
+        let l = LocalLevel::new(&f).unwrap();
+        let bar = f.grid.as_ref().unwrap().bar_time(1) - f.grid.as_ref().unwrap().bar_time(0);
+        let intro = l.at(f64::from(2.0 * bar));
+        let body = l.at(f64::from(16.0 * bar));
+        assert!((body + 9.0).abs() < 1.0, "body {body}");
+        assert!((body - intro - 9.4).abs() < 0.3, "intro {intro} body {body}");
+        // No loudness: nothing to go on. No curve: flat at the integrated loudness.
+        assert!(LocalLevel::new(&flat(-70.0, 200)).is_none());
+        let mut f = feat(-9.0);
+        f.bars.energy.clear();
+        let l = LocalLevel::new(&f).unwrap();
+        assert!((l.at(5.0) + 9.0).abs() < 1e-4 && (l.at(1e4) + 9.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn equal_loudness_trim() {
+        let l = levels(-10.0, -10.0, 8.0);
+        assert!((l.out_ref + 10.0).abs() < 0.01 && (l.in_ref + 10.0).abs() < 0.01);
+        // Both decks at full level: −3 dB keeps the sum where each one was.
+        assert!((l.trim_db(4.0, 1.0, 1.0, 0.0, 0.0) + 3.01).abs() < 0.05);
+        // Equal-power midpoint: already right.
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        assert!(l.trim_db(4.0, h, h, 0.0, 0.0).abs() < 0.05);
+        // One deck alone: no trim.
+        assert_eq!(l.trim_db(4.0, 1.0, 0.0, 0.0, 0.0), 0.0);
+        assert_eq!(l.trim_db(4.0, 0.0, 1.0, 0.0, 0.0), 0.0);
+        // Fading out with the overlap: small where one deck is nearly gone.
+        assert!(l.trim_db(0.5, 1.0, 0.1, 0.0, 0.0).abs() < 0.1);
+
+        // 6 LU apart (−8 out, −14 in), equal-power midpoint: the sum follows the straight line, so at
+        // half way it should be −11 LUFS. Without a trim it is 10·log10((10^-0.8 + 10^-1.4)/2) = −10.03.
+        let l = levels(-8.0, -14.0, 8.0);
+        let t = l.trim_db(4.0, h, h, 0.0, 0.0);
+        assert!((t + 0.97).abs() < 0.1, "{t}");
+        // Levelling brings both to −14: back to the equal case.
+        assert!(l.trim_db(4.0, h, h, -6.0, 0.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn trim_is_bounded() {
+        // A 20 LU hole in both decks (quiet breakdowns) is not filled by more than +3 dB.
+        let mut l = levels(-10.0, -10.0, 8.0);
+        for p in &mut l.points {
+            p.1 = -30.0;
+            p.2 = -30.0;
+        }
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        assert!((l.trim_db(4.0, h, h, 0.0, 0.0) - BLEND_MAX_BOOST_DB).abs() < 1e-4);
+        for p in &mut l.points {
+            p.1 = 0.0;
+            p.2 = 0.0;
+        }
+        assert!((l.trim_db(4.0, h, h, 0.0, 0.0) - BLEND_MAX_CUT_DB).abs() < 1e-4);
+    }
+
+    #[test]
+    fn plans_carry_levels_and_handovers_skip_the_trim() {
+        use crate::plan::{Envelope, Kind, PlanCtx, plan};
+        let (a, b) = (FeatBuilder::new(124.0, 64).build(), FeatBuilder::new(124.0, 64).build());
+        let mixing = listen_core::settings::Mixing::default();
+        let ctx = PlanCtx {
+            settings: &mixing,
+            out_position_s: 30.0,
+            voice_break: None,
+            out_genres: &[],
+            in_genres: &[],
+        };
+        let p = plan(&a, &b, &ctx);
+        assert!(!matches!(p.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless), "{}", p.reason);
+        let l = p.levels.as_ref().expect("a blend between analysed songs has levels");
+        assert!((l.points.last().unwrap().0 - p.blend_s).abs() < 1e-9);
+        // Survives a JSON round trip (Android gets plans as JSON), and old plans without it load.
+        let back: crate::plan::TransitionPlan =
+            serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        let (x, y) = (back.levels.unwrap(), l.clone());
+        assert_eq!(x.points.len(), y.points.len());
+        assert!(
+            x.points.iter().zip(&y.points).all(|(u, v)| (u.0 - v.0).abs() < 1e-9 && u.1 == v.1 && u.2 == v.2)
+        );
+
+        let mut cut = p.clone();
+        cut.kind = Kind::Cut;
+        assert_eq!(blend_trim(&cut, 1.0, 1.0, 1.0, 0.0, 0.0), 1.0);
+        // Without levels: equal power (both full → −3 dB, equal-power midpoint → unity).
+        let mut bare = p.clone();
+        bare.levels = None;
+        bare.gain = Envelope { points: vec![(0.0, 1.0, 0.0), (4.0, 1.0, 1.0), (8.0, 0.0, 1.0)] };
+        assert!((factor_to_db(blend_trim(&bare, 4.0, 1.0, 1.0, 0.0, 0.0)) + 3.01).abs() < 0.05);
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        assert!(factor_to_db(blend_trim(&bare, 4.0, h, h, 0.0, 0.0)).abs() < 0.05);
     }
 }

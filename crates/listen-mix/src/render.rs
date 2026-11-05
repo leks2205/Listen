@@ -7,6 +7,19 @@ use crate::plan::{EqTarget, Kind, SpeedRamp, TransitionPlan, Which};
 /// Renders the transition from `out` into `inn` (mono, `sr` Hz) with `context_s` seconds of context on
 /// either side.
 pub fn render(out: &[f32], inn: &[f32], sr: u32, plan: &TransitionPlan, context_s: f64) -> Vec<f32> {
+    render_with_gains(out, inn, sr, plan, context_s, (0.0, 0.0))
+}
+
+/// [`render`] with the decks' playback gains (levelling, dB) for the equal-loudness blend trim
+/// ([`crate::loudness::blend_trim`]); the samples themselves are not scaled by them.
+pub fn render_with_gains(
+    out: &[f32],
+    inn: &[f32],
+    sr: u32,
+    plan: &TransitionPlan,
+    context_s: f64,
+    deck_gains_db: (f32, f32),
+) -> Vec<f32> {
     let sr_f = f64::from(sr.max(1));
     let dt = 1.0 / sr_f;
     if plan.kind == Kind::Gapless {
@@ -28,6 +41,8 @@ pub fn render(out: &[f32], inn: &[f32], sr: u32, plan: &TransitionPlan, context_
     let mut buf = Vec::new();
     // Safety cap: 15 minutes of output.
     let cap = (900.0 * sr_f) as usize;
+    // The blend trim changes slowly: evaluated every 64 samples.
+    let mut trim = 1.0f32;
 
     while buf.len() < cap {
         if ramp_wall.is_none() && plan.out_ramp.is_some_and(|r| out_pos >= r.start_out_s) {
@@ -56,6 +71,15 @@ pub fn render(out: &[f32], inn: &[f32], sr: u32, plan: &TransitionPlan, context_
             Some(m) => plan.gain.gains_at(wall - m),
             None => (1.0, 0.0),
         };
+        if buf.len() % 64 == 0 {
+            trim = match mix_wall {
+                Some(m) => {
+                    crate::loudness::blend_trim(plan, wall - m, g_out, g_in, deck_gains_db.0, deck_gains_db.1)
+                }
+                None => 1.0,
+            };
+        }
+        let (g_out, g_in) = (g_out * trim, g_in * trim);
         let mut y = 0.0;
         if stop_wall.is_none() {
             y += g_out * fx_out.process(sample(out, out_pos * sr_f));
@@ -248,6 +272,7 @@ mod tests {
             gain: Envelope { points: vec![(0.0, 1.0, 0.0), (2.0, 0.0, 1.0)] },
             eq,
             voice_window: None,
+            levels: None,
         }
     }
 

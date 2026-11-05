@@ -120,11 +120,6 @@ fn eq_value(target: EqTarget) -> Option<(Filter, f32)> {
     })
 }
 
-/// No dry overlap: both decks may play at full level (no blend trim) and their beats need no lock.
-fn handover_kind(kind: Kind) -> bool {
-    matches!(kind, Kind::EchoOut { .. } | Kind::Cut)
-}
-
 /// The incoming song's audio for the second deck ([`MusicSource::mix_input`]). Fetched when the pair is
 /// planned (YouTube Music takes seconds) and kept across re-plans of the same song.
 #[derive(Debug, Default)]
@@ -815,8 +810,13 @@ impl Listen {
         if !self.mix.out_stopped {
             // The pre-roll bar stays silent whatever the envelope starts with.
             let (g_out, g_in) = if t < 0.0 { (1.0, 0.0) } else { plan.gain.gains_at(t) };
-            // Both decks at full level mid-blend add up; trim a little.
-            let trim = if g_out > 0.0 && g_in > 0.0 && !handover_kind(plan.kind) { 0.85 } else { 1.0 };
+            // Both decks together: an equal-loudness trim from the plan's levels and the decks' gains.
+            let trim = if t < 0.0 {
+                1.0
+            } else {
+                let (lo, li) = (self.level.decks[out_deck].applied_db, self.level.decks[in_deck].applied_db);
+                listen_mix::loudness::blend_trim(plan, t, g_out, g_in, lo, li)
+            };
             self.mix.gains[out_deck] = g_out * trim;
             self.mix.gains[in_deck] = g_in * trim;
         } else {
