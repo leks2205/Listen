@@ -2374,6 +2374,7 @@ impl Listen {
         // (`keep_going`), and a DJ set that lands must play (`dj_resume`).
         let stop = self.stop_player();
         self.playback.idle = true;
+        self.playback.last_pos = None;
         self.dj_queue_ended();
         stop
     }
@@ -2595,6 +2596,8 @@ impl Listen {
                 // Nothing plays any more; queued songs are started by `keep_going`.
                 self.playback.idle = true;
                 self.playback.position = Duration::ZERO;
+                // The song ended on its own: starting another one later is not a skip.
+                self.playback.last_pos = None;
                 self.dj_queue_ended();
             }
             PlayerEvent::Error(e) => {

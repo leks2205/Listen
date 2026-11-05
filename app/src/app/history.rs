@@ -473,4 +473,16 @@ mod tests {
         let _ = s.update(Message::PlayQueueItem(uid));
         assert_eq!(s.history.entries.len(), 1);
     }
+
+    #[test]
+    fn a_song_that_ended_on_its_own_is_no_skip_later() {
+        use crate::playback::PlayerMsg;
+        use listen_player::PlayerEvent;
+        // Ends below the scrobble point (seeked to the end), then the user starts another song.
+        let mut s = playing_at(10);
+        let _ = s.update(Message::Deck(0, PlayerMsg::Event(PlayerEvent::Ended)));
+        let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
+        let _ = s.update(Message::PlayQueueItem(uid));
+        assert!(s.history.entries.is_empty(), "{:?}", s.history.entries);
+    }
 }
