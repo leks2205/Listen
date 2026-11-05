@@ -76,7 +76,6 @@ fn tiles_and_lists_keep_their_text_inside_at_960_px() {
     let _ = s.update(Message::WindowResized(iced::Size::new(960.0, 1048.0)));
     let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
     let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 1048.0), s.view());
-    use iced_test::selector::Bounded;
     let value = ui.find("1222 h 13 min").expect("the week's listening time");
     let next = ui.find("different songs").expect("the third tile");
     let (v, n) = (value.bounds(), next.bounds());
