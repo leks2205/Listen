@@ -25,12 +25,15 @@ fn link_cost(a: &(Song, Option<FlowFeatures>), b: &(Song, Option<FlowFeatures>),
     step_cost(a.1.as_ref(), b.1.as_ref(), &[], ctx, ctx.timbre.as_ref()) + repeat_penalty(&[&a.0], &b.0, ctx)
 }
 
-/// Sum of the link costs along `order` (indices into `songs`), and the number of links. Used to compare
-/// an order before and after [`order_all`].
+/// Sum of the link costs between the analysed songs of `order` (indices into `songs`) in the order they
+/// come, unanalysed ones skipped, and the number of those links. That chain is what [`order_all`]
+/// orders; links into unanalysed songs cost a fixed neutral amount that says nothing about the flow.
+/// Used to compare an order before and after [`order_all`].
 pub fn path_cost(songs: &[(Song, Option<FlowFeatures>)], order: &[usize], ctx: &FlowCtx) -> (f32, usize) {
     let ctx = list_ctx(songs, ctx);
-    let total = order.windows(2).map(|w| link_cost(&songs[w[0]], &songs[w[1]], &ctx)).sum();
-    (total, order.len().saturating_sub(1))
+    let chain: Vec<usize> = order.iter().copied().filter(|&i| songs[i].1.is_some()).collect();
+    let total = chain.windows(2).map(|w| link_cost(&songs[w[0]], &songs[w[1]], &ctx)).sum();
+    (total, chain.len().saturating_sub(1))
 }
 
 /// The scorer context for a fixed list: no recent-artist penalty (every song is in the list anyway),
@@ -69,7 +72,12 @@ pub fn order_all(songs: &[(Song, Option<FlowFeatures>)], first: Option<usize>, c
             }
         }
     }
-    let path = improve(nearest_neighbour(&cost, n), &cost, n);
+    // Improved from the greedy path and from the original order; the cheaper wins, so the result is
+    // never worse than the list as it was.
+    let length = |p: &[usize]| p.windows(2).map(|w| cost[w[0] * n + w[1]]).sum::<f32>();
+    let greedy = improve(nearest_neighbour(&cost, n), &cost, n);
+    let kept = improve((0..n).collect(), &cost, n);
+    let path = if length(&kept) + EPS < length(&greedy) { kept } else { greedy };
 
     let mut out = Vec::with_capacity(songs.len());
     out.extend(first);
@@ -343,6 +351,41 @@ mod tests {
         let mut short = Queue::new();
         short.set(mk(&[100, 120]), 1);
         assert_eq!(order_queue(&mut short, flow_of, &FlowCtx::default()), QueueOrder::Nothing);
+    }
+
+    #[test]
+    fn never_worse_than_the_list_as_it_was() {
+        // Mostly unanalysed lists (a few percent analysed, as in a big liked-songs copy): the logged
+        // cost counts only analysed links, and the order never raises it.
+        let mut x: u32 = 777;
+        let mut rnd = || {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x
+        };
+        let ctx = FlowCtx::default();
+        for round in 0..40 {
+            let n = 20 + (rnd() % 300) as usize;
+            let songs: Vec<_> = (0..n)
+                .map(|i| {
+                    if rnd() % 100 < 6 {
+                        let bpm = 80.0 + (rnd() % 80) as f32;
+                        let k = (rnd() % 12) as u8 + 1;
+                        let e = (rnd() % 100) as f32 / 100.0;
+                        entry(&format!("s{i}"), &format!("A{}", rnd() % 15), bpm, k, e)
+                    } else {
+                        (song(&format!("u{i}"), &format!("U{}", rnd() % 15), None, None), None)
+                    }
+                })
+                .collect();
+            let o = order_all(&songs, Some(0), &ctx);
+            assert!(is_permutation(&o, n));
+            let (before, links) = path_cost(&songs, &(0..n).collect::<Vec<_>>(), &ctx);
+            let (after, links_after) = path_cost(&songs, &o, &ctx);
+            assert_eq!(links, links_after, "round {round}");
+            assert!(after <= before + 1e-3, "round {round}: {after} > {before}");
+        }
     }
 
     #[test]

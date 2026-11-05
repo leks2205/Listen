@@ -62,7 +62,7 @@ pub struct SmoothOrder {
 
 impl Listen {
     /// "Order for smooth mixing": the playing order of `songs` (first kept when `keep_first`), analysed
-    /// songs in flow order, unanalysed ones after them in their order. Logs mean link cost before/after.
+    /// songs in flow order, unanalysed ones after them in their order. Logs the mean link cost between analysed songs before/after.
     pub(super) fn smooth_order(&self, songs: &[Song], keep_first: bool) -> SmoothOrder {
         let lookup = self.flow_lookup();
         let annotated: Vec<(Song, Option<FlowFeatures>)> =
@@ -78,7 +78,7 @@ impl Listen {
         };
         let identity: Vec<usize> = (0..songs.len()).collect();
         tracing::info!(
-            "smooth order: {} songs ({analysed} analysed), mean link cost {:.3} → {:.3}, {:.0} ms",
+            "smooth order: {} songs ({analysed} analysed), mean link cost between analysed songs {:.3} → {:.3}, {:.0} ms",
             songs.len(),
             mean(&identity),
             mean(&order),
