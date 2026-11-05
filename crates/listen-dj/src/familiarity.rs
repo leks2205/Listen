@@ -150,22 +150,15 @@ pub fn mix_buckets(heavy: Vec<Song>, rediscover: Vec<Song>, n: usize) -> Vec<Son
 #[cfg(test)]
 mod tests {
     use super::*;
-    use listen_core::model::{ArtistRef, ServerId, SourceKind};
 
+    /// A played entry (built from JSON so fields added to `Entry` later keep their defaults).
     fn entry(title: &str, artist: &str, ts: i64) -> Entry {
-        Entry {
-            ts,
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            song_id: format!("{title}-{artist}"),
-            status: PlayStatus::Played,
-            title: title.into(),
-            artists: vec![ArtistRef { id: None, name: artist.into() }],
-            album: None,
-            album_id: None,
-            image: None,
-            duration_secs: 200,
-        }
+        serde_json::from_value(serde_json::json!({
+            "ts": ts, "server_id": "s", "source": "subsonic", "song_id": format!("{title}-{artist}"),
+            "status": "played", "title": title, "artists": [{"id": null, "name": artist}],
+            "album": null, "album_id": null, "image": null, "duration_secs": 200
+        }))
+        .expect("entry JSON")
     }
 
     const NOW: i64 = 1_800_000_000;
