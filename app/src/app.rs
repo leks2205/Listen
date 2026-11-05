@@ -727,6 +727,8 @@ pub struct AutoDjFill {
 pub enum Message {
     /// YouTube's loudness of a video (volume levelling's fallback): id, `loudnessDb`.
     YtmLoudness(String, Result<Option<f32>, String>),
+    /// mpv's answer to a levelling `af-command` (deck, dB).
+    LevelSent(u8, f32, Result<(), String>),
     /// A file was dropped onto the window (cookies file / Feishin settings).
     FileDropped(std::path::PathBuf),
     Navigate(Route),
@@ -3890,6 +3892,9 @@ impl Listen {
                 }
             }
             Message::Deck(deck, PlayerMsg::Event(event)) => {
+                if event == PlayerEvent::Restarted {
+                    self.levelling_on_restart(deck);
+                }
                 if usize::from(deck) != self.decks.active {
                     // The idle deck (DJ transitions) reports to the mixer.
                     return self.mix_on_idle_event(usize::from(deck), event);
@@ -3904,6 +3909,7 @@ impl Listen {
             Message::SubstituteToggle => return self.substitute_toggle(),
             Message::PlayerDone(Ok(())) => {}
             Message::YtmLoudness(id, r) => self.on_ytm_loudness(id, r),
+            Message::LevelSent(deck, db, r) => self.on_level_sent(deck, db, r),
             Message::PlayerDone(Err(e)) => tracing::warn!("player/server command failed: {e}"),
             Message::ArtistsLoaded(result) => {
                 self.library.artists_loading = false;

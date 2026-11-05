@@ -164,31 +164,53 @@ async fn speed_and_af_commands_on_the_deck_chain() {
     assert!(f.player.af_command(DECK_MIX_LABEL, "g", "-6", "lo").await.is_err());
 }
 
+/// RMS level (dBFS) of the last frames through the `st` probe after the levelling stage.
+async fn probe_rms(f: &Fixture) -> f64 {
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let meta = f.player.mpv().get_property("af-metadata/st").await.expect("probe metadata");
+    meta["lavfi.astats.Overall.RMS_level"]
+        .as_str()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| panic!("no RMS in {meta}"))
+}
+
 /// Volume levelling: the limiter stage ends the deck chain, takes the song's gain live as
-/// `level_in`, and its delay compensation keeps the cue exact (both decks stay in time).
+/// `level_in` once the graph exists, and its delay compensation keeps the cue exact (both
+/// decks stay in time). mpv rebuilds the graph from the `af` string on a seek, so the app sends
+/// the gain again after every `Restarted`. Needs mpv (not skipped: this is the only check
+/// that the gain is audible).
 #[tokio::test(flavor = "multi_thread")]
 async fn levelling_stage_takes_gain_live() {
-    let Some(mut f) = deck("lvl").await else { return };
+    let mut f = deck("lvl").await.expect("this test needs mpv (LISTEN_MPV)");
     let p = Playback::default();
-    let chain = with_levelling(&p, deck_audio_filters(&p), 1.0);
+    let probe = ",@st:lavfi=[astats=metadata=1:reset=1:measure_overall=RMS_level:measure_perchannel=none]";
+    let chain = with_levelling(&p, deck_audio_filters(&p), 1.0) + probe;
     if f.player.set_af(&chain).await.is_err() {
-        let fallback = with_levelling(&p, deck_audio_filters_with(&p, DECK_TEMPO_FALLBACK), 1.0);
+        let fallback = with_levelling(&p, deck_audio_filters_with(&p, DECK_TEMPO_FALLBACK), 1.0) + probe;
         f.player.set_af(&fallback).await.expect("levelling chain accepted");
     }
     let af = f.player.mpv().get_property("af").await.unwrap();
     let labels: Vec<_> = af.as_array().unwrap().iter().map(|e| e["label"].as_str().unwrap_or("")).collect();
-    assert_eq!(labels, ["mix", "ts", LEVELLING_LABEL]);
+    assert_eq!(labels, ["mix", "ts", LEVELLING_LABEL, "st"]);
+    // No graph before a file plays: refused (the app retries).
+    assert!(f.player.af_command(LEVELLING_LABEL, "level_in", "0.5", LEVELLING_TARGET).await.is_err());
 
     f.player.load(&f.track, Some(Duration::from_secs_f64(2.5)), true).await.unwrap();
     wait_for(&mut f.rx, &PlayerEvent::Restarted, &NOT_EXPECTED).await;
     let pts = f.player.audio_pts().await.unwrap().unwrap();
     assert!((pts.pts - 2.5).abs() < 0.01, "cue unaffected by the limiter: {pts:?}");
-    for factor in ["1.995262", "0.1", "1"] {
-        f.player
-            .af_command(LEVELLING_LABEL, "level_in", factor, LEVELLING_TARGET)
-            .await
-            .unwrap_or_else(|e| panic!("level_in={factor}: {e}"));
-    }
+    f.player.set_paused(false).await.unwrap();
+    let unity = probe_rms(&f).await;
+    f.player.af_command(LEVELLING_LABEL, "level_in", "0.1", LEVELLING_TARGET).await.expect("live level_in");
+    let cut = probe_rms(&f).await;
+    assert!((unity - cut - 20.0).abs() < 1.0, "−20 dB live: {unity:.1} → {cut:.1} dBFS");
+    // A seek rebuilds the graph from the chain string (level_in=1): the live value is gone.
+    f.player.seek(Duration::from_secs(1)).await.unwrap();
+    wait_for(&mut f.rx, &PlayerEvent::Restarted, &NOT_EXPECTED).await;
+    let rebuilt = probe_rms(&f).await;
+    assert!((rebuilt - unity).abs() < 1.0, "rebuilt at the chain's gain: {rebuilt:.1} dBFS");
+    f.player.af_command(LEVELLING_LABEL, "level_in", "0.1", LEVELLING_TARGET).await.expect("sent again");
+    assert!((probe_rms(&f).await - cut).abs() < 1.0);
     assert!(f.player.af_command(LEVELLING_LABEL, "level_in", "1", "alimiter@x").await.is_err());
 }
 

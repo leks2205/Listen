@@ -3,6 +3,10 @@
 //! `level_in` of an `alimiter` at the end of each deck's `af` chain, so boosts are limited.
 //! A new song gets its gain at once; a changed setting or a late loudness value ramps at most
 //! 1 dB per 50 ms (`ramp_toward` on the fade clock).
+//!
+//! mpv builds a deck's lavfi graph from the `af` string when audio starts and again after every
+//! seek or new file, so a live `af-command` is lost then (and fails before the graph exists):
+//! a value counts as sent only once mpv took it, and each `Restarted` of a deck sends it again.
 
 use super::{Listen, Message, err};
 use iced::Task;
@@ -28,7 +32,7 @@ pub struct DeckLevel {
     pub target: Option<GainDb>,
     /// The gain on the deck now (dB; ramps toward `target`).
     pub applied_db: f32,
-    /// Last value sent to mpv.
+    /// Last value mpv took (or is being sent); `None` sends the applied gain again.
     sent_db: Option<f32>,
 }
 
@@ -68,6 +72,18 @@ impl DeckLevel {
             self.sent_db = Some(self.applied_db);
             self.applied_db
         })
+    }
+
+    /// mpv refused `db` (no graph yet): send again on the next step unless something newer went out.
+    fn send_failed(&mut self, db: f32) {
+        if self.sent_db == Some(db) {
+            self.sent_db = None;
+        }
+    }
+
+    /// mpv rebuilt the deck's graph from the `af` string (seek, new file): the live gain is gone.
+    fn graph_rebuilt(&mut self) {
+        self.sent_db = None;
     }
 }
 
@@ -195,9 +211,10 @@ impl Listen {
             }
             if let Some(db) = send {
                 let arg = format!("{:.6}", loudness::db_to_factor(db));
+                let deck = deck as u8;
                 tasks.push(Task::perform(
                     async move { player.af_command(LEVELLING_LABEL, "level_in", &arg, LEVELLING_TARGET).await },
-                    |r| Message::PlayerDone(r.map_err(err)),
+                    move |r| Message::LevelSent(deck, db, r.map_err(err)),
                 ));
             }
         }
@@ -239,6 +256,22 @@ impl Listen {
             ));
         }
         Task::batch(tasks)
+    }
+
+    /// mpv's answer to a level `af-command`.
+    pub(super) fn on_level_sent(&mut self, deck: u8, db: f32, r: Result<(), String>) {
+        if let Err(e) = r {
+            // Normal right after a load, before mpv has built the graph; the next tick retries.
+            tracing::debug!("levelling: deck {deck} did not take {db:+.2} dB yet: {e}");
+            self.level.decks[usize::from(deck).min(1)].send_failed(db);
+        }
+    }
+
+    /// A deck (re)started playback: its graph was rebuilt with the gain of the `af` string.
+    pub(super) fn levelling_on_restart(&mut self, deck: u8) {
+        if self.level.chain_on {
+            self.level.decks[usize::from(deck).min(1)].graph_rebuilt();
+        }
     }
 
     pub(super) fn on_ytm_loudness(&mut self, id: String, r: Result<Option<f32>, String>) {
@@ -295,6 +328,24 @@ mod tests {
         // The next song under a new source generation snaps again.
         d.retarget(Some(2), g(4.0), Levelling::Normal, 1);
         assert_eq!(d.step(0.03), Some(4.0));
+    }
+
+    #[test]
+    fn refused_or_lost_gain_is_sent_again() {
+        let mut d = DeckLevel::default();
+        d.retarget(Some(1), g(-6.0), Levelling::Normal, 0);
+        assert_eq!(d.step(0.03), Some(-6.0));
+        // Sent before mpv had a graph: refused, so the next step sends it again.
+        d.send_failed(-6.0);
+        assert_eq!(d.step(0.03), Some(-6.0));
+        assert_eq!(d.step(0.03), None);
+        // A refusal of an older value does not resend the newer one.
+        d.send_failed(-5.0);
+        assert_eq!(d.step(0.03), None);
+        // A seek rebuilt the graph from the chain string: the gain goes out again.
+        d.graph_rebuilt();
+        assert_eq!(d.step(0.03), Some(-6.0));
+        assert_eq!(d.step(0.03), None);
     }
 
     #[test]
