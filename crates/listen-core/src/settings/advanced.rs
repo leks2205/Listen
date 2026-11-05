@@ -123,40 +123,44 @@ pub struct ImportReport {
     pub issues: Vec<String>,
 }
 
+/// Merges `incoming` into `root` at `path` key by key: objects are walked into (so a partial section keeps
+/// its other keys), anything else replaces the value there if the settings still load with it. A value
+/// that doesn't fit is reported as `path: reason` and skipped; a key the settings don't know is ignored.
 fn apply(root: &mut Value, path: &mut Vec<String>, incoming: &Value, report: &mut (usize, Vec<String>)) {
+    let current = path.iter().try_fold(&*root, |c, k| c.get(k.as_str()));
+    if let (Some(Value::Object(_)), Value::Object(inc)) = (current, incoming) {
+        for (k, v) in inc {
+            path.push(k.clone());
+            apply(root, path, v, report);
+            path.pop();
+        }
+        return;
+    }
+    if current == Some(incoming) {
+        report.0 += 1;
+        return;
+    }
     let mut candidate = root.clone();
+    let Some((last, parents)) = path.split_last() else { return };
     let mut slot = &mut candidate;
-    for k in path.iter() {
+    for k in parents {
         match slot.get_mut(k.as_str()) {
             Some(next) => slot = next,
             None => return,
         }
     }
-    *slot = incoming.clone();
-    match serde_json::from_value::<Settings>(candidate.clone()) {
-        Ok(_) => {
-            *root = candidate;
-            report.0 += 1;
-        }
-        Err(e) => {
-            let mut current = &*root;
-            for k in path.iter() {
-                current = current.get(k.as_str()).unwrap_or(&Value::Null);
-            }
-            if let (Value::Object(inc), Value::Object(_)) = (incoming, current) {
-                for (k, v) in inc {
-                    path.push(k.clone());
-                    // An unknown nested key is ignored by serde; only known ones can fail.
-                    let known = path.iter().try_fold(&*root, |c, k| c.get(k.as_str())).is_some();
-                    if known {
-                        apply(root, path, v, report);
-                    }
-                    path.pop();
-                }
-            } else {
-                report.1.push(format!("{}: {e}", path.join(".")));
+    let Value::Object(map) = slot else { return };
+    map.insert(last.clone(), incoming.clone());
+    match serde_json::from_value::<Settings>(candidate) {
+        Ok(settings) => {
+            // Re-serialise so an unknown key (dropped by serde) doesn't linger or count.
+            let Ok(loaded) = serde_json::to_value(&settings) else { return };
+            if path.iter().try_fold(&loaded, |c, k| c.get(k.as_str())).is_some() {
+                *root = loaded;
+                report.0 += 1;
             }
         }
+        Err(e) => report.1.push(format!("{}: {e}", path.join("."))),
     }
 }
 
@@ -224,6 +228,87 @@ mod tests {
         assert!(r.settings.history.enabled, "bad value keeps the old one");
         assert!(r.issues.iter().any(|i| i.starts_with("history.enabled")), "{:?}", r.issues);
         assert!(r.issues.iter().any(|i| i.starts_with("nonsense")), "{:?}", r.issues);
+    }
+
+    fn with_profile() -> Settings {
+        let mut s = Settings::default();
+        s.playback.volume = 56;
+        s.playback.headphone_eq = true;
+        let profile = crate::peq::Profile {
+            name: "HD 600".into(),
+            source: "oratory1990".into(),
+            preamp: -6.0,
+            filters: vec![crate::peq::Filter {
+                kind: crate::peq::FilterKind::Peak,
+                freq: 100.0,
+                gain: 3.0,
+                q: 0.7,
+            }],
+        };
+        s.playback.headphone_profiles.insert("auto".into(), profile);
+        s
+    }
+
+    #[test]
+    fn partial_section_keeps_untouched_keys() {
+        let base = with_profile();
+        let r = import_json(&base, r#"{"playback":{"headphone_eq":false}}"#).unwrap();
+        assert!(r.issues.is_empty(), "{:?}", r.issues);
+        assert_eq!(r.applied, 1);
+        assert!(!r.settings.playback.headphone_eq);
+        assert_eq!(r.settings.playback.volume, 56);
+        assert_eq!(r.settings.playback.headphone_profiles, base.playback.headphone_profiles);
+        let mut want = base.clone();
+        want.playback.headphone_eq = false;
+        assert_eq!(r.settings, want, "nothing else moved");
+
+        let mut mixing = Settings::default();
+        mixing.mixing.long_blend_bars = 32;
+        mixing.mixing.bass_swap = false;
+        let r = import_json(&mixing, r#"{"mixing":{"max_tempo_pct":4.0}}"#).unwrap();
+        assert_eq!(r.settings.mixing.max_tempo_pct, 4.0);
+        assert_eq!(r.settings.mixing.long_blend_bars, 32);
+        assert!(!r.settings.mixing.bass_swap);
+    }
+
+    #[test]
+    fn nested_map_entries_merge_and_change_one_field() {
+        let base = with_profile();
+        // One field of an existing profile, and a new profile next to it.
+        let json = r#"{"playback":{"headphone_profiles":{
+            "auto":{"preamp":-3.0},
+            "usb":{"name":"DT 770","source":"crinacle","preamp":-2.0,"filters":[]}}}}"#;
+        let r = import_json(&base, json).unwrap();
+        assert!(r.issues.is_empty(), "{:?}", r.issues);
+        let profiles = &r.settings.playback.headphone_profiles;
+        assert_eq!(profiles["auto"].preamp, -3.0);
+        assert_eq!(profiles["auto"].name, "HD 600");
+        assert_eq!(profiles["auto"].filters.len(), 1);
+        assert_eq!(profiles["usb"].name, "DT 770");
+        assert_eq!(r.settings.playback.volume, 56);
+    }
+
+    #[test]
+    fn bad_leaf_in_a_partial_section_is_refused_alone() {
+        let base = with_profile();
+        let json = r#"{"playback":{"volume":"banana","headphone_eq":false,"no_such_key":1},
+            "lyrics":{"font_size":31.0}}"#;
+        let r = import_json(&base, json).unwrap();
+        assert_eq!(r.settings.playback.volume, 56, "bad value keeps the old one");
+        assert!(!r.settings.playback.headphone_eq);
+        assert_eq!(r.settings.lyrics.font_size, 31.0);
+        assert_eq!(r.issues.len(), 1, "{:?}", r.issues);
+        assert!(r.issues[0].starts_with("playback.volume"), "{:?}", r.issues);
+        assert_eq!(r.applied, 2, "the unknown key is ignored, not counted");
+        assert_eq!(r.settings.playback.headphone_profiles, base.playback.headphone_profiles);
+    }
+
+    #[test]
+    fn full_export_round_trips_onto_changed_settings() {
+        let s = with_profile();
+        let r = import_json(&Settings::default(), &export_json(&s, "1")).unwrap();
+        assert!(r.issues.is_empty(), "{:?}", r.issues);
+        assert_eq!(r.settings, s);
     }
 
     #[test]
