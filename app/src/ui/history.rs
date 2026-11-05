@@ -164,11 +164,16 @@ fn duration_text(secs: u64) -> String {
 fn tile<'a>(state: &'a Listen, value: String, name: &'static str) -> Element<'a, Message> {
     let t = state.tokens;
     container(
-        column![label_w(value, 28.0, t.foreground, Weight::Bold), label(name, metrics::font_sm(), t.muted)]
-            .spacing(metrics::space_xs()),
+        column![
+            label_w(value, 28.0, t.foreground, Weight::Bold)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            label(name, metrics::font_sm(), t.muted)
+        ]
+        .spacing(metrics::space_xs()),
     )
     .padding(metrics::space_lg())
     .width(Length::FillPortion(1))
+    .clip(true)
     .style(move |_| container::Style {
         background: Some(iced::Background::Color(t.surface)),
         border: iced::Border { color: t.border, width: 1.0, radius: metrics::radius_md().into() },
@@ -198,13 +203,16 @@ fn top_list<'a>(state: &'a Listen, title: &'static str, items: &'a [Ranked]) -> 
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
             column![
-                label_w(r.name.clone(), metrics::font_md(), t.foreground, Weight::Medium),
-                label(detail, metrics::font_xs(), t.muted),
+                label_w(r.name.clone(), metrics::font_md(), t.foreground, Weight::Medium)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+                label(detail, metrics::font_xs(), t.muted)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             ]
-            .spacing(2),
+            .spacing(2)
+            .width(Length::Fill),
         ]);
     }
-    container(col).width(Length::FillPortion(1)).into()
+    container(col).width(Length::FillPortion(1)).clip(true).into()
 }
 
 pub fn stats(state: &Listen) -> Element<'_, Message> {
@@ -303,7 +311,8 @@ fn week_tile<'a>(
     let t = state.tokens;
     container(
         column![
-            label_w(value, 28.0, t.foreground, Weight::Bold),
+            label_w(value, 28.0, t.foreground, Weight::Bold)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             label(name, metrics::font_sm(), t.muted),
             label(versus(before, now), metrics::font_xs(), if now >= before { t.primary } else { t.muted }),
         ]
@@ -311,6 +320,7 @@ fn week_tile<'a>(
     )
     .padding(metrics::space_lg())
     .width(Length::FillPortion(1))
+    .clip(true)
     .style(move |_| container::Style {
         background: Some(iced::Background::Color(t.surface)),
         border: iced::Border { color: t.border, width: 1.0, radius: metrics::radius_md().into() },
@@ -399,11 +409,14 @@ fn owned_list<'a>(state: &'a Listen, title: &'static str, items: Vec<Ranked>) ->
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
             column![
-                label_w(r.name, metrics::font_md(), t.foreground, Weight::Medium),
-                label(crate::i18n::trf("{} • {} plays", &[&r.detail, &r.plays]), metrics::font_xs(), t.muted),
+                label_w(r.name, metrics::font_md(), t.foreground, Weight::Medium)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+                label(crate::i18n::trf("{} • {} plays", &[&r.detail, &r.plays]), metrics::font_xs(), t.muted)
+                    .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
             ]
-            .spacing(2),
+            .spacing(2)
+            .width(Length::Fill),
         ]);
     }
-    container(col).width(Length::FillPortion(1)).into()
+    container(col).width(Length::FillPortion(1)).clip(true).into()
 }

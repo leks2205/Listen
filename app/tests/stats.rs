@@ -54,3 +54,37 @@ fn the_week_view_shows_new_artists_skips_and_the_change() {
     assert!(!has_text(&s, "New artists this week"));
     assert!(has_text(&s, "Your listening, all time"));
 }
+
+/// QA bug 45: at a 960 px window the tile values ("8 Std. 48 Min.") and long song names ran into the
+/// next tile or column. Values and names now wrap inside their box.
+#[test]
+fn tiles_and_lists_keep_their_text_inside_at_960_px() {
+    let (mut s, _) = Listen::boot(&Args { demo: true, ephemeral: true, ..Args::default() });
+    s.history.entries.clear();
+    let song = s.queue.current().unwrap().song.clone();
+    let now = history::now_secs();
+    let long = "I'm gonna sing a very long title (Narration by somebody) [special medley edition]";
+    for i in 0..400 {
+        let mut e = Entry::new(&song, now - 3_600 - i * 60);
+        e.duration_secs = 11_000;
+        e.title = long.into();
+        e.artists = vec![ArtistRef { id: None, name: "Artist".into() }];
+        s.history.entries.push(e);
+    }
+    let _ = s.update(Message::History(HistoryMsg::Weeks));
+    let _ = s.update(Message::Navigate(Route::Stats));
+    let _ = s.update(Message::WindowResized(iced::Size::new(960.0, 1048.0)));
+    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
+    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 1048.0), s.view());
+    use iced_test::selector::Bounded;
+    let value = ui.find("1222 h 13 min").expect("the week's listening time");
+    let next = ui.find("different songs").expect("the third tile");
+    let (v, n) = (value.bounds(), next.bounds());
+    assert!(v.x + v.width < n.x, "the time {v:?} ends before the next tile's text {n:?}");
+    assert!(v.height > 40.0, "the time wraps to two lines at 960 px: {v:?}");
+    let name = ui.find(long).expect("the long song name");
+    let artists = ui.find("Top artists").expect("the artists column");
+    let (a, b) = (name.bounds(), artists.bounds());
+    assert!(a.x + a.width < b.x, "the song name {a:?} stays left of the artists column {b:?}");
+    assert!(a.height > 30.0, "the long song name wraps inside its column: {a:?}");
+}
