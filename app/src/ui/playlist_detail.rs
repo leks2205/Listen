@@ -50,7 +50,7 @@ pub fn song_list<'a>(
         column![
             label_w(kind, metrics::font_md(), t.foreground, Weight::Semibold),
             super::header_title(title, t.foreground),
-            label(meta, metrics::font_md(), t.muted),
+            label(meta, metrics::font_md(), t.muted).wrapping(iced::widget::text::Wrapping::Word),
             play_btn,
         ]
         .spacing(metrics::space_sm()),

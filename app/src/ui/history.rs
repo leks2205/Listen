@@ -83,8 +83,9 @@ pub fn learnable(state: &Listen) -> Element<'_, Message> {
         return container(
             column![
                 label_w("Learnable songs", 36.0, t.foreground, Weight::Bold),
-                label(LEARNABLE_BLURB, metrics::font_md(), t.muted),
-                label(text, metrics::font_md(), t.muted),
+                label(LEARNABLE_BLURB, metrics::font_md(), t.muted)
+                    .wrapping(iced::widget::text::Wrapping::Word),
+                label(text, metrics::font_md(), t.muted).wrapping(iced::widget::text::Wrapping::Word),
             ]
             .spacing(metrics::space_md()),
         )
@@ -276,7 +277,8 @@ pub fn stats(state: &Listen) -> Element<'_, Message> {
             "Listening time counts the full length of each song you played past the scrobble point. A song you leave for another one before that point counts as skipped, never as played.",
             metrics::font_xs(),
             t.muted
-        ),
+        )
+        .wrapping(iced::widget::text::Wrapping::Word),
     ]
     .spacing(metrics::space_lg());
     page(state, body)
@@ -313,8 +315,9 @@ fn week_tile<'a>(
         column![
             label_w(value, 28.0, t.foreground, Weight::Bold)
                 .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
-            label(name, metrics::font_sm(), t.muted),
-            label(versus(before, now), metrics::font_xs(), if now >= before { t.primary } else { t.muted }),
+            label(name, metrics::font_sm(), t.muted).wrapping(iced::widget::text::Wrapping::WordOrGlyph),
+            label(versus(before, now), metrics::font_xs(), if now >= before { t.primary } else { t.muted })
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
         ]
         .spacing(metrics::space_xs()),
     )
@@ -388,7 +391,8 @@ fn weeks<'a>(state: &'a Listen, periods: impl Into<Element<'a, Message>>) -> Col
             "Rolling windows: this week is the last 7 days, last week the 7 days before, 4 weeks the last 28 days. A new artist has a play this week and none before it.",
             metrics::font_xs(),
             t.muted
-        ),
+        )
+        .wrapping(iced::widget::text::Wrapping::Word),
     ]
     .spacing(metrics::space_lg())
 }

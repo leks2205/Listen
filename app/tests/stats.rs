@@ -87,3 +87,30 @@ fn tiles_and_lists_keep_their_text_inside_at_960_px() {
     assert!(a.x + a.width < b.x, "the song name {a:?} stays left of the artists column {b:?}");
     assert!(a.height > 30.0, "the long song name wraps inside its column: {a:?}");
 }
+
+/// QA bug 108: the bug-45 clip cut the last letter of the German comparison line ("+174 % ggü.
+/// letzter Woch") at 960 px. The line now wraps inside its tile like the value above it.
+#[test]
+fn the_german_comparison_line_wraps_inside_its_tile_at_960_px() {
+    let (mut s, _) = Listen::boot(&Args { demo: true, ephemeral: true, ..Args::default() });
+    s.history.entries.clear();
+    let song = s.queue.current().unwrap().song.clone();
+    let now = history::now_secs();
+    for i in 0..535 {
+        // 392 plays this week against 143 last week: +174 %.
+        let at = if i < 392 { now - 3_600 - i * 60 } else { now - 8 * 86_400 - i * 60 };
+        let mut e = Entry::new(&song, at);
+        e.artists = vec![ArtistRef { id: None, name: "Artist".into() }];
+        s.history.entries.push(e);
+    }
+    let _ = s.update(Message::History(HistoryMsg::Weeks));
+    let _ = s.update(Message::Navigate(Route::Stats));
+    let _ = s.update(Message::WindowResized(iced::Size::new(960.0, 1048.0)));
+    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
+    listen::i18n::set_language("de");
+    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 1048.0), s.view());
+    let line = ui.find("+174 % ggü. letzter Woche").map(|l| l.bounds());
+    listen::i18n::set_language("en");
+    let line = line.expect("the German comparison line of the plays tile");
+    assert!(line.height > 20.0, "the line takes a second row instead of being clipped: {line:?}");
+}
