@@ -508,7 +508,10 @@ fn headphone(state: &Listen) -> Element<'_, Message> {
     for e in hits {
         search = search.push(
             button(label(
-                format!("{} · {} · {}", e.name, e.kind, e.source),
+                match e.kind.as_str() {
+                    "" => format!("{} · {}", e.name, e.source),
+                    kind => format!("{} · {} · {}", e.name, crate::i18n::tr(kind), e.source),
+                },
                 metrics::font_sm(),
                 t.foreground,
             ))
