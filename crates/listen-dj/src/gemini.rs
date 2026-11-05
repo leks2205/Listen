@@ -68,6 +68,9 @@ impl Gemini {
 
     /// Asks the text model for the next set and the break line.
     pub async fn plan(&self, model: &str, req: &PlanRequest<'_>) -> Result<(Plan, Usage), DjError> {
+        // A short pool (Tell the DJ kept only one or two songs) can't fill a longer set: ask for what's there.
+        let set_max = req.set_max.max(1).min(req.candidates.len().max(1));
+        let set_min = req.set_min.max(1).min(set_max);
         let body = json!({
             "model": model,
             "system_instruction": prompt::system_instruction(req.persona, &req.show),
@@ -75,7 +78,7 @@ impl Gemini {
             "response_format": {
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": prompt::response_schema(req.persona, req.set_min, req.set_max, prompt::offers_new(req)),
+                "schema": prompt::response_schema(req.persona, set_min, set_max, prompt::offers_new(req)),
             },
             // No sampling parameters: ignored since 3.6 Flash, and newer models reject them (400).
             "generation_config": { "thinking_level": "minimal" },

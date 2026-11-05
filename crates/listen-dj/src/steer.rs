@@ -14,8 +14,9 @@ pub const MAX_TEXT: usize = 120;
 pub const MIN_POOL: usize = 8;
 
 /// Calmer / More energy keep only the songs on the requested side of the bar once at least this many are
-/// there (a short set beats one that breaks the request); with fewer, the best-fitting [`MIN_POOL`] stay.
-pub const MIN_STEERED: usize = 3;
+/// there: one is enough (a short set beats one that breaks the request, bug 124). Only when no candidate is
+/// on that side, the best-fitting [`MIN_POOL`] stay (the request can't be met from this pool).
+pub const MIN_STEERED: usize = 1;
 
 /// A quick request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -405,8 +406,29 @@ mod tests {
     }
 
     #[test]
-    fn too_few_calm_songs_keeps_the_calmest_and_the_order() {
-        // Only two songs below the bar: the eight calmest stay, in pool order; unknown energy last.
+    fn one_or_two_songs_on_the_requested_side_are_the_whole_pool() {
+        // Bug 124: the check's round 2 had only Holocene (0.25) below the replaced set's 0.30; the eight
+        // best-fitting let 0.35 / 0.45 in and the set came out louder. Now only the songs below stay.
+        let e: Vec<Option<f32>> =
+            [0.35, 0.45, 0.25, 0.30, 0.40, 0.30, 0.50, 0.38, 0.30, 0.42, 0.33, 0.36, 0.31, 0.48, 0.30, 0.44]
+                .into_iter()
+                .map(Some)
+                .collect();
+        let kept = filter_pool(pool(&e), |s| s.1, &with(&[Chip::Calmer]), Some(0.30));
+        assert_eq!(ids(kept.clone()), vec![2]);
+        let mut two = e.clone();
+        two[10] = Some(0.28);
+        let kept = filter_pool(pool(&two), |s| s.1, &with(&[Chip::Calmer]), Some(0.30));
+        assert_eq!(ids(kept.clone()), vec![2, 10]);
+        // Whatever a planner picks from it, the set is calmer than the songs it replaces.
+        assert!(kept.iter().all(|s| s.1.energy.unwrap() < 0.30));
+        let up = filter_pool(pool(&e), |s| s.1, &with(&[Chip::MoreEnergy]), Some(0.49));
+        assert_eq!(ids(up), vec![6]);
+    }
+
+    #[test]
+    fn no_song_on_the_requested_side_keeps_the_calmest_and_the_order() {
+        // Nothing below the bar: the eight calmest stay, in pool order; unknown energy last.
         let e = [
             Some(0.9),
             Some(0.2),
@@ -419,7 +441,7 @@ mod tests {
             Some(0.65),
             Some(0.85),
         ];
-        let kept = ids(filter_pool(pool(&e), |s| s.1, &with(&[Chip::Calmer]), Some(0.3)));
+        let kept = ids(filter_pool(pool(&e), |s| s.1, &with(&[Chip::Calmer]), Some(0.05)));
         assert_eq!(kept.len(), MIN_POOL);
         assert!(!kept.contains(&2), "unknown energy left out while analysed songs remain: {kept:?}");
         assert!(!kept.contains(&7), "the loudest song goes: {kept:?}");
