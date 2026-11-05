@@ -19,6 +19,12 @@ use listen_core::analysis::{Features, cue};
 pub const STEP_S: f64 = 0.1;
 /// Largest hole or bump of the summed loudness during a blend (LU, see [`Check::dip_lu`]).
 pub const MAX_LEVEL_LU: f32 = 1.5;
+/// The curves' error on a hole (LU): rendered blends' holes measured (stereo BS.1770, decks aligned)
+/// against the modelled ones differ by about this much (bug 57: −0.69, +0.58, −0.11 on the lyric-armed
+/// BeatBlends with a modelled hole; the bar curve's own error against the audio is 0.8 dB sd mid-song).
+/// A modelled hole fails at [`MAX_LEVEL_LU`] minus this, so a hole the curves place just under the gate
+/// does not render just over it. On the 427 history pairs 12 plans change, all to another blend.
+pub const HOLE_MARGIN_LU: f32 = 0.6;
 /// Longest time both decks may be audibly sung at once (s).
 pub const MAX_CLASH_S: f32 = 1.0;
 /// A deck's vocal counts as audible above this (vocal likelihood × deck gain).
@@ -48,8 +54,8 @@ impl Check {
     /// Why the plan fails, `None` if it passes.
     pub fn failure(&self) -> Option<String> {
         let mut why = Vec::new();
-        if let Some(d) = self.dip_lu.filter(|&d| d > MAX_LEVEL_LU) {
-            why.push(format!("loudness dip {d:.1} LU"));
+        if let Some(d) = self.dip_lu.filter(|&d| d + HOLE_MARGIN_LU > MAX_LEVEL_LU) {
+            why.push(format!("loudness dip {d:.1} LU (may render {:.1})", d + HOLE_MARGIN_LU));
         }
         if let Some(b) = self.bump_lu.filter(|&b| b > MAX_LEVEL_LU) {
             why.push(format!("loudness bump {b:.1} LU"));
@@ -66,7 +72,7 @@ impl Check {
     /// How far past the gates (0 when it passes): for picking the least bad plan when none passes.
     pub fn badness(&self) -> f32 {
         let over = |v: Option<f32>| v.map_or(0.0, |v| (v - MAX_LEVEL_LU).max(0.0));
-        over(self.dip_lu)
+        over(self.dip_lu.map(|d| d + HOLE_MARGIN_LU))
             + over(self.bump_lu)
             + (self.clash_s - MAX_CLASH_S).max(0.0)
             + if self.cuts_line { 1.0 } else { 0.0 }
@@ -523,6 +529,21 @@ mod tests {
         let c = check(&p, &sa, &sb, (0.0, 0.0));
         assert!(c.dip_lu.is_some_and(|d| d > MAX_LEVEL_LU), "{c:?}");
         assert!(c.failure().unwrap().contains("loudness dip"));
+    }
+
+    #[test]
+    fn a_hole_just_under_the_gate_fails_with_the_curves_error() {
+        // Bug 57: the 8-bar BeatBlend ytm:KcZn05qxVgg → ytm:BycLmWI97Nc had a 0.99 LU hole on the curves
+        // and 1.57 LU rendered (stereo, decks aligned).
+        let hole = |d: f32| Check { dip_lu: Some(d), bump_lu: Some(0.0), ..Check::default() };
+        let why = hole(0.99).failure().unwrap();
+        assert!(why.contains("loudness dip 1.0 LU (may render 1.6)"), "{why}");
+        assert!(hole(0.99).badness() > 0.0);
+        assert_eq!(hole(0.85).failure(), None);
+        assert_eq!(hole(0.85).badness(), 0.0);
+        // Bumps keep the plain gate (no rendered bump over it so far).
+        let bump = Check { dip_lu: Some(0.0), bump_lu: Some(1.4), ..Check::default() };
+        assert_eq!(bump.failure(), None);
     }
 
     #[test]
