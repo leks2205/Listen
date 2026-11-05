@@ -526,5 +526,28 @@ mod tests {
         let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
         let _ = s.update(Message::PlayQueueItem(uid));
         assert!(s.history.entries.is_empty(), "{:?}", s.history.entries);
+        // Bug 19: a late position event after Stop (mpv's rewind, a seek while stopped) or after the
+        // end does not re-arm the skip.
+        for halt in [Message::Stop, Message::Deck(0, PlayerMsg::Event(PlayerEvent::Ended))] {
+            let mut s = playing_at(10);
+            let _ = s.update(halt);
+            for p in [0, 400] {
+                let pos = std::time::Duration::from_millis(p);
+                let _ = s.update(Message::Deck(0, PlayerMsg::Event(PlayerEvent::Position(pos))));
+            }
+            let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
+            let _ = s.update(Message::PlayQueueItem(uid));
+            assert!(s.history.entries.is_empty(), "{:?}", s.history.entries);
+        }
+        // Played again after Stop: leaving it early is a skip again.
+        let mut s = playing_at(10);
+        let _ = s.update(Message::Stop);
+        s.playback.playing = true;
+        for p in [1, 2, 3] {
+            s.playback.track_played(std::time::Duration::from_secs(p));
+        }
+        let uid = s.queue.peek_next().map(|i| i.uid).unwrap();
+        let _ = s.update(Message::PlayQueueItem(uid));
+        assert_eq!(s.history.entries.len(), 1, "{:?}", s.history.entries);
     }
 }

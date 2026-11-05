@@ -194,6 +194,9 @@ pub struct Playback {
     played: Duration,
     /// Last reported position, to measure the step to the next report.
     last_pos: Option<Duration>,
+    /// Stopped by hand or ended on its own: late position events (the rewind after Stop, a seek
+    /// while stopped) must not re-arm the skip until the track plays again or another one starts.
+    halted: bool,
 }
 
 impl Playback {
@@ -202,11 +205,22 @@ impl Playback {
         self.scrobbled = false;
         self.played = Duration::ZERO;
         self.last_pos = None;
+        self.halted = false;
+    }
+
+    /// Stopped or ended: leaving the track now is not a skip (see `halted`).
+    pub(crate) fn halt(&mut self) {
+        self.last_pos = None;
+        self.halted = true;
     }
 
     /// Adds the step to `pos` to the played time when it is a normal tick
     /// (forward, at most [`MAX_PLAY_STEP`]); seeks and rewinds add nothing.
     pub(crate) fn track_played(&mut self, pos: Duration) {
+        if self.halted && !self.playing {
+            return;
+        }
+        self.halted = false;
         if let Some(last) = self.last_pos
             && pos > last
             && pos - last <= MAX_PLAY_STEP
@@ -1061,6 +1075,7 @@ impl Listen {
                 scrobbled: false,
                 played: Duration::ZERO,
                 last_pos: None,
+                halted: false,
             },
             show_queue: false,
             demo: args.demo,
@@ -2490,7 +2505,7 @@ impl Listen {
         // (`keep_going`), and a DJ set that lands must play (`dj_resume`).
         let stop = self.stop_player();
         self.playback.idle = true;
-        self.playback.last_pos = None;
+        self.playback.halt();
         self.dj_queue_ended();
         stop
     }
@@ -2713,7 +2728,7 @@ impl Listen {
                 self.playback.idle = true;
                 self.playback.position = Duration::ZERO;
                 // The song ended on its own: starting another one later is not a skip.
-                self.playback.last_pos = None;
+                self.playback.halt();
                 self.dj_queue_ended();
             }
             PlayerEvent::Error(e) => {
@@ -3218,7 +3233,7 @@ impl Listen {
             Message::Stop => {
                 self.playback.position = Duration::ZERO;
                 // Stopped by hand: starting another song afterwards is not a skip of this one.
-                self.playback.last_pos = None;
+                self.playback.halt();
                 if self.mock_playback() {
                     self.playback.playing = false;
                     return Task::none();
