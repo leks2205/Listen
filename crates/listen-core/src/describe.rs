@@ -14,6 +14,9 @@
 //! the spike (295 songs) audio alone reaches recall@10 0.45, all three 0.68.
 
 use crate::analysis::{Camelot, Features, vocal_share};
+use crate::config::ServerConfig;
+use crate::history::Entry as Play;
+use crate::model::{ArtistRef, ImageRef, ServerId, Song, SourceKind};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -295,6 +298,74 @@ pub fn split_hint(hint: &str) -> (String, String) {
     match hint.split_once(" – ").or_else(|| hint.split_once(" - ")) {
         Some((a, t)) => (t.trim().to_string(), a.trim().to_string()),
         None => (hint.trim().to_string(), String::new()),
+    }
+}
+
+/// The host of a server URL ("https://music.example.org:4533/" → "music.example.org").
+fn host(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let hostport = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let hostport = hostport.rsplit_once('@').map_or(hostport, |(_, h)| h);
+    hostport.split(':').next().unwrap_or("")
+}
+
+/// The server of `servers` a hit plays on: `ytm:` songs on the first YouTube Music server, others on the
+/// Navidrome server whose host is the hit's `server_hint`.
+pub fn server_for<'a>(hit: &Hit, servers: &'a [ServerConfig]) -> Option<&'a ServerConfig> {
+    if hit.song_id.starts_with("ytm:") {
+        servers.iter().find(|c| c.kind == SourceKind::YouTubeMusic)
+    } else {
+        servers.iter().find(|c| {
+            c.kind == SourceKind::Subsonic && !hit.server_hint.is_empty() && host(&c.url) == hit.server_hint
+        })
+    }
+}
+
+/// Playable songs for search hits (in order; hits without a matching server are left out). The newest
+/// history play of a song gives album and cover; otherwise the hit's title and artist (and the video's
+/// thumbnail for YouTube Music) stand in.
+pub fn hit_songs(hits: &[Hit], servers: &[ServerConfig], history: &[Play]) -> Vec<Song> {
+    let mut last: HashMap<(&ServerId, &str), &Play> = HashMap::new();
+    for e in history {
+        last.insert((&e.server_id, e.song_id.as_str()), e);
+    }
+    hits.iter()
+        .filter_map(|h| {
+            let server = server_for(h, servers)?;
+            let id = h.song_id.strip_prefix("ytm:").unwrap_or(&h.song_id);
+            if let Some(e) = last.get(&(&server.id, id)) {
+                return Some(e.to_song());
+            }
+            let mut e = blank_entry(&server.id, server.kind, id);
+            e.title = h.title.clone();
+            if !h.artist.is_empty() {
+                e.artists = vec![ArtistRef { id: None, name: h.artist.clone() }];
+            }
+            e.duration_secs = h.duration_ms / 1000;
+            if server.kind == SourceKind::YouTubeMusic {
+                e.image = Some(ImageRef::Url(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg")));
+            }
+            Some(e.to_song())
+        })
+        .collect()
+}
+
+fn blank_entry(server: &ServerId, source: SourceKind, id: &str) -> Play {
+    Play {
+        ts: 0,
+        server_id: server.clone(),
+        source,
+        song_id: id.to_string(),
+        status: crate::history::PlayStatus::Played,
+        title: String::new(),
+        artists: vec![],
+        album: None,
+        album_id: None,
+        image: None,
+        duration_secs: 0,
+        at_s: None,
+        frac: None,
+        ctx: None,
     }
 }
 
@@ -613,6 +684,55 @@ mod tests {
             f.allows(Some(&at(8, true))) && f.allows(Some(&at(9, true))) && f.allows(Some(&at(8, false)))
         );
         assert!(!f.allows(Some(&at(2, true))) && !f.allows(Some(&Facets::default())));
+    }
+
+    #[test]
+    fn hits_become_songs_of_the_matching_server() {
+        let servers = vec![
+            ServerConfig {
+                id: ServerId("nd".into()),
+                name: "Navidrome".into(),
+                kind: SourceKind::Subsonic,
+                url: "https://music.example.org:4533/".into(),
+                username: "u".into(),
+            },
+            ServerConfig {
+                id: ServerId("ytm-1".into()),
+                name: "YouTube Music".into(),
+                kind: SourceKind::YouTubeMusic,
+                url: String::new(),
+                username: String::new(),
+            },
+        ];
+        let hit = |id: &str, hint: &str| Hit {
+            song_id: id.into(),
+            title: "Song".into(),
+            artist: "Artist".into(),
+            duration_ms: 181_500,
+            server_hint: hint.into(),
+            score: 1.0,
+        };
+        let mut played = blank_entry(&ServerId("ytm-1".into()), SourceKind::YouTubeMusic, "vid2");
+        played.title = "From history".into();
+        played.album = Some("Album".into());
+        let songs = hit_songs(
+            &[
+                hit("ytm:vid1", ""),
+                hit("nd-123", "music.example.org"),
+                hit("nd-9", "other.host"),
+                hit("ytm:vid2", ""),
+            ],
+            &servers,
+            &[played],
+        );
+        assert_eq!(songs.len(), 3);
+        assert_eq!((songs[0].id.as_str(), songs[0].server_id.0.as_str()), ("vid1", "ytm-1"));
+        assert_eq!(songs[0].image, Some(ImageRef::Url("https://i.ytimg.com/vi/vid1/hqdefault.jpg".into())));
+        assert_eq!((songs[0].duration.as_secs(), songs[0].artists[0].name.as_str()), (181, "Artist"));
+        assert_eq!((songs[1].id.as_str(), songs[1].source), ("nd-123", SourceKind::Subsonic));
+        assert!(songs[1].image.is_none());
+        assert_eq!((songs[2].title.as_str(), songs[2].album.as_deref()), ("From history", Some("Album")));
+        assert_eq!(host("http://user@h.local:80/x"), "h.local");
     }
 
     #[test]

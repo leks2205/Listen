@@ -33,9 +33,10 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let id = ListId::Search(tab);
     let config = state.config.settings.lists.config(id.kind());
 
+    let placeholder = if s.describe { "Describe the music, e.g. slow 90s Korean ballad" } else { "Search" };
     let input = row![
         icon(Icon::LuSearch, metrics::font_lg(), t.muted),
-        text_input(crate::i18n::tr("Search"), &s.query)
+        text_input(crate::i18n::tr(placeholder), &s.query)
             .font(crate::ui::font_for(&s.query, crate::appearance::current_font()))
             .id(iced::widget::Id::new(super::sidebar::SEARCH_ID))
             .font(super::font_for(&s.query, crate::appearance::current_font()))
@@ -50,7 +51,23 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     .align_y(Alignment::Center);
 
     let mut tab_row = Row::new().spacing(metrics::space_xs());
+    if state.describe_available() {
+        tab_row = tab_row.push(
+            button(label_w(
+                "Describe it",
+                metrics::font_md(),
+                if s.describe { t.primary } else { t.foreground },
+                Weight::Semibold,
+            ))
+            .padding(Padding::from([6.0, 14.0]))
+            .style(style::icon_button(t, s.describe))
+            .on_press(Message::Search(SearchMsg::Describe(!s.describe))),
+        );
+    }
     for (this, name, count) in tabs(state) {
+        if s.describe && this != SearchTab::Songs {
+            continue;
+        }
         let active = this == tab;
         let text = if s.query.trim().is_empty() { name.to_string() } else { format!("{name} ({count})") };
         tab_row = tab_row.push(
@@ -90,7 +107,11 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             container(label(e.clone(), metrics::font_md(), t.error)).padding(Padding::from([0.0, 32.0])),
         );
     }
-    let empty = if s.query.trim().is_empty() { "Type to search your library." } else { "No results." };
+    let empty = match (s.describe, s.query.trim().is_empty()) {
+        (true, true) => "Describe what you want to hear and press Enter: a mood, an era, a scene, a singer.",
+        (false, true) => "Type to search your library.",
+        _ => "No results.",
+    };
     let r = &s.results;
     let list: Element<'_, Message> = match tab {
         SearchTab::Songs => {

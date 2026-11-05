@@ -51,6 +51,22 @@ Once you have typed something, each tab shows its number of results, for example
 
 Each tab is an ordinary list: you can switch between table and grid with the buttons at the right (albums and artists), change columns in the list options, select, drag and right-click exactly as described in [Lists, selection and menus](lists.md). `Ctrl+F` puts the cursor back into the search box (**Local search** in the hotkey list).
 
+## Describe it
+
+With **Merge with other devices** set up (a listen-server address and token, see [Continue on another device](../integration/handoff.md)), the search page has a **Describe it** button next to the tabs. Turned on, the box takes a description instead of a title: "slow 90s Korean ballad", "Brazilian samba with acoustic guitar", "트로트", "girl crush K-pop with heavy beats", "dreamy lo-fi 80 bpm". Press `Enter` to search (Listen does not search while you type in this mode). The results are songs only, best match first, up to 100.
+
+Your listen-server ranks every song it has an embedding for by three things added together:
+
+- how the music sounds: a 30-second clip of each song, compared with your words by the CLaMP 3 music-and-text model,
+- what is known about the song: search tags (genre, decade, country, who sings, instruments, mood, scene names such as "city pop" or "1st-generation K-pop") written once per song by Gemini from its artist and title, compared with your words by the same model,
+- the words themselves: words of your description found in those tags or in the title.
+
+A tempo in the description ("120 bpm") becomes a filter: only songs within 6 bpm of it (or at half or double speed) are shown, using the tempo from the analysis store.
+
+The embeddings come from **listen-embed**, a job that runs on a computer with a graphics card (`tools/listen-embed` in the source, see its README) and writes to `Listen/embeddings` next to the analysis store. Songs it has not reached yet are not found by **Describe it**; the server lists them at `/v1/search/missing` and counts them in `/v1/status`. Results play from the server they belong to: YouTube Music songs on your YouTube Music account, Navidrome songs on the Navidrome server whose address matches; songs of servers you have not added are left out.
+
+The first search after a while takes a few seconds longer while the server loads its text model; turning **Describe it** on starts that loading.
+
 ## What gets searched
 
 What the search matches depends on the server:

@@ -2255,5 +2255,10 @@
 "Focus is on: little singing, instrumental versions, no DJ talk": "Fokus ist an: wenig Gesang, Instrumentalversionen, keine DJ-Ansagen",
 "Focus: the DJs pick songs with little singing and keep quiet": "Fokus: Die DJs wählen Songs mit wenig Gesang und sagen nichts an",
 "Focus off: the DJs pick as usual again.": "Fokus aus: Die DJs wählen wieder wie gewohnt.",
-"Focus on: songs with little singing, instrumental versions, no DJ talk.": "Fokus an: Songs mit wenig Gesang, Instrumentalversionen, keine DJ-Ansagen."
+"Focus on: songs with little singing, instrumental versions, no DJ talk.": "Fokus an: Songs mit wenig Gesang, Instrumentalversionen, keine DJ-Ansagen.",
+"Describe it": "Beschreiben",
+"Describe the music, e.g. slow 90s Korean ballad": "Beschreib die Musik, z. B. langsame koreanische Ballade aus den 90ern",
+"Describe what you want to hear and press Enter: a mood, an era, a scene, a singer.": "Beschreib, was du hören willst, und drück Enter: eine Stimmung, eine Zeit, eine Szene, eine Stimme.",
+"listen-server is too old for Describe it (needs 0.8)": "listen-server ist zu alt für Beschreiben (braucht 0.8)",
+"No songs are indexed for Describe it yet (listen-embed).": "Für Beschreiben sind noch keine Songs erfasst (listen-embed)."
 }

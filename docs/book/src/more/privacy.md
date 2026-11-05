@@ -27,6 +27,7 @@ You can turn off lyrics fetching, update checks, Discord, the AI DJ, song analys
 
 - **Listening history.** Songs, server and time are saved in a file on your computer and never uploaded or shared. Switch **Record listening history** off or use **Don't record this session** in **Settings → Advanced → Listening history**. You can export or delete the history there. See [History, statistics and mixes](../using/history.md).
 - **New from your artists.** With **Merge with other devices** on, Home asks your own listen-server for the new releases it found. The server reads the YouTube Music pages of the artists you follow and play most, with the YouTube Music session the phone shared with it; nothing goes anywhere else. See [Home](../using/library.md#home).
+- **Describe it.** The description you type on the search page goes to your own listen-server only. The listen-embed job (only if you run it) sends the artist and title of each analysed song to Gemini once for search tags, with your Gemini key, and fetches a 30-second clip of each song from YouTube Music or your Navidrome server; see [Search](../using/search.md#describe-it).
 - **Song analysis results** (tempo, key, sections) are stored locally, or in a folder you choose and sync yourself.
 - **Settings, queue and caches** are plain files in Listen's folders; see [Files and folders](../reference/files.md).
 

@@ -31,6 +31,7 @@ pub mod artist_page;
 pub mod audio;
 mod bridge;
 pub mod decks;
+pub mod describe;
 mod dj;
 mod dj_mix;
 pub mod dj_steer;
@@ -382,6 +383,8 @@ pub struct SearchState {
     /// The tab of the search page.
     pub tab: list::SearchTab,
     pub debounce: search::Debounce,
+    /// "Describe it": the query goes to listen-server's natural-language search.
+    pub describe: bool,
 }
 
 /// Loaded library data for the pages.

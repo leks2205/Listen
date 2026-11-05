@@ -43,6 +43,8 @@ pub enum SearchMsg {
     /// The debounce timer of keystroke `token` ran out.
     Debounced(u64),
     Tab(SearchTab),
+    /// "Describe it" on or off.
+    Describe(bool),
 }
 
 impl Listen {
@@ -58,12 +60,25 @@ impl Listen {
             self.search.results = Default::default();
             return Task::none();
         }
+        if self.search.describe {
+            // Describing takes a sentence: search on Enter only.
+            return Task::none();
+        }
         Debounce::after(token, |t| Message::Search(SearchMsg::Debounced(t)))
     }
 
     /// Searches now (Enter, or the pause after typing); opens the search page.
     pub(super) fn run_search(&mut self) -> Task<Message> {
         let query = self.search.query.trim().to_string();
+        if self.search.describe && !query.is_empty() {
+            self.search.debounce.bump();
+            self.search.generation += 1;
+            self.search.loading = true;
+            self.search.error = None;
+            self.search.tab = SearchTab::Songs;
+            let nav = if self.route != Route::Search { self.navigate(Route::Search) } else { Task::none() };
+            return Task::batch([nav, self.describe_task(query, self.search.generation)]);
+        }
         let Some(source) = self.source.clone().filter(|_| !query.is_empty()) else { return Task::none() };
         // A pending timer of an earlier keystroke has nothing left to do.
         self.search.debounce.bump();
@@ -87,6 +102,7 @@ impl Listen {
                     return self.run_search();
                 }
             }
+            SearchMsg::Describe(on) => return self.set_describe(on),
             SearchMsg::Tab(tab) => {
                 self.search.tab = tab;
                 self.lists.reset(&ListId::Search(tab));
