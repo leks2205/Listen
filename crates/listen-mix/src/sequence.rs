@@ -73,11 +73,16 @@ pub fn order_all(songs: &[(Song, Option<FlowFeatures>)], first: Option<usize>, c
         }
     }
     // Improved from the greedy path and from the original order; the cheaper wins, so the result is
-    // never worse than the list as it was.
-    let length = |p: &[usize]| p.windows(2).map(|w| cost[w[0] * n + w[1]]).sum::<f32>();
+    // never worse than the list as it was. "Cheaper" as [`path_cost`] counts it: an unanalysed first
+    // song's link into the chain (its artist repeat) steers the search but isn't measured, so a path
+    // that avoids that repeat could make the chain itself worse; then the list keeps its order.
+    let measured_from = usize::from(first.is_some_and(|f| songs[f].1.is_none()));
+    let length = |p: &[usize]| p.windows(2).skip(measured_from).map(|w| cost[w[0] * n + w[1]]).sum::<f32>();
+    let identity: Vec<usize> = (0..n).collect();
     let greedy = improve(nearest_neighbour(&cost, n), &cost, n);
-    let kept = improve((0..n).collect(), &cost, n);
-    let path = if length(&kept) + EPS < length(&greedy) { kept } else { greedy };
+    let kept = improve(identity.clone(), &cost, n);
+    let best = if length(&kept) + EPS < length(&greedy) { kept } else { greedy };
+    let path = if length(&identity) + EPS < length(&best) { identity } else { best };
 
     let mut out = Vec::with_capacity(songs.len());
     out.extend(first);
@@ -385,6 +390,46 @@ mod tests {
             let (after, links_after) = path_cost(&songs, &o, &ctx);
             assert_eq!(links, links_after, "round {round}");
             assert!(after <= before + 1e-3, "round {round}: {after} > {before}");
+        }
+    }
+
+    #[test]
+    fn an_unanalysed_first_songs_artist_repeat_does_not_raise_the_measured_cost() {
+        // Bug 65: u0 (A0, unanalysed) is kept first; avoiding u0 -> s0 (both A0) used to win on the
+        // full path while the analysed chain got worse.
+        let ctx = FlowCtx::default();
+        let songs = vec![
+            (song("u0", "A0", None, None), None),
+            entry("s0", "A0", 90.0, 3, 0.25),
+            entry("s1", "A2", 170.0, 3, 1.0),
+            entry("s2", "A0", 150.0, 3, 0.5),
+        ];
+        let o = order_all(&songs, Some(0), &ctx);
+        assert!(is_permutation(&o, 4) && o[0] == 0, "{o:?}");
+        let (before, _) = path_cost(&songs, &[0, 1, 2, 3], &ctx);
+        let (after, _) = path_cost(&songs, &o, &ctx);
+        assert!(after <= before + 1e-3, "{o:?}: {after} > {before}");
+        // Small lists of this shape (first unanalysed, a few analysed, three artists), as QA's probe.
+        let mut x: u32 = 96;
+        let mut rnd = || {
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            x
+        };
+        for round in 0..3000 {
+            let n = 4 + (rnd() % 7) as usize;
+            let songs: Vec<_> = std::iter::once((song("u0", "A0", None, None), None))
+                .chain((1..n).map(|i| {
+                    let bpm = 80.0 + (rnd() % 100) as f32;
+                    let e = (rnd() % 100) as f32 / 100.0;
+                    entry(&format!("s{i}"), &format!("A{}", rnd() % 3), bpm, (rnd() % 12) as u8 + 1, e)
+                }))
+                .collect();
+            let o = order_all(&songs, Some(0), &ctx);
+            let (before, _) = path_cost(&songs, &(0..n).collect::<Vec<_>>(), &ctx);
+            let (after, _) = path_cost(&songs, &o, &ctx);
+            assert!(after <= before + 1e-3, "round {round} {o:?}: {after} > {before}");
         }
     }
 
