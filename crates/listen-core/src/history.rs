@@ -17,6 +17,77 @@ const DAY: i64 = 86_400;
 pub enum PlayStatus {
     /// Played past the scrobble threshold.
     Played,
+    /// Left by the user (next, or another song started by hand) before the scrobble threshold. Never a
+    /// play: statistics, mixes, Last.fm and play counts read only [`PlayStatus::Played`]. Automatic
+    /// handovers (a DJ mix, the end of the song) are never skips. Apps before 0.41 drop these lines.
+    Skipped,
+}
+
+/// The play mode the player was in when an entry was recorded.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayMode {
+    #[default]
+    Off,
+    Shuffle,
+    AutoDj,
+    AiDj,
+    Radio,
+    Focus,
+    Tempo,
+    /// A mode written by a newer version.
+    #[serde(other)]
+    Other,
+}
+
+/// Who put a song in the queue (history context and queue reasons).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Picker {
+    /// Started or queued by hand (also a playlist or album the user started).
+    #[default]
+    User,
+    AutoDj,
+    AiDj,
+    Bridge,
+    Radio,
+    Rediscover,
+    Tempo,
+    /// Picked for a listener request to the AI DJ ("Tell the DJ").
+    Request,
+    /// A picker written by a newer version.
+    #[serde(other)]
+    Other,
+}
+
+impl Picker {
+    /// Picked by the player rather than the user.
+    pub fn automatic(self) -> bool {
+        self != Self::User
+    }
+}
+
+/// The context of a play or skip.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayCtx {
+    #[serde(default)]
+    pub mode: PlayMode,
+    #[serde(default)]
+    pub picker: Picker,
+    /// The recording device's machine id (handoff's device id); empty when unknown.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub device: String,
+}
+
+/// Reads an optional field written by any version: a value this version cannot read becomes `None`
+/// instead of dropping the whole line.
+pub(crate) fn lenient<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let v = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(v.and_then(|v| serde_json::from_value(v).ok()))
 }
 
 /// One play: track id, source, time and status, plus the display fields needed to list it offline.
@@ -34,6 +105,15 @@ pub struct Entry {
     pub album_id: Option<String>,
     pub image: Option<ImageRef>,
     pub duration_secs: u32,
+    /// Seconds into the song when it ended (skips; plays recorded from 0.41 on).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at_s: Option<f32>,
+    /// `at_s` as a share of the song's length, 0–1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frac: Option<f32>,
+    /// Play mode, picker and device at the time.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient")]
+    pub ctx: Option<PlayCtx>,
 }
 
 impl Entry {
@@ -50,7 +130,27 @@ impl Entry {
             album_id: song.album_id.clone(),
             image: song.image.clone(),
             duration_secs: u32::try_from(song.duration.as_secs()).unwrap_or(u32::MAX),
+            at_s: None,
+            frac: None,
+            ctx: None,
         }
+    }
+
+    /// A skip of `song` at `at_s` seconds (see [`PlayStatus::Skipped`]); `frac` from the song's length.
+    pub fn skipped(song: &Song, ts: i64, at_s: f32, ctx: PlayCtx) -> Self {
+        let len = song.duration.as_secs_f32();
+        Self {
+            status: PlayStatus::Skipped,
+            at_s: Some(at_s.max(0.0)),
+            frac: (len > 0.0).then(|| (at_s / len).clamp(0.0, 1.0)),
+            ctx: Some(ctx),
+            ..Self::new(song, ts)
+        }
+    }
+
+    /// Counts as a play (statistics, mixes, Last.fm, play counts). Skips do not.
+    pub fn played(&self) -> bool {
+        self.status == PlayStatus::Played
     }
 
     /// Key of the track across servers.
@@ -228,7 +328,7 @@ impl History {
                 e.server_id.0.clone(),
                 format!("{:?}", e.source).to_lowercase(),
                 e.song_id.clone(),
-                "played".to_string(),
+                if e.played() { "played" } else { "skipped" }.to_string(),
                 e.title.clone(),
                 artists,
                 e.album.clone().unwrap_or_default(),
@@ -280,7 +380,7 @@ pub fn stats(entries: &[Entry], year: Option<i32>, tz: FixedOffset, top: usize) 
     let mut songs: HashMap<(&ServerId, &str), Ranked> = HashMap::new();
     let mut artists: HashMap<&str, Ranked> = HashMap::new();
     let mut albums: HashMap<(&str, &str), Ranked> = HashMap::new();
-    for e in entries {
+    for e in entries.iter().filter(|e| e.played()) {
         if year.is_some() && local(e, tz).map(|d| d.year()) != year {
             continue;
         }
@@ -334,7 +434,7 @@ pub fn artist_top_songs(
         })
     };
     let mut counts: HashMap<&str, (u32, &Entry)> = HashMap::new();
-    for e in entries.iter().filter(|e| &e.server_id == server && by(e)) {
+    for e in entries.iter().filter(|e| e.played() && &e.server_id == server && by(e)) {
         let slot = counts.entry(&e.song_id).or_insert((0, e));
         slot.0 += 1;
         if e.ts >= slot.1.ts {
@@ -407,7 +507,8 @@ pub fn mix(entries: &[Entry], kind: MixKind, now: i64, tz: FixedOffset, limit: u
             MixKind::HeavyRotation => e.ts >= now - 30 * DAY,
             MixKind::Rediscover | MixKind::AllTimeFavorites => true,
         };
-        if counts_here {
+        // A recent skip still counts as heard (Rediscover leaves it out), never as a play.
+        if counts_here && e.played() {
             let c = counts.entry(e.key()).or_insert((0, e));
             c.0 += 1;
             if e.ts >= c.1.ts {
@@ -677,5 +778,62 @@ mod tests {
         let s = e.to_song();
         assert_eq!((s.id.as_str(), s.title.as_str()), ("7", "T7"));
         assert_eq!(s.duration, Duration::from_secs(200));
+    }
+
+    #[test]
+    fn old_lines_load_and_new_fields_roundtrip() {
+        // A line written by 0.40: no at_s/frac/ctx.
+        let old = r#"{"ts":1700000000,"server_id":"s","source":"subsonic","song_id":"1","status":"played","title":"T","artists":[{"id":null,"name":"A"}],"album":null,"album_id":null,"image":null,"duration_secs":200}"#;
+        let e: Entry = serde_json::from_str(old).unwrap();
+        assert!(e.played() && e.at_s.is_none() && e.ctx.is_none());
+        // Unchanged entries are written exactly as before.
+        assert_eq!(serde_json::to_string(&e).unwrap(), old);
+
+        let ctx = PlayCtx { mode: PlayMode::AiDj, picker: Picker::AiDj, device: "pc".into() };
+        let s = Entry::skipped(&e.to_song(), 1_700_000_100, 10.0, ctx.clone());
+        assert_eq!((s.status, s.at_s, s.frac), (PlayStatus::Skipped, Some(10.0), Some(0.05)));
+        let line = serde_json::to_string(&s).unwrap();
+        assert!(line.contains(r#""status":"skipped""#) && line.contains(r#""mode":"ai_dj""#), "{line}");
+        assert_eq!(serde_json::from_str::<Entry>(&line).unwrap(), s);
+
+        // A newer version's unknown mode or picker still loads; a broken ctx is dropped, not the line.
+        let newer = line.replace("ai_dj", "moon_mode");
+        let n: Entry = serde_json::from_str(&newer).unwrap();
+        assert_eq!(n.ctx.as_ref().map(|c| (c.mode, c.picker)), Some((PlayMode::Other, Picker::Other)));
+        let broken = line.replace(r#""device":"pc""#, r#""device":7"#);
+        let b: Entry = serde_json::from_str(&broken).unwrap();
+        assert_eq!((b.ctx, b.at_s), (None, Some(10.0)));
+    }
+
+    #[test]
+    fn skips_are_never_plays() {
+        let mut entries: Vec<Entry> = (0..3).map(|d| at(d, 9, "1")).collect();
+        let song = entries[0].to_song();
+        for d in 3..10 {
+            entries.push(Entry::skipped(&song, BASE + d * DAY, 5.0, PlayCtx::default()));
+            entries.push(Entry::skipped(
+                &at(0, 0, "2").to_song(),
+                BASE + d * DAY + 1,
+                5.0,
+                PlayCtx::default(),
+            ));
+        }
+        let st = stats(&entries, None, utc(), 10);
+        assert_eq!(st.plays, 3);
+        assert_eq!(st.songs.len(), 1);
+        assert!(!st.songs.iter().any(|r| r.name == "T2"));
+        let all = mix(&entries, MixKind::AllTimeFavorites, BASE + 20 * DAY, utc(), 10);
+        assert_eq!(all.iter().map(|e| e.song_id.as_str()).collect::<Vec<_>>(), ["1"]);
+        assert!(all[0].played());
+        let top = artist_top_songs(&entries, &song.server_id, "", "A1", 10);
+        assert_eq!(top.iter().map(|(_, n)| *n).collect::<Vec<_>>(), [3]);
+        // A skip is heard: the song is not "not heard for two months".
+        let mut old = vec![at(0, 9, "3"), at(1, 9, "3")];
+        assert_eq!(mix(&old, MixKind::Rediscover, BASE + 90 * DAY, utc(), 10).len(), 1);
+        old.push(Entry::skipped(&old[0].to_song(), BASE + 85 * DAY, 3.0, PlayCtx::default()));
+        assert!(mix(&old, MixKind::Rediscover, BASE + 90 * DAY, utc(), 10).is_empty());
+        let mut h = History::in_memory();
+        h.entries = old;
+        assert!(h.export_csv().contains(",skipped,"));
     }
 }

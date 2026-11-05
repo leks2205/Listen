@@ -4088,6 +4088,7 @@ version = "0.40.2"
 dependencies = [
  "listen-core",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

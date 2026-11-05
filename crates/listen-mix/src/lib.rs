@@ -5,6 +5,7 @@
 //!   timbre, mixability, repetition) and a beam search that orders DJ picks.
 //! - [`plan`](mod@plan): where and how to mix two analysed songs ([`TransitionPlan`]),
 //!   and which queue pairs may be mixed at all ([`mix_eligible`]).
+//! - [`pick`]: what automatic fills aim for: tempo, focus, forgotten-favourite slot (contract C4).
 //! - [`loudness`]: playback and blend gain from measured loudness (contract C5).
 //! - [`render`](mod@render): an offline mono preview of a plan (dev tool for
 //!   `listen --check-mix --render`).
@@ -12,6 +13,7 @@
 pub mod bridge;
 pub mod genre;
 pub mod loudness;
+pub mod pick;
 pub mod plan;
 pub mod render;
 pub mod score;

@@ -1014,6 +1014,7 @@ mod tests {
             ai: false,
             queued,
             bridge: None,
+            why: None,
         };
         // DJ picks mix.
         assert!(mix_eligible(&item(1, "x", true, false), &item(5, "y", true, false), true, false, &s));

@@ -279,6 +279,9 @@ pub fn song_of_record(record: &TrackAnalysis, ytm_server: &ServerId) -> Option<S
         album_id: None,
         image: Some(ImageRef::Url(format!("https://i.ytimg.com/vi/{id}/hqdefault.jpg"))),
         duration_secs: record.file.duration_ms / 1000,
+        at_s: None,
+        frac: None,
+        ctx: None,
     };
     Some(entry.to_song())
 }

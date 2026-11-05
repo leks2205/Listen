@@ -1,6 +1,7 @@
 //! The play queue. It lives in the app; the player only ever holds the
 //! current and the next track (Feishin's two-slot model).
 
+pub use crate::history::Picker;
 use crate::model::Song;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,50 @@ pub struct QueueItem {
     /// A DJ bridge: only this stretch of the song plays, mixed in and out (see `listen_mix::bridge`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge: Option<BridgeCut>,
+    /// Why the player picked this song ("Why this song?"); `None` for songs the user added.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::history::lenient")]
+    pub why: Option<Why>,
+}
+
+/// The reason for an automatic pick: who picked it and a code rendered through i18n (never prose,
+/// except the AI DJ's own note and the listener's request text). Serialised as
+/// `{"picker":"auto_dj","code":"similar_to","args":{"seed":"…"}}`. A code this version does not know
+/// reads as no reason (the item itself always loads).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Why {
+    #[serde(default)]
+    pub picker: Picker,
+    #[serde(flatten)]
+    pub code: WhyCode,
+}
+
+impl Why {
+    pub fn new(picker: Picker, code: WhyCode) -> Self {
+        Self { picker, code }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "code", content = "args", rename_all = "snake_case")]
+pub enum WhyCode {
+    /// Sounds like `seed` (a song title).
+    SimilarTo { seed: String },
+    /// Played a lot, not for a long time; `last_played` in Unix seconds.
+    ForgottenFavourite { last_played: i64 },
+    /// Never played before.
+    NewToYou,
+    /// Its tempo fits the tempo target (heart rate, cadence).
+    MatchesTempo { bpm: f32 },
+    /// Little lead vocal, steady energy (focus mode).
+    FocusFriendly,
+    /// A DJ bridge between the songs titled `a` and `b`.
+    BridgeBetween { a: String, b: String },
+    /// The AI DJ's own short note (≤ 80 characters).
+    AiDj { note: String },
+    /// Picked for the listener's request `text`.
+    Request { text: String },
+    /// A new release by `artist`.
+    NewRelease { artist: String },
 }
 
 /// The stretch of a song played as a DJ bridge between two songs that don't mix well directly.
@@ -253,6 +298,17 @@ impl Queue {
     }
 
     /// Advances to the next track (the automatic "track ended" path).
+    /// Sets the reason of the item `uid` ("Why this song?"); false when it is not in the queue.
+    pub fn set_why(&mut self, uid: u64, why: Option<Why>) -> bool {
+        match self.items.iter_mut().find(|it| it.uid == uid) {
+            Some(it) => {
+                it.why = why;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn advance(&mut self) -> Option<&QueueItem> {
         self.position = self.next_position();
         self.current()
@@ -656,6 +712,7 @@ impl Queue {
                 ai: false,
                 queued: false,
                 bridge: None,
+                why: None,
             });
         }
         let new: Vec<usize> = (start..self.items.len()).collect();
@@ -1307,5 +1364,36 @@ mod tests {
         assert_eq!(s.filtered(songs.clone()).len(), 3, "an invalid pattern matches nothing");
         s.filters[0] = rule(FilterField::Name, FilterOp::Contains, "  ");
         assert_eq!(s.filtered(songs).len(), 3);
+    }
+
+    #[test]
+    fn reasons_serialise_as_codes_and_old_queues_load() {
+        let mut q = Queue::default();
+        q.set(vec![song("a")], 0);
+        // A queue item written by 0.40: no `why`, written back unchanged.
+        let old = serde_json::to_string(&q.items[0]).unwrap();
+        assert!(!old.contains("why"));
+        let back: QueueItem = serde_json::from_str(&old).unwrap();
+        assert_eq!(back, q.items[0]);
+
+        let uid = q.items[0].uid;
+        let why = Why::new(Picker::AutoDj, WhyCode::SimilarTo { seed: "Song".into() });
+        assert!(q.set_why(uid, Some(why.clone())));
+        assert!(!q.set_why(uid + 99, None));
+        let line = serde_json::to_string(&q.items[0]).unwrap();
+        assert!(
+            line.contains(r#""why":{"picker":"auto_dj","code":"similar_to","args":{"seed":"Song"}}"#),
+            "{line}"
+        );
+        assert_eq!(serde_json::from_str::<QueueItem>(&line).unwrap().why, Some(why));
+
+        let unit = Why::new(Picker::Rediscover, WhyCode::NewToYou);
+        let j = serde_json::to_string(&unit).unwrap();
+        assert_eq!(serde_json::from_str::<Why>(&j).unwrap(), unit);
+        // A newer version's code or a broken reason never drops the item.
+        let newer = line.replace("similar_to", "moon_phase");
+        assert_eq!(serde_json::from_str::<QueueItem>(&newer).unwrap().why, None);
+        let broken = line.replace(r#""seed":"Song""#, r#""seed":3"#);
+        assert_eq!(serde_json::from_str::<QueueItem>(&broken).unwrap().why, None);
     }
 }
