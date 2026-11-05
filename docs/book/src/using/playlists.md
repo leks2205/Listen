@@ -88,6 +88,10 @@ If your Navidrome server can store playlist covers, small **+** and bin buttons 
 2. Drag the rows by the grip in the first column to their new places. The row where you will drop it is outlined.
 3. Press **Save and replace** and confirm "Replace the playlist with the new order? Are you sure?". Press **Cancel** to throw the changes away.
 
+In edit mode, **Order for smooth mixing** puts the songs into an order that mixes well, the way the DJs order their picks (see [Order for smooth mixing](../dj/transitions.md#order-for-smooth-mixing)). The first song stays first. Check the result, drag anything you want elsewhere, and press **Save and replace** to keep it or **Cancel** to throw it away.
+
+To just listen in that order without changing the playlist, right-click it and choose **Play in smooth order**.
+
 While you edit, search, sort and filters are switched off and the page shows the songs as tracks. **Save and replace** writes the whole playlist back to the server, so avoid editing the same playlist elsewhere at the same time. **Edit** is only offered for playlists you own on servers that can reorder (Navidrome, OpenSubsonic and YouTube Music). If you press it before a long playlist has finished loading, Listen tells you to wait.
 
 ### Removing songs

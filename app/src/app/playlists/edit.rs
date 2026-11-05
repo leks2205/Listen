@@ -30,6 +30,15 @@ impl Edit {
         self.order.insert(to, at);
     }
 
+    /// Puts the rows into `order` (a permutation of the row indices).
+    pub fn apply(&mut self, order: &[usize]) {
+        if order.len() != self.rows.len() {
+            return;
+        }
+        self.rows = order.iter().map(|&i| self.rows[i].clone()).collect();
+        self.order = order.iter().map(|&i| self.order[i]).collect();
+    }
+
     /// The order differs from the playlist's.
     pub fn dirty(&self) -> bool {
         self.order.iter().enumerate().any(|(i, p)| i != *p)
@@ -128,6 +137,21 @@ impl Listen {
                     self.config.settings.lists.playlist_target = PlaylistTarget::Tracks;
                     self.lists.reset(&ListId::Playlist(id));
                 }
+                return self.playlist_list_visible();
+            }
+            P::EditSmooth => {
+                let Some(rows) = self.playlist_page.edit.as_ref().map(|e| e.rows.clone()) else {
+                    return Task::none();
+                };
+                let o = self.smooth_order(&rows, true);
+                if o.analysed < 2 {
+                    self.toast_info("Too few analysed songs in this playlist to order them.".into());
+                    return Task::none();
+                }
+                if let Some(edit) = self.playlist_page.edit.as_mut() {
+                    edit.apply(&o.order);
+                }
+                self.playlist_rows_sync();
                 return self.playlist_list_visible();
             }
             P::EditCancel => {

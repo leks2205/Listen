@@ -141,6 +141,9 @@ pub enum PlaylistPageMsg {
     Refresh,
     // ---- edit mode and removing
     EditStart,
+    /// "Order for smooth mixing" in edit mode: rows reordered by flow (first song kept); saved with
+    /// "Save and replace" like a manual reorder.
+    EditSmooth,
     EditCancel,
     /// "Save and replace": asks first.
     EditSave,

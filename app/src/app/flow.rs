@@ -2,7 +2,8 @@
 //! (Navidrome and YouTube Music songs) order the Auto-DJ's picks and the AI
 //! DJ's pool.
 
-use super::Listen;
+use super::{Listen, Message};
+use iced::Task;
 use listen_core::analysis::FlowFeatures;
 use listen_core::model::Song;
 use std::sync::Arc;
@@ -48,5 +49,90 @@ impl Listen {
             recent_artists: recent.iter().map(|s| s.artist_line().to_lowercase()).collect(),
             ..Default::default()
         }
+    }
+}
+
+/// Result of ordering a list for smooth mixing.
+pub struct SmoothOrder {
+    /// A permutation of the input indices.
+    pub order: Vec<usize>,
+    /// Songs with analysis (only these move).
+    pub analysed: usize,
+}
+
+impl Listen {
+    /// "Order for smooth mixing": the playing order of `songs` (first kept when `keep_first`), analysed
+    /// songs in flow order, unanalysed ones after them in their order. Logs mean link cost before/after.
+    pub(super) fn smooth_order(&self, songs: &[Song], keep_first: bool) -> SmoothOrder {
+        let lookup = self.flow_lookup();
+        let annotated: Vec<(Song, Option<FlowFeatures>)> =
+            songs.iter().map(|s| (s.clone(), lookup(s))).collect();
+        let analysed = annotated.iter().filter(|a| a.1.is_some()).count();
+        let ctx = listen_mix::score::FlowCtx::default();
+        let started = std::time::Instant::now();
+        let order = listen_mix::order_all(&annotated, keep_first.then_some(0), &ctx);
+        let took = started.elapsed();
+        let mean = |o: &[usize]| {
+            let (sum, n) = listen_mix::path_cost(&annotated, o, &ctx);
+            if n == 0 { 0.0 } else { sum / n as f32 }
+        };
+        let identity: Vec<usize> = (0..songs.len()).collect();
+        tracing::info!(
+            "smooth order: {} songs ({analysed} analysed), mean link cost {:.3} → {:.3}, {:.0} ms",
+            songs.len(),
+            mean(&identity),
+            mean(&order),
+            took.as_secs_f64() * 1000.0
+        );
+        SmoothOrder { order, analysed }
+    }
+
+    /// Reorders the not-yet-played part of the queue for smooth mixing. The Up Next block (Play next /
+    /// Add to queue) is ordered within itself and still plays first; the rest follows on from it. DJ
+    /// bridges in that part are dropped (they were chosen for their old neighbours).
+    pub(super) fn smooth_queue(&mut self) -> Task<Message> {
+        let start = self.queue.current_position().map_or(0, |p| p + 1);
+        let bridges: Vec<u64> =
+            self.queue.iter().skip(start).filter(|i| i.bridge.is_some()).map(|i| i.uid).collect();
+        for uid in bridges {
+            self.queue.remove(uid);
+        }
+        let manual = self.queue.up_next_range();
+        let items: Vec<(u64, Song)> = self.queue.iter().map(|i| (i.uid, i.song.clone())).collect();
+        let anchor = self.queue.current().map(|i| (i.uid, i.song.clone()));
+        let block = |range: std::ops::Range<usize>| -> Vec<(u64, Song)> {
+            items.get(range).map(<[_]>::to_vec).unwrap_or_default()
+        };
+        let (up_next, rest) = (block(manual.clone()), block(manual.end..items.len()));
+        if up_next.len() + rest.len() < 2 {
+            self.toast_info("Nothing to reorder in the queue.".into());
+            return Task::none();
+        }
+        // Orders `block` to follow `anchor`; returns the block's uids in the new order.
+        let order_block = |anchor: Option<&(u64, Song)>, block: &[(u64, Song)]| -> (Vec<u64>, usize) {
+            let songs: Vec<Song> = anchor.into_iter().chain(block.iter()).map(|(_, s)| s.clone()).collect();
+            let o = self.smooth_order(&songs, anchor.is_some());
+            let skip = usize::from(anchor.is_some());
+            let uids = o.order.into_iter().filter(|&i| i >= skip).map(|i| block[i - skip].0).collect();
+            (uids, o.analysed.saturating_sub(skip))
+        };
+        let (up_uids, a1) = order_block(anchor.as_ref(), &up_next);
+        let rest_anchor =
+            up_uids.last().and_then(|u| up_next.iter().find(|(x, _)| x == u)).or(anchor.as_ref());
+        let (rest_uids, a2) = order_block(rest_anchor, &rest);
+        if a1 + a2 < 2 {
+            self.toast_info("Too few analysed songs in the queue to order them.".into());
+            return Task::none();
+        }
+        // Up Next: each goes right after the current song, last first, so they end up in order.
+        for uid in up_uids.iter().rev() {
+            self.queue.move_to_next(&[*uid]);
+        }
+        // The rest: each to the end, in order (they were not in Up Next, so nothing else changes).
+        for uid in &rest_uids {
+            self.queue.move_to_bottom(&[*uid]);
+        }
+        self.toast_success("Queue ordered for smooth mixing.".into());
+        self.refresh_next()
     }
 }

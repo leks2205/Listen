@@ -27,6 +27,7 @@ pub fn entries(cx: &Ctx, out: &mut Vec<Entry>) {
     // What the playlist's server does (demo playlists behave like their source).
     let caps = cx.state.playlist_caps(first);
     out.extend(entry::play_shuffle());
+    out.push(Entry::action(Icon::LuActivity, "Play in smooth order", MenuAction::PlaySmooth));
     out.extend(entry::queue_entries());
     out.push(entry::play_submenu());
     out.push(entry::add_to_playlist());

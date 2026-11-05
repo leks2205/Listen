@@ -117,7 +117,7 @@ Queue settings are in **Settings → Playback → Queue**:
 - **Select:** `Ctrl`+click toggles a row, `Shift`+click selects a range. See [Lists, selection and menus](../using/lists.md) for the details.
 - **Remove:** select rows and press `Delete` or `Backspace`. The playing song stays.
 - **Search:** the field in the toolbar filters the queue by title, artist, album or genre.
-- **Right-click** (or the row menu) offers **Remove from queue**, **Move to top**, **Move to next**, **Move to bottom** and **Shuffle selected**.
+- **Right-click** (or the row menu) offers **Remove from queue**, **Move to top**, **Move to next**, **Move to bottom**, **Shuffle selected** and **Order for smooth mixing**. The last one reorders everything after the playing song so that each song flows into the next (see [Order for smooth mixing](../dj/transitions.md#order-for-smooth-mixing)). The Up Next block is ordered within itself and still plays first; DJ bridge songs in that part are dropped, because they were chosen for their old neighbours.
 
 Songs that were analysed for the DJ features show their tempo and key after the artist ("Artist · 124 BPM · 8A").
 

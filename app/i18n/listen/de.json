@@ -1,4 +1,11 @@
 {
+"Order for smooth mixing": "Für weiche Übergänge sortieren",
+"Play in smooth order": "In weicher Reihenfolge abspielen",
+"Queue ordered for smooth mixing.": "Warteschlange für weiche Übergänge sortiert.",
+"Nothing to reorder in the queue.": "In der Warteschlange gibt es nichts umzusortieren.",
+"Too few analysed songs in the queue to order them.": "Zu wenige analysierte Titel in der Warteschlange zum Sortieren.",
+"Too few analysed songs to order them; playing in the usual order.": "Zu wenige analysierte Titel zum Sortieren; die Wiedergabe folgt der üblichen Reihenfolge.",
+"Too few analysed songs in this playlist to order them.": "Zu wenige analysierte Titel in dieser Wiedergabeliste zum Sortieren.",
 "Now playing on {}.": "Läuft jetzt auf {}.",
 "Continuing from {}.": "Geht weiter von {}.",
 "“{}” from {} can't play here.": "„{}“ von {} kann hier nicht laufen.",

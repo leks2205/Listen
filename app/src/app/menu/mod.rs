@@ -196,6 +196,10 @@ pub enum MenuAction {
     MoveQueue(QueueMove, Vec<u64>),
     /// Shuffle the given queue rows among themselves (`None`: the whole queue).
     ShuffleQueue(Option<Vec<u64>>),
+    /// "Order for smooth mixing": reorder the not-yet-played part of the queue.
+    SmoothQueue,
+    /// "Play in smooth order": play the songs ordered for smooth mixing (first song kept).
+    PlaySmooth,
     /// Rate every targeted item 1..=5 stars (0 clears).
     Rate(u8),
     GoToAlbum(String),
@@ -555,7 +559,8 @@ impl Listen {
                 a @ (MenuAction::Favorite(_)
                 | MenuAction::Radio(_)
                 | MenuAction::MoveQueue(..)
-                | MenuAction::ShuffleQueue(_)),
+                | MenuAction::ShuffleQueue(_)
+                | MenuAction::SmoothQueue),
                 target,
             ) => self.menu_extra(a, target),
             (MenuAction::Rate(stars), target) => self.rate_target(target, stars),
@@ -663,6 +668,7 @@ impl Listen {
             action,
             MenuAction::Play
                 | MenuAction::Shuffle
+                | MenuAction::PlaySmooth
                 | MenuAction::PlayNext
                 | MenuAction::AddToQueue
                 | MenuAction::PlayNextShuffled
@@ -672,6 +678,17 @@ impl Listen {
             songs = self.queue_filter(songs);
             if songs.is_empty() {
                 return Task::none();
+            }
+            // Smooth order is decided once here; from then on it plays like Play.
+            if matches!(action, MenuAction::PlaySmooth) {
+                let o = self.smooth_order(&songs, true);
+                songs = o.order.iter().map(|&i| songs[i].clone()).collect();
+                if o.analysed < 2 {
+                    self.toast_info(
+                        "Too few analysed songs to order them; playing in the usual order.".into(),
+                    );
+                }
+                return self.apply_to_songs(MenuAction::Play, songs);
             }
             if matches!(action, MenuAction::Play | MenuAction::Shuffle) && self.queue_confirm_needed() {
                 return self.queue_confirm_apply(action, songs);

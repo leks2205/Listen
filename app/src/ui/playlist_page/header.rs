@@ -419,6 +419,17 @@ fn toolbar<'a>(state: &'a Listen, detail: &'a PlaylistDetail) -> Element<'a, Mes
                         .on_press_maybe((!edit.saving).then(|| msg(P::EditSave))),
                     )
                     .push(
+                        button(label_w(
+                            "Order for smooth mixing",
+                            metrics::font_md(),
+                            t.foreground,
+                            Weight::Medium,
+                        ))
+                        .padding(Padding::from([8.0, 12.0]))
+                        .style(style::default_button(t))
+                        .on_press_maybe((!edit.saving).then(|| msg(P::EditSmooth))),
+                    )
+                    .push(
                         button(label_w("Cancel", metrics::font_md(), t.foreground, Weight::Medium))
                             .padding(Padding::from([8.0, 12.0]))
                             .style(style::default_button(t))

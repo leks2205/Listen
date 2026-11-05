@@ -52,6 +52,12 @@ The bridge shows in the queue with the tag **Bridge**. It does not count as play
 
 When a DJ picks several songs, **Order by flow** arranges them so that each song follows from the one before: similar tempo, neighbouring keys and a sensible energy curve, and without repeating the same artist too soon. The Auto-DJ and the AI DJ both use this. Songs without analysis are placed by the server's own similarity order.
 
+## Order for smooth mixing
+
+The same idea works on a whole playlist or the queue. **Play in smooth order** (right-click a playlist), **Order for smooth mixing** (right-click a queue row, or the button in a playlist's edit mode) put all analysed songs into an order where tempo, key, energy and sound change as little as possible from one song to the next, and the same artist does not play twice in a row. The first song stays first (in the queue: the playing song). Songs without analysis keep their order and go to the end. A playlist on the server only changes when you press **Save and replace** in edit mode.
+
+The order is found in a few milliseconds even for a few hundred songs: Listen starts with the closest next song each time and then keeps reversing stretches and moving single songs while that makes the whole run smoother.
+
 ## Settings
 
 Everything is in **Settings → Playback → DJ transitions & song analysis**.

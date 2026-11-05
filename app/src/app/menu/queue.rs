@@ -47,6 +47,7 @@ pub fn entries(cx: &Ctx, out: &mut Vec<Entry>) {
             Entry::action(Icon::LuShuffle, "Shuffle all", MenuAction::ShuffleQueue(None)),
         ],
     ));
+    out.push(Entry::action(Icon::LuActivity, "Order for smooth mixing", MenuAction::SmoothQueue));
     out.push(Entry::divider());
     out.push(song::track_radio(cx));
     out.push(Entry::divider());

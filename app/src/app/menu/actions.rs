@@ -22,7 +22,7 @@ impl PlayHow {
 }
 
 impl Listen {
-    /// `Favorite`, `Radio`, `MoveQueue` and `ShuffleQueue` on `target`.
+    /// `Favorite`, `Radio`, `MoveQueue`, `ShuffleQueue` and `SmoothQueue` on `target`.
     pub(in crate::app) fn menu_extra(&mut self, action: MenuAction, target: MenuTarget) -> Task<Message> {
         match action {
             MenuAction::Favorite(favorite) => self.favorite_target(target, favorite),
@@ -35,6 +35,7 @@ impl Listen {
                 }
                 self.refresh_next()
             }
+            MenuAction::SmoothQueue => self.smooth_queue(),
             MenuAction::ShuffleQueue(selected) => {
                 match selected {
                     Some(uids) => self.queue.shuffle_selected(&uids),

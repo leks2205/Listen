@@ -234,7 +234,7 @@ fn same_artist(a: &Song, b: &Song) -> bool {
 }
 
 /// Penalty for `next` given the songs before it (most recent last).
-fn repeat_penalty(before: &[&Song], next: &Song, ctx: &FlowCtx) -> f32 {
+pub(crate) fn repeat_penalty(before: &[&Song], next: &Song, ctx: &FlowCtx) -> f32 {
     let w = &ctx.weights;
     let mut p = 0.0;
     for (back, prev) in before.iter().rev().take(3).enumerate() {
@@ -252,7 +252,7 @@ fn repeat_penalty(before: &[&Song], next: &Song, ctx: &FlowCtx) -> f32 {
 }
 
 /// One step: flow (or neutral) cost plus the unanalysed penalty.
-fn step_cost(
+pub(crate) fn step_cost(
     a: Option<&FlowFeatures>,
     b: Option<&FlowFeatures>,
     history: &[f32],
@@ -267,7 +267,7 @@ fn step_cost(
     }
 }
 
-fn stats_for(
+pub(crate) fn stats_for(
     ctx: &FlowCtx,
     current: Option<&FlowFeatures>,
     cands: &[(Song, Option<FlowFeatures>)],
