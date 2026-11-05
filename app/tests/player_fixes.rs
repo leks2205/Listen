@@ -84,7 +84,10 @@ fn a_new_track_starts_counting_afresh() {
     }
     let _ = s.update(Message::Next);
     pos(&mut s, 100.0);
-    assert!(s.history.entries.is_empty(), "the old track's played time is gone");
+    assert!(
+        s.history.entries.iter().all(|e| e.status == listen_core::history::PlayStatus::Skipped),
+        "the old track's played time is gone (only its skip is noted)"
+    );
 }
 
 #[test]
