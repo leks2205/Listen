@@ -124,33 +124,21 @@ async fn check(
         };
         let outs = [level(&out_pcm.left, gains.0), level(&out_pcm.right, gains.0)];
         let ins = [level(&in_pcm.left, gains.1), level(&in_pcm.right, gains.1)];
-        let mixes: Vec<Vec<f32>> = (0..2)
-            .map(|c| listen_mix::render::render_with_gains(&outs[c], &ins[c], sr, &plan, context, gains))
+        let r: Vec<listen_mix::render::Rendered> = (0..2)
+            .map(|c| listen_mix::render::render_decks(&outs[c], &ins[c], sr, &plan, context, gains))
             .collect();
-        let samples: Vec<f32> = mixes[0].iter().zip(&mixes[1]).map(|(l, r)| 0.5 * (l + r)).collect();
-        // Where the blend starts in the preview (the outgoing ramp, if any, plays at its mean speed).
-        let first = plan.out_ramp.map_or(plan.out_mix_start_s, |r| r.start_out_s.min(plan.out_mix_start_s));
-        let pre = (first - context).max(0.0);
-        let ramp_speed = plan.out_ramp.map_or(1.0, |r| (r.from + r.to) / 2.0);
-        let blend_from = (first - pre) + (plan.out_mix_start_s - first) / ramp_speed;
-        // Hole and bump against each deck's own levelled audio, aligned to the preview (speed
-        // changes ignored; they are a few per cent). Only blends overlap two decks.
-        if !matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless) {
-            let srf = f64::from(sr);
-            let at = |t: f64| (t.max(0.0) * srf) as usize;
-            let n = samples.len();
-            let out_own =
-                |x: &[f32]| -> Vec<f32> { x.get(at(pre)..).unwrap_or(&[]).iter().take(n).copied().collect() };
-            let in_own = |x: &[f32]| -> Vec<f32> {
-                let mut v = vec![0.0f32; at(blend_from).min(n)];
-                let m = n - v.len();
-                v.extend(x.get(at(plan.in_mix_start_s)..).unwrap_or(&[]).iter().take(m));
-                v
+        let samples: Vec<f32> = r[0].mix.iter().zip(&r[1].mix).map(|(l, r)| 0.5 * (l + r)).collect();
+        // Hole and bump against each deck alone on the preview's timeline (its speed and ramp, its
+        // levelling gain, no blend gain, trim or filters). Only blends overlap two decks.
+        if !matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless)
+            && let Some(blend_from) = r[0].blend_from_s
+        {
+            let lv = |f: fn(&listen_mix::render::Rendered) -> &Vec<f32>| {
+                listen_mix::verify::audio_levels_of(&[f(&r[0]), f(&r[1])], sr, 0.1)
             };
-            let lv = |l: &[f32], r: &[f32]| listen_mix::verify::audio_levels_of(&[l, r], sr, 0.1);
-            let lm = lv(&mixes[0], &mixes[1]);
-            let lo = lv(&out_own(&outs[0]), &out_own(&outs[1]));
-            let li = lv(&in_own(&ins[0]), &in_own(&ins[1]));
+            let lm = lv(|r| &r.mix);
+            let lo = lv(|r| &r.out_alone);
+            let li = lv(|r| &r.in_alone);
             if let Some((dip, bump)) =
                 listen_mix::verify::audio_dip_bump(&lm, &lo, &li, 0.1, blend_from, plan.blend_s)
             {

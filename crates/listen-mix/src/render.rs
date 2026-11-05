@@ -20,13 +20,45 @@ pub fn render_with_gains(
     context_s: f64,
     deck_gains_db: (f32, f32),
 ) -> Vec<f32> {
+    render_decks(out, inn, sr, plan, context_s, deck_gains_db).mix
+}
+
+/// A rendered preview and each deck alone on the same timeline (see [`render_decks`]).
+pub struct Rendered {
+    pub mix: Vec<f32>,
+    /// The outgoing song as the outgoing deck plays it (its speed, ramp included), at full gain, without
+    /// the blend's gain, trim or filters, also after it stops in the mix; 0 past its end.
+    pub out_alone: Vec<f32>,
+    /// The incoming song likewise, from the mix point (0 before).
+    pub in_alone: Vec<f32>,
+    /// Where the blend starts in the preview (s); `None` when the plan never reached it.
+    pub blend_from_s: Option<f64>,
+}
+
+/// [`render_with_gains`] plus each deck alone, sample-aligned to the mix: the reference
+/// [`crate::verify::audio_dip_bump`] measures the mix against (a tempo ramp before the blend moves the
+/// outgoing by up to a second against its file, so the file itself can't be that reference).
+pub fn render_decks(
+    out: &[f32],
+    inn: &[f32],
+    sr: u32,
+    plan: &TransitionPlan,
+    context_s: f64,
+    deck_gains_db: (f32, f32),
+) -> Rendered {
     let sr_f = f64::from(sr.max(1));
     let dt = 1.0 / sr_f;
     if plan.kind == Kind::Gapless {
         // Tail of the outgoing straight into the head of the incoming.
         let from = ((plan.out_stop_s - context_s).max(0.0) * sr_f) as usize;
         let head = ((context_s * sr_f) as usize).min(inn.len());
-        return out.get(from..).unwrap_or(&[]).iter().chain(&inn[..head]).copied().collect();
+        let tail = out.get(from..).unwrap_or(&[]);
+        let mix: Vec<f32> = tail.iter().chain(&inn[..head]).copied().collect();
+        let mut out_alone = tail.to_vec();
+        out_alone.resize(mix.len(), 0.0);
+        let mut in_alone = vec![0.0; tail.len()];
+        in_alone.extend_from_slice(&inn[..head]);
+        return Rendered { mix, out_alone, in_alone, blend_from_s: Some(tail.len() as f64 / sr_f) };
     }
 
     let first = plan.out_ramp.map_or(plan.out_mix_start_s, |r| r.start_out_s.min(plan.out_mix_start_s));
@@ -39,6 +71,7 @@ pub fn render_with_gains(
     let mut next_event = 0;
     let (mut fx_out, mut fx_in) = (Fx::new(sr_f), Fx::new(sr_f));
     let mut buf = Vec::new();
+    let (mut out_alone, mut in_alone) = (Vec::new(), Vec::new());
     // Safety cap: 15 minutes of output.
     let cap = (900.0 * sr_f) as usize;
     // The blend trim changes slowly: evaluated every 64 samples.
@@ -91,6 +124,8 @@ pub fn render_with_gains(
             y += g_in * fx_in.process(sample(inn, p * sr_f));
         }
         buf.push(y);
+        out_alone.push(sample(out, out_pos * sr_f));
+        in_alone.push(in_pos.map_or(0.0, |p| sample(inn, p * sr_f)));
 
         let s_out = speed(plan.out_ramp, ramp_wall, wall, 1.0);
         let s_in = match stop_wall {
@@ -106,7 +141,7 @@ pub fn render_with_gains(
         }
         wall += dt;
     }
-    buf
+    Rendered { mix: buf, out_alone, in_alone, blend_from_s: mix_wall }
 }
 
 /// Speed at `wall` given a ramp that began at `began` (or `before` if it
@@ -286,6 +321,46 @@ mod tests {
         let s = sr as usize;
         assert!((rms(&y[..s / 2]) - rms(&out)).abs() < 0.01);
         assert!((rms(&y[y.len() - s / 2..]) - rms(&inn)).abs() < 0.01);
+    }
+
+    #[test]
+    fn each_deck_alone_follows_the_mix_through_a_tempo_ramp() {
+        // Bug 57: a ramp 30 s before the blend plays the outgoing 1.2 s ahead of its file; the deck
+        // reference must follow it, or a level step at the mix point reads as a hole the mix doesn't have.
+        let sr = 4000;
+        let s = sr as f64;
+        let out: Vec<f32> = tone(440.0, 60.0, sr)
+            .iter()
+            .enumerate()
+            .map(|(i, v)| if i < 40 * sr as usize { *v } else { 0.1 * v })
+            .collect();
+        let inn = tone(660.0, 30.0, sr);
+        let mut plan = fade(vec![]);
+        plan.out_mix_start_s = 40.0;
+        plan.out_stop_s = 42.0;
+        plan.handover_out_s = 41.0;
+        plan.out_ramp = Some(SpeedRamp { from: 1.0, to: 1.04, start_out_s: 10.0, secs: 1.0 });
+        let r = render_decks(&out, &inn, sr, &plan, 1.0, (0.0, 0.0));
+        assert_eq!(
+            (r.mix.len(), r.out_alone.len(), r.in_alone.len()),
+            (r.mix.len(), r.mix.len(), r.mix.len())
+        );
+        let from = r.blend_from_s.expect("the blend starts");
+        let at = |t: f64| (t * s) as usize;
+        // Before the blend the mix is the outgoing alone, sample for sample; the incoming is silent.
+        assert!(r.mix[..at(from - 0.01)].iter().zip(&r.out_alone).all(|(m, o)| (m - o).abs() < 1e-6));
+        assert!(r.in_alone[..at(from - 0.01)].iter().all(|&v| v == 0.0));
+        // The outgoing's step sits at the blend start in its reference, not 1.2 s later as in the file.
+        assert!(rms(&r.out_alone[at(from - 0.3)..at(from - 0.05)]) > 0.5);
+        assert!(rms(&r.out_alone[at(from + 0.05)..at(from + 0.3)]) < 0.1);
+        // After the outgoing stops, the mix is the incoming alone.
+        let end = r.mix.len();
+        assert!(
+            r.mix[end - at(0.5)..]
+                .iter()
+                .zip(&r.in_alone[end - at(0.5)..])
+                .all(|(m, i)| (m - i).abs() < 1e-6)
+        );
     }
 
     #[test]
