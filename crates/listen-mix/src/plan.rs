@@ -526,7 +526,12 @@ fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
             if through {
                 cut_score -= 0.5;
             }
+            // The repeats need the outgoing file to run on (a deck stops at its end, echo and all).
+            let room = o.t(m as f64) + echo_tail(delay) <= end + 0.05;
             for (is_echo, score) in [(true, echo), (false, cut_score)] {
+                if is_echo && !room {
+                    continue;
+                }
                 let better = best.is_none_or(|b| score.total_cmp(&b.score).then(m.cmp(&b.m)).is_gt());
                 if better {
                     best = Some(Hand { echo: is_echo, m, i: inb, score });
