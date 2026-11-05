@@ -122,22 +122,27 @@ impl Exclusions {
 
     /// Snoozes `song` for [`SNOOZE_DAYS`] from `now`.
     pub fn snooze(&mut self, song: &Song, now: i64) {
-        self.snoozed.insert(song_key(song), Snooze { until: now + SNOOZE_DAYS * DAY, at: now });
+        let key = song_key(song);
+        let at = stamp(self.snoozed.get(&key).map(|s| s.at), now);
+        self.snoozed.insert(key, Snooze { until: now + SNOOZE_DAYS * DAY, at });
     }
 
     /// Ends a snooze early (kept as an expired snooze so the end syncs).
     pub fn unsnooze(&mut self, key: &str, now: i64) {
         if let Some(s) = self.snoozed.get_mut(key) {
-            *s = Snooze { until: now, at: now };
+            *s = Snooze { until: now, at: stamp(Some(s.at), now) };
         }
     }
 
     pub fn set_not_interested(&mut self, key: &str, on: bool, now: i64) {
-        self.not_interested.insert(key.to_string(), Mark { at: now, on });
+        let at = stamp(self.not_interested.get(key).map(|m| m.at), now);
+        self.not_interested.insert(key.to_string(), Mark { at, on });
     }
 
     pub fn set_hidden_in(&mut self, playlist: &str, key: &str, on: bool, now: i64) {
-        self.hidden_in.entry(playlist.to_string()).or_default().insert(key.to_string(), Mark { at: now, on });
+        let marks = self.hidden_in.entry(playlist.to_string()).or_default();
+        let at = stamp(marks.get(key).map(|m| m.at), now);
+        marks.insert(key.to_string(), Mark { at, on });
     }
 
     /// Takes in another device's state: per song (and playlist), the later change wins; on a tie, set
@@ -171,6 +176,12 @@ impl Exclusions {
         }
         self.hidden_in.retain(|_, m| !m.is_empty());
     }
+}
+
+/// The time of a change on this device: after the change it replaces, even within the same second (an
+/// Undo right after Snooze must win the next merge against the server's copy of the snooze).
+fn stamp(prev: Option<i64>, now: i64) -> i64 {
+    prev.map_or(now, |p| now.max(p + 1))
 }
 
 fn merge_marks(mine: &mut BTreeMap<String, Mark>, theirs: &BTreeMap<String, Mark>) -> bool {
@@ -263,6 +274,28 @@ mod tests {
         assert_eq!(keys, [song_key(&song("S", "A")), "n|a".to_string()].into());
         assert_eq!(x.blocked_keys(NOW + 31 * DAY).count(), 1, "the snooze ran out");
         assert!(x.any_set(NOW));
+    }
+
+    #[test]
+    fn undo_in_the_same_second_wins_the_next_merge() {
+        let song = song("Song", "Band");
+        let key = song_key(&song);
+        let mut x = Exclusions::default();
+        x.snooze(&song, NOW);
+        x.set_not_interested(&key, true, NOW);
+        x.set_hidden_in("pl", &key, true, NOW);
+        let server = x.clone();
+        x.unsnooze(&key, NOW);
+        x.set_not_interested(&key, false, NOW);
+        x.set_hidden_in("pl", &key, false, NOW);
+        x.merge(&server);
+        assert_eq!(x.blocked_keys(NOW).count(), 0);
+        assert!(!x.is_hidden_in("pl", &key));
+        // And the server takes the undo from this device.
+        let mut s = server;
+        s.merge(&x);
+        assert_eq!(s.blocked_keys(NOW).count(), 0);
+        assert!(!s.is_hidden_in("pl", &key));
     }
 
     #[test]
