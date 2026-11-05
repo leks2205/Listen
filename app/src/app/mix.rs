@@ -216,6 +216,17 @@ impl MixState {
         self.plan.as_deref()
     }
 
+    /// The song a deck holds during a mix (`None` when no mix runs).
+    pub fn deck_uid(&self, deck: usize) -> Option<u64> {
+        if self.phase == Phase::Idle {
+            None
+        } else if deck == self.in_deck {
+            Some(self.in_uid)
+        } else {
+            Some(self.out_uid)
+        }
+    }
+
     /// The pair being mixed (outgoing uid, incoming uid).
     pub fn pair(&self) -> Option<(u64, u64)> {
         (self.phase != Phase::Idle).then_some((self.out_uid, self.in_uid))

@@ -31,52 +31,7 @@ pub const PEAK_CEILING_DBTP: f32 = -1.0;
 /// Fastest gain change while levelling is toggled or a source arrives late: 1 dB per 50 ms.
 pub const MAX_RAMP_DB_PER_S: f32 = 20.0;
 
-/// "Volume levelling" setting: the loudness every song is brought to.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Levelling {
-    Off,
-    /// −19 LUFS.
-    Quiet,
-    /// −14 LUFS (streaming convention).
-    #[default]
-    Normal,
-    /// −11 LUFS.
-    Loud,
-}
-
-impl Levelling {
-    pub const ALL: [Levelling; 4] = [Levelling::Off, Levelling::Quiet, Levelling::Normal, Levelling::Loud];
-
-    /// Target integrated loudness; `None` = levelling off.
-    pub fn target_lufs(self) -> Option<f32> {
-        match self {
-            Levelling::Off => None,
-            Levelling::Quiet => Some(-19.0),
-            Levelling::Normal => Some(-14.0),
-            Levelling::Loud => Some(-11.0),
-        }
-    }
-
-    pub fn to_u8(self) -> u8 {
-        self as u8
-    }
-
-    pub fn from_u8(v: u8) -> Self {
-        Self::ALL.get(usize::from(v)).copied().unwrap_or_default()
-    }
-}
-
-impl std::fmt::Display for Levelling {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Levelling::Off => "Off",
-            Levelling::Quiet => "Quiet",
-            Levelling::Normal => "Normal",
-            Levelling::Loud => "Loud",
-        })
-    }
-}
+pub use listen_core::settings::Levelling;
 
 /// A ReplayGain tag pair (gain in dB, peak as a linear sample value).
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -183,9 +183,17 @@ impl Listen {
     /// mpv properties for `deck` from the settings.
     pub(super) fn audio_settings_for(&self, deck: usize) -> listen_player::AudioSettings {
         let s = &self.config.settings.playback;
+        let levelling = self.levelling_in_chain();
+        let chain = if self.mixing_possible() || deck == 1 {
+            settings::deck_audio_filters(s)
+        } else {
+            settings::mpv_audio_filters(s)
+        };
         listen_player::AudioSettings {
             gapless: s.gapless.clone(),
+            // Volume levelling reads the ReplayGain tags itself.
             replay_gain: match s.replay_gain {
+                _ if levelling => "no",
                 settings::ReplayGain::No => "no",
                 settings::ReplayGain::Track => "track",
                 settings::ReplayGain::Album => "album",
@@ -195,10 +203,14 @@ impl Listen {
             replay_gain_clip: s.replay_gain_clip,
             replay_gain_fallback_db: s.replay_gain_fallback_db,
             audio_device: s.audio_device.clone(),
-            audio_filters: if self.mixing_possible() || deck == 1 {
-                settings::deck_audio_filters(s)
+            audio_filters: if levelling {
+                let mut on = s.clone();
+                if on.levelling == settings::Levelling::Off {
+                    on.levelling = settings::Levelling::Normal; // ramping down after a switch-off
+                }
+                settings::with_levelling(&on, chain, self.levelling_level_in(deck))
             } else {
-                settings::mpv_audio_filters(s)
+                chain
             },
             pitch_correction: s.preserve_pitch,
             audio_exclusive: s.audio_exclusive,

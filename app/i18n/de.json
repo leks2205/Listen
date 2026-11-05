@@ -2621,5 +2621,13 @@
 "The word meanings did not load: {}": "Die Wortbedeutungen konnten nicht geladen werden: {}",
 "vocab-hub address": "vocab-hub-Adresse",
 "Your vocab-hub (https://…) for Lute: words mode shows whether you know a word and adds new ones to Lute. Empty = off.": "Dein vocab-hub (https://…) für Lute: Der Wörtermodus zeigt, ob du ein Wort kennst, und fügt neue zu Lute hinzu. Leer = aus.",
-"The online service for the Translation button (needs your own API key; Gemini uses the AI DJ's key and leaves English lines as they are).": "Der Online-Dienst für den Übersetzen-Knopf (braucht einen eigenen API-Schlüssel; Gemini nutzt den Schlüssel des KI-DJs und lässt englische Zeilen, wie sie sind)."
+"The online service for the Translation button (needs your own API key; Gemini uses the AI DJ's key and leaves English lines as they are).": "Der Online-Dienst für den Übersetzen-Knopf (braucht einen eigenen API-Schlüssel; Gemini nutzt den Schlüssel des KI-DJs und lässt englische Zeilen, wie sie sind).",
+"Volume levelling": "Lautstärkeausgleich",
+"Level": "Pegel",
+"Quiet": "Leise",
+"Normal": "Normal",
+"Loud": "Laut",
+"Play every song equally loud: Quiet −19, Normal −14, Loud −11 LUFS. Uses the analysis, YouTube's loudness or ReplayGain tags; a limiter keeps boosted songs from clipping. Replaces ReplayGain while on.": "Jeden Titel gleich laut abspielen: Leise −19, Normal −14, Laut −11 LUFS. Nutzt die Analyse, die Lautheit von YouTube oder ReplayGain-Tags; ein Limiter verhindert, dass angehobene Titel übersteuern. Ersetzt ReplayGain, solange er an ist.",
+"Normalize loudness with ReplayGain tags (when Volume levelling is off).": "Lautstärke mit ReplayGain-Tags normalisieren (wenn der Lautstärkeausgleich aus ist).",
+"(loudness unknown)": "(Lautheit unbekannt)"
 }

@@ -398,8 +398,19 @@ impl Entry {
             Subject::Song(s) => state.song_file(s),
             _ => None,
         };
-        let rows = rows(&subject, None);
+        let rows = state.with_levelling_row(&subject, rows(&subject, None));
         Entry { subject, load: Load::Idle, details: None, rows, local_path }
+    }
+}
+
+impl Listen {
+    /// Adds "Volume levelling" (the gain this song gets and its source) to a song's rows.
+    fn with_levelling_row(&self, subject: &Subject, rows: Vec<Row>) -> Vec<Row> {
+        let mut r = Rows(rows);
+        if let Subject::Song(s) = subject {
+            r.add("Volume levelling", self.levelling_describe(s));
+        }
+        r.0
     }
 }
 
@@ -449,10 +460,18 @@ impl Listen {
                 return self.load_details(i);
             }
             DetailsMsg::Loaded(i, result) => {
+                let subject =
+                    self.item.details.as_ref().and_then(|d| d.entries.get(i)).map(|e| e.subject.clone());
+                let new_rows = match (&*result, subject) {
+                    (Ok(details), Some(subject)) => {
+                        Some(self.with_levelling_row(&subject, rows(&subject, Some(details))))
+                    }
+                    _ => None,
+                };
                 if let Some(e) = self.item.details.as_mut().and_then(|d| d.entries.get_mut(i)) {
                     match *result {
                         Ok(details) => {
-                            e.rows = rows(&e.subject, Some(&details));
+                            e.rows = new_rows.unwrap_or_default();
                             e.details = Some(details);
                             e.load = Load::Done;
                         }

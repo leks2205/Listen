@@ -210,11 +210,17 @@ The player bar's volume (0 to 100) is saved in `settings.playback.volume` (defau
 | Exclusive mode | Takes the sound device for Listen alone (WASAPI and some ALSA setups). | Off | `settings.playback.audio_exclusive` |
 | Audio format | Sample format sent to the sound card: auto, `s16`, `s32`, `float`, `u8`. | auto | `settings.playback.audio_format` (empty = auto) |
 
+### Volume levelling
+
+| Row | What it does | Default | Key |
+| --- | --- | --- | --- |
+| Level | Plays every song equally loud: **Off**, **Quiet** (−19 LUFS), **Normal** (−14 LUFS) or **Loud** (−11 LUFS), from the analysis, YouTube's loudness or ReplayGain tags, with a limiter. Replaces ReplayGain while on. | Normal | `settings.playback.levelling` (`"off"`, `"quiet"`, `"normal"`, `"loud"`) |
+
 ### ReplayGain
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Mode | Normalises loudness using ReplayGain tags: **No**, **Track** or **Album**. | No | `settings.playback.replay_gain` (`"no"`, `"track"`, `"album"`) |
+| Mode | Normalises loudness using ReplayGain tags: **No**, **Track** or **Album** (only while Volume levelling is off). | No | `settings.playback.replay_gain` (`"no"`, `"track"`, `"album"`) |
 | Preamp | Gain added on top of the ReplayGain value, -15 to +15 dB. | 0 | `settings.playback.replay_gain_preamp_db` |
 | Prevent clipping | Lowers the gain so the peak never exceeds full scale. | On | `settings.playback.replay_gain_clip` |
 | Fallback gain | Gain for songs without ReplayGain tags, -15 to +15 dB. | 0 | `settings.playback.replay_gain_fallback_db` |

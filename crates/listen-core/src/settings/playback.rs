@@ -20,6 +20,53 @@ impl std::fmt::Display for ReplayGain {
     }
 }
 
+/// "Volume levelling" setting: the loudness every song is brought to.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Levelling {
+    Off,
+    /// −19 LUFS.
+    Quiet,
+    /// −14 LUFS (streaming convention).
+    #[default]
+    Normal,
+    /// −11 LUFS.
+    Loud,
+}
+
+impl Levelling {
+    pub const ALL: [Levelling; 4] = [Levelling::Off, Levelling::Quiet, Levelling::Normal, Levelling::Loud];
+
+    /// Target integrated loudness; `None` = levelling off.
+    pub fn target_lufs(self) -> Option<f32> {
+        match self {
+            Levelling::Off => None,
+            Levelling::Quiet => Some(-19.0),
+            Levelling::Normal => Some(-14.0),
+            Levelling::Loud => Some(-11.0),
+        }
+    }
+
+    pub fn to_u8(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_u8(v: u8) -> Self {
+        Self::ALL.get(usize::from(v)).copied().unwrap_or_default()
+    }
+}
+
+impl std::fmt::Display for Levelling {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Levelling::Off => "Off",
+            Levelling::Quiet => "Quiet",
+            Levelling::Normal => "Normal",
+            Levelling::Loud => "Loud",
+        })
+    }
+}
+
 /// How much quality to stream (lower saves bandwidth). Local files, the analysis
 /// copy used for DJ mixing and playback while DJ transitions are on always stay original.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,6 +182,10 @@ pub struct Playback {
     pub microtonal_pitch: bool,
     /// mpv `replaygain-fallback`: gain in dB for songs without ReplayGain tags.
     pub replay_gain_fallback_db: f32,
+    /// "Volume levelling": every song is brought to one loudness (analysis store, YouTube's
+    /// loudness, ReplayGain tags), with a limiter at the end of the chain. On replaces mpv's
+    /// ReplayGain.
+    pub levelling: Levelling,
     /// mpv `audio-exclusive`.
     pub audio_exclusive: bool,
     /// mpv `audio-samplerate`; below 8000 = the device's default.
@@ -179,6 +230,7 @@ impl Default for Playback {
             preserve_pitch: true,
             microtonal_pitch: false,
             replay_gain_fallback_db: 0.0,
+            levelling: Levelling::Normal,
             audio_exclusive: false,
             sample_rate_hz: 0,
             audio_format: String::new(),
@@ -205,6 +257,33 @@ pub fn mpv_audio_filters(p: &Playback) -> String {
         parts.push(p.compressor.filter());
     }
     parts.join(",")
+}
+
+/// `af` label of the levelling stage (gain + limiter, last in the chain).
+pub const LEVELLING_LABEL: &str = "lvl";
+/// Inner name of the levelling `alimiter` (its `level_in` takes the song's gain live).
+pub const LEVELLING_TARGET: &str = "alimiter@lv";
+/// Limiter ceiling: −2.5 dBFS sample peak. Inter-sample peaks after heavy limiting (Loud) overshoot
+/// by up to ~1.4 dB; this keeps the true peak ≤ −1 dBTP (measured on 28 store songs).
+pub const LEVELLING_LIMIT: f32 = 0.75;
+
+/// The levelling stage: an `alimiter` whose input level is the song's gain `level_in`
+/// (linear; changed live with `af-command lvl level_in <factor> alimiter@lv`), auto-level off,
+/// delay compensated so both DJ decks keep their timing.
+pub fn levelling_filter(level_in: f32) -> String {
+    let level_in = if level_in.is_finite() { level_in.clamp(0.015_625, 64.0) } else { 1.0 };
+    format!(
+        "@{LEVELLING_LABEL}:lavfi=[{LEVELLING_TARGET}=level_in={level_in:.6}:limit={LEVELLING_LIMIT}:attack=5:release=50:level=0:latency=1]"
+    )
+}
+
+/// `chain` with the levelling stage (at gain `level_in`) appended when levelling is on.
+pub fn with_levelling(p: &Playback, chain: String, level_in: f32) -> String {
+    match p.levelling {
+        Levelling::Off => chain,
+        _ if chain.is_empty() => levelling_filter(level_in),
+        _ => format!("{chain},{}", levelling_filter(level_in)),
+    }
 }
 
 fn eq_filters(p: &Playback, parts: &mut Vec<String>) {
@@ -417,6 +496,27 @@ pub fn parse_mpv_extra_args(text: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn levelling_is_on_by_default_and_ends_the_chain() {
+        let mut p = Playback::default();
+        assert_eq!(p.levelling, Levelling::Normal);
+        let lim = levelling_filter(1.0);
+        assert!(lim.starts_with("@lvl:lavfi=[alimiter@lv=level_in=1.000000:limit=0.75:"), "{lim}");
+        assert!(lim.contains(":level=0:latency=1]"), "auto-level off, delay compensated: {lim}");
+        assert!(levelling_filter(0.5).contains("level_in=0.500000:"));
+        assert!(levelling_filter(f32::NAN).contains("level_in=1.000000:"));
+        assert!(levelling_filter(1000.0).contains("level_in=64.000000:"), "ffmpeg's range");
+        assert_eq!(with_levelling(&p, String::new(), 1.0), lim);
+        assert_eq!(with_levelling(&p, "volume=2dB".into(), 1.0), format!("volume=2dB,{lim}"));
+        p.levelling = Levelling::Off;
+        assert_eq!(with_levelling(&p, "volume=2dB".into(), 1.0), "volume=2dB", "off: chain as before");
+        // Old settings files (no field) get the default; the value round-trips.
+        let old: Playback = serde_json::from_str("{\"volume\": 50}").unwrap();
+        assert_eq!(old.levelling, Levelling::Normal);
+        let quiet: Playback = serde_json::from_str("{\"levelling\": \"quiet\"}").unwrap();
+        assert_eq!(quiet.levelling.target_lufs(), Some(-19.0));
+    }
 
     #[test]
     fn compressor_follows_feishin_in_linear_amplitudes() {

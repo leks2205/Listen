@@ -14,6 +14,7 @@ pub mod cookies;
 pub mod favorites;
 mod home;
 mod library;
+pub mod loudness;
 pub mod query;
 pub mod token;
 pub mod ytdlp;

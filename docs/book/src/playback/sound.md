@@ -1,10 +1,10 @@
 # Sound
 
-Listen plays through [mpv](https://mpv.io), so most sound settings map directly to mpv features. This page covers the output device, gapless playback, ReplayGain, the equalizer and compressor, speed and pitch, fades, streaming quality and transcoding, extra mpv options, and the server jukebox.
+Listen plays through [mpv](https://mpv.io), so most sound settings map directly to mpv features. This page covers the output device, gapless playback, volume levelling, ReplayGain, the equalizer and compressor, speed and pitch, fades, streaming quality and transcoding, extra mpv options, and the server jukebox.
 
-Most of these settings are in **Settings → Playback**, in the sections **Playback**, **Audio output**, **ReplayGain**, **mpv**, **Equalizer**, **Compressor** and **Transcoding**. Output device, speed and pitch are also in the **Player options** popover (the sliders icon in the player bar).
+Most of these settings are in **Settings → Playback**, in the sections **Playback**, **Audio output**, **Volume levelling**, **ReplayGain**, **mpv**, **Equalizer**, **Compressor** and **Transcoding**. Output device, speed and pitch are also in the **Player options** popover (the sliders icon in the player bar).
 
-> **Note:** Equalizer, compressor, ReplayGain, speed, pitch and fades are applied by mpv on this computer. They have no effect while you [cast to a device](casting.md) or use the server [jukebox](#jukebox-mode).
+> **Note:** Equalizer, compressor, volume levelling, ReplayGain, speed, pitch and fades are applied by mpv on this computer. They have no effect while you [cast to a device](casting.md) or use the server [jukebox](#jukebox-mode).
 
 ## Output device
 
@@ -41,6 +41,28 @@ Two settings in the **Playback** section smooth the start and end of songs:
 
 - **Fade songs in and out:** each song fades in at its start and out at its end over this time. Range 0 to 10 s in steps of 0.5 s; default 1.5 s; 0 turns it off. The AI DJ lowers and raises the music at this speed too (at least 1 s).
 - **Fade on pause:** fades out briefly when you pause and back in when you resume. On by default.
+
+## Volume levelling
+
+Volume levelling plays every song equally loud, so a quiet ballad after a loud dance track needs no hand on the volume. It is on by default. Choose the level in **Settings → Playback → Volume levelling → Level**:
+
+| Level | Loudness |
+|---|---|
+| **Off** | Songs play as they are (ReplayGain applies, if set). |
+| **Quiet** | −19 LUFS: room for very dynamic music. |
+| **Normal** (default) | −14 LUFS, the level streaming services use. |
+| **Loud** | −11 LUFS. |
+
+How loud a song is comes from the first of these that knows it:
+
+1. the [analysis](../dj/analysis.md) of the song (its measured loudness),
+2. YouTube's own loudness value, for YouTube Music songs that are not analysed yet (Listen asks YouTube once per song),
+3. the song's ReplayGain tags,
+4. nothing: the song plays unchanged.
+
+Loud songs are turned down as far as needed; quiet songs are turned up by at most 6 dB, and a limiter at the end of the sound chain keeps boosted peaks below −1 dB, so nothing clips. Changing the level while a song plays glides to the new loudness instead of jumping. **Get info** on a song shows the gain it gets and where its loudness came from (row **Volume levelling**); the log names it too (`levelling: <title> −4.2 dB from analysis`).
+
+While volume levelling is on, it replaces ReplayGain (it reads the ReplayGain tags itself), so the ReplayGain settings below only matter with **Off**.
 
 ## ReplayGain
 

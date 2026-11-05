@@ -26,6 +26,7 @@ pub enum Setting {
     Integrations(super::integrations::IntegrationSetting),
     Gapless(String),
     ReplayGain(listen_core::settings::ReplayGain),
+    Levelling(listen_core::settings::Levelling),
     StreamQuality(listen_core::settings::StreamQuality),
     Scrobble(bool),
     HistoryEnabled(bool),
@@ -155,6 +156,12 @@ impl Listen {
             Setting::ReplayGain(v) => {
                 s.playback.replay_gain = v;
                 player_changed = true;
+            }
+            Setting::Levelling(v) => {
+                s.playback.levelling = v;
+                // Switching on adds the stage at 0 dB (then ramps); switching off ramps to
+                // 0 dB first and takes the stage out afterwards (`levelling_tick`).
+                player_changed = v != listen_core::settings::Levelling::Off;
             }
             Setting::StreamQuality(v) => {
                 s.playback.stream_quality = v;

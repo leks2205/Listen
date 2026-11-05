@@ -45,6 +45,7 @@ pub mod hotkeys;
 pub mod integrations;
 pub mod item;
 pub mod lastfm;
+mod levelling;
 pub mod library_extra;
 pub mod list;
 pub mod list_query;
@@ -593,6 +594,7 @@ pub struct Listen {
     voice: Option<Player>,
     /// Volume moves: song fades, the DJ's ducking, pause fades.
     fader: fade::Fader,
+    level: levelling::LevelState,
     /// Text of the accent field on the settings page.
     pub accent_input: String,
     /// Path typed into "Import from Feishin".
@@ -700,6 +702,8 @@ pub struct AutoDjFill {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// YouTube's loudness of a video (volume levelling's fallback): id, `loudnessDb`.
+    YtmLoudness(String, Result<Option<f32>, String>),
     /// A file was dropped onto the window (cookies file / Feishin settings).
     FileDropped(std::path::PathBuf),
     Navigate(Route),
@@ -1114,6 +1118,7 @@ impl Listen {
             offline: offline::OfflineState::default(),
             voice: None,
             fader: fade::Fader::default(),
+            level: levelling::LevelState::default(),
             sleep_timer: None,
             fs: Default::default(),
             sb: Default::default(),
@@ -3854,6 +3859,7 @@ impl Listen {
             Message::Substituted(id) => return self.on_substituted(&id),
             Message::SubstituteToggle => return self.substitute_toggle(),
             Message::PlayerDone(Ok(())) => {}
+            Message::YtmLoudness(id, r) => self.on_ytm_loudness(id, r),
             Message::PlayerDone(Err(e)) => tracing::warn!("player/server command failed: {e}"),
             Message::ArtistsLoaded(result) => {
                 self.library.artists_loading = false;

@@ -79,7 +79,7 @@ impl Listen {
 
     /// The playback position now, extrapolated since mpv's last report. Not at position 0:
     /// after a gapless switch mpv holds 0 until the previous song's buffer has played.
-    fn est_position(&self) -> Duration {
+    pub(super) fn est_position(&self) -> Duration {
         let mut pos = self.playback.position;
         if self.playback.playing
             && !self.fader.pending_pause
@@ -129,7 +129,7 @@ impl Listen {
         if !self.decks.has_active() || self.mock_playback() {
             return false;
         }
-        if self.mix.phase != super::mix::Phase::Idle {
+        if self.mix.phase != super::mix::Phase::Idle || self.levelling_active() {
             return true;
         }
         let f = &self.fader;
@@ -168,7 +168,7 @@ impl Listen {
         } else {
             (f.pause + step).min(f.pause_target)
         };
-        let mut tasks = vec![self.mix_tick(), self.push_volume(false)];
+        let mut tasks = vec![self.mix_tick(), self.push_volume(false), self.levelling_tick()];
         if self.fader.pending_pause && self.fader.pause <= 0.0 {
             self.fader.pending_pause = false;
             self.fader.mpv_paused = true;

@@ -18,6 +18,7 @@ pub(super) fn playback(state: &Listen) -> Vec<Element<'_, Message>> {
     let mut v = vec![
         playback_section(state),
         output(state),
+        levelling(state),
         replay_gain(state),
         mpv(state),
         equalizer(state),
@@ -230,6 +231,25 @@ fn output(state: &Listen) -> Element<'_, Message> {
     section(state, "Audio output", rows)
 }
 
+fn levelling(state: &Listen) -> Element<'_, Message> {
+    let p = &state.config.settings.playback;
+    section(
+        state,
+        "Volume levelling",
+        vec![line(
+            state,
+            "Level",
+            "Play every song equally loud: Quiet −19, Normal −14, Loud −11 LUFS. Uses the analysis, \
+             YouTube's loudness or ReplayGain tags; a limiter keeps boosted songs from clipping. \
+             Replaces ReplayGain while on.",
+            pick_list(settings::Levelling::ALL, Some(p.levelling), |v| {
+                Message::Setting(Setting::Levelling(v))
+            })
+            .into(),
+        )],
+    )
+}
+
 fn replay_gain(state: &Listen) -> Element<'_, Message> {
     let p = &state.config.settings.playback;
     let rg = [ReplayGain::No, ReplayGain::Track, ReplayGain::Album];
@@ -240,7 +260,7 @@ fn replay_gain(state: &Listen) -> Element<'_, Message> {
             line(
                 state,
                 "Mode",
-                "Normalize loudness with ReplayGain tags.",
+                "Normalize loudness with ReplayGain tags (when Volume levelling is off).",
                 pick_list(rg, Some(p.replay_gain), |v| Message::Setting(Setting::ReplayGain(v))).into(),
             ),
             line(
