@@ -338,6 +338,10 @@ pub struct AiDjCheck {
     pub dump: bool,
     /// "Tell the DJ" from round 2 on (`--request calmer`, repeatable; chip ids or free text).
     pub requests: listen_dj::Requests,
+    /// No Gemini (`--offline`): a stand-in planner picks against the requests (the loudest songs left
+    /// for Calmer, the quietest for More energy), so only the app's pool filter can keep the promise.
+    /// No key, no tokens, no speech, no judge.
+    pub offline: bool,
 }
 
 impl AiDjCheck {
@@ -354,6 +358,7 @@ impl AiDjCheck {
             rounds,
             judge: !args.iter().any(|a| a == "--no-judge"),
             dump: args.iter().any(|a| a == "--dump-prompt"),
+            offline: args.iter().any(|a| a == "--offline"),
             requests: {
                 let mut r = listen_dj::Requests::default();
                 for w in args.windows(2).filter(|w| w[0] == "--request") {
@@ -378,6 +383,7 @@ impl AiDjCheck {
 /// the judge. `--request` (a chip id such as `calmer`, `more_energy`, `no_ballads`, or free text) is told to
 /// the DJ before round 2: the pool is filtered as in the app, and for Calmer / More energy the next 5 songs
 /// must have a lower / higher mean energy than round 1's set (the songs the request replaced).
+/// `--offline` needs no key: a stand-in planner that picks against the request (see [`AiDjCheck::offline`]).
 pub fn ai_dj(check: AiDjCheck) -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -457,7 +463,15 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         let paths = listen_core::config::Paths::discover().ok()?;
         crate::secrets::Secrets::new(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
     });
-    let key = key.ok_or("no key: set LISTEN_GEMINI_API_KEY or save one in Settings → AI DJ")?;
+    let key = match key {
+        _ if check.offline => None,
+        Some(k) => Some(k),
+        None => {
+            return Err(
+                "no key: set LISTEN_GEMINI_API_KEY or save one in Settings → AI DJ (or --offline)".into()
+            );
+        }
+    };
     let settings = listen_core::config::Paths::discover()
         .ok()
         .and_then(|p| listen_core::config::Config::load(&p.config_file()).ok())
@@ -466,7 +480,12 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     let persona =
         listen_dj::Persona::by_id(&std::env::var("LISTEN_AI_DJ_PERSONA").unwrap_or(settings.persona.clone()));
     let http = reqwest::Client::new();
-    let gemini = listen_dj::Gemini::new(http, key).map_err(|e| e.to_string())?;
+    let gemini = key.map(|k| listen_dj::Gemini::new(http, k)).transpose().map_err(|e| e.to_string())?;
+    let check =
+        AiDjCheck { voice: check.voice && gemini.is_some(), judge: check.judge && gemini.is_some(), ..check };
+    if gemini.is_none() {
+        println!("offline: a stand-in planner picks against the requests; no speech, no judge, no tokens");
+    }
     // Title, artist, year, genre, (bpm, Camelot, minor, energy), what the listener knows.
     #[rustfmt::skip]
     let songs: [CheckSong; 20] = [
@@ -588,8 +607,13 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
             println!("\n— prompt {round}:\n{}", listen_dj::prompt::user_prompt(&req));
         }
         let t = std::time::Instant::now();
-        let (plan, usage) =
-            gemini.plan(&settings.text_model, &req).await.map_err(|e| format!("plan: {e}"))?;
+        let (plan, usage) = match &gemini {
+            Some(g) => g.plan(&settings.text_model, &req).await.map_err(|e| format!("plan: {e}"))?,
+            None => (
+                offline_plan(&pool, requests, |s| energy_of(s).energy, settings.set_max as usize),
+                Default::default(),
+            ),
+        };
         plan_tokens = add_usage(plan_tokens, usage);
         println!("\n— round {round}: plan in {:.1}s ({usage})", t.elapsed().as_secs_f32());
         println!("break: {}", req.mode.name());
@@ -606,7 +630,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         for t in &plan.turns {
             println!("{}: {}  [{}]", if t.speaker.is_empty() { "line" } else { &t.speaker }, t.text, t.style);
         }
-        if check.voice && round <= 2 {
+        if let Some(gemini) = gemini.as_ref().filter(|_| check.voice && round <= 2) {
             let t = std::time::Instant::now();
             let (wav, usage) = gemini
                 .speak(&settings.tts_model, persona, &plan.turns, settings.place_pronunciation().as_slice())
@@ -624,7 +648,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
                 out.display()
             );
         }
-        if check.judge && !plan.turns.is_empty() {
+        if let Some(gemini) = gemini.as_ref().filter(|_| check.judge && !plan.turns.is_empty()) {
             let line_of = |s: &listen_core::model::Song| {
                 let tag = familiar.get(&s.id).map(|t| format!(" [{t}]")).unwrap_or_default();
                 format!(
@@ -719,7 +743,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         }
     }
     println!("songs with a note (\"Why this song?\"): {noted}/{picked}");
-    if noted * 5 < picked * 4 {
+    if gemini.is_some() && noted * 5 < picked * 4 {
         return Err(format!("only {noted} of {picked} picked songs got a note"));
     }
     println!(
@@ -746,6 +770,31 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     }
     println!("\n✓ AI DJ works");
     Ok(())
+}
+
+/// `--offline`'s stand-in for the model: `set` songs of the pool, chosen against the requests — the
+/// highest energies first for Calmer, the lowest for More energy, otherwise in pool order.
+fn offline_plan(
+    pool: &[listen_core::model::Song],
+    requests: &listen_dj::Requests,
+    energy: impl Fn(&listen_core::model::Song) -> Option<f32>,
+    set: usize,
+) -> listen_dj::Plan {
+    let mut picks: Vec<usize> = (0..pool.len()).collect();
+    let e = |i: &usize| energy(&pool[*i]).unwrap_or(0.5);
+    if requests.has(listen_dj::Chip::Calmer) {
+        picks.sort_by(|a, b| e(b).total_cmp(&e(a)));
+    } else if requests.has(listen_dj::Chip::MoreEnergy) {
+        picks.sort_by(|a, b| e(a).total_cmp(&e(b)));
+    }
+    picks.truncate(set.max(1));
+    listen_dj::Plan {
+        notes: vec![String::new(); picks.len()],
+        picks,
+        mood: "offline".into(),
+        turns: Vec::new(),
+        introduces: String::new(),
+    }
 }
 
 fn add_usage(a: listen_dj::Usage, b: listen_dj::Usage) -> listen_dj::Usage {
