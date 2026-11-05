@@ -8,7 +8,7 @@
 
 use crate::genre::relax_vocal_edge;
 use crate::score::octave_match;
-use listen_core::analysis::{BeatGrid, Features, SectionKind};
+use listen_core::analysis::{BeatGrid, Features, SectionKind, cue};
 use listen_core::model::SourceKind;
 use listen_core::queue::QueueItem;
 use listen_core::settings::Mixing;
@@ -30,6 +30,14 @@ const QUIET_VOCAL: f32 = 0.4;
 const SETTLE_MAX_S: f64 = 32.0;
 /// Tempo gaps under this are matched on the incoming deck alone (inaudible).
 const TINY_TEMPO_LR: f64 = 0.005;
+/// Cue anchors (lyric phrase ends, breakdowns) may start a mix-out this far into the outgoing song.
+const EARLY_OUT_FRAC: f64 = 0.6;
+/// Cue-ins before a verse or chorus entry within this part (and this many seconds) of the incoming song.
+const EARLY_IN_FRAC: f64 = 0.4;
+const EARLY_IN_MAX_S: f64 = 90.0;
+/// Score per second of the outgoing song cut off, and of the incoming intro skipped.
+const CUT_PER_S: f32 = 0.02;
+const SKIP_PER_S: f32 = 0.01;
 
 /// How the two songs are joined.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -307,6 +315,29 @@ impl<'a> Side<'a> {
         if instrumental { 0.0 } else { 1.0 }
     }
 
+    /// [`cue`] flags of a bar (none without synced lyrics, see [`crate::lyric`]).
+    fn cue(&self, bar: usize) -> u8 {
+        self.f.bars.cue.get(bar).copied().unwrap_or(0)
+    }
+
+    fn has_lyrics(&self) -> bool {
+        !self.f.bars.cue.is_empty()
+    }
+
+    /// A sung line or the chorus ends in the bar before `bar`, and `bar` is not sung: a cue-out anchor.
+    fn after_phrase(&self, bar: usize) -> bool {
+        bar > 0 && self.cue(bar - 1) & (cue::LINE_END | cue::CHORUS_END) != 0 && self.vocal(bar) < QUIET_VOCAL
+    }
+
+    fn breakdown_at(&self, bar: usize) -> bool {
+        self.on_phrase(bar)
+            && self
+                .f
+                .sections
+                .iter()
+                .any(|s| s.kind == SectionKind::Breakdown && usize::from(s.start_bar) == bar)
+    }
+
     pub(crate) fn energy(&self, bar: usize) -> f32 {
         self.f.bars.energy.get(bar).map_or(0.5, |&e| f32::from(e) / 255.0)
     }
@@ -411,9 +442,15 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
 
     // Mix-out window: 16 bars before the outro (within the last 90 s) to the end, not before `earliest`.
     let lo_t = o.t(outro.unwrap_or(o.bars) as f64 - 16.0).max(end - 90.0).max(earliest);
+    // DJustify-style cue anchors earlier in the last 40 %: the bar after a sung phrase (when a gap
+    // follows) and breakdowns. Cutting the song short costs `CUT_PER_S` per second.
+    let early_lo = (EARLY_OUT_FRAC * end).max(earliest);
     let outs: Vec<usize> = (0..o.bars)
-        .filter(|&b| o.t(b as f64) >= lo_t - 1e-6)
-        .filter(|&b| o.on_subphrase(b) || Some(b) == outro)
+        .filter(|&b| {
+            let t = o.t(b as f64);
+            (t >= lo_t - 1e-6 && (o.on_subphrase(b) || Some(b) == outro))
+                || (t >= early_lo && (o.after_phrase(b) || o.breakdown_at(b)))
+        })
         .collect();
 
     // Mix-in: the first phrase downbeat with audio, plus the next phrase for a very long intro.
@@ -422,6 +459,18 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
     let mut ins = vec![first_in];
     if i.f.intro_instrumental_bars > 32 && first_in + i.phrase() < i.bars {
         ins.push(first_in + i.phrase());
+    }
+    // With lyrics: 1, 2 or 4 bars before a verse or chorus entry early in the song, so a short blend
+    // hands over right where the singing starts (the rest of the intro is skipped).
+    if i.has_lyrics() {
+        let hi = (EARLY_IN_FRAC * f64::from(i.f.audio_end)).min(EARLY_IN_MAX_S);
+        for e in (first_in + 1..i.bars).filter(|&b| i.t(b as f64) <= hi) {
+            if i.cue(e) & (cue::ENTRY | cue::CHORUS) != 0 {
+                ins.extend([1, 2, 4].iter().filter(|&&d| e >= first_in + d).map(|&d| e - d));
+            }
+        }
+        ins.sort_unstable();
+        ins.dedup();
     }
 
     // Each edge is relaxed by its own song's genre: the outro for the outgoing, the intro for the incoming.
@@ -450,7 +499,7 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
 
     for &m in &outs {
         let Some(tempo) = tempo_for(o, m, lr, ctx) else { continue };
-        let phrase_pen = if o.on_phrase(m) || Some(m) == outro { 0.0 } else { -0.25 };
+        let phrase_pen = if o.on_phrase(m) || Some(m) == outro || o.after_phrase(m) { 0.0 } else { -0.25 };
         for &inb in &ins {
             let in_bar = |j: f64| inb + (j / k).floor() as usize;
             let mut kinds: Vec<(CandKind, usize)> =
@@ -477,7 +526,15 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
                 let half = n as f64 / 2.0;
                 let jump = (o.energy((m + n / 2).saturating_sub(1).max(m)) - i.energy(in_bar(half))).abs();
                 let cut = (outro_t.min(end) - o.t(m as f64 + half)).max(0.0) as f32;
-                let mut score = 0.15 * cover - 0.5 * jump - 0.02 * cut + phrase_pen;
+                // (Only lyric cue-ins skip intro bars on purpose; the long-intro case keeps its old score.)
+                let skipped = if i.has_lyrics() {
+                    (i.t(inb as f64) - i.t(first_in as f64)).max(0.0) as f32
+                } else {
+                    0.0
+                };
+                let mut score =
+                    0.15 * cover - 0.5 * jump - CUT_PER_S * cut - SKIP_PER_S * skipped + phrase_pen;
+                score += lyric_score(o, i, m, n, in_bar(n as f64));
                 score += match kind {
                     CandKind::Beat | CandKind::Short => -3.0 * clash,
                     // Overlap hurts less when filtered, but it's the least musical option.
@@ -497,6 +554,27 @@ fn best_candidate(o: &Side, i: &Side, k: f64, lr: f64, ctx: &PlanCtx, opts: Opts
         }
     }
     best
+}
+
+/// What synced lyrics add to a candidate (0 without them): a bonus when the incoming singing (or its
+/// chorus) starts right after the blend, a penalty when the outgoing stops in the middle of a sung line.
+fn lyric_score(o: &Side, i: &Side, m: usize, n: usize, in_after: usize) -> f32 {
+    let mut score = 0.0;
+    let lands = i.cue(in_after);
+    if lands & cue::CHORUS != 0 {
+        score += 0.5;
+    } else if lands & cue::ENTRY != 0 {
+        score += 0.3;
+    }
+    let last = m + n - 1;
+    if o.has_lyrics()
+        && o.vocal(last) >= QUIET_VOCAL
+        && o.vocal(last + 1) >= QUIET_VOCAL
+        && o.cue(last) & cue::LINE_END == 0
+    {
+        score -= 0.5;
+    }
+    score
 }
 
 /// Longest vocal-free stretch (outgoing file time) touching the blend, from up to 16 bars before to its end.
@@ -711,6 +789,68 @@ mod tests {
     fn assert_in_downbeats(f: &Features, t: f64) {
         let g = f.grid.as_ref().unwrap();
         assert!(g.downbeats().any(|d| (f64::from(d) - t).abs() < 1e-3), "{t} is not a downbeat");
+    }
+
+    /// `f` merged with lyrics sung over `sung` bar ranges (chorus = `chorus` bar ranges).
+    fn with_lyrics(f: &Features, sung: &[(usize, usize)], chorus: &[(usize, usize)]) -> Features {
+        let spans = crate::lyric::bar_spans(f);
+        let t = |b: usize| if b < spans.len() { spans[b].0 } else { spans[spans.len() - 1].1 };
+        let map = listen_core::analysis::VocalMap {
+            sung: sung.iter().map(|&(a, b)| (t(a), t(b) - 0.2)).collect(),
+            line_ends: sung
+                .iter()
+                .flat_map(|&(a, b)| (a + 2..=b).step_by(2).map(move |e| t(e) - 0.2))
+                .collect(),
+            chorus: chorus.iter().map(|&(a, b)| (t(a), t(b) - 0.2)).collect(),
+        };
+        crate::lyric::with_lyrics(f, &map).expect("lyrics fit")
+    }
+
+    #[test]
+    fn a_lyric_gap_late_in_the_song_is_a_cue_out() {
+        let s = settings();
+        // Both sung from start to end; the lyrics show an 8-bar gap at bars 64–72 of the outgoing
+        // that the audio curve doesn't see.
+        let out = FeatBuilder::new(120.0, 96).intro(0).outro(0).build();
+        let inn = FeatBuilder::new(120.0, 96).intro(0).outro(8).build();
+        let base = plan(&out, &inn, &ctx(&s, 30.0));
+        assert!(!matches!(base.kind, Kind::BeatBlend { .. }), "{}", base.reason);
+        let lyr = with_lyrics(&out, &[(0, 64), (72, 96)], &[]);
+        let p = plan(&lyr, &inn, &ctx(&s, 30.0));
+        assert!(matches!(p.kind, Kind::BeatBlend { bars: 8, .. }), "{}", p.reason);
+        let og = lyr.grid.as_ref().unwrap();
+        assert!((p.out_mix_start_s - f64::from(og.bar_time(64))).abs() < 1e-3, "{}", p.reason);
+        // Before 60 % of the song a gap is no anchor.
+        let early = with_lyrics(&out, &[(0, 40), (48, 96)], &[]);
+        let p = plan(&early, &inn, &ctx(&s, 30.0));
+        assert!(p.out_mix_start_s > f64::from(og.bar_time(56)), "{}", p.reason);
+    }
+
+    #[test]
+    fn blends_land_on_the_incoming_chorus() {
+        let s = settings();
+        // The outgoing sings to its end; the incoming has a 16-bar instrumental intro, chorus at 16.
+        let out = FeatBuilder::new(120.0, 96).intro(8).outro(0).build();
+        let out = with_lyrics(&out, &[(8, 96)], &[]);
+        let inn = FeatBuilder::new(120.0, 96).intro(16).outro(8).build();
+        let lyr_in = with_lyrics(&inn, &[(16, 88)], &[(16, 32), (56, 72)]);
+        let p = plan(&out, &lyr_in, &ctx(&s, 30.0));
+        let after = p.in_mix_start_s + p.blend_s * p.in_speed;
+        let chorus = f64::from(lyr_in.grid.as_ref().unwrap().bar_time(16));
+        assert!((after - chorus).abs() < 0.05, "lands on the chorus: {}", p.reason);
+    }
+
+    #[test]
+    fn stopping_in_the_middle_of_a_sung_line_costs() {
+        let out = FeatBuilder::new(120.0, 64).intro(8).outro(0).build();
+        let inn = FeatBuilder::new(120.0, 64).intro(8).outro(8).build();
+        let o = with_lyrics(&out, &[(8, 64)], &[]);
+        let (os, is) = (Side::new(&o).unwrap(), Side::new(&inn).unwrap());
+        // Line ends every two bars (in bars 9, 11, …): stopping after bar 10 cuts a line, after 11 doesn't.
+        assert!(lyric_score(&os, &is, 9, 2, 0) < -0.4);
+        assert_eq!(lyric_score(&os, &is, 10, 2, 0), 0.0);
+        // No lyrics, no opinion.
+        assert_eq!(lyric_score(&Side::new(&out).unwrap(), &is, 9, 2, 0), 0.0);
     }
 
     #[test]

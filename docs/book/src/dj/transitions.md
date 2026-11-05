@@ -28,6 +28,16 @@ Listen looks at both songs and picks the best way to join them. It prefers to st
 | **Fade** | A plain crossfade, used when the songs have no steady beat or their tempos are too far apart. |
 | **Gapless** | No mixing at all. |
 
+## Lyrics show where the singing is
+
+The song analysis guesses from the sound where a singer is, and it often hears a voice in a synth lead or a chant. Synced lyrics are much more exact: each line has a start time, and the gap to the next line shows where the singing stops. So while a song plays and while it is next, Listen looks up its synced lyrics the same way as for the lyrics view (the server's lyrics first, then the [lyric providers](../playback/lyrics.md) if **Fetch lyrics** is on) and uses them for the transition:
+
+- **Where the singing is.** Bars without a sung line count as instrumental, even if the sound analysis thought otherwise. That finds the short vocal gaps that pop and K-pop songs have, such as rap breaks, dance breaks and post-chorus hooks, so more pairs get a real blend and fewer a filter-out.
+- **Where a line ends.** In the last 40 % of a song, a mix may start right after a sung line when a gap follows, not only in the outro. A mix that would stop the outgoing song in the middle of a line is avoided.
+- **Where the chorus is.** The block of lines that repeats most is the chorus. A blend that ends right where the next song's singing or chorus starts is preferred, and the next song may skip part of its intro for it (at most within its first 40 % or 90 seconds).
+
+Cutting a song short or skipping an intro costs the plan points for every second, so Listen only does it when the join is clearly better. Lyrics are not used when they do not fit the song: when they run past its end, or when the sound analysis hears singing mostly where the lyrics are silent, or the lyrics fit much better a few bars earlier or later (an offset, or the lyrics of another version). Plain (unsynced) lyrics are not used. A transition is planned at once with what is known; if the lyrics arrive later but well before the mix, it is planned again.
+
 For a beat-matched blend the two songs must run at the same speed. Listen speeds one or both songs up or down by a few percent without changing the pitch. With **Tempo ramps** on, the speed glides smoothly during the blend and returns to the natural speed of the new song afterwards. With it off, the tempo is matched for the whole blend at once, which can be heard on large differences.
 
 Songs whose tempo is double or half of the other (for example 70 and 140 BPM) are matched at that ratio instead of being sped up a lot.
@@ -90,6 +100,7 @@ The [AI DJ](ai-dj.md) knows how each candidate song would be mixed in after the 
 - **Songs are not mixed.** Check that **Analyse songs** is on, that the songs have been analysed (see the status line), that Auto-DJ or the AI DJ is on, and that the songs come from Navidrome or YouTube Music. Consecutive tracks of an album are always gapless.
 - **Many fades, few beat-matched blends.** Raise **Largest tempo change**, or accept that songs without a steady beat or with very different tempos are faded.
 - **A song was skipped for mixing right after you started it.** A mix needs about 5 seconds of lead time. Songs started late are played gapless.
+- **A song ended earlier than usual, or the next one started after its intro.** The lyrics showed a cleaner place to mix (see [Lyrics show where the singing is](#lyrics-show-where-the-singing-is)). `listen --check-mix A B --lyrics-a A.lrc --lyrics-b B.lrc` shows how a pair is planned with given lyrics.
 - **Different tempo after the mix.** That is the intended tempo ramp. If you dislike it, turn off **Tempo ramps** or lower **Largest tempo change**.
 
 How the engine works internally is described in [DJ transitions internals](../development/dj-transitions.md).

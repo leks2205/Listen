@@ -203,6 +203,40 @@ pub struct BarCurves {
     pub centroid: Vec<u8>,
     /// How much changes at this bar (section boundaries peak).
     pub novelty: Vec<u8>,
+    /// Cue flags per bar ([`cue`] bits, not a 0–255 curve): set from synced lyrics at plan time
+    /// (`listen_mix::lyric::with_lyrics`), empty in the analysis store.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cue: Vec<u8>,
+}
+
+/// Bits of [`BarCurves::cue`].
+pub mod cue {
+    /// A sung lyric line ends in this bar (a phrase end: a cue-out may start on the next bar).
+    pub const LINE_END: u8 = 1;
+    /// The singing starts again in this bar after a gap (a verse or other section entry).
+    pub const ENTRY: u8 = 2;
+    /// A chorus (the most repeated block of lyric lines) starts in this bar.
+    pub const CHORUS: u8 = 4;
+    /// A chorus ends in this bar.
+    pub const CHORUS_END: u8 = 8;
+}
+
+/// Where the singing is, from synced lyrics (`listen_lyrics::vocal_map`). File seconds.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct VocalMap {
+    /// Sung stretches, sorted and disjoint (lines closer than a second are merged).
+    pub sung: Vec<(f32, f32)>,
+    /// End of every sung line (sorted).
+    pub line_ends: Vec<f32>,
+    /// Every occurrence of the chorus (the most repeated block of lines), sorted.
+    pub chorus: Vec<(f32, f32)>,
+}
+
+impl VocalMap {
+    /// Seconds sung within `a..b`.
+    pub fn sung_within(&self, a: f32, b: f32) -> f32 {
+        self.sung.iter().map(|&(s, e)| (e.min(b) - s.max(a)).max(0.0)).sum()
+    }
 }
 
 /// Coarse descriptors for choosing songs and for the AI DJ prompt.

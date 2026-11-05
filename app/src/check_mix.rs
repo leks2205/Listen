@@ -1,6 +1,8 @@
-//! `listen --check-mix <a> <b> [--render out.wav]`: plans the DJ transition from `a` into `b` as the player
-//! would and optionally renders an offline preview (`listen_mix::render`). A song is a Navidrome song id
-//! (first Navidrome server), `ytm:<videoId>` (via yt-dlp) or a local file / URL; both are analysed afresh.
+//! `listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc]`: plans the DJ
+//! transition from `a` into `b` as the player would and optionally renders an offline preview
+//! (`listen_mix::render`). A song is a Navidrome song id (first Navidrome server), `ytm:<videoId>` (via
+//! yt-dlp) or a local file / URL; both are analysed afresh. Synced lyrics given as LRC files are merged
+//! into the analysis like the player does with fetched ones (`listen_mix::lyric`).
 
 use listen_analysis::{BeatModel, BeatSource, Cancel, Opts};
 use listen_mix::plan::PlanCtx;
@@ -9,11 +11,13 @@ use listen_source::MusicSource;
 pub fn run(args: &[String]) -> i32 {
     let (Some(a), Some(b)) = (args.first(), args.get(1)) else {
         eprintln!(
-            "usage: listen --check-mix <a> <b> [--render out.wav]  (Navidrome id, ytm:<videoId>, file or URL)"
+            "usage: listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc]  (Navidrome id, ytm:<videoId>, file or URL)"
         );
         return 2;
     };
-    let render = args.iter().position(|x| x == "--render").and_then(|i| args.get(i + 1)).cloned();
+    let flag = |name: &str| args.iter().position(|x| x == name).and_then(|i| args.get(i + 1)).cloned();
+    let render = flag("--render");
+    let lyrics = [flag("--lyrics-a"), flag("--lyrics-b")];
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
@@ -21,7 +25,7 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
-    rt.block_on(check(a, b, render.as_deref())).map_or_else(
+    rt.block_on(check(a, b, render.as_deref(), &lyrics)).map_or_else(
         |e| {
             eprintln!("✗ {e}");
             1
@@ -30,7 +34,7 @@ pub fn run(args: &[String]) -> i32 {
     )
 }
 
-async fn check(a: &str, b: &str, render: Option<&str>) -> Result<(), String> {
+async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>; 2]) -> Result<(), String> {
     let paths = listen_core::config::Paths::discover().map_err(|e| e.to_string())?;
     let config = listen_core::config::Config::load(&paths.config_file()).map_err(|e| e.to_string())?;
     let beats = match BeatModel::ensure(&paths.cache_dir.join("models")).await {
@@ -42,7 +46,7 @@ async fn check(a: &str, b: &str, render: Option<&str>) -> Result<(), String> {
     };
     let opts = Opts { beats, bpm_hint: None };
     let mut sides = Vec::new();
-    for arg in [a, b] {
+    for (arg, lrc) in [a, b].into_iter().zip(lyrics) {
         let input = input_for(arg, &paths, &config).await?;
         let pcm =
             listen_analysis::decode(&input, &Cancel::default()).await.map_err(|e| format!("{arg}: {e}"))?;
@@ -50,6 +54,10 @@ async fn check(a: &str, b: &str, render: Option<&str>) -> Result<(), String> {
             .await
             .ok_or("analysis cancelled")?;
         println!("{arg}: {:.1}s, {}", pcm.duration(), listen_core::analysis::FlowFeatures::of(&f).describe());
+        let f = match lrc {
+            Some(path) => with_lrc(&f, path)?,
+            None => f,
+        };
         sides.push((pcm, f));
     }
     let ((out_pcm, fa), (in_pcm, fb)) = (&sides[0], &sides[1]);
@@ -82,6 +90,28 @@ async fn check(a: &str, b: &str, render: Option<&str>) -> Result<(), String> {
         println!("rendered {:.1}s preview to {path}", samples.len() as f32 / sr.max(1) as f32);
     }
     Ok(())
+}
+
+/// `f` with the synced lyrics of the LRC file at `path` merged in (unchanged when they don't fit).
+fn with_lrc(
+    f: &listen_core::analysis::Features,
+    path: &str,
+) -> Result<listen_core::analysis::Features, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let Some(map) = listen_lyrics::vocal_map(&listen_lyrics::parse_lrc(&text), f.audio_end) else {
+        println!("  lyrics {path}: not synced or too short; not used");
+        return Ok(f.clone());
+    };
+    let r = listen_mix::lyric::agreement(f, &map).map_or("-".into(), |r| format!("{r:.2}"));
+    let merged = listen_mix::lyric::with_lyrics(f, &map);
+    println!(
+        "  lyrics {path}: {} sung stretches, {} lines, chorus ×{}, agreement with the audio r = {r}: {}",
+        map.sung.len(),
+        map.line_ends.len(),
+        map.chorus.len(),
+        if merged.is_some() { "used" } else { "don't fit, not used" }
+    );
+    Ok(merged.unwrap_or_else(|| f.clone()))
 }
 
 /// What mpv decodes for one command-line song.

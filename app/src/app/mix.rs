@@ -128,6 +128,8 @@ struct Fetch {
     ahead: Option<(u64, AudioInput)>,
     /// Songs whose fetched file is pinned in their source's cache, see [`Listen::mix_sync_pins`].
     pins: Vec<(u64, Song)>,
+    /// Vocal maps from synced lyrics (kept like the fetches, across plans).
+    vocal: vocal::LyricMaps,
 }
 
 impl Fetch {
@@ -230,6 +232,8 @@ pub enum MixMsg {
     Done(Result<(), String>),
     /// The incoming song's deck input was fetched (keyed by queue uid: a fetch outlives re-plans).
     Input(u64, Result<Option<AudioInput>, String>),
+    /// A song's vocal map from its synced lyrics (song key; `None`: no usable lyrics).
+    Lyrics(String, Option<listen_core::analysis::VocalMap>),
 }
 
 /// Runs a source's [`MusicSource::mix_input`] (separate so tests can call it without iced).
@@ -290,8 +294,14 @@ impl Listen {
         p + ahead * self.mix.speed[deck].max(0.5)
     }
 
-    /// Plans a mix into the next song (after a track or queue change, or a new analysis).
+    /// Plans a mix into the next song (after a track or queue change, or a new analysis), and looks up
+    /// the lyrics of both songs for the planner.
     pub(super) fn mix_consider(&mut self) -> Task<Message> {
+        let lyrics = self.mix_lyrics_prefetch();
+        Task::batch([lyrics, self.mix_plan_next()])
+    }
+
+    fn mix_plan_next(&mut self) -> Task<Message> {
         // Called on every track and queue change: the pins follow the decks.
         self.mix_sync_pins();
         // Paused: planned again on resume (a plan's clock is the outgoing deck).
@@ -334,6 +344,9 @@ impl Listen {
             return Task::none();
         };
         let out_now = self.playback.position.as_secs_f64();
+        // Synced lyrics sharpen the vocal curves and add cue points (listen_mix::lyric).
+        let lyric = self.mix_with_lyrics([&cur_song, &next_song], [fa, fb]);
+        let (fa, fb) = (lyric[0].as_ref().unwrap_or(fa), lyric[1].as_ref().unwrap_or(fb));
         let voice_break = self.dj_voice_break(next.uid);
         // Far apart: a bridge may go between them; then this plans into the bridge.
         if voice_break.is_none() && self.bridge_maybe_insert(&cur, &next, fa, fb, out_now) {
@@ -1008,6 +1021,7 @@ impl Listen {
                 self.mix_phase_lock(a, b);
             }
             MixMsg::Done(Err(e)) => tracing::debug!("mix deck command: {e}"),
+            MixMsg::Lyrics(key, map) => return self.mix_lyrics_arrived(key, map),
             MixMsg::Input(uid, result) => {
                 if self.mix.fetch.busy == Some(uid) {
                     self.mix.fetch.busy = None;
@@ -1139,3 +1153,4 @@ impl Listen {
 
 #[cfg(test)]
 mod tests;
+mod vocal;

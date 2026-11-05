@@ -13,8 +13,10 @@ pub mod romaji;
 pub mod rtl;
 pub mod translate;
 pub mod vocab;
+mod vocal;
 
 pub use lrc::{BREAK, active_line, has_translation, has_word_sync, merge_translation, parse_lrc};
+pub use vocal::vocal_map;
 
 use listen_core::model::{LyricLine, Lyrics, Song};
 use serde::Deserialize;

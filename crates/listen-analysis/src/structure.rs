@@ -383,6 +383,7 @@ pub fn curves(stats: &BarStats) -> BarCurves {
         vocal: unit(&stats.vocal),
         centroid: minmax(&stats.centroid),
         novelty: unit(&stats.novelty),
+        cue: Vec::new(),
     }
 }
 

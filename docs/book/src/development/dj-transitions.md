@@ -27,6 +27,7 @@ Analysis runs in a short-lived helper process (`listen --analysis-worker`) and r
 - `score` rates how well one song flows into another (tempo, key, energy, timbre, mixability, repetition) and orders DJ picks with a beam search.
 - `plan` decides which pairs may be mixed at all (`mix_eligible`) and builds a `TransitionPlan`: the kind of transition (a beat-matched blend or a plain fade), where the outgoing song stops and the incoming one starts, envelopes for volume, bass and filters, and speed ramps. Songs more than a few percent apart in tempo get a fade instead of a beat match.
 - `render` makes an offline preview of a plan, available through `listen --check-mix --render`.
+- `lyric` merges a `VocalMap` (from `listen_lyrics::vocal_map`: sung stretches, line ends, chorus occurrences of synced lyrics) into `bars.vocal` and sets `bars.cue` flags (`LINE_END`, `ENTRY`, `CHORUS`, `CHORUS_END`). It drops lyrics that are anti-correlated with the audio vocal curve or fit clearly better shifted by up to 6 bars. The planner then adds cue-outs after a sung phrase or at a breakdown in the last 40 % (cut cost 0.02/s), cue-ins 1, 2 or 4 bars before a verse or chorus entry (skip cost 0.01/s), +0.5/+0.3 when a blend ends on the incoming chorus/entry, and −0.5 for stopping the outgoing mid-line. Without lyrics the plans are unchanged. The desktop looks lyrics up for the playing and next song (`app/src/app/mix/vocal.rs`) and re-plans when they arrive before the preload.
 
 ### 3. Two mpv decks
 

@@ -862,6 +862,7 @@ fn record_at(song: &Song, bpm: f32, groove: bool) -> Arc<TrackAnalysis> {
         vocal: (0..bars).map(|b| if inst(b) { 0 } else { 255 }).collect(),
         centroid: vec![128; bars],
         novelty: vec![0; bars],
+        cue: vec![],
     };
     r.analyzed_at = 2;
     Arc::new(r)
@@ -1019,4 +1020,37 @@ fn a_bridge_is_neither_scrobbled_nor_kept_in_the_history() {
     let before = s.history.entries.len();
     s.record_play();
     assert_eq!(s.history.entries.len(), before);
+}
+
+#[test]
+fn lyrics_arriving_before_the_preload_replan_the_mix() {
+    use listen_core::analysis::VocalMap;
+    let mut s = auto_rig();
+    plan(&mut s);
+    let before = plan_of(&s);
+    let item = |s: &Listen, uid: u64| s.queue.iter().find(|i| i.uid == uid).unwrap().song.clone();
+    let inn = item(&s, s.mix.in_uid);
+    let key = Listen::song_key(&s.playable(&inn));
+    let out_key = Listen::song_key(&item(&s, s.mix.out_uid));
+    // Both songs are sung from start to end: no instrumental intro or outro to blend over.
+    let sung = VocalMap { sung: vec![(1.0, 236.0)], line_ends: vec![236.0], chorus: vec![] };
+    for k in [&key, &out_key] {
+        let _ = s.update(Message::Mix(MixMsg::Lyrics(k.clone(), Some(sung.clone()))));
+        assert!(s.mix.fetch.vocal.get(k).is_some_and(|m| m.is_some()));
+        assert_eq!(s.mix.phase, Phase::Planned);
+    }
+    let after = plan_of(&s);
+    assert_ne!(after, before, "planned again with the lyrics");
+    assert!(!matches!(after.kind, Kind::BeatBlend { .. }), "{}", after.reason);
+    assert!(s.mix.fetch.input(s.mix.in_uid).is_some(), "the fetched input is kept");
+
+    // Once the incoming deck is loaded, new lyrics leave the plan alone.
+    let token = s.mix.token;
+    let _ = s.update(Message::Mix(MixMsg::Loaded(token, Ok(()))));
+    let gap = VocalMap { sung: vec![(1.0, 100.0)], line_ends: vec![100.0], chorus: vec![] };
+    let _ = s.update(Message::Mix(MixMsg::Lyrics(out_key, Some(gap))));
+    assert_eq!(plan_of(&s), after);
+    // No usable lyrics: nothing to plan again.
+    let _ = s.update(Message::Mix(MixMsg::Lyrics("nd:other".into(), None)));
+    assert_eq!(plan_of(&s), after);
 }

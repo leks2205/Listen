@@ -28,7 +28,7 @@ The providers are asked one after the other in your order. The first that has sy
 | **Genius** | Plain lyrics only. Off by default. |
 | **SimpMusic** | A community lyrics service. Off by default. |
 
-Each lookup sends the song's title, artist, album and length to the providers you enabled. Nothing is sent when **Fetch lyrics** is off.
+Each lookup sends the song's title, artist, album and length to the providers you enabled. Nothing is sent when **Fetch lyrics** is off. While [DJ transitions](../dj/transitions.md#lyrics-show-where-the-singing-is) mix songs, the next song's lyrics are looked up ahead too, to find where its singing starts.
 
 To change this, open **Settings → Playback → Lyrics**:
 

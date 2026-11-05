@@ -131,6 +131,7 @@ impl FeatBuilder {
                 vocal: curve(0, 255),
                 centroid: curve(128, 128),
                 novelty: vec![0; self.bars],
+                cue: vec![],
             },
             phrase_bars: 8,
             phrase_offset: 0,
