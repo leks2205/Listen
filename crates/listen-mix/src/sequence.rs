@@ -9,6 +9,7 @@
 use crate::score::{FlowCtx, repeat_penalty, stats_for, step_cost};
 use listen_core::analysis::FlowFeatures;
 use listen_core::model::Song;
+use listen_core::queue::Queue;
 
 /// Analysed songs beyond this many are left after the ordered part, in their order (the cost matrix
 /// grows with the square; 2000 songs take well under a second).
@@ -76,6 +77,76 @@ pub fn order_all(songs: &[(Song, Option<FlowFeatures>)], first: Option<usize>, c
     out.extend(overflow);
     out.extend(unanalysed);
     out
+}
+
+/// What [`order_queue`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueOrder {
+    /// Fewer than two songs after the playing one.
+    Nothing,
+    /// Fewer than two of them are analysed; the queue is unchanged.
+    TooFewAnalysed,
+    /// Reordered; this many upcoming songs had analysis.
+    Ordered { analysed: usize },
+}
+
+/// "Order for smooth mixing" on the queue: the not-yet-played part follows on from the playing song.
+/// The Up Next block (Play next / Add to queue) is ordered within itself and still plays first; the
+/// rest follows on from its last song. DJ bridges in that part are dropped (they were chosen for
+/// their old neighbours). Played songs and the playing one stay where they are.
+pub fn order_queue(
+    queue: &mut Queue,
+    flow: impl Fn(&Song) -> Option<FlowFeatures>,
+    ctx: &FlowCtx,
+) -> QueueOrder {
+    let start = queue.current_position().map_or(0, |p| p + 1);
+    let manual = queue.up_next_range();
+    let anchor = queue.current().map(|i| (i.uid, i.song.clone(), flow(&i.song)));
+    type Row = (u64, Song, Option<FlowFeatures>);
+    let mut up_next: Vec<Row> = Vec::new();
+    let mut rest: Vec<Row> = Vec::new();
+    let mut bridges = Vec::new();
+    for (pos, item) in queue.iter().enumerate().skip(start) {
+        if item.bridge.is_some() {
+            bridges.push(item.uid);
+            continue;
+        }
+        let row = (item.uid, item.song.clone(), flow(&item.song));
+        if manual.contains(&pos) { up_next.push(row) } else { rest.push(row) }
+    }
+    if up_next.len() + rest.len() < 2 {
+        return QueueOrder::Nothing;
+    }
+    let analysed = up_next.iter().chain(&rest).filter(|r| r.2.is_some()).count();
+    if analysed < 2 {
+        return QueueOrder::TooFewAnalysed;
+    }
+    // `block` ordered to follow `anchor`, as uids.
+    let order_block = |anchor: Option<&Row>, block: &[Row]| -> Vec<u64> {
+        let list: Vec<(Song, Option<FlowFeatures>)> =
+            anchor.into_iter().chain(block).map(|r| (r.1.clone(), r.2.clone())).collect();
+        let skip = usize::from(anchor.is_some());
+        order_all(&list, anchor.is_some().then_some(0), ctx)
+            .into_iter()
+            .filter(|&i| i >= skip)
+            .map(|i| block[i - skip].0)
+            .collect()
+    };
+    let up_uids = order_block(anchor.as_ref(), &up_next);
+    let rest_anchor = up_uids.last().and_then(|u| up_next.iter().find(|r| r.0 == *u)).or(anchor.as_ref());
+    let rest_uids = order_block(rest_anchor, &rest);
+    for uid in bridges {
+        queue.remove(uid);
+    }
+    // Up Next: each goes right after the playing song, last first, so they end up in order.
+    for uid in up_uids.iter().rev() {
+        queue.move_to_next(&[*uid]);
+    }
+    // The rest: each to the end, in order.
+    for uid in &rest_uids {
+        queue.move_to_bottom(&[*uid]);
+    }
+    QueueOrder::Ordered { analysed }
 }
 
 /// Greedy path from node 0; ties go to the lower node (original order).
@@ -162,6 +233,7 @@ fn improve(mut t: Vec<usize>, cost: &[f32], n: usize) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::score::tempo_cost;
     use crate::testutil::{flow, song};
     use listen_core::analysis::Camelot;
 
@@ -235,6 +307,42 @@ mod tests {
         assert!(is_permutation(&o, 5));
         let artists: Vec<&str> = o.iter().map(|&i| songs[i].0.artists[0].name.as_str()).collect();
         assert!(artists.windows(2).all(|w| w[0] != w[1]), "{artists:?}");
+    }
+
+    #[test]
+    fn queue_upcoming_part_is_ordered_and_up_next_stays_first() {
+        let bpm = |s: &Song| -> f32 { s.title[1..].parse().unwrap() };
+        let mk = |b: &[u32]| -> Vec<Song> {
+            b.iter().map(|x| song(&format!("t{x}"), &format!("A{x}"), None, None)).collect()
+        };
+        let mut q = Queue::new();
+        // Played 100, playing 110, then a zig-zag; Up Next 120, 112, 116.
+        q.set(mk(&[100, 110, 140, 104, 136, 108, 132]), 1);
+        q.enqueue_next(mk(&[120, 112, 116]));
+        let flow_of = |s: &Song| Some(flow(Some(bpm(s)), Some(key(8, true)), 0.5));
+        let r = order_queue(&mut q, flow_of, &FlowCtx::default());
+        assert_eq!(r, QueueOrder::Ordered { analysed: 8 });
+        let titles: Vec<String> = q.iter().map(|i| i.song.title.clone()).collect();
+        assert_eq!(&titles[..2], ["t100", "t110"]);
+        assert_eq!(q.current().unwrap().song.title, "t110");
+        assert_eq!(&titles[2..5], ["t112", "t116", "t120"], "Up Next ordered, still first");
+        assert!(q.iter().skip(2).take(3).all(|i| i.queued));
+        let rest: Vec<f32> = q.iter().skip(5).map(|i| bpm(&i.song)).collect();
+        let steps = |v: &[f32]| -> f32 { v.windows(2).map(|w| tempo_cost(w[0], w[1])).sum() };
+        let mut was = vec![120.0, 140.0, 104.0, 136.0, 108.0, 132.0];
+        let now: Vec<f32> = std::iter::once(120.0).chain(rest.iter().copied()).collect();
+        assert!(steps(&now) < steps(&was), "{rest:?}");
+        was.sort_by(f32::total_cmp);
+        let mut got = now.clone();
+        got.sort_by(f32::total_cmp);
+        assert_eq!(got, was, "every song once");
+        // Nothing analysed: unchanged.
+        let before: Vec<u64> = q.iter().map(|i| i.uid).collect();
+        assert_eq!(order_queue(&mut q, |_| None, &FlowCtx::default()), QueueOrder::TooFewAnalysed);
+        assert_eq!(q.iter().map(|i| i.uid).collect::<Vec<_>>(), before);
+        let mut short = Queue::new();
+        short.set(mk(&[100, 120]), 1);
+        assert_eq!(order_queue(&mut short, flow_of, &FlowCtx::default()), QueueOrder::Nothing);
     }
 
     #[test]

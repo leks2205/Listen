@@ -87,52 +87,28 @@ impl Listen {
         SmoothOrder { order, analysed }
     }
 
-    /// Reorders the not-yet-played part of the queue for smooth mixing. The Up Next block (Play next /
-    /// Add to queue) is ordered within itself and still plays first; the rest follows on from it. DJ
-    /// bridges in that part are dropped (they were chosen for their old neighbours).
+    /// Reorders the not-yet-played part of the queue for smooth mixing ([`listen_mix::order_queue`]).
     pub(super) fn smooth_queue(&mut self) -> Task<Message> {
-        let start = self.queue.current_position().map_or(0, |p| p + 1);
-        let bridges: Vec<u64> =
-            self.queue.iter().skip(start).filter(|i| i.bridge.is_some()).map(|i| i.uid).collect();
-        for uid in bridges {
-            self.queue.remove(uid);
+        let lookup = self.flow_lookup();
+        let started = std::time::Instant::now();
+        let ctx = listen_mix::score::FlowCtx::default();
+        match listen_mix::order_queue(&mut self.queue, |s| lookup(s), &ctx) {
+            listen_mix::QueueOrder::Nothing => {
+                self.toast_info("Nothing to reorder in the queue.".into());
+                Task::none()
+            }
+            listen_mix::QueueOrder::TooFewAnalysed => {
+                self.toast_info("Too few analysed songs in the queue to order them.".into());
+                Task::none()
+            }
+            listen_mix::QueueOrder::Ordered { analysed } => {
+                tracing::info!(
+                    "smooth order: queue reordered ({analysed} analysed upcoming songs, {:.0} ms)",
+                    started.elapsed().as_secs_f64() * 1000.0
+                );
+                self.toast_success("Queue ordered for smooth mixing.".into());
+                self.refresh_next()
+            }
         }
-        let manual = self.queue.up_next_range();
-        let items: Vec<(u64, Song)> = self.queue.iter().map(|i| (i.uid, i.song.clone())).collect();
-        let anchor = self.queue.current().map(|i| (i.uid, i.song.clone()));
-        let block = |range: std::ops::Range<usize>| -> Vec<(u64, Song)> {
-            items.get(range).map(<[_]>::to_vec).unwrap_or_default()
-        };
-        let (up_next, rest) = (block(manual.clone()), block(manual.end..items.len()));
-        if up_next.len() + rest.len() < 2 {
-            self.toast_info("Nothing to reorder in the queue.".into());
-            return Task::none();
-        }
-        // Orders `block` to follow `anchor`; returns the block's uids in the new order.
-        let order_block = |anchor: Option<&(u64, Song)>, block: &[(u64, Song)]| -> (Vec<u64>, usize) {
-            let songs: Vec<Song> = anchor.into_iter().chain(block.iter()).map(|(_, s)| s.clone()).collect();
-            let o = self.smooth_order(&songs, anchor.is_some());
-            let skip = usize::from(anchor.is_some());
-            let uids = o.order.into_iter().filter(|&i| i >= skip).map(|i| block[i - skip].0).collect();
-            (uids, o.analysed.saturating_sub(skip))
-        };
-        let (up_uids, a1) = order_block(anchor.as_ref(), &up_next);
-        let rest_anchor =
-            up_uids.last().and_then(|u| up_next.iter().find(|(x, _)| x == u)).or(anchor.as_ref());
-        let (rest_uids, a2) = order_block(rest_anchor, &rest);
-        if a1 + a2 < 2 {
-            self.toast_info("Too few analysed songs in the queue to order them.".into());
-            return Task::none();
-        }
-        // Up Next: each goes right after the current song, last first, so they end up in order.
-        for uid in up_uids.iter().rev() {
-            self.queue.move_to_next(&[*uid]);
-        }
-        // The rest: each to the end, in order (they were not in Up Next, so nothing else changes).
-        for uid in &rest_uids {
-            self.queue.move_to_bottom(&[*uid]);
-        }
-        self.toast_success("Queue ordered for smooth mixing.".into());
-        self.refresh_next()
     }
 }

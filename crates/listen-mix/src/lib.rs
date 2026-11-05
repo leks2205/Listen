@@ -27,7 +27,7 @@ pub use plan::{
 };
 pub use render::render;
 pub use score::{FlowCtx, TimbreStats, Weights, octave_match, order, pair_cost, rank, tempo_cost};
-pub use sequence::{order_all, path_cost};
+pub use sequence::{QueueOrder, order_all, order_queue, path_cost};
 
 #[cfg(test)]
 pub(crate) mod testutil;
