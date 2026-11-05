@@ -103,9 +103,10 @@ Servers that cannot do an operation answer with an error such as `This server ca
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `voice_gain_db`. Never the key itself. | none |
+| `get_ai_dj` | The AI DJ's setup: `enabled`, `key_stored`, persona, voices, models, language, location, pronunciation, details, set size range, `talk_every`, `voice_gain_db`, the active `requests` (Tell the DJ). Never the key itself. | none |
 | `list_personas` | The AI DJ's personas with `id`, `name`, `description` and voices. | none |
 | `set_ai_dj` | Change the AI DJ. Only the given fields change; returns the new setup. | see below |
+| `tell_dj` | Tell the AI DJ what you want: a new request replans the queued, not yet started part of the set at once (the playing song goes on); the same request again changes nothing. Requests stay until removed. Returns the AI DJ setup with `requests` and `changed`. | `request` (string): `calmer`, `more_energy`, `more_new`, `only_favourites`, `focus`, `korean_only`, `no_ballads` or free text; `remove` (string): an active request; `clear` (boolean): remove all |
 | `set_gemini_key` | Store a Gemini API key for the AI DJ in the system keyring. An empty string removes it. The key is never returned by any tool. | `key` (string, required): the key from Google AI Studio |
 
 `set_ai_dj` arguments (all optional):

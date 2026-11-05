@@ -326,7 +326,7 @@ async fn mpv_opens(url: &str) -> Result<(), String> {
 }
 
 /// What `listen --check-ai-dj` does.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AiDjCheck {
     /// Speak the first two breaks (`--no-voice` = never).
     pub voice: bool,
@@ -336,6 +336,8 @@ pub struct AiDjCheck {
     pub judge: bool,
     /// Print each round's prompt (`--dump-prompt`).
     pub dump: bool,
+    /// "Tell the DJ" from round 2 on (`--request calmer`, repeatable; chip ids or free text).
+    pub requests: listen_dj::Requests,
 }
 
 impl AiDjCheck {
@@ -352,16 +354,30 @@ impl AiDjCheck {
             rounds,
             judge: !args.iter().any(|a| a == "--no-judge"),
             dump: args.iter().any(|a| a == "--dump-prompt"),
+            requests: {
+                let mut r = listen_dj::Requests::default();
+                for w in args.windows(2).filter(|w| w[0] == "--request") {
+                    if let Some(s) = listen_dj::Chip::from_id(&w[1])
+                        .map(listen_dj::Steer::Chip)
+                        .or_else(|| listen_dj::Steer::text(&w[1]))
+                    {
+                        r.add(s);
+                    }
+                }
+                r
+            },
         }
     }
 }
 
-/// `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt]`: AI DJ rounds against
+/// `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt] [--request R]…`: AI DJ rounds against
 /// Gemini on a fixed song pool with listening-history tags and measured tempo/key/energy; prints picks,
 /// lines, timings and tokens, grades every break with a judge call, saves the first two spoken breaks as
 /// WAVs in the temp dir. Key: `$LISTEN_GEMINI_API_KEY` or the app's keyring entry. Costs one text request
 /// per round, one more per round with the judge, and up to 2 speech requests. Fails when a break fails
-/// the judge.
+/// the judge. `--request` (a chip id such as `calmer`, `more_energy`, `no_ballads`, or free text) is told to
+/// the DJ before round 2: the pool is filtered as in the app, and for Calmer / More energy the next 5 songs
+/// must have a lower / higher mean energy than round 1's set (the songs the request replaced).
 pub fn ai_dj(check: AiDjCheck) -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -508,12 +524,35 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     let (mut plan_tokens, mut judge_tokens) = (listen_dj::Usage::default(), listen_dj::Usage::default());
     let (mut failed, mut new_sets, mut introduced, mut named_new) = (0usize, 0usize, 0usize, 0usize);
     let (mut noted, mut picked) = (0usize, 0usize);
+    // Tell the DJ: no requests in round 1, then `check.requests`; set energies to compare.
+    let none = listen_dj::Requests::default();
+    let mut first_energy = None::<f32>;
+    // Energies of the songs picked after the request, in play order (the first 5 are compared).
+    let mut after: Vec<f32> = Vec::new();
+    let energy_of = |s: &listen_core::model::Song| listen_dj::steer::Facts {
+        energy: flow.get(&s.id).map(|f| f.mood.energy),
+        bpm: flow.get(&s.id).and_then(|f| f.bpm),
+        new_to_you: familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")),
+        plays: familiar
+            .get(&s.id)
+            .and_then(|t| t.split("plays ").nth(1))
+            .and_then(|t| t.split(',').next())
+            .and_then(|n| n.trim().parse().ok())
+            .unwrap_or(0),
+    };
     for round in 1..=check.rounds {
+        let asked = round > 1 && !check.requests.is_empty();
+        let requests = if asked { &check.requests } else { &none };
         let mut pool: Vec<_> = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
         // Long runs: the pool starts over (except the song playing now).
         if pool.len() < settings.set_max as usize + 3 {
             used = [current.id.clone()].into();
             pool = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
+        }
+        if asked {
+            let before = pool.len();
+            pool = listen_dj::steer::filter_pool(pool, energy_of, requests, first_energy);
+            println!("requests: {} candidates of {before} fit", pool.len());
         }
         let now = flow.get(&current.id);
         let mut notes: HashMap<String, String> =
@@ -541,6 +580,8 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
             // Two-host shows: the co-host joins every other round.
             duo: round % 2 == 0,
             show: listen_dj::Show { language, location: &settings.location, notes: &settings.notes },
+            requests,
+            requests_fresh: round == 2,
         };
         if check.dump {
             println!("\n— prompt {round}:\n{}", listen_dj::prompt::user_prompt(&req));
@@ -636,6 +677,14 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         }
         // The set "plays"; the last song of it is playing when the next plan is made.
         let picks: Vec<_> = plan.picks.iter().map(|&i| pool[i].clone()).collect();
+        if let Some(e) = listen_dj::steer::mean_energy(&picks, energy_of) {
+            println!("set energy: {e:.2}");
+            if first_energy.is_none() {
+                first_energy = Some(e);
+            } else {
+                after.extend(picks.iter().filter_map(|s| energy_of(s).energy));
+            }
+        }
         for s in &picks {
             used.insert(s.id.clone());
         }
@@ -649,6 +698,25 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         mood = Some(plan.mood);
     }
     let n = check.rounds as u64;
+    if !check.requests.is_empty() {
+        let asked: Vec<&str> = check.requests.items.iter().map(listen_dj::Steer::label).collect();
+        let next: Vec<f32> = after.iter().copied().take(5).collect();
+        let mean = (!next.is_empty()).then(|| next.iter().sum::<f32>() / next.len() as f32);
+        let before = first_energy.unwrap_or(0.5);
+        println!(
+            "requests ({}): the next {} songs average energy {} (the replaced set: {before:.2})",
+            asked.join(", "),
+            next.len(),
+            mean.map_or("?".into(), |m| format!("{m:.2}"))
+        );
+        let calmer = check.requests.has(listen_dj::Chip::Calmer);
+        let livelier = check.requests.has(listen_dj::Chip::MoreEnergy);
+        if let Some(m) = mean
+            && ((calmer && m >= before) || (livelier && m <= before))
+        {
+            return Err(format!("the request was not followed: next songs {m:.2} vs {before:.2} before"));
+        }
+    }
     println!("songs with a note (\"Why this song?\"): {noted}/{picked}");
     if noted * 5 < picked * 4 {
         return Err(format!("only {noted} of {picked} picked songs got a note"));

@@ -32,6 +32,7 @@ mod bridge;
 pub mod decks;
 mod dj;
 mod dj_mix;
+pub mod dj_steer;
 pub mod dlna;
 pub mod exclude;
 mod fade;
@@ -932,6 +933,8 @@ pub enum Message {
     Mix(mix::MixMsg),
     History(history::HistoryMsg),
     Exclude(exclude::ExcludeMsg),
+    /// Tell the DJ (requests for the AI DJ).
+    Steer(dj_steer::SteerMsg),
     Handoff(handoff::HandoffMsg),
     Radio(radio::RadioMsg),
     Dlna(dlna::DlnaMsg),
@@ -3976,6 +3979,7 @@ impl Listen {
             }
             Message::History(m) => return self.on_history(m),
             Message::Exclude(m) => return self.on_exclude(m),
+            Message::Steer(m) => return self.on_steer(m),
             Message::Handoff(m) => return self.on_handoff(m),
             Message::Radio(m) => return self.on_radio(m),
             Message::Dlna(m) => return self.on_dlna(m),

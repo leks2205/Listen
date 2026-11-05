@@ -264,6 +264,19 @@ pub fn definitions() -> Vec<Value> {
             &[],
         ),
         tool(
+            "tell_dj",
+            "Tell the AI DJ what you want (\"Tell the DJ\"): a request replans the queued, not yet started part \
+             of the set at once; the song playing now goes on. The same request again changes nothing. Requests \
+             stay until removed; get_ai_dj lists them.",
+            json!({
+                "request": s("A chip (calmer, more_energy, more_new, only_favourites, focus, korean_only, no_ballads) \
+                              or free text such as \"more 2010s girl groups\""),
+                "remove": s("Remove an active request (chip id or its text)"),
+                "clear": b("Remove every request"),
+            }),
+            &[],
+        ),
+        tool(
             "set_gemini_key",
             "Store a Gemini API key for the AI DJ in the system keyring (empty removes it). The key is never \
              returned by any tool.",

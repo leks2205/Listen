@@ -491,6 +491,10 @@ impl Listen {
             "set_max": d.set_max,
             "talk_every": d.talk_every,
             "voice_gain_db": d.voice_gain_db,
+            "requests": self.dj.requests.items.iter().map(|r| match r {
+                listen_dj::Steer::Chip(c) => json!({ "chip": c.id(), "label": c.label() }),
+                listen_dj::Steer::Text(t) => json!({ "text": t }),
+            }).collect::<Vec<_>>(),
         })
     }
 
@@ -1087,6 +1091,32 @@ impl Listen {
                     tasks.push(msg(self, Message::Setting(S::AiDj(on))));
                 }
                 let now = self.ai_dj_json();
+                done(&reply, Task::batch(tasks), now)
+            }
+            "tell_dj" => {
+                use super::dj_steer::SteerMsg;
+                let mut tasks = Vec::new();
+                let mut changed = false;
+                if args.get("clear").and_then(Value::as_bool).unwrap_or(false) {
+                    changed |= !self.dj.requests.is_empty();
+                    tasks.push(msg(self, Message::Steer(SteerMsg::Clear)));
+                }
+                if let Some(r) = arg_str(args, "remove") {
+                    let at = self.dj.requests.items.iter().position(|x| match x {
+                        listen_dj::Steer::Chip(c) => listen_dj::Chip::from_id(r) == Some(*c),
+                        listen_dj::Steer::Text(t) => t.eq_ignore_ascii_case(r.trim()),
+                    });
+                    let at = at.ok_or_else(|| format!("no active request “{r}”"))?;
+                    changed = true;
+                    tasks.push(msg(self, Message::Steer(SteerMsg::Remove(at))));
+                }
+                if let Some(r) = arg_str(args, "request") {
+                    let (c, t) = self.steer_request(r);
+                    changed |= c;
+                    tasks.push(t);
+                }
+                let mut now = self.ai_dj_json();
+                now["changed"] = json!(changed);
                 done(&reply, Task::batch(tasks), now)
             }
             "set_gemini_key" => {

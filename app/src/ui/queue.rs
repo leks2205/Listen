@@ -611,7 +611,78 @@ fn queue_panel(state: &Listen, width: f32) -> Element<'_, Message> {
             container(mode_switcher(state)).padding(Padding::from([metrics::SPACE_XS, metrics::SPACE_MD])),
         );
     }
+    if let Some(steer) = tell_the_dj(state) {
+        col = col.push(container(steer).padding(Padding::from([metrics::SPACE_XS, metrics::SPACE_MD])));
+    }
     col.push(list(state, width)).into()
+}
+
+/// "Tell the DJ" while the AI DJ is on: a request box, the quick chips (an active one is filled; a
+/// click removes it again) and the typed requests with an ×.
+pub fn tell_the_dj(state: &Listen) -> Option<Element<'_, Message>> {
+    use crate::app::dj_steer::SteerMsg;
+    use iced::widget::text_input;
+    if !state.ai_dj_on() {
+        return None;
+    }
+    let t = state.tokens;
+    let steer = |m: SteerMsg| Message::Steer(m);
+    let input = text_input(crate::i18n::tr("Tell the DJ…"), &state.dj.request_input)
+        .on_input(move |s| steer(SteerMsg::Input(s)))
+        .on_submit(steer(SteerMsg::Submit))
+        .size(metrics::font_sm())
+        .padding(Padding::from([4.0, 8.0]))
+        .style(style::input(t));
+    let pill = |content: Element<'static, Message>, on: bool, m: Message| -> Element<'static, Message> {
+        button(content)
+            .padding(Padding::from([2.0, 8.0]))
+            .style(move |theme, status| {
+                if on {
+                    style::primary_button(t)(theme, status)
+                } else {
+                    style::default_button(t)(theme, status)
+                }
+            })
+            .on_press(m)
+            .into()
+    };
+    let on_color = |on: bool| if on { iced::Color::WHITE } else { t.foreground };
+    let chips = Row::with_children(listen_dj::Chip::ALL.into_iter().map(|c| {
+        let on = state.dj.requests.has(c);
+        pill(
+            label_w(c.label(), metrics::font_xs(), on_color(on), Weight::Medium).into(),
+            on,
+            steer(SteerMsg::Chip(c)),
+        )
+    }))
+    .spacing(metrics::space_xs())
+    .wrap();
+    let typed: Vec<Element<'_, Message>> = state
+        .dj
+        .requests
+        .items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| match r {
+            listen_dj::Steer::Text(text) => Some(pill(
+                row![
+                    label(super::ellipsize(text, 40), metrics::font_xs(), iced::Color::WHITE),
+                    icon(Icon::LuX, metrics::font_xs(), iced::Color::WHITE),
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center)
+                .into(),
+                true,
+                steer(SteerMsg::Remove(i)),
+            )),
+            listen_dj::Steer::Chip(_) => None,
+        })
+        .collect();
+    let mut col = column![input, chips].spacing(metrics::space_xs());
+    if !typed.is_empty() {
+        col = col.push(Row::with_children(typed).spacing(metrics::space_xs()).wrap());
+    }
+    Some(col.into())
 }
 
 fn visualizer_panel(state: &Listen) -> Element<'_, Message> {
@@ -757,13 +828,16 @@ pub fn page(state: &Listen) -> Element<'_, Message> {
         bottom: 8.0,
         left: metrics::PAGE_PADDING_X,
     });
-    column![
-        head,
-        toolbar(state, ListId::Queue),
-        super::divider_h(t),
-        container(table_of(state, ListId::Queue)).width(Length::Fill).height(Length::Fill),
-    ]
-    .into()
+    let steer = tell_the_dj(state)
+        .map(|e| container(e).padding(Padding::from([0.0, metrics::PAGE_PADDING_X])).width(Length::Fill));
+    column![head,]
+        .push(steer)
+        .push(column![
+            toolbar(state, ListId::Queue),
+            super::divider_h(t),
+            container(table_of(state, ListId::Queue)).width(Length::Fill).height(Length::Fill),
+        ])
+        .into()
 }
 
 // ---- the drawer ----------------------------------------------------------------------------

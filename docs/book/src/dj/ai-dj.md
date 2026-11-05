@@ -31,6 +31,14 @@ The break is spoken with a voice model and placed at random where it fits:
 
 The music is turned down while the voice speaks and back up afterwards. Breaks are short, at most 10 to 20 seconds of speech.
 
+### Tell the DJ
+
+While the AI DJ is on, the queue panel (and the Now Playing page) shows a **Tell the DJ…** box with quick requests under it: **Calmer**, **More energy**, **More new songs**, **Only favourites**, **Focus**, **Korean only** and **No ballads**. Click a chip to ask for it and click it again to take it back, or type your own request ("more 2010s girl groups") and press Enter; typed requests show as chips with an × to remove them.
+
+A new request takes effect at once: the songs the DJ queued that have not started yet are taken out and it plans a new set with the request. The song playing now plays on (a transition already running into the next song keeps that song), and songs you queued yourself stay. In its next break the DJ briefly says it heard you. Asking for a request that is already active changes nothing and costs no Gemini request.
+
+Requests stay active, also after a restart, until you remove them, and every later set follows them. Calmer and More energy exclude each other, and so do More new songs and Only favourites. With analysed songs the requests also narrow the candidate list before Gemini sees it: Calmer keeps songs with less energy than the ones it replaced (More energy: more), No ballads drops slow, soft songs, Focus drops the loudest ones, Only favourites keeps songs you have played at least three times (and takes more of them from your history) and More new songs keeps mostly songs new to you. Korean only is left to the DJ, because titles don't show the language reliably.
+
 ### How it uses the analysis
 
 If songs are analysed, the DJ knows more than titles. Each candidate is described with tempo, key and energy, plus a short conclusion of how it follows the current song (keys compatible or clashing, tempo close or a big jump, energy up or down), and the DJ is told how the mix engine would bring it in after the current song. The candidate list is ordered by how well the songs flow from the current one, so the DJ is offered songs that mix well. The DJ can also mention its mixes, and it keeps a talk-over shorter than the instrumental intro of the next song so that it never talks over a singer.
@@ -117,6 +125,7 @@ What is sent:
 - Song titles and artists the DJ chooses from, plus year and up to two genres where known.
 - Short analysis summaries (tempo, key, energy) and a description of how songs were mixed.
 - Which songs you skipped and which you queued yourself.
+- Your requests from **Tell the DJ**.
 - The DJ's own previous lines.
 - Your **Persona**, **Language**, **Location**, **Pronunciation** and **Details for the DJ**.
 - The lines to be spoken (to the voice model).

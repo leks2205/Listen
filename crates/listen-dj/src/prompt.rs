@@ -129,6 +129,10 @@ pub struct PlanRequest<'a> {
     pub duo: bool,
     /// Language, home town and the listener's own notes.
     pub show: Show<'a>,
+    /// What the listener told the DJ ("Tell the DJ"): outranks the seed's mood.
+    pub requests: &'a crate::steer::Requests,
+    /// A request changed since the last set: the break acknowledges it.
+    pub requests_fresh: bool,
 }
 
 /// What the listener set up for the show (Settings → AI DJ). Every field may be empty.
@@ -379,6 +383,7 @@ pub fn user_prompt(r: &PlanRequest<'_>) -> String {
     if let Some(mood) = r.mood.filter(|m| !m.is_empty() && Some(*m) != r.seed_mood) {
         let _ = writeln!(p, "Mood of your last set: {mood}");
     }
+    p.push_str(&r.requests.prompt(r.requests_fresh));
     if r.first {
         p.push_str(
             "\nThis is the first break: the listener just switched you on. Briefly say hi and \
@@ -711,8 +716,15 @@ mod tests {
             mode: BreakMode::Intro,
             duo: false,
             show: Show { language: "German", ..Show::default() },
+            requests: &crate::steer::Requests::default(),
+            requests_fresh: false,
         };
         let p = user_prompt(&req);
+        assert!(!p.contains("requests right now"));
+        let mut asked = crate::steer::Requests::default();
+        asked.add(crate::steer::Steer::Chip(crate::steer::Chip::Calmer));
+        let p2 = user_prompt(&PlanRequest { requests: &asked, requests_fresh: true, ..req.clone() });
+        assert!(p2.contains("requests right now") && p2.contains("Calmer:") && p2.contains("acknowledge"));
         assert!(p.contains("Seed song (the mood to keep): Teardrop – Massive Attack (1998, Trip-Hop)"));
         assert!(p.contains("Auto-DJ would have played after it"));
         assert!(

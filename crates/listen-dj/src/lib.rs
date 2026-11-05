@@ -9,6 +9,7 @@ pub mod judge;
 pub mod persona;
 pub mod prompt;
 pub mod quota;
+pub mod steer;
 pub mod wav;
 pub mod why;
 
@@ -16,6 +17,7 @@ pub use familiarity::{Familiarity, Listening};
 pub use gemini::{DjError, Gemini, Usage};
 pub use persona::{PERSONAS, Persona};
 pub use prompt::{BreakMode, Plan, PlanRequest, Played, Show};
+pub use steer::{Chip, Requests, Steer};
 
 /// Default text model (free tier: ~500 requests a day).
 pub const TEXT_MODEL: &str = "gemini-3.5-flash-lite";

@@ -95,6 +95,14 @@ pub struct DjState {
     /// How the current queue item came in (uid, mix phrase; `None` = not
     /// mixed), for the "played" list (see `dj_mix`).
     pub(super) entered: Option<(u64, Option<String>)>,
+    /// "Tell the DJ": the listener's active requests (kept in `ai-dj-requests.json`).
+    pub requests: listen_dj::Requests,
+    /// A request changed since the last set (the break acknowledges it).
+    pub(super) requests_fresh: bool,
+    /// Mean energy of the songs a request just replaced (Calmer / More energy beat it).
+    pub(super) steer_energy: Option<f32>,
+    /// The text box of Tell the DJ.
+    pub request_input: String,
 }
 
 /// What mpv's "next" slot should hold.
@@ -219,6 +227,54 @@ impl Listen {
         self.paths.as_ref().map(|p| p.cache_dir.join("dj"))
     }
 
+    pub(super) fn requests_file(&self) -> Option<PathBuf> {
+        self.paths.as_ref().map(|p| p.data_dir.join("ai-dj-requests.json"))
+    }
+
+    /// Tell the DJ: the requests changed. The not-yet-started DJ songs make way and the DJ plans a new
+    /// set at once (the song playing now plays on; a mix already running into the next song keeps it).
+    pub(super) fn dj_replan(&mut self) -> Task<Message> {
+        self.dj.requests_fresh = true;
+        if !self.ai_dj_on() {
+            return Task::none();
+        }
+        let start = self.queue.current_position().map_or(0, |p| p + 1);
+        let keep_next = self.mix.phase != super::mix::Phase::Idle;
+        let gone: Vec<(u64, Song)> = self
+            .queue
+            .iter()
+            .skip(start)
+            .enumerate()
+            .filter(|(n, i)| i.auto && !(keep_next && *n == 0))
+            .map(|(_, i)| (i.uid, i.song.clone()))
+            .collect();
+        let lookup = self.flow_lookup();
+        let replaced: Vec<Song> = gone.iter().map(|(_, s)| s.clone()).collect();
+        let energy = |s: &Song| listen_dj::steer::Facts {
+            energy: lookup(s).map(|f| f.mood.energy),
+            ..Default::default()
+        };
+        self.dj.steer_energy = listen_dj::steer::mean_energy(&replaced, energy)
+            .or_else(|| self.queue.current().and_then(|i| lookup(&i.song)).map(|f| f.mood.energy));
+        let uids: Vec<u64> = gone.iter().map(|(u, _)| *u).collect();
+        if let Break::Armed { before_uid, .. } = &self.dj.brk
+            && uids.contains(before_uid)
+        {
+            self.drop_break();
+        }
+        self.queue.remove_many(&uids);
+        tracing::info!(
+            "Tell the DJ: {} request(s); {} queued DJ songs replaced, planning a new set",
+            self.dj.requests.items.len(),
+            uids.len()
+        );
+        // A plan already under way was made without the change: drop it when it lands.
+        self.dj.generation += 1;
+        self.dj.busy = false;
+        self.dj.stalled = false;
+        Task::batch([self.refresh_next(), self.dj_maybe_plan()])
+    }
+
     fn quota_file(&self) -> Option<PathBuf> {
         self.paths.as_ref().map(|p| p.data_dir.join("ai-dj-quota.json"))
     }
@@ -235,6 +291,9 @@ impl Listen {
             .or_else(|| self.secrets.as_ref().and_then(|s| s.get(&ServerId(KEY_ENTRY.into()))));
         if let Some(file) = self.quota_file() {
             self.dj.quota = Quota::load(&file);
+        }
+        if let Some(file) = self.requests_file() {
+            self.dj.requests = listen_dj::Requests::load(&file);
         }
         if let Some(dir) = self.dj_dir()
             && let Ok(entries) = std::fs::read_dir(dir)
@@ -704,11 +763,17 @@ impl Listen {
             .chain(self.auto_blocked())
             .collect();
         let picks = self.dj.listener_picks.clone();
+        let requests = self.dj.requests.clone();
+        let requests_fresh = std::mem::take(&mut self.dj.requests_fresh);
+        let steer_energy = self.dj.steer_energy.take();
         // What the listener knows (tags in the prompt) and favourites from the history for the pool.
         let now_secs = listen_core::history::now_secs();
         let listening = listen_dj::Listening::new(&self.history.entries, now_secs);
+        // "Only favourites" pulls many more of them from the history.
+        let (lookup_n, slots) =
+            if requests.wants_favourites() { (POOL, POOL / 2) } else { (HISTORY_LOOKUP, HISTORY_SLOTS) };
         let (heavy, rediscover) =
-            listen_dj::familiarity::history_candidates(&self.history.entries, now_secs, HISTORY_LOOKUP);
+            listen_dj::familiarity::history_candidates(&self.history.entries, now_secs, lookup_n);
         let connected = |s: &Song| self.sources.contains_key(&s.server_id);
         let from_history: (Vec<Song>, Vec<Song>) = (
             heavy.into_iter().filter(connected).collect(),
@@ -739,9 +804,37 @@ impl Listen {
         Task::perform(
             async move {
                 let gemini = Gemini::new(http, key)?;
-                let (pool, similar) =
-                    candidates(source, &seed, &current, &picks, from_history, &exclude, &lookup, &flow_ctx)
-                        .await;
+                let (pool, similar) = candidates(
+                    source,
+                    &seed,
+                    &current,
+                    &picks,
+                    from_history,
+                    slots,
+                    &exclude,
+                    &lookup,
+                    &flow_ctx,
+                )
+                .await;
+                // Tell the DJ: keep the candidates that fit the requests (energy, tempo, what the listener knows).
+                let pool = if requests.is_empty() {
+                    pool
+                } else {
+                    let before = pool.len();
+                    let facts = |s: &Song| {
+                        let f = lookup(s);
+                        let known = listening.of(s);
+                        listen_dj::steer::Facts {
+                            energy: f.as_ref().map(|f| f.mood.energy),
+                            bpm: f.as_ref().and_then(|f| f.bpm.filter(|_| f.bpm_confidence >= 0.35)),
+                            new_to_you: known.new_to_you,
+                            plays: known.plays,
+                        }
+                    };
+                    let pool = listen_dj::steer::filter_pool(pool, facts, &requests, steer_energy);
+                    tracing::info!("AI DJ requests: {} of {before} candidates fit", pool.len());
+                    pool
+                };
                 // Nothing queued by the Auto-DJ to learn from: take what it would
                 // have picked (the seed's similar songs, in order).
                 let looked_up = if seed_context.is_empty() {
@@ -803,6 +896,8 @@ impl Listen {
                         location: &s.location,
                         notes: &s.notes,
                     },
+                    requests: &requests,
+                    requests_fresh,
                 };
                 let (plan, _) = gemini.plan(&s.text_model, &req).await?;
                 let songs: Vec<Song> = plan.picks.iter().map(|&i| pool[i].clone()).collect();
@@ -1162,6 +1257,7 @@ async fn candidates(
     current: &Song,
     picks: &[Song],
     from_history: (Vec<Song>, Vec<Song>),
+    history_slots: usize,
     exclude: &HashSet<String>,
     lookup: &super::flow::FlowLookup,
     flow_ctx: &listen_mix::score::FlowCtx,
@@ -1220,7 +1316,7 @@ async fn candidates(
         }
     };
     let history =
-        listen_dj::familiarity::mix_buckets(fitting(from_history.0), fitting(from_history.1), HISTORY_SLOTS);
+        listen_dj::familiarity::mix_buckets(fitting(from_history.0), fitting(from_history.1), history_slots);
     let history_keys: HashSet<String> = history.iter().map(song_key).collect();
     pool.retain(|s| !history_keys.contains(&song_key(s)));
     pool.truncate(POOL - 6 - history.len());
