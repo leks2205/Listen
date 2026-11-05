@@ -865,9 +865,10 @@ impl Listen {
                 let p = (started.elapsed().as_secs_f64() / r.secs.max(0.01)).min(1.0);
                 r.from + (r.to - r.from) * p
             }
-            // Through the blend, on the outgoing deck's clock (it plays at the end of its ramp by then).
-            _ => plan
-                .in_speed_at((out_t - plan.out_mix_start_s).max(0.0) / plan.out_ramp.map_or(1.0, |r| r.to)),
+            // The pre-roll at the constant speed its start was timed with; through the blend on the outgoing
+            // deck's clock (it plays at the end of its ramp by then).
+            _ if out_t < plan.out_mix_start_s => plan.in_speed,
+            _ => plan.in_speed_at((out_t - plan.out_mix_start_s) / plan.out_ramp.map_or(1.0, |r| r.to)),
         };
         tasks.push(self.set_deck_speed(in_deck, base * (1.0 + self.mix.nudge)));
 
