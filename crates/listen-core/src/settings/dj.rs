@@ -204,6 +204,12 @@ pub const DECK_MIX_LABEL: &str = "mix";
 pub const DECK_BASS: &str = "bass@lo";
 pub const DECK_HIGHPASS: &str = "highpass@hp";
 pub const DECK_LOWPASS: &str = "lowpass@lp";
+/// The deck's echo (DJ echo-out): a send (`volume`) into four delay taps (`adelay`, `delays` in ms, live),
+/// mixed with the dry signal by `amix` (`weights` "dry tap1 … tap4", live). Idle: send 0, weights
+/// "1 0 0 0 0", delays 0 — bit-exact passthrough.
+pub const DECK_ECHO_SEND: &str = "volume@es";
+pub const DECK_ECHO_TAPS: [&str; 4] = ["adelay@e1", "adelay@e2", "adelay@e3", "adelay@e4"];
+pub const DECK_ECHO_MIX: &str = "amix@em";
 /// Tempo filter of a deck: rubberband R3 keeps beats in place off 1.0× (WSOLA shifts them ±5–7 ms).
 pub const DECK_TEMPO: &str = "rubberband=engine=finer";
 /// For mpv builds without librubberband: clean, but beats jitter off 1.0×.
@@ -217,8 +223,16 @@ pub fn deck_audio_filters(p: &Playback) -> String {
 /// mpv `af` for a DJ deck: the user's EQ ([`mpv_audio_filters`]), the live mix filters, then a
 /// permanent tempo filter `ts`. Without one, mpv adds and removes its own around 1.0×, which jumps.
 pub fn deck_audio_filters_with(p: &Playback, tempo: &str) -> String {
+    let [e1, e2, e3, e4] = DECK_ECHO_TAPS;
+    // Bass shelf, echo (before the passes, so a high-pass sweep thins its repeats), high-pass, low-pass.
+    let echo = format!(
+        "asplit=2[dry][wet];[wet]{DECK_ECHO_SEND}=0,asplit=4[t1][t2][t3][t4];\
+         [t1]{e1}=delays=0:all=1[u1];[t2]{e2}=delays=0:all=1[u2];\
+         [t3]{e3}=delays=0:all=1[u3];[t4]{e4}=delays=0:all=1[u4];\
+         [dry][u1][u2][u3][u4]{DECK_ECHO_MIX}=inputs=5:normalize=0:duration=first:weights=1 0 0 0 0"
+    );
     let deck = format!(
-        "@{DECK_MIX_LABEL}:lavfi=[{DECK_BASS}=g=0:f=120:w=0.7,{DECK_HIGHPASS}=f=10,{DECK_LOWPASS}=f=20000],@ts:{tempo}"
+        "@{DECK_MIX_LABEL}:lavfi=[{DECK_BASS}=g=0:f=120:w=0.7,{echo},{DECK_HIGHPASS}=f=10,{DECK_LOWPASS}=f=20000],@ts:{tempo}"
     );
     match mpv_audio_filters(p) {
         user if user.is_empty() => deck,

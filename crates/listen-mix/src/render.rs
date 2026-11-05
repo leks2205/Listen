@@ -1,6 +1,7 @@
 //! Offline preview of a [`TransitionPlan`] (`listen --check-mix --render`). Approximate: speed changes
 //! are linear resampling (pitch follows tempo, unlike mpv's scaletempo2) and the EQ is one-pole filters.
 
+use crate::echo::{Echo, EchoParams};
 use crate::plan::{EqTarget, Kind, SpeedRamp, TransitionPlan, Which};
 
 /// Renders the transition from `out` into `inn` (mono, `sr` Hz) with `context_s` seconds of context on
@@ -144,7 +145,7 @@ impl Param {
     }
 }
 
-/// One deck's mix filter: bass shelf → high-pass → low-pass.
+/// One deck's mix filter: bass shelf → echo → high-pass → low-pass (the desktop chain's order).
 struct Fx {
     sr: f64,
     bass_db: Param,
@@ -155,6 +156,7 @@ struct Fx {
     lo: f32,
     hp_lo: f32,
     lp: f32,
+    echo: Echo,
 }
 
 /// Shelf corner of the bass swap (kick and bassline).
@@ -172,6 +174,7 @@ impl Fx {
             lo: 0.0,
             hp_lo: 0.0,
             lp: 0.0,
+            echo: Echo::new(sr as u32, 1),
         }
     }
 
@@ -187,6 +190,7 @@ impl Fx {
                 self.lp_hz.set(hz, n);
                 self.lp_mix.set(mix, n);
             }
+            EqTarget::Echo { .. } => self.echo.set(EchoParams::of(target).unwrap_or(EchoParams::IDLE)),
         }
     }
 
@@ -198,6 +202,9 @@ impl Fx {
         let gain = 10f32.powf(self.bass_db.tick() / 20.0);
         self.lo += self.coef(BASS_HZ) * (x - self.lo);
         let mut y = x + (gain - 1.0) * self.lo;
+        let mut e = [y];
+        self.echo.process(&mut e);
+        y = e[0];
 
         let (hz, mix) = (self.hp_hz.tick(), self.hp_mix.tick());
         self.hp_lo += self.coef(hz) * (y - self.hp_lo);
@@ -284,5 +291,35 @@ mod tests {
         // Blend 2 s of wall; stop when outgoing reaches 6 s: 2 s of file at 1.5× ≈ 1.33 s.
         let secs = y.len() as f32 / sr as f32;
         assert!((secs - (1.5 + 4.0 / 3.0)).abs() < 0.02, "{secs}");
+    }
+
+    #[test]
+    fn echo_out_rings_on_after_the_dry_stop() {
+        let sr = 8000;
+        let s = sr as f64;
+        let mut plan = fade(vec![]);
+        let echo = |send, dry| EqTarget::Echo { delay_s: 0.5, feedback: 0.5, send, dry };
+        plan.kind = Kind::EchoOut { delay_s: 0.5 };
+        plan.out_mix_start_s = 4.0;
+        plan.out_stop_s = 6.25;
+        plan.gain = Envelope { points: vec![(0.0, 1.0, 0.0), (0.03, 1.0, 1.0)] };
+        plan.eq = vec![
+            EqEvent { deck: Which::Out, at_out_s: 3.5, target: echo(1.0, 1.0), ramp_s: 0.0 },
+            EqEvent { deck: Which::Out, at_out_s: 4.0, target: echo(0.0, 0.0), ramp_s: 0.0 },
+        ];
+        let out = tone(440.0, 8.0, sr);
+        let silent = vec![0.0; 8 * sr as usize];
+        let y = render(&out, &silent, sr, &plan, 1.0);
+        // y starts 1 s before the stop (out 3 s); the stop is at 1 s.
+        let at = |t: f64| (t * s) as usize;
+        let dry = rms(&y[at(0.1)..at(0.4)]);
+        assert!((dry - rms(&out)).abs() < 0.02, "{dry}");
+        let rep: Vec<f32> =
+            (0..4).map(|k| rms(&y[at(1.05 + 0.5 * k as f64)..at(1.45 + 0.5 * k as f64)])).collect();
+        for (k, r) in rep.iter().enumerate() {
+            let want = dry * 0.5f32.powi(k as i32 + 1);
+            assert!((r - want).abs() < 0.15 * want, "repeat {k}: {r} vs {want}");
+        }
+        assert!(rms(&y[at(3.1)..at(3.2)]) < 0.01);
     }
 }

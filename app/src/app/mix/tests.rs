@@ -1054,3 +1054,67 @@ fn lyrics_arriving_before_the_preload_replan_the_mix() {
     let _ = s.update(Message::Mix(MixMsg::Lyrics("nd:other".into(), None)));
     assert_eq!(plan_of(&s), after);
 }
+
+/// Turns the planned mix into an echo-out at the same stop (0.5 s repeats), as `listen_mix` builds one.
+fn make_echo_out(s: &mut Listen) -> TransitionPlan {
+    use listen_mix::plan::{Envelope, EqEvent, EqTarget};
+    let mut p = plan_of(s);
+    let (stop, delay) = (p.out_mix_start_s, 0.5);
+    let echo = |send, dry| EqTarget::Echo { delay_s: delay as f32, feedback: 0.5, send, dry };
+    p.kind = Kind::EchoOut { delay_s: delay as f32 };
+    p.eq = vec![
+        EqEvent { deck: Which::Out, at_out_s: stop - delay, target: echo(1.0, 1.0), ramp_s: 0.0 },
+        EqEvent { deck: Which::Out, at_out_s: stop, target: echo(0.0, 0.0), ramp_s: 0.0 },
+    ];
+    p.gain = Envelope { points: vec![(0.0, 1.0, 0.0), (0.03, 1.0, 1.0)] };
+    p.blend_s = 4.5 * delay;
+    p.handover_out_s = stop;
+    p.out_stop_s = stop + p.blend_s;
+    p.in_speed = 1.0;
+    p.out_ramp = None;
+    p.in_settle = None;
+    s.mix.eq_done = vec![false; p.eq.len()];
+    s.mix.plan = Some(Arc::new(p.clone()));
+    p
+}
+
+#[test]
+fn an_echo_out_opens_the_send_before_the_start_then_rings_on_at_full_level() {
+    let mut s = auto_rig();
+    plan(&mut s);
+    let p = make_echo_out(&mut s);
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    let start = start_out(&s);
+    pos(&mut s, out, start - PRELOAD_LEAD_S + 0.5);
+    tick(&mut s);
+    let token = s.mix.token;
+    let _ = s.update(Message::Mix(MixMsg::Loaded(token, Ok(()))));
+    event(&mut s, inn, PlayerEvent::Restarted);
+    assert_eq!(s.mix.phase, Phase::Ready);
+    assert_eq!(s.mix.echo[out], None, "idle until a repeat before the stop");
+    // One repeat before the stop the send opens, though the incoming deck hasn't started.
+    pos(&mut s, out, p.out_mix_start_s - 0.5);
+    tick(&mut s);
+    let e = s.mix.echo[out].expect("echo on");
+    assert_eq!((e.send, e.dry, e.delay_s), (1.0, 1.0, 0.5));
+    assert_eq!(s.mix.echo[inn], None, "the incoming deck has no echo");
+    if s.mix.phase == Phase::Starting {
+        let token = s.mix.token;
+        let _ = s.update(Message::Mix(MixMsg::Started(token, Ok(Instant::now()))));
+    }
+    // At the stop the dry signal goes; both decks play at full level (no blend trim).
+    pos(&mut s, out, p.out_mix_start_s + 0.2);
+    tick(&mut s);
+    if s.mix.phase == Phase::Starting {
+        let token = s.mix.token;
+        let _ = s.update(Message::Mix(MixMsg::Started(token, Ok(Instant::now()))));
+        tick(&mut s);
+    }
+    let e = s.mix.echo[out].expect("echo still ringing");
+    assert_eq!((e.send, e.dry), (0.0, 0.0));
+    assert_eq!(s.deck_volume(out), 100.0);
+    assert_eq!(s.deck_volume(inn), 100.0);
+    // A stopped deck forgets its echo (its next file starts with an idle chain).
+    s.forget_deck_filters(out);
+    assert_eq!(s.mix.echo[out], None);
+}

@@ -9,7 +9,10 @@ use super::{Listen, Message, err};
 use iced::Task;
 use listen_core::analysis::{BeatGrid, Features};
 use listen_core::model::Song;
-use listen_core::settings::{DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL};
+use listen_core::settings::{
+    DECK_BASS, DECK_ECHO_MIX, DECK_ECHO_SEND, DECK_ECHO_TAPS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL,
+};
+use listen_mix::echo::EchoParams;
 use listen_mix::plan::{EqTarget, Kind, PlanCtx, TransitionPlan, Which};
 use listen_player::{PlayerEvent, PtsSample, Track};
 use listen_source::{AudioInput, MusicSource};
@@ -103,8 +106,9 @@ impl Filter {
     }
 }
 
-fn eq_value(target: EqTarget) -> (Filter, f32) {
-    match target {
+/// The filter and value of an EQ target (`None` for the echo, see [`Listen::set_echo`]).
+fn eq_value(target: EqTarget) -> Option<(Filter, f32)> {
+    Some(match target {
         EqTarget::Bass(db) => (Filter::Bass, db),
         EqTarget::Highpass { hz, mix } => {
             (Filter::Highpass, if mix <= 0.0 { Filter::Highpass.neutral() } else { hz })
@@ -112,7 +116,13 @@ fn eq_value(target: EqTarget) -> (Filter, f32) {
         EqTarget::Lowpass { hz, mix } => {
             (Filter::Lowpass, if mix <= 0.0 { Filter::Lowpass.neutral() } else { hz })
         }
-    }
+        EqTarget::Echo { .. } => return None,
+    })
+}
+
+/// No dry overlap: both decks may play at full level (no blend trim) and their beats need no lock.
+fn handover_kind(kind: Kind) -> bool {
+    matches!(kind, Kind::EchoOut { .. } | Kind::Cut)
 }
 
 /// The incoming song's audio for the second deck ([`MusicSource::mix_input`]). Fetched when the pair is
@@ -173,6 +183,8 @@ pub struct MixState {
     speed: [f64; 2],
     /// Filter values per deck: [bass dB, highpass Hz, lowpass Hz].
     eq: [[f32; 3]; 2],
+    /// Echo sent per deck (`None`: idle, as the deck's chain starts).
+    pub(super) echo: [Option<EchoParams>; 2],
     eq_done: Vec<bool>,
     ramps: Vec<EqRamp>,
     out_ramp_started: Option<Instant>,
@@ -568,6 +580,7 @@ impl Listen {
                 return self.mix_fail("the incoming song wasn't ready in time");
             }
             Phase::Ready => {
+                tasks.push(self.mix_eq_events(&plan, out_t, true));
                 let wall = (start_out - out_t) / out_speed.max(0.5);
                 if wall < -0.2 {
                     return self.mix_fail("missed the start");
@@ -579,6 +592,7 @@ impl Listen {
             Phase::Starting if out_t > plan.out_mix_start_s + 1.0 => {
                 return self.mix_fail("the incoming deck didn't start");
             }
+            Phase::Starting => tasks.push(self.mix_eq_events(&plan, out_t, true)),
             Phase::Running | Phase::Settling => tasks.push(self.mix_automate(&plan, out_t)),
             _ => {}
         }
@@ -667,8 +681,10 @@ impl Listen {
         let in_deck = self.mix.in_deck;
         let mut start = [Filter::Bass.neutral(), Filter::Highpass.neutral(), Filter::Lowpass.neutral()];
         for (i, ev) in plan.eq.iter().enumerate() {
-            if ev.deck == Which::In && ev.at_out_s <= plan.out_mix_start_s + 0.01 {
-                let (filter, value) = eq_value(ev.target);
+            if ev.deck == Which::In
+                && ev.at_out_s <= plan.out_mix_start_s + 0.01
+                && let Some((filter, value)) = eq_value(ev.target)
+            {
                 self.mix.eq_done[i] = true;
                 start[filter.index()] = value;
             }
@@ -684,7 +700,40 @@ impl Listen {
     /// A stopped deck has no filter chain; its next file starts from scratch (see `mix_deck_ready`).
     fn forget_deck_filters(&mut self, deck: usize) {
         self.mix.eq[deck] = [f32::NAN; 3];
+        self.mix.echo[deck] = None;
         self.mix.ramps.retain(|r| r.deck != deck);
+    }
+
+    /// Sets a deck's echo ([`DECK_ECHO_SEND`], [`DECK_ECHO_TAPS`], [`DECK_ECHO_MIX`]); only what changed
+    /// is sent, delays first so the taps are in place when the send opens.
+    fn set_echo(&mut self, deck: usize, to: EchoParams) -> Task<Message> {
+        let from = self.mix.echo[deck].unwrap_or(EchoParams::IDLE);
+        if from == to {
+            return Task::none();
+        }
+        self.mix.echo[deck] = (to != EchoParams::IDLE).then_some(to);
+        let delays: Vec<String> = if (from.delay_s - to.delay_s).abs() > 1e-4 {
+            // adelay's `delays` command sets only the listed channels (`all` counts at init only): one
+            // entry per channel, up to 7.1.
+            (1..=DECK_ECHO_TAPS.len())
+                .map(|k| vec![format!("{:.1}", k as f32 * to.delay_s * 1000.0); 8].join("|"))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let weights = std::iter::once(to.dry)
+            .chain((1..=DECK_ECHO_TAPS.len()).map(|k| to.tap_gain(k)))
+            .map(|g| format!("{g:.4}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let send = format!("{:.3}", to.send);
+        self.deck_task(deck, move |p| async move {
+            for (ms, tap) in delays.iter().zip(DECK_ECHO_TAPS) {
+                p.af_command(DECK_MIX_LABEL, "delays", ms, tap).await?;
+            }
+            p.af_command(DECK_MIX_LABEL, "weights", &weights, DECK_ECHO_MIX).await?;
+            p.af_command(DECK_MIX_LABEL, "volume", &send, DECK_ECHO_SEND).await
+        })
     }
 
     /// Unpauses the incoming deck when the outgoing one reaches `start_out`.
@@ -719,35 +768,26 @@ impl Listen {
         )
     }
 
-    /// Gains, EQ, tempo, phase lock, handover and the end of the blend.
-    fn mix_automate(&mut self, plan: &TransitionPlan, out_t: f64) -> Task<Message> {
+    /// EQ and echo events that are due, sent early by the output latency. Before the incoming deck starts
+    /// (`out_only`) just the outgoing deck's: an echo-out opens its send a repeat before the stop, which
+    /// can lie before the incoming pre-roll.
+    fn mix_eq_events(&mut self, plan: &TransitionPlan, out_t: f64, out_only: bool) -> Task<Message> {
         let (out_deck, in_deck) = (self.mix.out_deck, self.mix.in_deck);
-        let out_speed = self.mix.speed[out_deck];
+        let lead = FILTER_LEAD_S * self.mix.speed[out_deck];
         let mut tasks = Vec::new();
-        let t = (out_t - plan.out_mix_start_s) / out_speed.max(0.5);
-        if !self.mix.out_stopped {
-            // The pre-roll bar stays silent whatever the envelope starts with.
-            let (g_out, g_in) = if t < 0.0 { (1.0, 0.0) } else { plan.gain.gains_at(t) };
-            // Both decks at full level mid-blend add up; trim a little.
-            let trim = if g_out > 0.0 && g_in > 0.0 { 0.85 } else { 1.0 };
-            self.mix.gains[out_deck] = g_out * trim;
-            self.mix.gains[in_deck] = g_in * trim;
-        } else {
-            self.mix.gains[in_deck] = 1.0;
-        }
-        tasks.push(self.push_volume(false));
-        tasks.push(self.push_idle_volume(false));
-
-        // EQ events, sent early by the output latency.
-        let lead = FILTER_LEAD_S * out_speed;
         for i in 0..plan.eq.len() {
             let ev = plan.eq[i];
-            if self.mix.eq_done[i] || out_t < ev.at_out_s - lead {
+            if self.mix.eq_done[i] || out_t < ev.at_out_s - lead || (out_only && ev.deck != Which::Out) {
                 continue;
             }
             self.mix.eq_done[i] = true;
             let deck = if ev.deck == Which::Out { out_deck } else { in_deck };
-            let (filter, to) = eq_value(ev.target);
+            let Some((filter, to)) = eq_value(ev.target) else {
+                if let Some(echo) = EchoParams::of(ev.target) {
+                    tasks.push(self.set_echo(deck, echo));
+                }
+                continue;
+            };
             let from = self.mix.eq[deck][filter.index()];
             self.mix.ramps.retain(|r| !(r.deck == deck && r.filter == filter));
             if ev.ramp_s <= 0.0 || from.is_nan() {
@@ -763,6 +803,29 @@ impl Listen {
                 });
             }
         }
+        Task::batch(tasks)
+    }
+
+    /// Gains, EQ, tempo, phase lock, handover and the end of the blend.
+    fn mix_automate(&mut self, plan: &TransitionPlan, out_t: f64) -> Task<Message> {
+        let (out_deck, in_deck) = (self.mix.out_deck, self.mix.in_deck);
+        let out_speed = self.mix.speed[out_deck];
+        let mut tasks = Vec::new();
+        let t = (out_t - plan.out_mix_start_s) / out_speed.max(0.5);
+        if !self.mix.out_stopped {
+            // The pre-roll bar stays silent whatever the envelope starts with.
+            let (g_out, g_in) = if t < 0.0 { (1.0, 0.0) } else { plan.gain.gains_at(t) };
+            // Both decks at full level mid-blend add up; trim a little.
+            let trim = if g_out > 0.0 && g_in > 0.0 && !handover_kind(plan.kind) { 0.85 } else { 1.0 };
+            self.mix.gains[out_deck] = g_out * trim;
+            self.mix.gains[in_deck] = g_in * trim;
+        } else {
+            self.mix.gains[in_deck] = 1.0;
+        }
+        tasks.push(self.push_volume(false));
+        tasks.push(self.push_idle_volume(false));
+
+        tasks.push(self.mix_eq_events(plan, out_t, false));
         let ramps = self.mix.ramps.clone();
         for r in &ramps {
             let p = (r.start.elapsed().as_secs_f64() / r.secs).min(1.0) as f32;
@@ -874,6 +937,7 @@ impl Listen {
         for f in [Filter::Bass, Filter::Highpass, Filter::Lowpass] {
             tasks.push(self.set_filter(deck, f, f.neutral()));
         }
+        tasks.push(self.set_echo(deck, EchoParams::IDLE));
         Task::batch(tasks)
     }
 

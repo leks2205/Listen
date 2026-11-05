@@ -208,6 +208,16 @@ mod tests {
         let deck = deck_audio_filters(&p);
         assert!(deck.starts_with("@mix:lavfi=[bass@lo="), "{deck}");
         assert!(deck.ends_with(",@ts:rubberband=engine=finer"), "{deck}");
+        // The echo sits between the bass shelf and the passes, idle (send 0, dry only, no delay).
+        let (bass, echo, hp) = (
+            deck.find("bass@lo=").unwrap(),
+            deck.find("volume@es=0,").unwrap(),
+            deck.find(",highpass@hp=").unwrap(),
+        );
+        assert!(bass < echo && echo < hp, "{deck}");
+        assert!(deck.contains("amix@em=inputs=5:normalize=0:duration=first:weights=1 0 0 0 0"), "{deck}");
+        assert_eq!(deck.matches("=delays=0:all=1").count(), 4, "{deck}");
+        assert!(!deck.contains('\n') && !deck.contains("  "), "{deck}");
         assert!(deck_audio_filters_with(&p, DECK_TEMPO_FALLBACK).ends_with(",@ts:scaletempo2"));
         p.equalizer_enabled = true;
         p.equalizer_preamp = -3.0;

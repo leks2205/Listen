@@ -97,6 +97,13 @@ pub fn describe(plan: &TransitionPlan, out: Option<&Features>, inn: Option<&Feat
             None => "fade (no steady beat)".into(),
             Some(_) => "fade".into(),
         },
+        Kind::EchoOut { .. } | Kind::Cut => {
+            let what = if plan.kind == Kind::Cut { "cut on the downbeat" } else { "echo-out" };
+            match gap {
+                Some(lr) if pct(lr) > s.max_tempo_pct => format!("{what} (tempos {:.0} % apart)", pct(lr)),
+                _ => what.into(),
+            }
+        }
         Kind::Gapless => "straight cut".into(),
     }
 }
@@ -279,7 +286,7 @@ mod tests {
         // The instrumental intro (32 s at 120 bpm) comes first, then the mix preview.
         assert_eq!(notes["close"], "120 bpm, 8A; intro 32 s; mix from now: 16-bar beat blend + bass swap");
         assert!(notes["slower"].contains("beat blend") && notes["slower"].contains("tempo eases down 3 %"));
-        assert!(notes["far"].ends_with("mix from now: fade (tempos 10 % apart)"));
+        assert!(notes["far"].ends_with("mix from now: echo-out (tempos 10 % apart)"), "{}", notes["far"]);
         // No beat grid: no intro length either.
         assert_eq!(notes["beatless"], "mix from now: fade (no steady beat)");
         assert!(!notes.contains_key("unknown"), "unanalysed songs get no preview");
@@ -294,6 +301,10 @@ mod tests {
         assert_eq!(describe(&plan, None, None, &s), "short 4-bar blend");
         plan.kind = Kind::FilterOut { bars: 2 };
         assert_eq!(describe(&plan, None, None, &s), "filter-out");
+        plan.kind = Kind::EchoOut { delay_s: 0.5 };
+        assert_eq!(describe(&plan, None, None, &s), "echo-out");
+        plan.kind = Kind::Cut;
+        assert_eq!(describe(&plan, None, None, &s), "cut on the downbeat");
         plan.kind = Kind::BeatBlend { bars: 8, bass_swap_bar: None };
         assert_eq!(describe(&plan, None, None, &s), "8-bar beat blend");
     }

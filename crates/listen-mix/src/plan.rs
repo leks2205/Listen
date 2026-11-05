@@ -49,8 +49,13 @@ pub enum Kind {
     ShortBlend { bars: u8 },
     /// Outgoing is high-passed away while the incoming starts on a downbeat.
     FilterOut { bars: u8 },
-    /// Plain equal-power crossfade (no steady beat or tempos too far apart).
+    /// Plain equal-power crossfade (no steady beat on one side).
     Fade { secs: f32 },
+    /// The outgoing's last beat before a phrase end is echoed (`delay_s` apart, see [`EqTarget::Echo`]), its
+    /// dry signal stops on the downbeat and the incoming starts there at its own tempo (no beat matching).
+    EchoOut { delay_s: f32 },
+    /// Hard handover on a phrase downbeat (a few ms crossfade), each song at its own tempo.
+    Cut,
     /// No mix: play the next song gaplessly.
     Gapless,
 }
@@ -85,6 +90,15 @@ pub enum EqTarget {
     Lowpass {
         hz: f32,
         mix: f32,
+    },
+    /// The deck's echo ([`crate::echo`]): repeats `delay_s` apart, each `feedback` times the last, of what
+    /// goes into the send (`send` 0..1); `dry` is the direct signal's level. Set at once (`ramp_s` unused).
+    /// Idle: send 0, dry 1.
+    Echo {
+        delay_s: f32,
+        feedback: f32,
+        send: f32,
+        dry: f32,
     },
 }
 
@@ -398,14 +412,191 @@ pub(crate) fn plan_with(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opt
     let (k, lr) = octave_match(i.g.bpm, o.g.bpm);
     let (k, lr) = (f64::from(k), f64::from(lr));
     let max_lr = (1.0 + f64::from(ctx.settings.max_tempo_pct.max(0.0)) / 100.0).ln();
+    // Echo-out or cut: no overlap, so no tempo match needed. Not on bridge legs (they exist to be
+    // beat-mixed) and not under an AI DJ talk-over (it wants a blend to talk over).
+    let talk = ctx.voice_break.is_some_and(|v| matches!(v.mode, VoiceMode::Outro | VoiceMode::Across));
+    let hand = (opts == Opts::NORMAL && !talk).then(|| best_handover(&o, &i, ctx)).flatten();
     if lr.abs() > max_lr {
         let reason =
             format!("tempo gap {:.1} % ({:.0} → {:.0} bpm)", lr.abs().exp_m1() * 100.0, o.bpm(), i.bpm());
-        return fade_plan(out, inn, ctx, &reason);
+        return match hand {
+            Some(h) => build_handover(&o, &i, h, &reason),
+            None => fade_plan(out, inn, ctx, &reason),
+        };
     }
-    match best_candidate(&o, &i, k, lr, ctx, opts) {
-        Some(c) => build(&o, &i, k, c, ctx, opts),
-        None => fade_plan(out, inn, ctx, "no beat-matched mix point left"),
+    match (best_candidate(&o, &i, k, lr, ctx, opts), hand) {
+        (Some(c), Some(h)) if h.score > c.score => build_handover(&o, &i, h, "vocals on both edges"),
+        (Some(c), _) => build(&o, &i, k, c, ctx, opts),
+        (None, Some(h)) => build_handover(&o, &i, h, "no beat-matched mix point left"),
+        (None, None) => fade_plan(out, inn, ctx, "no beat-matched mix point left"),
+    }
+}
+
+/// Repeats of an echo-out fall off by this much each.
+const ECHO_FEEDBACK: f32 = 0.5;
+/// Crossfade of a [`Kind::Cut`] (wall s): short enough to sound like a cut, long enough not to click.
+const CUT_FADE_S: f64 = 0.03;
+/// Base scores: below every beat-matched blend without a clash, above [`Kind::Fade`] (−2) and a filter-out
+/// over clashing vocals. An echo gets [`ECHO_SUNG`] more when the bar before the stop is sung.
+const ECHO_BASE: f32 = -1.5;
+const ECHO_SUNG: f32 = 0.15;
+const CUT_BASE: f32 = -1.45;
+
+/// An echo-out or cut candidate: the outgoing stops on the downbeat of bar `m`, the incoming starts at
+/// its bar `i`.
+#[derive(Debug, Clone, Copy)]
+struct Hand {
+    echo: bool,
+    m: usize,
+    i: usize,
+    score: f32,
+}
+
+/// Echo delay: one beat, or two beats / half a beat to stay within 0.3–0.75 s.
+fn echo_delay(o: &Side) -> f64 {
+    let beat = o.beat_s();
+    if beat < 0.3 {
+        2.0 * beat
+    } else if beat > 0.75 {
+        beat / 2.0
+    } else {
+        beat
+    }
+}
+
+/// How long the echo rings after the dry signal stops (wall s).
+fn echo_tail(delay: f64) -> f64 {
+    (crate::echo::TAPS as f64 + 0.5) * delay
+}
+
+/// The best echo-out or cut: the outgoing stops on a phrase downbeat (or after a sung phrase / at a
+/// breakdown late in the song) and the incoming starts on its first phrase downbeat or, with lyrics, right
+/// on a verse or chorus entry. An echo suits a loud or sung bar before the stop, a cut a quiet one.
+fn best_handover(o: &Side, i: &Side, ctx: &PlanCtx) -> Option<Hand> {
+    let earliest = ctx.out_position_s + MIN_LEAD_S;
+    let end = f64::from(o.f.audio_end);
+    let outro = o.outro_start();
+    let outro_t = outro.map_or(end, |b| o.t(b as f64));
+    let delay = echo_delay(o);
+    let lo_t = o.t(outro.unwrap_or(o.bars) as f64 - 16.0).max(end - 90.0).max(earliest + delay);
+    let early_lo = (EARLY_OUT_FRAC * end).max(earliest + delay);
+    let outs: Vec<usize> = (1..=o.bars)
+        .filter(|&b| {
+            let t = o.t(b as f64);
+            t <= end - 0.5
+                && ((t >= lo_t - 1e-6 && (o.on_subphrase(b) || Some(b) == outro))
+                    || (t >= early_lo && (o.after_phrase(b) || o.breakdown_at(b))))
+        })
+        .collect();
+
+    let audio_start = f64::from(i.f.audio_start);
+    let first_in = (0..i.bars).find(|&b| i.on_phrase(b) && i.t(b as f64) >= audio_start - 0.05)?;
+    let mut ins = vec![first_in];
+    if i.has_lyrics() {
+        let hi = (EARLY_IN_FRAC * f64::from(i.f.audio_end)).min(EARLY_IN_MAX_S);
+        ins.extend(
+            (first_in + 1..i.bars)
+                .filter(|&b| i.t(b as f64) <= hi && i.cue(b) & (cue::ENTRY | cue::CHORUS) != 0),
+        );
+    }
+
+    let mut best: Option<Hand> = None;
+    for &m in &outs {
+        let phrase_pen = if o.on_phrase(m) || Some(m) == outro || o.after_phrase(m) { 0.0 } else { -0.25 };
+        let cut = (outro_t.min(end) - o.t(m as f64)).max(0.0) as f32;
+        let (vo, vo_next, eo) = (o.vocal(m - 1), o.vocal(m), o.energy(m - 1));
+        // Singing runs on through the stop: mid-line (lyric_score knows it for sure with lyrics).
+        let through = !o.has_lyrics() && vo >= QUIET_VOCAL && vo_next >= QUIET_VOCAL;
+        for &inb in &ins {
+            let skipped = (i.t(inb as f64) - i.t(first_in as f64)).max(0.0) as f32;
+            let jump = (eo - i.energy(inb)).abs();
+            let vi = i.vocal(inb);
+            let common =
+                -CUT_PER_S * cut - SKIP_PER_S * skipped + phrase_pen + lyric_score(o, i, m - 1, 1, inb);
+            // Echo: the sung or loud end of a phrase repeats over the incoming start.
+            let mut echo = ECHO_BASE + common - 0.25 * jump + 0.3 * (eo - 0.5);
+            if vo >= QUIET_VOCAL {
+                echo += ECHO_SUNG - 0.2 * vo * vi;
+            }
+            if through {
+                echo -= 0.3;
+            }
+            // A cut right after a sung bar chops the line's last note; it suits a quiet bar.
+            let mut cut_score = CUT_BASE + common - 0.5 * jump - 0.4 * vo;
+            if through {
+                cut_score -= 0.5;
+            }
+            for (is_echo, score) in [(true, echo), (false, cut_score)] {
+                let better = best.is_none_or(|b| score.total_cmp(&b.score).then(m.cmp(&b.m)).is_gt());
+                if better {
+                    best = Some(Hand { echo: is_echo, m, i: inb, score });
+                }
+            }
+        }
+    }
+    best
+}
+
+fn build_handover(o: &Side, i: &Side, h: Hand, why: &str) -> TransitionPlan {
+    let stop = o.t(h.m as f64);
+    let in_mix_start_s = i.t(h.i as f64);
+    let delay = echo_delay(o);
+    let (kind, blend_s, gain, eq, what) = if h.echo {
+        let tail = echo_tail(delay);
+        let echo = |send: f32, dry: f32| EqTarget::Echo {
+            delay_s: delay as f32,
+            feedback: ECHO_FEEDBACK,
+            send,
+            dry,
+        };
+        let eq = vec![
+            // The send takes the last repeat-length before the stop…
+            EqEvent { deck: Which::Out, at_out_s: stop - delay, target: echo(1.0, 1.0), ramp_s: 0.0 },
+            // …then the dry signal stops and only the repeats ring on, thinning out.
+            EqEvent { deck: Which::Out, at_out_s: stop, target: echo(0.0, 0.0), ramp_s: 0.0 },
+            EqEvent {
+                deck: Which::Out,
+                at_out_s: stop,
+                target: EqTarget::Highpass { hz: 1000.0, mix: 1.0 },
+                ramp_s: tail,
+            },
+        ];
+        // The outgoing deck's level stays up for the repeats; its dry part is muted in its effect.
+        let gain = vec![(0.0, 1.0, 0.0), (CUT_FADE_S, 1.0, 1.0)];
+        (
+            Kind::EchoOut { delay_s: delay as f32 },
+            tail,
+            gain,
+            eq,
+            format!("echo-out ({:.2} s repeats)", delay),
+        )
+    } else {
+        let gain = vec![(0.0, 1.0, 0.0), (CUT_FADE_S, 0.0, 1.0)];
+        (Kind::Cut, CUT_FADE_S, gain, Vec::new(), "cut".to_string())
+    };
+    TransitionPlan {
+        kind,
+        reason: format!(
+            "{what} on a downbeat (out bar {}, in bar {}), {:.1} → {:.1} bpm at their own tempos: {why}",
+            h.m,
+            h.i,
+            o.bpm(),
+            i.bpm()
+        ),
+        score: h.score,
+        out_mix_start_s: stop,
+        in_mix_start_s,
+        // One incoming bar of silent pre-roll, as for the blends.
+        in_load_at_s: i.t(h.i as f64 - 1.0).clamp(0.0, in_mix_start_s.max(0.0)),
+        blend_s,
+        handover_out_s: stop,
+        out_stop_s: stop + blend_s,
+        in_speed: 1.0,
+        out_ramp: None,
+        in_settle: None,
+        gain: Envelope { points: gain },
+        eq,
+        voice_window: None,
     }
 }
 
@@ -928,7 +1119,7 @@ mod tests {
         // Without ramps the incoming matches the outgoing alone (5 % > 3 %: no).
         let flat = Mixing { tempo_ramps: false, ..settings() };
         let p = plan(&out, &inn, &ctx(&flat, 30.0));
-        assert!(matches!(p.kind, Kind::Fade { .. }), "{}", p.reason);
+        assert!(matches!(p.kind, Kind::EchoOut { .. } | Kind::Cut), "{}", p.reason);
         let near = FeatBuilder::new(123.0, 96).intro(16).outro(8).build();
         let p = plan(&out, &near, &ctx(&flat, 30.0));
         assert!(matches!(p.kind, Kind::BeatBlend { .. }));
@@ -960,11 +1151,37 @@ mod tests {
     }
 
     #[test]
-    fn unavoidable_vocal_clash_filters_out() {
+    fn unavoidable_vocal_clash_echoes_out() {
         let s = settings();
         let out = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
         let inn = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
         let p = plan(&out, &inn, &ctx(&s, 30.0));
+        let Kind::EchoOut { delay_s } = p.kind else { panic!("{:?}: {}", p.kind, p.reason) };
+        // One beat at 124 bpm.
+        assert!((f64::from(delay_s) - 60.0 / 124.0).abs() < 1e-3);
+        assert!(p.reason.contains("vocals on both edges"), "{}", p.reason);
+        assert_in_downbeats(&out, p.out_mix_start_s);
+        assert_eq!((p.in_speed, p.out_ramp, p.in_settle), (1.0, None, None));
+        assert!(p.eq.iter().all(|e| e.deck == Which::Out));
+        let echo: Vec<_> =
+            p.eq.iter()
+                .filter_map(|e| crate::echo::EchoParams::of(e.target).map(|x| (e.at_out_s, x)))
+                .collect();
+        assert_eq!(echo.len(), 2);
+        // The send opens one repeat before the stop, then the dry signal goes and the repeats ring on.
+        assert!((echo[0].0 - (p.out_mix_start_s - f64::from(delay_s))).abs() < 1e-6);
+        assert_eq!((echo[0].1.send, echo[0].1.dry), (1.0, 1.0));
+        assert_eq!((echo[1].0, echo[1].1.send, echo[1].1.dry), (p.out_mix_start_s, 0.0, 0.0));
+        assert!((p.out_stop_s - p.out_mix_start_s - echo_tail(f64::from(delay_s))).abs() < 1e-6);
+        assert_eq!(p.handover_out_s, p.out_mix_start_s);
+        assert_eq!(p.gain.gains_at(1.0), (1.0, 1.0));
+
+        // Under an AI DJ talk-over it stays a filter-out (the talk wants a blend).
+        let c = PlanCtx {
+            voice_break: Some(VoiceBreak { mode: VoiceMode::Outro, clip_secs: 6.0 }),
+            ..ctx(&s, 30.0)
+        };
+        let p = plan(&out, &inn, &c);
         assert_eq!(p.kind, Kind::FilterOut { bars: 2 }, "{}", p.reason);
         assert_eq!(p.gain.gains_at(0.0), (1.0, 1.0));
         let hp: Vec<_> = p.eq.iter().filter(|e| matches!(e.target, EqTarget::Highpass { .. })).collect();
@@ -998,7 +1215,7 @@ mod tests {
             let beat = matches!(p.kind, Kind::BeatBlend { .. });
             assert_eq!(beat, blends, "{mode:?} {og:?} {ig:?}: {:?} {}", p.kind, p.reason);
             if !blends {
-                assert_eq!(p.kind, Kind::FilterOut { bars: 2 });
+                assert!(matches!(p.kind, Kind::EchoOut { .. }), "{:?}", p.kind);
             }
         }
     }
@@ -1027,11 +1244,35 @@ mod tests {
     }
 
     #[test]
-    fn large_tempo_gap_or_no_grid_fades() {
+    fn large_tempo_gap_cuts_and_no_grid_fades() {
         let s = settings();
         let out = FeatBuilder::new(120.0, 96).intro(8).outro(16).build();
         let inn = FeatBuilder::new(130.8, 96).intro(16).outro(8).build(); // +9 %
+        // The last sung bar echoes out at the start of the outro, into the first incoming downbeat, each at
+        // its own tempo.
         let p = plan(&out, &inn, &ctx(&s, 30.0));
+        assert_eq!(p.kind, Kind::EchoOut { delay_s: 0.5 }, "{}", p.reason);
+        assert!(p.reason.contains("tempo gap"), "{}", p.reason);
+        let og = out.grid.as_ref().unwrap();
+        assert!((p.out_mix_start_s - f64::from(og.bar_time(80))).abs() < 1e-3, "{}", p.reason);
+        assert_in_downbeats(&inn, p.in_mix_start_s);
+        assert_eq!((p.in_speed, p.out_ramp, p.in_settle), (1.0, None, None));
+
+        // Only instrumental bars in reach: a cut on a phrase downbeat.
+        let long_outro = FeatBuilder::new(120.0, 96).intro(8).outro(48).build();
+        let p = plan(&long_outro, &inn, &ctx(&s, 30.0));
+        assert_eq!(p.kind, Kind::Cut, "{}", p.reason);
+        assert_in_downbeats(&long_outro, p.out_mix_start_s);
+        assert!((p.out_stop_s - p.out_mix_start_s - CUT_FADE_S).abs() < 1e-9);
+        assert_eq!(p.gain.gains_at(CUT_FADE_S), (0.0, 1.0));
+        assert!(p.eq.is_empty());
+
+        // Under a talk-over: the old fade.
+        let c = PlanCtx {
+            voice_break: Some(VoiceBreak { mode: VoiceMode::Across, clip_secs: 6.0 }),
+            ..ctx(&s, 30.0)
+        };
+        let p = plan(&out, &inn, &c);
         assert_eq!(p.kind, Kind::Fade { secs: 4.0 }, "{}", p.reason);
         assert!(p.reason.contains("tempo"));
         assert_eq!(p.in_mix_start_s, f64::from(inn.audio_start));

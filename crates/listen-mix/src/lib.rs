@@ -9,10 +9,12 @@
 //! - [`pick`]: what automatic fills aim for: tempo, focus, forgotten-favourite slot (contract C4).
 //! - [`lyric`]: synced lyrics as a vocal map and cue flags for the planner.
 //! - [`loudness`]: playback and blend gain from measured loudness (contract C5).
+//! - [`echo`]: the echo of an echo-out as a sample-level effect (preview and Android mixer).
 //! - [`render`](mod@render): an offline mono preview of a plan (dev tool for
 //!   `listen --check-mix --render`).
 
 pub mod bridge;
+pub mod echo;
 pub mod genre;
 pub mod loudness;
 pub mod lyric;

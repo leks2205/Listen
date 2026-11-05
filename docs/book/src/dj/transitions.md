@@ -25,7 +25,9 @@ Listen looks at both songs and picks the best way to join them. It prefers to st
 | **Long blend** | A beat-matched crossfade over 8 or 16 bars (see **Long blends**), used where both songs have instrumental parts. With **Bass swap** on, the bass of the outgoing song is cut halfway through, exactly on a downbeat, while the incoming bass comes in, so the two basslines never play together. |
 | **Short blend** | A beat-matched crossfade of a few bars, placed so the vocals do not overlap. |
 | **Filter-out** | The outgoing song is filtered away (its low end disappears first) while the next one starts on a downbeat. |
-| **Fade** | A plain crossfade, used when the songs have no steady beat or their tempos are too far apart. |
+| **Echo-out** | The last beat of a phrase of the outgoing song is repeated four times, each repeat half as loud and thinner, while the next song starts on the downbeat right after. The two songs never play their own sound at the same time, so the tempos need not match and the voices don't clash. Used when both edges are sung, or the tempos are too far apart for a blend, and the outgoing song ends a phrase loudly or with a sung line. |
+| **Cut** | A hard switch on a phrase downbeat (with a few milliseconds of fade so it doesn't click), each song at its own tempo. Used in the same cases as an echo-out when the bar before is quiet. |
+| **Fade** | A plain crossfade, used when one song has no steady beat, or while the AI DJ talks over the join. |
 | **Gapless** | No mixing at all. |
 
 ## Lyrics show where the singing is
@@ -76,7 +78,7 @@ Everything is in **Settings → Playback → DJ transitions & song analysis**.
 |---|---|---|---|
 | **DJ transitions** | On | on/off | Master switch for mixing. |
 | **Order by flow** | On | on/off | Pick songs whose tempo, key and energy follow on from the current one. |
-| **Largest tempo change** | 6 % | 2 to 8 % | The biggest speed difference Listen accepts for a beat-matched blend. Beyond this the songs fade instead. Smaller values sound more natural and mix fewer songs. |
+| **Largest tempo change** | 6 % | 2 to 8 % | The biggest speed difference Listen accepts for a beat-matched blend. Beyond this the songs join with an echo-out or a cut instead. Smaller values sound more natural and mix fewer songs. |
 | **Long blends** | 16 bars | 8 or 16 | Length of a blend over instrumental intros and outros. At 120 BPM, 16 bars take 32 seconds and 8 bars take 16. |
 | **Transition edges** | Smart | Always, Instrumental only, Smart | Whether vocals at the end of the outgoing song or the start of the incoming one may be blended over. **Instrumental only** needs instrumental edges, otherwise the songs get a short blend or a filter fade. **Always** never lets vocals stop a blend. **Smart** allows it for club and electronic genres (UK garage, house, techno, trance, drum and bass, dubstep, grime, amapiano and similar), where vocal samples over the beat are normal, and keeps the strict rule for everything else. The outgoing song's end is relaxed by its own genre, the incoming song's start by its own. Songs without a genre tag, including YouTube Music songs, count as non-club. Tempo, key and beat checks apply in every mode. |
 | **Tempo ramps** | On | on/off | Glide the tempo between songs instead of jumping. |
@@ -89,7 +91,7 @@ One more value has no switch in the window. Set it in the `[mixing]` section of 
 
 | Key | Default | Range | What it does |
 |---|---|---|---|
-| `fallback_fade_secs` | 4.0 | 3 to 6 seconds | Length of the plain fade used when songs cannot be beat-matched. |
+| `fallback_fade_secs` | 4.0 | 3 to 6 seconds | Length of the plain fade used when songs cannot be beat-matched and no echo-out or cut fits. |
 
 ## Mixing with the AI DJ
 
@@ -98,7 +100,7 @@ The [AI DJ](ai-dj.md) knows how each candidate song would be mixed in after the 
 ## Troubleshooting
 
 - **Songs are not mixed.** Check that **Analyse songs** is on, that the songs have been analysed (see the status line), that Auto-DJ or the AI DJ is on, and that the songs come from Navidrome or YouTube Music. Consecutive tracks of an album are always gapless.
-- **Many fades, few beat-matched blends.** Raise **Largest tempo change**, or accept that songs without a steady beat or with very different tempos are faded.
+- **Many echo-outs, few beat-matched blends.** Raise **Largest tempo change**: songs whose tempos are too far apart are joined with an echo-out or a cut. Songs without a steady beat are faded.
 - **A song was skipped for mixing right after you started it.** A mix needs about 5 seconds of lead time. Songs started late are played gapless.
 - **A song ended earlier than usual, or the next one started after its intro.** The lyrics showed a cleaner place to mix (see [Lyrics show where the singing is](#lyrics-show-where-the-singing-is)). `listen --check-mix A B --lyrics-a A.lrc --lyrics-b B.lrc` shows how a pair is planned with given lyrics.
 - **Different tempo after the mix.** That is the intended tempo ramp. If you dislike it, turn off **Tempo ramps** or lower **Largest tempo change**.
