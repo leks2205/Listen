@@ -18,6 +18,9 @@ pub struct AutoDj {
     /// Focus mode: automatic picks prefer little lead vocal, calm energy and instrumental versions;
     /// the AI DJ doesn't talk.
     pub focus: bool,
+    /// The flow scorer's weights learnt from early skips after automatic handovers (`listen_mix::learn`,
+    /// blended with the defaults until 300 labelled transitions); off = the hand-set defaults.
+    pub learned_weights: bool,
 }
 
 /// The Auto-DJ's forgotten-favourite slot: one pick in this many.
@@ -41,6 +44,7 @@ impl Default for AutoDj {
             strategy: "similar".into(),
             forgotten_favourites: true,
             focus: false,
+            learned_weights: true,
         }
     }
 }

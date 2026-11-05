@@ -39,6 +39,7 @@ pub mod dlna;
 pub mod exclude;
 mod fade;
 mod flow;
+mod flow_weights;
 pub mod focus;
 pub mod fullscreen_state;
 pub mod handoff;
@@ -606,6 +607,9 @@ pub struct Listen {
     session_played: std::collections::HashSet<String>,
     /// Auto-DJ picks so far: every eighth is a forgotten favourite (`memory.rs`).
     dj_picks_counted: usize,
+    /// Flow weights learnt from early skips (`flow_weights.rs`), with the history length they were fitted on.
+    flow_learnt: Option<listen_mix::learn::Learnt>,
+    flow_learnt_len: usize,
     /// DJ bridges between far-apart songs.
     bridge: bridge::BridgeState,
     /// The AI DJ (Gemini).
@@ -1041,6 +1045,7 @@ impl Listen {
             }
             _ => listen_core::history::History::in_memory(),
         };
+        let flow_learnt = history.path().and_then(std::path::Path::parent).and_then(flow_weights::load);
         let lyrics_ui = lyrics_state::LyricsUi::new(
             paths
                 .as_ref()
@@ -1160,6 +1165,8 @@ impl Listen {
             seek_preview: None,
             session_played: Default::default(),
             dj_picks_counted: 0,
+            flow_learnt,
+            flow_learnt_len: 0,
             bridge: Default::default(),
             lastfm: Default::default(),
             menu: None,

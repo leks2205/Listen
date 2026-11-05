@@ -47,6 +47,7 @@ impl Listen {
         listen_mix::score::FlowCtx {
             recent: recent.iter().filter_map(|s| lookup(s)).collect(),
             recent_artists: recent.iter().map(|s| s.artist_line().to_lowercase()).collect(),
+            weights: self.flow_weights(),
             ..Default::default()
         }
     }
@@ -68,7 +69,7 @@ impl Listen {
         let annotated: Vec<(Song, Option<FlowFeatures>)> =
             songs.iter().map(|s| (s.clone(), lookup(s))).collect();
         let analysed = annotated.iter().filter(|a| a.1.is_some()).count();
-        let ctx = listen_mix::score::FlowCtx::default();
+        let ctx = listen_mix::score::FlowCtx { weights: self.flow_weights(), ..Default::default() };
         let started = std::time::Instant::now();
         let order = listen_mix::order_all(&annotated, keep_first.then_some(0), &ctx);
         let took = started.elapsed();

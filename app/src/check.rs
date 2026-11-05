@@ -1525,6 +1525,132 @@ pub fn memory(args: &[String]) -> i32 {
 /// candidate pools; each fill takes `per-fill` songs as an ordinary fill would (in pool order) and as
 /// focus mode does ([`listen_mix::pick::focus_pool`]). Prints the mean sung-bar share of both and the
 /// ratio as JSON (the acceptance: focus ≤ 50 % of normal).
+/// `listen --flow-weights [--history FILE] [--store DIR] [--simulate N [--seed S]]`: the flow weights item 16 learns from this
+/// history (labelled handovers, skips, cross-validated AUC against the default weights' AUC, the weights).
+pub fn flow_weights(args: &[String]) -> i32 {
+    use listen_core::analysis::FlowFeatures;
+    use listen_core::history;
+    let opt = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let paths = match listen_core::config::Paths::discover() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("no data folder: {e}");
+            return 1;
+        }
+    };
+    let config = listen_core::config::Config::load(&paths.config_file()).unwrap_or_default();
+    let hist = opt("--history")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| paths.data_dir.join(history::FILE_NAME));
+    let dir = opt("--store").map(std::path::PathBuf::from).unwrap_or_else(|| shared_dir(&config, &paths));
+    let store = match listen_analysis::store::ShardStore::open(&dir, &listen_analysis::store::machine_id()) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("analysis store {}: {e}", dir.display());
+            return 1;
+        }
+    };
+    let mut h = history::History::load(&hist);
+    let flow = |song: &listen_core::model::Song| {
+        store
+            .lookup(&listen_analysis::record_key(song), &listen_core::analysis::FileId::of(song))
+            .and_then(|r| r.features().map(FlowFeatures::of))
+    };
+    if let Some(n) = opt("--simulate").and_then(|n| n.parse::<usize>().ok()) {
+        h.entries = simulated_handovers(
+            &h.entries,
+            &flow,
+            n,
+            opt("--seed").and_then(|s| s.parse().ok()).unwrap_or(16),
+        );
+        println!(
+            "simulated: {n} Auto-DJ handovers over the history's analysed songs; early skips follow key clashes and tempo gaps"
+        );
+    }
+    let data = listen_mix::learn::transitions(&h.entries, flow);
+    let l = listen_mix::learn::learn(&data, history::now_secs());
+    let auc = |a: Option<f32>| a.map_or("-".to_string(), |a| format!("{a:.3}"));
+    println!("history entries      {}", h.entries.len());
+    println!("labelled handovers   {} ({} skipped within 30 s)", l.labels, l.skips);
+    println!("trust                {:.2} (full at {})", l.trust, listen_mix::learn::FULL_TRUST);
+    println!("AUC 5-fold (learnt)  {}", auc(l.auc_cv));
+    println!("AUC default weights  {}", auc(l.auc_default));
+    let d = listen_mix::learn::TermWeights::of(&listen_mix::Weights::default());
+    let row = |name: &str, def: f32, fit: Option<f32>, used: f32| {
+        println!(
+            "  {name:<14} default {def:>5.2}  fitted {:>6}  used {used:>5.2}",
+            fit.map_or("-".into(), |f| format!("{f:.2}"))
+        );
+    };
+    let f = l.fitted;
+    let w = l.weights;
+    row("tempo", d.tempo, f.map(|f| f.tempo), w.tempo);
+    row("key", d.key, f.map(|f| f.key), w.key);
+    row("energy", d.energy, f.map(|f| f.energy), w.energy);
+    row("timbre", d.timbre, f.map(|f| f.timbre), w.timbre);
+    row("mixability", d.mixability, f.map(|f| f.mixability), w.mixability);
+    row("artist_repeat", d.artist_repeat, f.map(|f| f.artist_repeat), w.artist_repeat);
+    row("album_repeat", d.album_repeat, f.map(|f| f.album_repeat), w.album_repeat);
+    0
+}
+
+/// A made-up Auto-DJ history over the analysed songs of `entries`: `n` handovers on one device, the next
+/// song skipped 10 s in with a probability that rises with the key clash and the tempo gap (as a listener
+/// who minds those), else played. Shows that the fit finds such a listener.
+fn simulated_handovers(
+    entries: &[listen_core::history::Entry],
+    flow: &dyn Fn(&listen_core::model::Song) -> Option<listen_core::analysis::FlowFeatures>,
+    n: usize,
+    seed: u64,
+) -> Vec<listen_core::history::Entry> {
+    use listen_core::history::{Entry, Picker, PlayCtx, PlayMode};
+    use rand::{Rng, SeedableRng};
+    let mut seen = std::collections::HashSet::new();
+    let songs: Vec<(listen_core::model::Song, listen_core::analysis::FlowFeatures)> = entries
+        .iter()
+        .map(Entry::to_song)
+        .filter(|s| seen.insert((s.server_id.0.clone(), s.id.clone())))
+        .filter_map(|s| flow(&s).map(|f| (s, f)))
+        .collect();
+    if songs.len() < 2 {
+        return Vec::new();
+    }
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let ctx = |picker| PlayCtx { mode: PlayMode::AutoDj, picker, device: "sim".into() };
+    let mut ts = 1_700_000_000i64;
+    let mut prev = rng.random_range(0..songs.len());
+    let mut out =
+        vec![Entry { ctx: Some(ctx(Picker::User)), at_s: Some(100.0), ..Entry::new(&songs[prev].0, ts) }];
+    for _ in 0..n {
+        let next = rng.random_range(0..songs.len());
+        let t = listen_mix::score::flow_terms(&songs[prev].1, &songs[next].1, &[], None);
+        let logit = -3.5 + 1.6 * t[1] + 0.9 * t[0];
+        let skip = rng.random::<f32>() < 1.0 / (1.0 + (-logit).exp());
+        let left = songs[prev].0.duration.as_secs() as i64 - 100;
+        if skip {
+            ts += left.max(0) + 10;
+            out.push(Entry::skipped(&songs[next].0, ts, 10.0, ctx(Picker::AutoDj)));
+            // The song after a skip starts fresh (not a handover).
+            prev = rng.random_range(0..songs.len());
+            ts += 3600;
+            out.push(Entry {
+                ctx: Some(ctx(Picker::User)),
+                at_s: Some(100.0),
+                ..Entry::new(&songs[prev].0, ts)
+            });
+        } else {
+            ts += left.max(0) + 100;
+            out.push(Entry {
+                ctx: Some(ctx(Picker::AutoDj)),
+                at_s: Some(100.0),
+                ..Entry::new(&songs[next].0, ts)
+            });
+            prev = next;
+        }
+    }
+    out
+}
+
 pub fn focus(args: &[String]) -> i32 {
     use listen_core::analysis::FlowFeatures;
     use listen_core::history;

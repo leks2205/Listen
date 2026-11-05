@@ -771,6 +771,12 @@ pub(super) fn auto_dj(state: &Listen) -> Element<'_, Message> {
                 "One song in eight is a favourite you haven't played for a while.",
                 switch(dj.forgotten_favourites, Setting::AutoDjForgotten),
             ),
+            line(
+                state,
+                "Learn from my skips",
+                "Weighs tempo, key, energy and sound by the songs you skip early after a handover.",
+                switch(dj.learned_weights, Setting::AutoDjLearnedWeights),
+            ),
         ],
     )
 }

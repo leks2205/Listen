@@ -139,6 +139,7 @@ impl Listen {
         if let Err(e) = self.history.add(entry) {
             tracing::warn!("saving the listening history: {e}");
         }
+        self.refit_flow_weights(false);
         if matches!(self.route, Route::Stats) {
             self.refresh_history_views();
         }
@@ -162,6 +163,7 @@ impl Listen {
         if let Err(e) = self.history.add(Entry { ctx: Some(ctx), ..Entry::new(&song, now) }) {
             tracing::warn!("saving the listening history: {e}");
         }
+        self.refit_flow_weights(false);
         if matches!(self.route, Route::Recent | Route::Stats | Route::Mixes | Route::Mix(_)) {
             self.refresh_history_views();
         }

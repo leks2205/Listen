@@ -32,6 +32,7 @@ If `config.toml` cannot be read because it is damaged, Listen starts with defaul
 |---|---|
 | `logs/` | `listen.log`, `mpv.log` (and the previous run as `.log.1`) and `rip-*.log` from CD rips. |
 | `history.jsonl` | Your listening history, one line per play. Local only. |
+| `flow-weights.json` | The DJ flow weights learnt from your early skips (Auto-DJ setting **Learn from my skips**); rebuilt from the history, safe to delete. |
 | `queue.json` | The play queue, restored at the next start. |
 | `analysis/` | Song analysis results (tempo, key, sections), unless you set another **Analysis folder** in the settings. |
 | `offline/` | Songs you downloaded for offline playback from your own servers, with an index. The folder is private to your user. See [Downloads](../using/downloads.md). |

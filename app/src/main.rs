@@ -98,6 +98,10 @@ fn main() -> iced::Result {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::memory(&args));
     }
+    if std::env::args().nth(1).as_deref() == Some("--flow-weights") {
+        let args: Vec<String> = std::env::args().skip(2).collect();
+        std::process::exit(listen::check::flow_weights(&args));
+    }
     if std::env::args().nth(1).as_deref() == Some("--focus") {
         let args: Vec<String> = std::env::args().skip(2).collect();
         std::process::exit(listen::check::focus(&args));

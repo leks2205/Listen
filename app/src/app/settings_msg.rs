@@ -45,6 +45,7 @@ pub enum Setting {
     AutoDj(bool),
     AutoDjCount(u32),
     AutoDjForgotten(bool),
+    AutoDjLearnedWeights(bool),
     /// Focus mode (`auto_dj.focus`).
     Focus(bool),
     Analysis(bool),
@@ -209,6 +210,7 @@ impl Listen {
             }
             Setting::AutoDjCount(v) => s.auto_dj.item_count = v,
             Setting::AutoDjForgotten(v) => s.auto_dj.forgotten_favourites = v,
+            Setting::AutoDjLearnedWeights(v) => s.auto_dj.learned_weights = v,
             Setting::Focus(v) => s.auto_dj.focus = v,
             Setting::Analysis(v) => s.analysis.enabled = v,
             Setting::AnalysisLibrary(v) => s.analysis.analyze_library = v,

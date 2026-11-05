@@ -49,6 +49,7 @@ Details:
 - With [DJ transitions](../dj/transitions.md) on, songs the Auto-DJ picked are mixed into each other.
 - **Forgotten favourites:** every eighth song the Auto-DJ adds is one of your favourites that you have not played for at least 30 days (at least five plays in your [history](../using/history.md)). Of those, the one whose tempo, key and energy fit the playing song best is taken. Its reason in the queue reads "A favourite, not played for 5 months". Without such songs in your history the slot gets an ordinary pick.
 - **Worn-out songs rest:** a song you skipped three times in the last seven days (or twice, if you also played it a lot that week) is left out of the Auto-DJ, the AI DJ, radio, DJ bridges and the mixes until those skips are more than a week old. You can still play it yourself at any time.
+- **Learn from my skips:** how much a tempo gap, a key clash, an energy jump, a change of sound, a hard cut or a repeated artist count when the DJ orders its picks is learnt from your own listening. Every time a song you were playing hands over to one the Auto-DJ, AI DJ, radio or Rediscover picked, Listen notes whether you skipped the new song within 30 seconds. From these handovers (on every device, the history is synced) it fits how strongly each of those terms goes with an early skip, and weighs them that way. Until 300 handovers are recorded the learnt weights are mixed with the built-in ones in proportion (100 handovers: one third learnt), and below 300 a term can only count more or less, never the opposite way; below 30 handovers the built-in weights are used unchanged. A term your history says nothing about (for example no same-artist handovers yet) keeps its built-in weight. The fit is redone every ten plays or skips and kept in `flow-weights.json` next to the history. Turning the setting off brings back the built-in weights exactly. `listen --flow-weights` prints the number of handovers, the cross-validated AUC of the learnt weights next to that of the built-in ones, and each weight.
 - What "similar" means depends on the server: Navidrome and Jellyfin use their similar-songs lists, YouTube Music uses its "watch next" list.
 
 ### Settings
@@ -60,6 +61,7 @@ Open **Settings → Playback → Auto-DJ**:
 | **Enabled** | on | Switches the Auto-DJ on or off. Same as choosing the mode. |
 | **Songs to add** | 5 (1 to 20) | How many songs are added at a time. |
 | **Forgotten favourites** | on | One song in eight is a favourite you haven't played for a while (see above). |
+| **Learn from my skips** | on | The flow scorer's weights learnt from the songs you skip early after a handover (see above). |
 
 Three more options exist that have no control in the settings window. They live in the configuration file under `[settings.auto_dj]` (see [Files and folders](../reference/files.md)), can be changed through the MCP server's `set_settings` tool, and are filled in when you import your settings from Feishin:
 

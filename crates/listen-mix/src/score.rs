@@ -193,6 +193,23 @@ fn mix_term(a: &FlowFeatures, b: &FlowFeatures) -> f32 {
     (2.0 - f32::from(u8::from(a.mixable_out)) - f32::from(u8::from(b.mixable_in))) / 2.0
 }
 
+/// The five unweighted flow terms of playing `b` after `a` (tempo, key, energy, timbre, mixability), as
+/// [`pair_cost`] weighs them; `history` holds the energies before `a`. For learning the weights.
+pub fn flow_terms(
+    a: &FlowFeatures,
+    b: &FlowFeatures,
+    history: &[f32],
+    stats: Option<&TimbreStats>,
+) -> [f32; 5] {
+    [
+        tempo_term(a, b),
+        key_term(a, b),
+        energy_term(history, a, b, None),
+        timbre_term(&a.timbre, &b.timbre, stats),
+        mix_term(a, b),
+    ]
+}
+
 fn cost_with(
     a: &FlowFeatures,
     b: &FlowFeatures,
@@ -224,7 +241,7 @@ fn neutral_cost(w: &Weights) -> f32 {
         + w.mixability * 0.5
 }
 
-fn same_artist(a: &Song, b: &Song) -> bool {
+pub(crate) fn same_artist(a: &Song, b: &Song) -> bool {
     a.artists.iter().any(|x| {
         b.artists.iter().any(|y| match (&x.id, &y.id) {
             (Some(i), Some(j)) => i == j,
