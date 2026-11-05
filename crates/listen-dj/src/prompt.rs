@@ -162,7 +162,13 @@ pub struct Plan {
     pub turns: Vec<Turn>,
     /// Title of the new-to-you song the break introduces (asked for when the pool has one), as answered.
     pub introduces: String,
+    /// Per pick (same order and length as `picks`): why it fits now, at most [`NOTE_MAX`] characters;
+    /// empty when the model gave none (filled-in picks have none).
+    pub notes: Vec<String>,
 }
+
+/// Longest per-song note ("Why this song?") kept from a plan, in characters.
+pub const NOTE_MAX: usize = 80;
 
 impl Plan {
     /// The break as text (with names when two people talk).
@@ -195,6 +201,8 @@ struct RawPlan {
     turns: Vec<RawTurn>,
     #[serde(default)]
     introduces: String,
+    #[serde(default)]
+    notes: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -291,7 +299,11 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
          \"from now:\" states how it fits the song playing now (keys, tempo, energy): trust it.\n\
          3. `style`: a short English direction for the voice (emotion, pace) that suits this line \
          and the persona.\n\
-         4. `mood`: a few words describing the mood you are keeping.",
+         4. `mood`: a few words describing the mood you are keeping.\n\
+         5. `notes`: one per pick, in the same order — a short reason the listener sees next to the song \
+         in the queue (why it fits right now: its sound, how it follows the previous song, that it is new \
+         to them or one they haven't played in a while). Speak {language}, at most 80 characters, no song \
+         title, no made-up facts.",
         brief = persona.brief,
         duo = duo
     )
@@ -477,6 +489,13 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
                     "maxItems": set_max,
                     "description": "Candidate numbers in play order"
                 },
+                "notes": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": set_min,
+                    "maxItems": set_max,
+                    "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
+                },
                 "mood": { "type": "string" },
                 "turns": {
                     "type": "array",
@@ -493,7 +512,7 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
                     }
                 }
             },
-            "required": ["picks", "mood", "turns"]
+            "required": ["picks", "notes", "mood", "turns"]
         });
     }
     json!({
@@ -506,11 +525,18 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
                 "maxItems": set_max,
                 "description": "Candidate numbers in play order"
             },
+            "notes": {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": set_min,
+                "maxItems": set_max,
+                "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
+            },
             "mood": { "type": "string" },
             "line": { "type": "string", "description": "The spoken break, in the show's language" },
             "style": { "type": "string", "description": "Voice direction for the speech model, in English" }
         },
-        "required": ["picks", "mood", "line", "style"]
+        "required": ["picks", "notes", "mood", "line", "style"]
     })
 }
 
@@ -523,20 +549,24 @@ pub fn parse_plan(text: &str, pool: usize, set_min: usize, set_max: usize) -> Re
     let set_max = set_max.max(1).min(pool);
     let set_min = set_min.max(1).min(set_max);
     let mut picks: Vec<usize> = Vec::new();
-    for v in &raw.picks {
+    let mut notes: Vec<String> = Vec::new();
+    for (k, v) in raw.picks.iter().enumerate() {
         let n = v.as_u64().or_else(|| v.as_str().and_then(|s| s.trim().trim_start_matches('#').parse().ok()));
         if let Some(n) = n.map(|n| n as usize)
             && n < pool
             && !picks.contains(&n)
         {
             picks.push(n);
+            notes.push(raw.notes.get(k).and_then(Value::as_str).map(clip_note).unwrap_or_default());
         }
     }
     picks.truncate(set_max);
+    notes.truncate(set_max);
     let mut filler = 0;
     while picks.len() < set_min && filler < pool {
         if !picks.contains(&filler) {
             picks.push(filler);
+            notes.push(String::new());
         }
         filler += 1;
     }
@@ -566,7 +596,22 @@ pub fn parse_plan(text: &str, pool: usize, set_min: usize, set_max: usize) -> Re
         mood: raw.mood.trim().to_string(),
         turns,
         introduces: raw.introduces.trim().to_string(),
+        notes,
     })
+}
+
+/// A per-song note cleaned up and cut to [`NOTE_MAX`] characters (at a word, with "…").
+pub fn clip_note(note: &str) -> String {
+    let note = clean_line(note);
+    if note.chars().count() <= NOTE_MAX {
+        return note;
+    }
+    let cut: String = note.chars().take(NOTE_MAX - 1).collect();
+    let cut = match cut.rfind(' ') {
+        Some(i) if i > NOTE_MAX / 2 => &cut[..i],
+        _ => cut.as_str(),
+    };
+    format!("{}…", cut.trim_end_matches([',', ';', ':', '.', ' ', '-']))
 }
 
 /// Strips markdown/emoji-ish leftovers and collapses whitespace.
@@ -740,6 +785,16 @@ mod tests {
         assert_eq!(plan.introduces, "");
         let intro = parse_plan(r#"{"picks": [0], "line": "x", "introduces": " Roads "}"#, 2, 1, 2).unwrap();
         assert_eq!(intro.introduces, "Roads");
+        let noted = parse_plan(
+            r#"{"picks": [2, 2, 9, 0], "notes": ["  Same **key**, a bit faster ", "dup", "bad", "x"], "line": "x"}"#,
+            4,
+            3,
+            5,
+        )
+        .unwrap();
+        assert_eq!(noted.picks, vec![2, 0, 1]);
+        assert_eq!(noted.notes, vec!["Same key, a bit faster".to_string(), "x".into(), String::new()]);
+        assert_eq!(intro.notes, vec![String::new()]);
 
         let few = parse_plan(r#"{"picks": [2], "mood": "", "line": "x", "style": ""}"#, 4, 3, 5).unwrap();
         assert_eq!(few.picks, vec![2, 0, 1]);
@@ -759,6 +814,8 @@ mod tests {
         assert!(n["required"].as_array().unwrap().contains(&json!("introduces")));
         assert_eq!(s["properties"]["picks"]["minItems"], 2);
         assert_eq!(s["properties"]["picks"]["maxItems"], 5);
+        assert_eq!(s["properties"]["notes"]["maxItems"], 5);
+        assert!(s["required"].as_array().unwrap().contains(&json!("notes")));
         let duo = crate::persona::Persona::by_id("hamburg_duo");
         let s = response_schema(duo, 2, 5, true);
         assert!(s["required"].as_array().unwrap().contains(&json!("introduces")));

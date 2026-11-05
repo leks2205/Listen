@@ -20,6 +20,8 @@ While the AI DJ is on, Listen plans one set at a time. When the last song of a s
 
 With the listening history on, up to 5 of the candidates come from it: songs from your heavy rotation of the last 30 days (not ones played today) and favourites you have not played for two months, the ones that flow best from the current song. Each candidate also tells the DJ what you know of it: how often you played it and when you last did, or that it is new to you (and whether its artist is). The DJ mixes familiar songs with new ones, and when it talks before a set that has a song new to you, it introduces one of them with a short line about it. It is told to state only facts it is sure of and otherwise to talk about the sound. "New to you" is only used once the history covers at least two weeks and 100 plays, so a fresh install does not call every song new. These tags go to Gemini with the song titles (see [Privacy](../more/privacy.md)).
 
+With every set the DJ also writes a short note per song (at most 80 characters) on why it fits right now. Hold the pointer over the **AI** tag of a song in the queue to read it; the note of the playing song is shown in the full-screen player.
+
 The break is spoken with a voice model and placed at random where it fits:
 
 - **between songs**, in the silence after the current song;

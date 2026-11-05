@@ -55,7 +55,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_queue` | The queue. Each entry is a song object plus `uid`, `current` (true for the playing one) and `auto` (added by a play mode). | none |
+| `get_queue` | The queue. Each entry is a song object plus `uid`, `current` (true for the playing one) `auto` (added by a play mode) and, for a DJ's pick, `why` (the reason as a code: `{picker, code, args}`) and `why_text` (the reason as shown in the app). | none |
 | `play_songs` | Play songs, albums, artists or playlists. | `refs` (array of strings, required); `how` (string): `now` (replace the queue and play, the default), `next` (play after the current song), `last` (add to the end); `shuffle` (boolean): shuffle them first |
 | `add_to_queue` | Add items to the end of the queue, or after the current song. | `refs` (array of strings, required); `next` (boolean): insert after the current song instead |
 | `play_queue_entry` | Jump to a queue entry. | `uid` (integer, required) |

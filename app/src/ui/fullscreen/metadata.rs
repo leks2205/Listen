@@ -141,6 +141,16 @@ pub fn view<'a>(state: &'a Listen, song: &'a Song, width: f32, align: Horizontal
     .align_x(x)
     .width(width);
 
+    // "Why this song?": the DJ's reason for the playing song.
+    if let Some(why) = state.queue.current().filter(|i| i.song.id == song.id).and_then(|i| i.why.as_ref()) {
+        let line = Row::new()
+            .push(crate::ui::icon(crate::icons::Icon::LuInfo, metrics::font_md(), t.primary))
+            .push(label(crate::i18n::why(why), metrics::font_md(), t.muted))
+            .spacing(metrics::space_xs())
+            .align_y(iced::Alignment::Center);
+        col = col.push(container(line).width(Length::Fill).align_x(align));
+    }
+
     let texts = badges(song, &state.config.settings.player_bar.info_items);
     if !texts.is_empty() {
         let mut row = Row::new().spacing(metrics::space_sm());

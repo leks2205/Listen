@@ -173,7 +173,18 @@ pub fn tag<'a>(cx: &Cx<'a>) -> Option<Element<'a, Message>> {
         return None;
     }
     let text = tag_text(cx.state, &cx.id, cx.index)?;
-    Some(container(label(text, metrics::font_xs(), cx.state.tokens.primary)).width(TAG_W).into())
+    let tag = container(label(text, metrics::font_xs(), cx.state.tokens.primary)).width(TAG_W);
+    // "Why this song?" on the tag of a DJ's pick.
+    match why_of(cx.state, cx.index) {
+        Some(why) => Some(super::tip::tip_raw(cx.state, tag, &why, None, super::tip::Position::Top)),
+        None => Some(tag.into()),
+    }
+}
+
+/// Why the DJ picked the song at queue row `row`, translated; `None` for songs the user added.
+pub fn why_of(state: &Listen, row: usize) -> Option<String> {
+    let it = state.queue.item_at(state.queue_row_pos(row)?)?;
+    it.why.as_ref().map(crate::i18n::why)
 }
 
 /// Room the tag takes next to the title text.

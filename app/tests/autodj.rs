@@ -124,3 +124,30 @@ fn autodj_orders_youtube_music_picks_by_flow() {
     let first_added = state.queue.iter().nth(before).unwrap();
     assert_eq!(first_added.song.id, candidates[n - 1].id, "the best-flowing song comes first");
 }
+
+/// "Why this song?": every song the Auto-DJ adds carries a reason, songs from the similar list name the
+/// song they are similar to, the rest are random picks; the songs the user started have none.
+#[test]
+fn autodj_picks_carry_a_reason() {
+    use listen::app::AutoDjFill;
+    use listen_core::queue::{Picker, WhyCode};
+    let (mut state, _) = Listen::boot(&Args { demo: true, ..Args::default() });
+    state.history.entries.clear();
+    let before = state.queue.len();
+    let songs = demo::album_songs(2);
+    let similar = songs.iter().take(2).map(|s| s.id.clone()).collect();
+    let fill = AutoDjFill { songs: songs.clone(), similar, seed: "Seed Song".into() };
+    let _ = state.update(Message::AutoDjFilled(Ok(fill)));
+    assert!(state.queue.iter().take(before).all(|i| i.why.is_none()), "user songs have no reason");
+    let added: Vec<_> = state.queue.iter().skip(before).collect();
+    assert!(!added.is_empty());
+    for it in &added {
+        let why = it.why.as_ref().expect("every Auto-DJ song has a reason");
+        assert_eq!(why.picker, Picker::AutoDj);
+        let from_similar = songs.iter().take(2).any(|s| s.id == it.song.id);
+        let want =
+            if from_similar { WhyCode::SimilarTo { seed: "Seed Song".into() } } else { WhyCode::Random };
+        assert_eq!(why.code, want, "{}", it.song.title);
+        assert!(!listen::i18n::why(why).is_empty());
+    }
+}

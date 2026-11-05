@@ -507,6 +507,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     let mut used: HashSet<String> = [seed.id.clone()].into();
     let (mut plan_tokens, mut judge_tokens) = (listen_dj::Usage::default(), listen_dj::Usage::default());
     let (mut failed, mut new_sets, mut introduced, mut named_new) = (0usize, 0usize, 0usize, 0usize);
+    let (mut noted, mut picked) = (0usize, 0usize);
     for round in 1..=check.rounds {
         let mut pool: Vec<_> = all.iter().filter(|s| !used.contains(&s.id)).cloned().collect();
         // Long runs: the pool starts over (except the song playing now).
@@ -551,9 +552,14 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         println!("\n— round {round}: plan in {:.1}s ({usage})", t.elapsed().as_secs_f32());
         println!("break: {}", req.mode.name());
         println!("mood: {}", plan.mood);
-        for &i in &plan.picks {
+        for (k, &i) in plan.picks.iter().enumerate() {
             let tag = familiar.get(&pool[i].id).map(|t| format!(" [{t}]")).unwrap_or_default();
             println!("  ♪ {} – {}{tag}", pool[i].title, pool[i].artist_line());
+            // "Why this song?": the DJ's note for the queue (≤ 80 characters).
+            let note = plan.notes.get(k).map(String::as_str).unwrap_or_default();
+            noted += usize::from(!note.is_empty());
+            picked += 1;
+            println!("      why: {}", if note.is_empty() { "(no note)" } else { note });
         }
         for t in &plan.turns {
             println!("{}: {}  [{}]", if t.speaker.is_empty() { "line" } else { &t.speaker }, t.text, t.style);
@@ -643,6 +649,10 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         mood = Some(plan.mood);
     }
     let n = check.rounds as u64;
+    println!("songs with a note (\"Why this song?\"): {noted}/{picked}");
+    if noted * 5 < picked * 4 {
+        return Err(format!("only {noted} of {picked} picked songs got a note"));
+    }
     println!(
         "\ntokens per plan: {} in / {} out (total {plan_tokens}){}",
         plan_tokens.input / n,

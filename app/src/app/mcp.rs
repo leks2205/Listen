@@ -609,6 +609,10 @@ impl Listen {
                         v["uid"] = json!(i.uid);
                         v["current"] = json!(Some(i.uid) == current);
                         v["auto"] = json!(i.auto);
+                        if let Some(why) = &i.why {
+                            v["why"] = json!(why);
+                            v["why_text"] = json!(crate::i18n::why(why));
+                        }
                         v
                     })
                     .collect();

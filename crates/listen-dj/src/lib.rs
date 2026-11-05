@@ -10,6 +10,7 @@ pub mod persona;
 pub mod prompt;
 pub mod quota;
 pub mod wav;
+pub mod why;
 
 pub use familiarity::{Familiarity, Listening};
 pub use gemini::{DjError, Gemini, Usage};

@@ -689,6 +689,15 @@ pub enum LoginMsg {
     ToggleCookies,
 }
 
+/// What an Auto-DJ fetch brought: the songs, the ids of those from the similar list and the title of the
+/// song they are similar to.
+#[derive(Debug, Clone, Default)]
+pub struct AutoDjFill {
+    pub songs: Vec<Song>,
+    pub similar: std::collections::HashSet<String>,
+    pub seed: String,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     /// A file was dropped onto the window (cookies file / Feishin settings).
@@ -835,6 +844,8 @@ pub enum Message {
     Spectrum(listen_visualizer::Frame),
     VisualizerFailed(String),
     AutoDjLoaded(Result<Vec<Song>, String>),
+    /// An Auto-DJ fill that knows which songs came from the similar list (reasons for the queue).
+    AutoDjFilled(Result<AutoDjFill, String>),
     /// A planned AI DJ set (generation, result).
     DjPlanned(u64, Result<dj::Planned, listen_dj::DjError>),
     /// Periodic AI DJ refill check.
@@ -2186,16 +2197,89 @@ impl Listen {
                 } else {
                     vec![]
                 };
+                let similar = songs.iter().map(|s| s.id.clone()).collect();
                 // Random songs fill in when the similar ones already played this session.
                 match source.random_songs(count * 3, None).await {
                     Ok(random) => songs.extend(random),
                     Err(e) if songs.is_empty() => return Err(err(e)),
                     Err(_) => {}
                 }
-                Ok(songs)
+                Ok(AutoDjFill { songs, similar, seed: seed.title })
             },
-            Message::AutoDjLoaded,
+            Message::AutoDjFilled,
         )
+    }
+
+    /// Queues an Auto-DJ fill: one version per song, nothing played this session, best flow first, each
+    /// with its reason.
+    fn autodj_loaded(&mut self, result: Result<AutoDjFill, String>) -> Task<Message> {
+        self.autodj_busy = false;
+        self.autodj_since = None;
+        match result {
+            // Started before the AI DJ went on: its picks are not wanted.
+            Ok(_) if self.ai_dj_on() && !self.autodj_for_ai => {
+                tracing::info!("Auto-DJ: dropped a stale fetch (AI DJ is on)");
+            }
+            Ok(AutoDjFill { songs, similar, seed }) => {
+                use listen_core::versions::{dedupe_versions, song_key};
+                self.bridge_pool_add(&songs);
+                let s = &self.config.settings.auto_dj;
+                let queued: std::collections::HashSet<String> =
+                    self.queue.iter().map(|i| song_key(&i.song)).collect();
+                let mut picked = Vec::new();
+                // One version per song (radio edits preferred), nothing
+                // that already played this session.
+                for song in dedupe_versions(songs) {
+                    let key = song_key(&song);
+                    if !self.session_played.contains(&key) && (s.allow_duplicates || !queued.contains(&key)) {
+                        picked.push(song);
+                    }
+                }
+                // Best flow from the current song first (tempo, key, energy), when analysed.
+                let n = s.item_count.max(1) as usize;
+                let picked = match self.queue.current().map(|i| i.song.clone()) {
+                    Some(current) => self.flow_order(&current, picked, n),
+                    None => picked.into_iter().take(n).collect(),
+                };
+                if picked.is_empty() {
+                    return Task::none();
+                }
+                tracing::info!(
+                    "Auto-DJ added {} songs{}",
+                    picked.len(),
+                    if self.autodj_for_ai { " (fallback for the AI DJ)" } else { "" }
+                );
+                let had_next = self.queue.peek_next().is_some();
+                let refs: Vec<ImageRef> = picked.iter().filter_map(|s| s.image.clone()).collect();
+                // Why each song is here ("Why this song?").
+                let now = listen_core::history::now_secs();
+                let listening = listen_dj::Listening::new(&self.history.entries, now);
+                let picked = picked
+                    .into_iter()
+                    .map(|song| {
+                        let seed = similar.contains(&song.id).then_some(seed.as_str());
+                        let why = listen_dj::why::auto_dj(&listening.of(&song), seed, now);
+                        (song, why)
+                    })
+                    .collect();
+                self.queue.add_picked(picked);
+                let images = self.request_images(refs.iter().map(Some));
+                if let Some(play) = self.dj_after_fill() {
+                    return Task::batch([images, play]);
+                }
+                if had_next {
+                    return images;
+                }
+                // The queue had run dry: start what just arrived.
+                return match self.keep_going() {
+                    Some(play) => Task::batch([images, play]),
+                    None => Task::batch([images, self.refresh_next()]),
+                };
+            }
+            Err(e) => tracing::warn!("Auto-DJ: {e}"),
+        }
+
+        Task::none()
     }
 
     /// A fill that never came back is dropped instead of blocking every later one.
@@ -4094,63 +4178,9 @@ impl Listen {
             }
             Message::VisualizerFailed(e) => self.visualizer_error = Some(e),
             Message::AutoDjLoaded(result) => {
-                self.autodj_busy = false;
-                self.autodj_since = None;
-                match result {
-                    // Started before the AI DJ went on: its picks are not wanted.
-                    Ok(_) if self.ai_dj_on() && !self.autodj_for_ai => {
-                        tracing::info!("Auto-DJ: dropped a stale fetch (AI DJ is on)");
-                    }
-                    Ok(songs) => {
-                        use listen_core::versions::{dedupe_versions, song_key};
-                        self.bridge_pool_add(&songs);
-                        let s = &self.config.settings.auto_dj;
-                        let queued: std::collections::HashSet<String> =
-                            self.queue.iter().map(|i| song_key(&i.song)).collect();
-                        let mut picked = Vec::new();
-                        // One version per song (radio edits preferred), nothing
-                        // that already played this session.
-                        for song in dedupe_versions(songs) {
-                            let key = song_key(&song);
-                            if !self.session_played.contains(&key)
-                                && (s.allow_duplicates || !queued.contains(&key))
-                            {
-                                picked.push(song);
-                            }
-                        }
-                        // Best flow from the current song first (tempo, key, energy), when analysed.
-                        let n = s.item_count.max(1) as usize;
-                        let picked = match self.queue.current().map(|i| i.song.clone()) {
-                            Some(current) => self.flow_order(&current, picked, n),
-                            None => picked.into_iter().take(n).collect(),
-                        };
-                        if picked.is_empty() {
-                            return Task::none();
-                        }
-                        tracing::info!(
-                            "Auto-DJ added {} songs{}",
-                            picked.len(),
-                            if self.autodj_for_ai { " (fallback for the AI DJ)" } else { "" }
-                        );
-                        let had_next = self.queue.peek_next().is_some();
-                        let refs: Vec<ImageRef> = picked.iter().filter_map(|s| s.image.clone()).collect();
-                        self.queue.add_last(picked, true);
-                        let images = self.request_images(refs.iter().map(Some));
-                        if let Some(play) = self.dj_after_fill() {
-                            return Task::batch([images, play]);
-                        }
-                        if had_next {
-                            return images;
-                        }
-                        // The queue had run dry: start what just arrived.
-                        return match self.keep_going() {
-                            Some(play) => Task::batch([images, play]),
-                            None => Task::batch([images, self.refresh_next()]),
-                        };
-                    }
-                    Err(e) => tracing::warn!("Auto-DJ: {e}"),
-                }
+                return self.autodj_loaded(result.map(|songs| AutoDjFill { songs, ..AutoDjFill::default() }));
             }
+            Message::AutoDjFilled(result) => return self.autodj_loaded(result),
             Message::DjPlanned(generation, result) => return self.dj_planned(generation, result),
             Message::DjCheck => {
                 self.autodj_timeout();

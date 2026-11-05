@@ -29,7 +29,7 @@ The top-left corner has two buttons: **Minimize** and **Configure** (the gear, s
 
 Click a tab to open its panel; click it again to close the panel, and the cover moves to the middle. One panel is open at a time.
 
-On the left are the cover (or the music video) and, under it, the title, the artists, the album and badges with technical details such as the codec. The title and the artists are links. A long title scrolls like a marquee unless you chose wrapped titles.
+On the left are the cover (or the music video) and, under it, the title, the artists, the album and badges with technical details such as the codec. The title and the artists are links. A long title scrolls like a marquee unless you chose wrapped titles. When a DJ picked the playing song, a line under the album says why (see [Why this song?](queue.md#queued-songs-and-dj-songs)).
 
 The background takes its colour from the cover and changes with each song.
 

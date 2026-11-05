@@ -111,7 +111,11 @@ impl Listen {
             next.song.title,
             choice.reason
         );
-        self.queue.insert_bridge(song, choice.cut, next.ai).is_some()
+        let why = listen_dj::why::bridge(&cur.song.title, &next.song.title);
+        match self.queue.insert_bridge(song, choice.cut, next.ai) {
+            Some(uid) => self.queue.set_why(uid, Some(why)),
+            None => false,
+        }
     }
 
     /// Analysed songs that may bridge now: the DJ pool (newest first), then the listening history, then

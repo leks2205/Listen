@@ -87,6 +87,50 @@ pub enum WhyCode {
     Request { text: String },
     /// A new release by `artist`.
     NewRelease { artist: String },
+    /// A random song from the library (the Auto-DJ's random fill).
+    Random,
+}
+
+impl Why {
+    /// The reason as an English i18n pattern with `{}` placeholders and its arguments, for both apps to
+    /// translate the pattern and fill it in (`now` in Unix seconds, for "not played for 5 months").
+    pub fn template(&self, now: i64) -> (&'static str, Vec<String>) {
+        match &self.code {
+            WhyCode::SimilarTo { seed } => ("Similar to “{}”", vec![seed.clone()]),
+            WhyCode::ForgottenFavourite { last_played } => {
+                let months = (now - last_played).max(0) / (30 * 86_400);
+                if months >= 2 {
+                    ("A favourite, not played for {} months", vec![months.to_string()])
+                } else {
+                    ("A favourite you haven't played for a while", vec![])
+                }
+            }
+            WhyCode::NewToYou => ("New to you", vec![]),
+            WhyCode::MatchesTempo { bpm } => ("Matches your tempo: {} BPM", vec![format!("{bpm:.0}")]),
+            WhyCode::FocusFriendly => ("Good for focus", vec![]),
+            WhyCode::BridgeBetween { a, b } => ("Bridge between “{}” and “{}”", vec![a.clone(), b.clone()]),
+            WhyCode::AiDj { note } if !note.trim().is_empty() => ("{}", vec![note.trim().to_string()]),
+            WhyCode::AiDj { .. } => ("Picked by the AI DJ", vec![]),
+            WhyCode::Request { text } => ("For your request “{}”", vec![text.clone()]),
+            WhyCode::NewRelease { artist } => ("New release by {}", vec![artist.clone()]),
+            WhyCode::Random => ("Random pick from your library", vec![]),
+        }
+    }
+
+    /// [`Self::template`] filled in, untranslated (logs, MCP, tests).
+    pub fn english(&self, now: i64) -> String {
+        let (pattern, args) = self.template(now);
+        let mut out = String::new();
+        let mut rest = pattern;
+        let mut args = args.iter();
+        while let Some(i) = rest.find("{}") {
+            out.push_str(&rest[..i]);
+            out.push_str(args.next().map_or("", String::as_str));
+            rest = &rest[i + 2..];
+        }
+        out.push_str(rest);
+        out
+    }
 }
 
 /// The stretch of a song played as a DJ bridge between two songs that don't mix well directly.
@@ -282,6 +326,22 @@ impl Queue {
         if self.position.is_none() && !self.order.is_empty() {
             self.position = Some(0);
         }
+    }
+
+    /// Appends songs a DJ picked, each with its reason (`ai` when the AI DJ picked it, also for a request). Returns their uids.
+    pub fn add_picked(&mut self, picks: Vec<(Song, Why)>) -> Vec<u64> {
+        let (songs, whys): (Vec<Song>, Vec<Why>) = picks.into_iter().unzip();
+        let new = self.push(songs, true);
+        let mut uids = Vec::with_capacity(new.len());
+        for (i, why) in new.into_iter().zip(whys) {
+            self.items[i].ai = matches!(why.picker, Picker::AiDj | Picker::Request);
+            self.items[i].why = Some(why);
+            uids.push(self.items[i].uid);
+        }
+        if self.position.is_none() && !self.order.is_empty() {
+            self.position = Some(0);
+        }
+        uids
     }
 
     /// Inserts a DJ bridge right after the current song (picked by the DJ: `auto`, and `ai` when the AI DJ's
@@ -1395,5 +1455,42 @@ mod tests {
         assert_eq!(serde_json::from_str::<QueueItem>(&newer).unwrap().why, None);
         let broken = line.replace(r#""seed":"Song""#, r#""seed":3"#);
         assert_eq!(serde_json::from_str::<QueueItem>(&broken).unwrap().why, None);
+    }
+
+    #[test]
+    fn picked_songs_carry_their_reason() {
+        let mut q = Queue::new();
+        q.set(vec![song("a")], 0);
+        let ai = Why::new(Picker::AiDj, WhyCode::AiDj { note: "Same key, a bit faster".into() });
+        let auto = Why::new(Picker::AutoDj, WhyCode::Random);
+        let uids = q.add_picked(vec![(song("b"), ai.clone()), (song("c"), auto.clone())]);
+        assert_eq!(uids.len(), 2);
+        let items: Vec<&QueueItem> = q.iter().collect();
+        assert!(items[0].why.is_none() && !items[0].auto);
+        assert!(items[1].auto && items[1].ai && items[1].why == Some(ai));
+        assert!(items[2].auto && !items[2].ai && items[2].why == Some(auto));
+        assert_eq!(items[1].uid, uids[0]);
+    }
+
+    #[test]
+    fn every_reason_reads_as_a_sentence() {
+        let now = 1_800_000_000;
+        let w = |c| Why::new(Picker::AutoDj, c);
+        assert_eq!(w(WhyCode::SimilarTo { seed: "Roads".into() }).english(now), "Similar to “Roads”");
+        let old = now - 150 * 86_400;
+        assert_eq!(
+            w(WhyCode::ForgottenFavourite { last_played: old }).english(now),
+            "A favourite, not played for 5 months"
+        );
+        assert_eq!(w(WhyCode::AiDj { note: " Warm up ".into() }).english(now), "Warm up");
+        assert_eq!(w(WhyCode::AiDj { note: "".into() }).english(now), "Picked by the AI DJ");
+        assert_eq!(
+            w(WhyCode::BridgeBetween { a: "A".into(), b: "B".into() }).english(now),
+            "Bridge between “A” and “B”"
+        );
+        assert_eq!(w(WhyCode::MatchesTempo { bpm: 123.6 }).english(now), "Matches your tempo: 124 BPM");
+        let j = serde_json::to_string(&w(WhyCode::Random)).unwrap();
+        assert_eq!(j, r#"{"picker":"auto_dj","code":"random"}"#);
+        assert_eq!(serde_json::from_str::<Why>(&j).unwrap().code, WhyCode::Random);
     }
 }

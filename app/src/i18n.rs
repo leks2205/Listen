@@ -272,6 +272,13 @@ pub fn trf(pattern: &str, args: &[&dyn std::fmt::Display]) -> String {
     out
 }
 
+/// "Why this song?": the reason of a DJ's pick, translated.
+pub fn why(why: &listen_core::queue::Why) -> String {
+    let (pattern, args) = why.template(listen_core::history::now_secs());
+    let args: Vec<&dyn std::fmt::Display> = args.iter().map(|a| a as &dyn std::fmt::Display).collect();
+    trf(pattern, &args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -119,6 +119,8 @@ pub struct Planned {
     tts_error: Option<DjError>,
     /// The candidates Gemini chose from (bridge candidates).
     pool: Vec<Song>,
+    /// Why each of `songs` was picked (same order).
+    whys: Vec<listen_core::queue::Why>,
 }
 
 impl DjState {
@@ -802,7 +804,12 @@ impl Listen {
                     },
                 };
                 let (plan, _) = gemini.plan(&s.text_model, &req).await?;
-                let songs = plan.picks.iter().map(|&i| pool[i].clone()).collect();
+                let songs: Vec<Song> = plan.picks.iter().map(|&i| pool[i].clone()).collect();
+                let whys = songs
+                    .iter()
+                    .zip(&plan.notes)
+                    .map(|(song, note)| listen_dj::why::ai_dj(note, &listening.of(song), now_secs))
+                    .collect();
                 let (mut clip, mut clip_secs, mut tts_error) = (None, 0.0, None);
                 if voice && !plan.turns.is_empty() {
                     match speak(
@@ -840,6 +847,7 @@ impl Listen {
                     mode,
                     tts_error,
                     pool,
+                    whys,
                 })
             },
             move |r| Message::DjPlanned(generation, r),
@@ -891,7 +899,7 @@ impl Listen {
         }
         let refs: Vec<ImageRef> = planned.songs.iter().filter_map(|s| s.image.clone()).collect();
         let first = planned.songs.first().cloned();
-        self.queue.add_ai(planned.songs);
+        self.queue.add_picked(planned.songs.into_iter().zip(planned.whys).collect());
         let before_uid = self.queue.iter().nth(self.queue.len().saturating_sub(count)).map(|i| i.uid);
         match before_uid {
             Some(before_uid) if !planned.line.is_empty() => {
