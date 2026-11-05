@@ -5,12 +5,14 @@ pub mod export;
 pub mod fetch;
 pub mod furigana;
 mod gate;
+pub mod gemini;
 mod lrc;
 pub mod providers;
 pub mod rank;
 pub mod romaji;
 pub mod rtl;
 pub mod translate;
+pub mod vocab;
 
 pub use lrc::{BREAK, active_line, has_translation, has_word_sync, merge_translation, parse_lrc};
 
