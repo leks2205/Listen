@@ -328,19 +328,28 @@ pub fn plan_verified(out: &Features, inn: &Features, ctx: &PlanCtx, gains_db: (f
 /// Short-term loudness (3 s, K-weighted, BS.1770) of mono `samples` every `step_s`, in LUFS: for
 /// measuring a rendered preview. Index `k` covers the 3 s ending at `k · step_s`.
 pub fn audio_levels(samples: &[f32], sr: u32, step_s: f64) -> Vec<f32> {
+    audio_levels_of(&[samples], sr, step_s)
+}
+
+/// [`audio_levels`] of several channels (BS.1770 sums the channels' mean squares), e.g. `[left, right]`:
+/// on the scale of the analysis' integrated loudness, which a mono downmix is 3–6 dB below depending on
+/// the stereo width.
+pub fn audio_levels_of(channels: &[&[f32]], sr: u32, step_s: f64) -> Vec<f32> {
     let sr_f = f64::from(sr.max(1));
-    let k = k_weighted(samples, sr_f);
+    let len = channels.iter().map(|c| c.len()).min().unwrap_or(0);
+    let k: Vec<Vec<f32>> = channels.iter().map(|c| k_weighted(&c[..len], sr_f)).collect();
     let win = (3.0 * sr_f) as usize;
     let hop = ((step_s * sr_f) as usize).max(1);
-    // Running sum of squares.
-    let mut cum = Vec::with_capacity(k.len() + 1);
+    // Running sum of squares over the channels.
+    let mut cum = Vec::with_capacity(len + 1);
     cum.push(0.0f64);
-    for x in &k {
-        cum.push(cum[cum.len() - 1] + f64::from(*x) * f64::from(*x));
+    for i in 0..len {
+        let e: f64 = k.iter().map(|c| f64::from(c[i]) * f64::from(c[i])).sum();
+        cum.push(cum[i] + e);
     }
-    (0..=k.len() / hop)
+    (0..=len / hop)
         .map(|n| {
-            let b = (n * hop).min(k.len());
+            let b = (n * hop).min(len);
             let a = b.saturating_sub(win);
             let ms = if b > a { (cum[b] - cum[a]) / (b - a) as f64 } else { 0.0 };
             (-0.691 + 10.0 * ms.max(1e-12).log10()) as f32
@@ -384,6 +393,9 @@ fn k_weighted(x: &[f32], sr: f64) -> Vec<f32> {
     biquad(hp, &biquad(shelf, &x)).into_iter().map(|v| v as f32).collect()
 }
 
+/// Level of a deck that has stopped, for [`audio_dip_bump`] (LUFS).
+const SILENT_LUFS: f32 = -70.0;
+
 /// Hole and bump (LU) of a rendered preview, measured like [`Check::dip_lu`]: `mix`, `out_own` and
 /// `in_own` are [`audio_levels`] (every `step_s`) of the preview and of each deck's own levelled audio
 /// aligned to it (silence where the deck doesn't play); the blend runs from `blend_from_s` for
@@ -399,6 +411,8 @@ pub fn audio_dip_bump(
     blend_s: f64,
 ) -> Option<(f32, f32)> {
     let at = |v: &[f32], t: f64| v.get((t / step_s).round().max(0.0) as usize).copied();
+    // The outgoing file may end inside the last window: silent from there.
+    let out_at = |t: f64| at(out_own, t).unwrap_or(SILENT_LUFS);
     let from = at(out_own, blend_from_s)?;
     let to = at(in_own, blend_from_s + blend_s + EDGE_REF_S)?;
     let (mut dip, mut bump) = (0.0f32, 0.0f32);
@@ -407,7 +421,7 @@ pub fn audio_dip_bump(
         let t = blend_from_s + k as f64 * step_s;
         let x = ((t - blend_from_s) / blend_s.max(1e-6)).clamp(0.0, 1.0) as f32;
         // A window ending at `t + 1.5` is centred on `t`.
-        let (l, o, i) = (at(mix, t + 1.5)?, at(out_own, t + 1.5)?, at(in_own, t + 1.5)?);
+        let (l, o, i) = (at(mix, t + 1.5)?, out_at(t + 1.5), at(in_own, t + 1.5)?);
         let target = from + (to - from) * x;
         dip = dip.max((o.min(i) - l).min(target - l));
         bump = bump.max((l - o.max(i)).min(l - target));
@@ -575,5 +589,13 @@ mod tests {
         // Where one deck is that quiet on its own, the mix following it is no hole.
         let (dip, _) = audio_dip_bump(&lv, &lv, &steady, 0.1, 8.0, 8.0).unwrap();
         assert!(dip < 0.5, "{dip}");
+        // An outgoing file that ends before the last window counts as silent there (it used to give None).
+        let short = &steady[..160];
+        assert!(audio_dip_bump(&lv, short, &steady, 0.1, 8.0, 8.0).is_some());
+        // Stereo sums the channels: the same signal on both is 3 dB above its mono level, and above a
+        // mono downmix of the two as well.
+        let x = tone(loud, 24.0, 0);
+        let (mono, stereo) = (audio_levels(&x, sr, 0.1), audio_levels_of(&[&x, &x], sr, 0.1));
+        assert!((stereo[150] - mono[150] - 3.01).abs() < 0.01, "{} vs {}", stereo[150], mono[150]);
     }
 }

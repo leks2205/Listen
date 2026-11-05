@@ -1,8 +1,9 @@
-//! `listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc]`: plans the DJ
+//! `listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc] [--levels out.jsonl]`: plans the DJ
 //! transition from `a` into `b` as the player would and optionally renders an offline preview
 //! (`listen_mix::render`). A song is a Navidrome song id (first Navidrome server), `ytm:<videoId>` (via
 //! yt-dlp) or a local file / URL; both are analysed afresh. Synced lyrics given as LRC files are merged
-//! into the analysis like the player does with fetched ones (`listen_mix::lyric`).
+//! into the analysis like the player does with fetched ones (`listen_mix::lyric`). `--levels` writes each song's
+//! modelled local loudness (`listen_mix::loudness::LocalLevel`) next to its measured 3 s loudness, every 0.5 s.
 
 use listen_analysis::{BeatModel, BeatSource, Cancel, Opts};
 use listen_mix::plan::{Kind, PlanCtx};
@@ -11,13 +12,14 @@ use listen_source::MusicSource;
 pub fn run(args: &[String]) -> i32 {
     let (Some(a), Some(b)) = (args.first(), args.get(1)) else {
         eprintln!(
-            "usage: listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc]  (Navidrome id, ytm:<videoId>, file or URL)"
+            "usage: listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc] [--levels out.jsonl]  (Navidrome id, ytm:<videoId>, file or URL)"
         );
         return 2;
     };
     let flag = |name: &str| args.iter().position(|x| x == name).and_then(|i| args.get(i + 1)).cloned();
     let render = flag("--render");
     let lyrics = [flag("--lyrics-a"), flag("--lyrics-b")];
+    let levels = flag("--levels");
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
         Err(e) => {
@@ -25,7 +27,7 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
-    rt.block_on(check(a, b, render.as_deref(), &lyrics)).map_or_else(
+    rt.block_on(check(a, b, render.as_deref(), &lyrics, levels.as_deref())).map_or_else(
         |e| {
             eprintln!("✗ {e}");
             1
@@ -34,7 +36,13 @@ pub fn run(args: &[String]) -> i32 {
     )
 }
 
-async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>; 2]) -> Result<(), String> {
+async fn check(
+    a: &str,
+    b: &str,
+    render: Option<&str>,
+    lyrics: &[Option<String>; 2],
+    levels: Option<&str>,
+) -> Result<(), String> {
     let paths = listen_core::config::Paths::discover().map_err(|e| e.to_string())?;
     let config = listen_core::config::Config::load(&paths.config_file()).map_err(|e| e.to_string())?;
     let beats = match BeatModel::ensure(&paths.cache_dir.join("models")).await {
@@ -59,6 +67,11 @@ async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>;
             None => f,
         };
         sides.push((pcm, f));
+    }
+    if let Some(path) = levels {
+        let rows: Vec<String> =
+            [a, b].iter().zip(&sides).filter_map(|(arg, (pcm, f))| level_row(arg, pcm, f)).collect();
+        std::fs::write(path, rows.join("\n") + "\n").map_err(|e| format!("{path}: {e}"))?;
     }
     let ((out_pcm, fa), (in_pcm, fb)) = (&sides[0], &sides[1]);
     // No song metadata here: genres are unknown, so Smart acts like Instrumental only.
@@ -103,13 +116,18 @@ async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>;
     if let Some(path) = render {
         let sr = out_pcm.sample_rate;
         let context = 15.0;
-        // Each deck at its levelling gain, as the player's levelling stage plays it (before the limiter).
-        let level = |pcm: &listen_analysis::Pcm, db: f32| -> Vec<f32> {
+        // Each deck at its levelling gain, as the player's levelling stage plays it (before the limiter),
+        // left and right apart (the render is linear per channel) so the levels are measured in stereo.
+        let level = |x: &[f32], db: f32| -> Vec<f32> {
             let g = listen_mix::loudness::db_to_factor(db);
-            pcm.mono().into_iter().map(|x| x * g).collect()
+            x.iter().map(|v| v * g).collect()
         };
-        let (out_mono, in_mono) = (level(out_pcm, gains.0), level(in_pcm, gains.1));
-        let samples = listen_mix::render::render_with_gains(&out_mono, &in_mono, sr, &plan, context, gains);
+        let outs = [level(&out_pcm.left, gains.0), level(&out_pcm.right, gains.0)];
+        let ins = [level(&in_pcm.left, gains.1), level(&in_pcm.right, gains.1)];
+        let mixes: Vec<Vec<f32>> = (0..2)
+            .map(|c| listen_mix::render::render_with_gains(&outs[c], &ins[c], sr, &plan, context, gains))
+            .collect();
+        let samples: Vec<f32> = mixes[0].iter().zip(&mixes[1]).map(|(l, r)| 0.5 * (l + r)).collect();
         // Where the blend starts in the preview (the outgoing ramp, if any, plays at its mean speed).
         let first = plan.out_ramp.map_or(plan.out_mix_start_s, |r| r.start_out_s.min(plan.out_mix_start_s));
         let pre = (first - context).max(0.0);
@@ -120,22 +138,25 @@ async fn check(a: &str, b: &str, render: Option<&str>, lyrics: &[Option<String>;
         if !matches!(plan.kind, Kind::EchoOut { .. } | Kind::Cut | Kind::Gapless) {
             let srf = f64::from(sr);
             let at = |t: f64| (t.max(0.0) * srf) as usize;
-            let out_own: Vec<f32> =
-                out_mono.get(at(pre)..).unwrap_or(&[]).iter().take(samples.len()).copied().collect();
-            let mut in_own = vec![0.0f32; at(blend_from).min(samples.len())];
-            in_own.extend(
-                in_mono
-                    .get(at(plan.in_mix_start_s)..)
-                    .unwrap_or(&[])
-                    .iter()
-                    .take(samples.len() - in_own.len()),
-            );
-            let lv = |x: &[f32]| listen_mix::verify::audio_levels(x, sr, 0.1);
-            let (lm, lo, li) = (lv(&samples), lv(&out_own), lv(&in_own));
+            let n = samples.len();
+            let out_own =
+                |x: &[f32]| -> Vec<f32> { x.get(at(pre)..).unwrap_or(&[]).iter().take(n).copied().collect() };
+            let in_own = |x: &[f32]| -> Vec<f32> {
+                let mut v = vec![0.0f32; at(blend_from).min(n)];
+                let m = n - v.len();
+                v.extend(x.get(at(plan.in_mix_start_s)..).unwrap_or(&[]).iter().take(m));
+                v
+            };
+            let lv = |l: &[f32], r: &[f32]| listen_mix::verify::audio_levels_of(&[l, r], sr, 0.1);
+            let lm = lv(&mixes[0], &mixes[1]);
+            let lo = lv(&out_own(&outs[0]), &out_own(&outs[1]));
+            let li = lv(&in_own(&ins[0]), &in_own(&ins[1]));
             if let Some((dip, bump)) =
                 listen_mix::verify::audio_dip_bump(&lm, &lo, &li, 0.1, blend_from, plan.blend_s)
             {
-                println!("rendered: loudness hole {dip:.2} LU, bump {bump:.2} LU (3 s short-term, levelled)");
+                println!(
+                    "rendered: loudness hole {dip:.2} LU, bump {bump:.2} LU (3 s short-term, levelled, stereo)"
+                );
             }
         }
         write_wav(path, sr, &samples).map_err(|e| format!("{path}: {e}"))?;
@@ -200,6 +221,32 @@ async fn input_for(
     song.id = arg.to_string();
     song.server_id = server.id.clone();
     client.analysis_url(&song).ok_or_else(|| "no analysis URL".to_string())
+}
+
+/// A song's modelled local loudness ([`listen_mix::loudness::LocalLevel`]) and its measured 3 s
+/// K-weighted loudness centred on the same times (every 0.5 s, LUFS, no levelling), with the bar curves.
+fn level_row(arg: &str, pcm: &listen_analysis::Pcm, f: &listen_core::analysis::Features) -> Option<String> {
+    let model = listen_mix::loudness::LocalLevel::new(f)?;
+    let step = 0.1;
+    let measured = listen_mix::verify::audio_levels_of(&[&pcm.left, &pcm.right], pcm.sample_rate, step);
+    let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
+    let times: Vec<f64> = (0..).map(|k| a + 0.5 * f64::from(k)).take_while(|t| *t <= b).collect();
+    // Index k covers the 3 s ending at k · step, so the window centred on t ends at t + 1.5.
+    let at = |t: f64| measured.get(((t + 1.5) / step).round() as usize).copied();
+    let bars: Vec<f64> = f
+        .grid
+        .as_ref()
+        .map(|g| (0..=g.bar_count()).map(|k| f64::from(g.bar_time(k))).collect())
+        .unwrap_or_default();
+    Some(
+        serde_json::json!({
+            "song": arg, "lufs": f.lufs, "t": times,
+            "model": times.iter().map(|&t| model.at(t)).collect::<Vec<_>>(),
+            "measured": times.iter().map(|&t| at(t)).collect::<Vec<_>>(),
+            "bars": bars, "energy": f.bars.energy, "low": f.bars.low, "centroid": f.bars.centroid,
+        })
+        .to_string(),
+    )
 }
 
 /// 16-bit mono PCM WAV.
