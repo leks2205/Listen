@@ -319,11 +319,21 @@ pub(super) fn hidden_songs(state: &Listen) -> Element<'_, Message> {
     } else {
         column(items.into_iter().map(|(song, what, undo)| {
             row![
-                column![
-                    label(song, metrics::font_md(), t.foreground),
-                    label(what, metrics::font_sm(), t.muted)
-                ]
-                .width(iced::Length::Fixed(320.0)),
+                // Labels don't wrap: cut both lines to the column so a long title can't run under Undo.
+                iced::widget::container(column![
+                    label(
+                        crate::ui::ellipsize_px(&song, HIDDEN_W, metrics::font_md()),
+                        metrics::font_md(),
+                        t.foreground
+                    ),
+                    label(
+                        crate::ui::ellipsize_px(&what, HIDDEN_W, metrics::font_sm()),
+                        metrics::font_sm(),
+                        t.muted
+                    )
+                ])
+                .width(iced::Length::Fixed(HIDDEN_W))
+                .clip(true),
                 small(state, "Undo", Some(undo)),
             ]
             .spacing(metrics::space_sm())
@@ -349,6 +359,9 @@ pub(super) fn hidden_songs(state: &Listen) -> Element<'_, Message> {
     ];
     section(state, "Hidden songs", rows)
 }
+
+/// Width of the title column of a Settings → Hidden songs row.
+const HIDDEN_W: f32 = 320.0;
 
 fn song_line(title: &str, artist: &str) -> String {
     if artist.is_empty() { title.to_string() } else { format!("{title} — {artist}") }
