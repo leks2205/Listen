@@ -389,7 +389,7 @@ mod tests {
         // ReplayGain −4 dB ⇒ −14 LUFS (RG 2 reference −18) ⇒ 0 dB to Normal.
         assert_eq!(gain.source, GainSource::ReplayGain);
         assert!(gain.db.abs() < 1e-4, "{gain:?}");
-        assert_eq!(s.levelling_describe(&song).as_deref(), Some("+0.0 dB (-14.0 LUFS, from replaygain)"));
+        assert_eq!(s.levelling_describe(&song).as_deref(), Some("+0.0 dB (-14.0 LUFS, from ReplayGain)"));
         s.level.add_ytm(song.id.clone(), -3.0);
         song.source = SourceKind::YouTubeMusic;
         let gain = s.levelling_gain(&song);
