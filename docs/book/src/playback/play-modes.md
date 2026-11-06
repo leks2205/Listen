@@ -80,7 +80,7 @@ Edit the file only while Listen is closed.
 With Focus on:
 
 - The Auto-DJ and the AI DJ prefer songs with little lead vocal and calm energy. Listen knows how much of a song is sung from the [analysis](../dj/analysis.md) (the vocal level of every bar). Besides the similar songs, the Auto-DJ also looks at the least sung analysed songs in your [history](../using/history.md), so each fill finds quiet songs even when the similar ones are all sung. Songs without an analysis come last.
-- A sung song the Auto-DJ picked is swapped for its instrumental version when its source has one (for example "Love (Inst.)" on YouTube Music, or an instrumental track on a Navidrome album). Listen searches for "title artist inst." for up to three songs per fill. The swapped song keeps its place in the queue, and its reason reads "Good for focus".
+- A sung song the Auto-DJ picked is swapped for its instrumental version when its source has one (for example "Love (Inst.)" on YouTube Music, or an instrumental track on a Navidrome album). Listen searches for "title artist inst." for up to three songs per fill; when that finds no instrumental it searches once more for plain "title artist" (some Navidrome searches miss "(Instrumental)" tracks with the extra word). The swapped song keeps its place in the queue, and its reason reads "Good for focus".
 - The AI DJ does not talk: no voiced breaks, not even planned ones. It still chooses and mixes the songs.
 - No forgotten-favourite slot (a forgotten favourite is rarely a quiet one).
 - Turning Focus on removes upcoming DJ songs that are sung, except the next one (it may already be mixing in). Songs you queued yourself stay.

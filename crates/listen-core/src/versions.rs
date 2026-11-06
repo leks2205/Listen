@@ -145,6 +145,13 @@ pub fn instrumental_query(song: &Song) -> String {
     format!("{} {} inst.", strip_extras(&song.title), artist)
 }
 
+/// The retry when [`instrumental_query`] finds no instrumental: plain title and main artist. Some
+/// Subsonic/Navidrome servers match every word, so "inst." hides an "(Instrumental)" track there.
+pub fn instrumental_retry_query(song: &Song) -> String {
+    let artist = song.artists.first().map(|a| a.name.clone()).unwrap_or_else(|| song.artist_line());
+    format!("{} {}", strip_extras(&song.title), artist)
+}
+
 /// The title without bracketed extras ("Love (Radio Edit)" -> "Love").
 fn strip_extras(title: &str) -> String {
     let mut out = String::new();
@@ -240,6 +247,7 @@ mod tests {
         assert!(is_instrumental(&song("봄날 (MR)", "BTS")) && is_instrumental(&song("X - Off Vocal", "Y")));
         assert!(!is_instrumental(&song("Institution", "Y")) && !is_instrumental(&love));
         assert_eq!(instrumental_query(&love), "LOVE StayC inst.");
+        assert_eq!(instrumental_retry_query(&love), "LOVE StayC");
     }
 
     #[test]

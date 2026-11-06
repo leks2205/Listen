@@ -12,7 +12,7 @@ use listen_core::analysis::FlowFeatures;
 use listen_core::history::Picker;
 use listen_core::model::Song;
 use listen_core::queue::{Why, WhyCode};
-use listen_core::versions::{instrumental_of, instrumental_query, song_key};
+use listen_core::versions::{instrumental_of, instrumental_query, instrumental_retry_query, song_key};
 use listen_mix::pick::{FOCUS_MAX_VOCAL, focus_cost, focus_extras, focus_pool, wants_instrumental};
 use std::collections::HashSet;
 
@@ -68,6 +68,30 @@ fn log_instrumental(song: &Song, query: &str, found: Option<&Song>, results: usi
             song.title
         ),
     }
+}
+
+/// Searches the instrumental of `song`: `query` ("… inst.") first; servers that match every word miss
+/// "(Instrumental)" with it, so a miss retries once with plain title and artist. One log line per search.
+async fn search_instrumental<F, Fut>(song: &Song, query: String, mut search: F) -> Option<Song>
+where
+    F: FnMut(String) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<Song>, String>>,
+{
+    for query in [query, instrumental_retry_query(song)] {
+        let results = match search(query.clone()).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::info!("Focus: instrumental search “{query}” failed: {e}");
+                continue;
+            }
+        };
+        let found = instrumental_of(song, &results);
+        log_instrumental(song, &query, found.as_ref(), results.len());
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
 }
 
 impl Listen {
@@ -166,16 +190,12 @@ impl Listen {
             searched.push((uid, query.clone()));
             tasks.push(Task::perform(
                 async move {
-                    let results = match source.search(&query, 10).await {
-                        Ok(r) => r.songs,
-                        Err(e) => {
-                            tracing::info!("Focus: instrumental search “{query}” failed: {e}");
-                            return None;
-                        }
-                    };
-                    let found = instrumental_of(&song, &results);
-                    log_instrumental(&song, &query, found.as_ref(), results.len());
-                    found.map(Box::new)
+                    search_instrumental(&song, query, |q| {
+                        let source = source.clone();
+                        async move { source.search(&q, 10).await.map(|r| r.songs).map_err(|e| e.to_string()) }
+                    })
+                    .await
+                    .map(Box::new)
                 },
                 move |found| Message::Focus(FocusMsg::Instrumental(uid, found)),
             ));
@@ -248,6 +268,43 @@ mod tests {
         let (mut s, _) = Listen::boot(&Args { demo: true, ..Args::default() });
         s.history.entries.clear();
         s
+    }
+
+    #[tokio::test]
+    async fn a_server_that_misses_inst_gets_a_plain_title_artist_retry() {
+        // A Navidrome-like search matching every word: "… inst." finds nothing, plain finds both.
+        let songs = demo::album_songs(0);
+        let mut sung = songs[0].clone();
+        sung.title = "매일 그대와".into();
+        let mut inst = songs[1].clone();
+        inst.title = "매일 그대와 (Instrumental)".into();
+        inst.artists = sung.artists.clone();
+        let library = vec![sung.clone(), inst.clone()];
+        let mut asked = Vec::new();
+        let found = search_instrumental(&sung, instrumental_query(&sung), |q: String| {
+            asked.push(q.clone());
+            let hits: Vec<Song> = library
+                .iter()
+                .filter(|s| {
+                    let hay = format!("{} {}", s.title, s.artist_line()).to_lowercase();
+                    q.to_lowercase().split_whitespace().all(|w| hay.contains(w))
+                })
+                .cloned()
+                .collect();
+            async move { Ok(hits) }
+        })
+        .await;
+        assert_eq!(found.map(|s| s.id), Some(inst.id));
+        assert_eq!(asked, vec![instrumental_query(&sung), instrumental_retry_query(&sung)]);
+        // A hit on the first query searches once.
+        let mut n = 0;
+        let found = search_instrumental(&sung, instrumental_query(&sung), |_| {
+            n += 1;
+            let hits = library.clone();
+            async move { Ok(hits) }
+        })
+        .await;
+        assert!(found.is_some() && n == 1);
     }
 
     #[test]
