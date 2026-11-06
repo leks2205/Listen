@@ -314,7 +314,7 @@ async fn main() {
         let (_bliss, w, c) = timed(|| timbre::bliss_vector(&mono));
         st.entry("bliss-audio timbre").or_default().add(w, c);
 
-        let opts = Opts { beats: BeatSource::BeatThis(models.clone()), bpm_hint: None };
+        let opts = Opts { beats: BeatSource::BeatThis(models.clone()), bpm_hint: None, voice: None };
         let ((f, tm), w, c) = timed(|| listen_analysis::analyze_timed(&pcm, &opts));
         st.entry("full analyze()").or_default().add(w, c);
         for (name, d) in &tm.stages {
@@ -541,7 +541,7 @@ async fn synthetic(count: u64, cache: &Path, models: &BeatModel) {
         let g_own = grid_of(beats::track_own(&frames, s, e, None).as_ref(), &frames, s, e);
         let st = track_stratum(&mono, pcm.sample_rate, s, e);
         let g_st = grid_of(st.as_ref().map(|r| &r.estimate), &frames, s, e);
-        let opts = Opts { beats: BeatSource::BeatThis(models.clone()), bpm_hint: None };
+        let opts = Opts { beats: BeatSource::BeatThis(models.clone()), bpm_hint: None, voice: None };
         let f = listen_analysis::analyze(&pcm, &opts);
         bt.add(g_bt.as_ref(), &truth);
         own.add(g_own.as_ref(), &truth);

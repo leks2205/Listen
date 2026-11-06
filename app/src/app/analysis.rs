@@ -29,6 +29,9 @@ pub struct AnalysisHandle {
     /// Songs whose candidate pool was already asked for (one radio request
     /// per song, however often the track-change hook runs).
     pooled: Arc<Mutex<HashSet<String>>>,
+    /// The singing-voice detector is downloaded: songs analysed without it are analysed again
+    /// (Navidrome and local files; YouTube Music fetches are budgeted, so those keep their analysis).
+    voice: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for AnalysisHandle {
@@ -93,12 +96,20 @@ impl AnalysisHandle {
         self.lookup(song).and_then(|r| r.features().map(FlowFeatures::of))
     }
 
-    /// Already analysed for this analyser version (or not analysable).
+    /// Already analysed for this analyser version (or not analysable). With the singing-voice detector
+    /// downloaded, a song analysed without it isn't done unless it comes from YouTube Music.
     fn done(&self, song: &Song) -> bool {
+        let upgrade =
+            self.voice.load(std::sync::atomic::Ordering::Relaxed) && song.source != SourceKind::YouTubeMusic;
         self.lookup(song).is_some_and(|r| match &r.outcome {
-            Outcome::Ok(_) => r.version >= ANALYZER_VERSION,
+            Outcome::Ok(f) => r.version >= ANALYZER_VERSION && !(upgrade && f.voiced.is_none()),
             Outcome::Failed { transient, .. } => !transient && r.version >= ANALYZER_VERSION,
         })
+    }
+
+    /// Whether the singing-voice detector is there (set by the worker before each job).
+    pub fn set_voice(&self, present: bool) {
+        self.voice.store(present, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// True the first time it's called for `song` (the pool is requested once).
@@ -182,6 +193,8 @@ pub struct AnalysisStatus {
     /// Analysed by this machine since start.
     pub done_here: usize,
     pub beats: &'static str,
+    /// Where the vocal curve comes from ("singing-voice detector" or "built-in heuristic").
+    pub vocals: &'static str,
     pub waiting: Option<&'static str>,
     pub error: Option<String>,
 }
@@ -212,6 +225,8 @@ impl std::fmt::Debug for CommandBox {
 pub struct AnalysisConfig {
     pub shared_dir: PathBuf,
     pub models_dir: PathBuf,
+    /// Where the singing-voice detector is downloaded to (the data folder: it isn't fetched again by itself).
+    pub voice_dir: PathBuf,
     pub library: bool,
     pub on_battery: bool,
 }
@@ -232,6 +247,7 @@ impl Listen {
         Some(AnalysisConfig {
             shared_dir,
             models_dir: paths.cache_dir.join("models"),
+            voice_dir: voice_dir(paths),
             library: s.analyze_library,
             on_battery: s.on_battery,
         })
@@ -409,6 +425,9 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
             }
         };
         status.beats = if matches!(beats, BeatSource::Own) { "built-in tracker" } else { "Beat This!" };
+        let voice = listen_analysis::VoiceModel::in_dir(&config.voice_dir).is_some();
+        handle.set_voice(voice);
+        status.vocals = vocals_label(voice);
 
         let mut worker = listen_analysis::Worker::new();
         let mut queue = JobQueue::default();
@@ -463,7 +482,10 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
             status.current = Some(format!("{} – {}", job.song.artist_line(), job.song.title));
             send_status(&mut out, &status, &mut sent).await;
             let Some((job, input)) = resolve(job, &mut queue, &mut tried).await else { continue };
-            let opts = Opts { beats: beats.clone(), bpm_hint: job.song.bpm.map(|b| b as f32) };
+            let voice = listen_analysis::VoiceModel::in_dir(&config.voice_dir);
+            handle.set_voice(voice.is_some());
+            status.vocals = vocals_label(voice.is_some());
+            let opts = Opts { beats: beats.clone(), bpm_hint: job.song.bpm.map(|b| b as f32), voice };
             let started = Instant::now();
             // mpv decodes a URL and a local file alike; the helper process
             // gives the memory back when the queue runs dry.
@@ -509,6 +531,77 @@ async fn send_status(
     }
     *sent = Some(status.clone());
     let _ = out.send(Message::Analysis(AnalysisMsg::Status(status.clone()))).await;
+}
+
+/// The singing-voice detector's download state.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct VoiceDetector {
+    pub present: bool,
+    pub busy: bool,
+    pub error: Option<String>,
+}
+
+impl Listen {
+    /// Re-reads whether the detector is downloaded.
+    pub(super) fn voice_refresh(&mut self) {
+        self.voice_detector.present =
+            self.paths.as_ref().is_some_and(|p| listen_analysis::VoiceModel::in_dir(&voice_dir(p)).is_some());
+    }
+
+    pub(super) fn voice_download(&mut self) -> iced::Task<Message> {
+        let Some(dir) = self.paths.as_ref().map(voice_dir) else { return iced::Task::none() };
+        if self.voice_detector.busy {
+            return iced::Task::none();
+        }
+        self.voice_detector.busy = true;
+        self.voice_detector.error = None;
+        iced::Task::perform(
+            async move {
+                listen_analysis::VoiceModel::download(&dir).await.map(|_| ()).map_err(|e| e.to_string())
+            },
+            |r| Message::Setting(super::settings_msg::Setting::VoiceDone(r)),
+        )
+    }
+
+    pub(super) fn voice_done(&mut self, result: Result<(), String>) {
+        self.voice_detector.busy = false;
+        match result {
+            Ok(()) => {
+                tracing::info!("singing-voice detector downloaded");
+                self.voice_refresh();
+                if let Some(handle) = &self.analysis {
+                    handle.set_voice(true);
+                }
+                // The library songs analysed without it are listed again.
+                self.analysis_crawl();
+            }
+            Err(e) => {
+                tracing::warn!("singing-voice detector: {e}");
+                self.voice_detector.error = Some(e);
+            }
+        }
+    }
+
+    pub(super) fn voice_remove(&mut self) {
+        if let Some(dir) = self.paths.as_ref().map(voice_dir)
+            && let Err(e) = listen_analysis::VoiceModel::remove(&dir)
+        {
+            self.voice_detector.error = Some(e.to_string());
+        }
+        self.voice_refresh();
+        if let Some(handle) = &self.analysis {
+            handle.set_voice(self.voice_detector.present);
+        }
+    }
+}
+
+/// The folder the singing-voice detector is downloaded to.
+pub fn voice_dir(paths: &listen_core::config::Paths) -> PathBuf {
+    paths.data_dir.join("models")
+}
+
+fn vocals_label(voice: bool) -> &'static str {
+    if voice { "singing-voice detector" } else { "built-in heuristic" }
 }
 
 fn with_store<T>(handle: &AnalysisHandle, f: impl FnOnce(&ShardStore) -> T) -> Option<T> {
@@ -952,6 +1045,7 @@ mod tests {
             outro_instrumental_bars: 0,
             timbre: vec![],
             mood: listen_core::analysis::Mood { energy: 0.5, danceability: 0.5, brightness: 0.5 },
+            voiced: None,
         };
         Arc::new(listen_analysis::record(song, file, "", "test", Ok(features)).unwrap())
     }
@@ -977,5 +1071,29 @@ mod tests {
         assert!(handle.lookup(&song("nd1", SourceKind::YouTubeMusic)).is_none());
         // Sources that aren't analysed aren't looked up.
         assert!(handle.lookup(&song("nd1", SourceKind::Jellyfin)).is_none());
+    }
+
+    #[test]
+    fn songs_analysed_without_the_voice_detector_are_analysed_again_once_it_is_there() {
+        let handle = AnalysisHandle::default();
+        let nd = song("nd1", SourceKind::Subsonic);
+        let yt = song("lYBUbBu4W08", SourceKind::YouTubeMusic);
+        let file = FileId { duration_ms: 213_581, suffix: None, format: Some("251".into()), bytes: Some(9) };
+        handle.insert([record(&nd, FileId::of(&nd)), record(&yt, file)]);
+        assert!(handle.done(&nd) && handle.done(&yt));
+        handle.set_voice(true);
+        // Navidrome: again, with the detector. YouTube Music: its fetches are budgeted, so it stays.
+        assert!(!handle.done(&nd));
+        assert!(handle.done(&yt));
+        // Analysed with it (nothing sung counts too): done.
+        let mut with = (*record(&nd, FileId::of(&nd))).clone();
+        if let Outcome::Ok(f) = &mut with.outcome {
+            f.voiced = Some(vec![]);
+        }
+        with.analyzed_at += 1;
+        handle.insert([Arc::new(with)]);
+        assert!(handle.done(&nd));
+        handle.set_voice(false);
+        assert!(handle.done(&nd));
     }
 }

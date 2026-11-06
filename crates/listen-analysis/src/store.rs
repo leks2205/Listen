@@ -387,6 +387,7 @@ mod tests {
                     outro_instrumental_bars: 0,
                     timbre: vec![],
                     mood: Mood::default(),
+                    voiced: None,
                 }))
             } else {
                 Outcome::Failed { reason: "x".into(), transient: false }

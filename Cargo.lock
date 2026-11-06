@@ -3974,6 +3974,8 @@ dependencies = [
  "listen-subsonic",
  "realfft",
  "reqwest 0.12.28",
+ "rten",
+ "rten-tensor",
  "serde",
  "serde_json",
  "sha2",

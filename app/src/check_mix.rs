@@ -52,7 +52,10 @@ async fn check(
             BeatSource::Own
         }
     };
-    let opts = Opts { beats, bpm_hint: None };
+    // Like the app: the singing-voice detector when it's downloaded.
+    let voice = listen_analysis::VoiceModel::in_dir(&crate::app::analysis::voice_dir(&paths));
+    println!("vocals: {}", if voice.is_some() { "singing-voice detector" } else { "built-in heuristic" });
+    let opts = Opts { beats, bpm_hint: None, voice };
     let mut sides = Vec::new();
     for (arg, lrc) in [a, b].into_iter().zip(lyrics) {
         let input = input_for(arg, &paths, &config).await?;

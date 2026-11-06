@@ -276,6 +276,10 @@ pub struct Features {
     /// Timbre/similarity vector (comparable only within one analyser version).
     pub timbre: Vec<f32>,
     pub mood: Mood,
+    /// Sung stretches (file seconds) from the singing-voice detector, which then also made `bars.vocal`;
+    /// `None` when the song was analysed without it (the vocal curve is the analyser's own heuristic).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voiced: Option<Vec<(f32, f32)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -500,6 +504,7 @@ mod tests {
                 outro_instrumental_bars: 16,
                 timbre: vec![0.5; 20],
                 mood: Mood { energy: 0.7, danceability: 0.8, brightness: 0.5 },
+                voiced: None,
             })),
         };
         let json = serde_json::to_string(&rec).unwrap();
@@ -566,6 +571,7 @@ mod tests {
             outro_instrumental_bars: 0,
             timbre: vec![],
             mood: Mood::default(),
+            voiced: None,
         }));
         ok.analyzed_at = 1;
         assert!(ok.better_than(&base));

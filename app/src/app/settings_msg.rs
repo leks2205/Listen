@@ -56,6 +56,10 @@ pub enum Setting {
     AnalysisDirSave,
     /// Choose the analysis folder in a dialog.
     AnalysisDirPick,
+    /// Download / delete the singing-voice detector, and the download's result.
+    VoiceDownload,
+    VoiceRemove,
+    VoiceDone(Result<(), String>),
     AnalysisDirPicked(Option<std::path::PathBuf>),
     /// Analyse YouTube Music songs too (asks for a folder first when none is set).
     AnalysisYtm(bool),
@@ -243,6 +247,15 @@ impl Listen {
                     },
                     |p| Message::Setting(Setting::AnalysisDirPicked(p)),
                 );
+            }
+            Setting::VoiceDownload => return self.voice_download(),
+            Setting::VoiceRemove => {
+                self.voice_remove();
+                return Task::none();
+            }
+            Setting::VoiceDone(result) => {
+                self.voice_done(result);
+                return Task::none();
             }
             Setting::AnalysisDirPicked(None) => return Task::none(),
             Setting::AnalysisDirPicked(Some(dir)) => {

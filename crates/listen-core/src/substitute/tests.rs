@@ -388,6 +388,7 @@ fn features(start: f32, bpm: f32, first_beat: f32, confidence: f32) -> Features 
         outro_instrumental_bars: 0,
         timbre: vec![],
         mood: Mood::default(),
+        voiced: None,
     }
 }
 

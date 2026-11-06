@@ -45,6 +45,7 @@ fn analysed(song: &Song, bpm: f32) -> Arc<listen_core::analysis::TrackAnalysis> 
             outro_instrumental_bars: 8,
             timbre: vec![],
             mood: Mood { energy: 0.6, danceability: 0.7, brightness: 0.5 },
+            voiced: None,
         })),
     })
 }

@@ -377,6 +377,7 @@ See [Song analysis](../dj/analysis.md) and [DJ transitions](../dj/transitions.md
 | Whole library | Works through the library in the background; the queue always comes first. | On | `settings.analysis.analyze_library` |
 | Also on battery | Keeps analysing when the computer is unplugged. | Off | `settings.analysis.on_battery` |
 | Analysis folder | Where results are kept, with **Save** and **Choose...**. A synced folder lets your other computers reuse them. Empty uses Listen's data folder. | empty | `settings.analysis.shared_dir` |
+| Singing-voice detector | **Download** / **Remove** for the optional DJustify detector (2 MB, CC BY-NC 4.0). Songs analysed without it are analysed again in the background (not YouTube Music). | not downloaded | file `models/djustify-svdnet.pt` in the data folder |
 | DJ transitions | Mixes songs the Auto-DJ or AI DJ picked: beat-matched blends, or fades when songs do not fit. | On | `settings.mixing.enabled` |
 | Order by flow | Picks songs whose tempo, key and energy follow on from the current one. | On | `settings.mixing.flow_select` |
 | Largest tempo change | Beyond this the songs fade instead of being beat-matched, 2 to 8 %. | 6 | `settings.mixing.max_tempo_pct` |

@@ -75,6 +75,12 @@ const SOFTWARE: &[Credit] = &[
         "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).",
         "https://github.com/CPJKU/beat_this",
     ),
+    (
+        "DJustify singing-voice detector",
+        "Finds the singing for DJ transitions, when downloaded. Model by Hsu et al. (2026), trained on the \
+         Jamendo corpus; the weights are licensed CC BY-NC 4.0 (non-commercial use only).",
+        "https://github.com/ddman1101/DJustify",
+    ),
     ("bliss", "Timbre and mood features for song ordering.", "https://github.com/Polochon-street/bliss-rs"),
     ("whipper", "Secure CD ripping.", "https://github.com/whipper-team/whipper"),
     ("Inter and Poppins", "Fonts, under the SIL Open Font License.", "https://rsms.me/inter/"),

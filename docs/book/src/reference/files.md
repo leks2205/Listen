@@ -40,6 +40,7 @@ If `config.toml` cannot be read because it is damaged, Listen starts with defaul
 | `lyrics_overrides.json` | Which lyrics match you picked for songs. |
 | `ai-dj-quota.json` | The count of AI DJ spoken breaks voiced today, and whether Google reported the speech quota as used up. |
 | `rips.json` | Discs you have ripped, including those listed under **Rips to fix**. |
+| `models/` | The optional singing-voice detector (`djustify-svdnet.pt`, 2 MB) when you downloaded it in the analysis settings. |
 
 ## Cache folder
 

@@ -22,6 +22,31 @@ GPL-3.0. They are combined with Listen under section 13 of the GPLv3 and the AGP
 The `bliss-audio` crate (timbre features for song ordering) is licensed under GPL-3.0-only and is combined with
 Listen in the same way.
 
+## DJustify singing-voice detector
+
+`crates/listen-analysis/src/voice.rs` reimplements the singing-voice detector of
+[DJustify](https://github.com/ddman1101/DJustify) (its `svd/` feature extraction, network and segmentation) in
+Rust. That code is licensed under the MIT License:
+
+> Copyright (c) 2026 Wei-Han Hsu and the DJustify authors
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+> documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+> the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+> to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions
+> of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+> THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+> CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+> IN THE SOFTWARE.
+
+The detector's weights are not part of Listen. They are licensed CC BY-NC 4.0 (non-commercial use) and are
+downloaded only when the user asks for them in the analysis settings.
+
 ## Fonts and icons
 
 | Files | Work | License |

@@ -13,11 +13,13 @@ pub mod structure;
 #[cfg(test)]
 mod test_util;
 pub mod timbre;
+pub mod voice;
 pub mod waveform;
 pub mod worker;
 
 pub use decode::{Pcm, decode, mpv_version};
 pub use models::BeatModel;
+pub use voice::VoiceModel;
 pub use worker::{Worker, run_worker};
 
 use listen_core::analysis::{ANALYZER_VERSION, Features, FileId, Outcome, TrackAnalysis};
@@ -90,6 +92,8 @@ pub struct Opts {
     /// The server's BPM tag: picks the tempo octave when it says half or
     /// double. Optional and only a prior.
     pub bpm_hint: Option<f32>,
+    /// The singing-voice detector, when downloaded: it replaces the vocal heuristic.
+    pub voice: Option<VoiceModel>,
 }
 
 /// How long each stage took (for `--validate-analysis` and the bench).
@@ -145,7 +149,15 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
     });
 
     let bounds = structure::bar_bounds(grid.as_ref(), start, end);
-    let stats = tm.time("bars", || structure::bar_stats(&frames, &bounds));
+    let mut stats = tm.time("bars", || structure::bar_stats(&frames, &bounds));
+    let voiced = opts.voice.as_ref().and_then(|model| {
+        tm.time("voice", || model.voiced(&mono, pcm.sample_rate))
+            .inspect_err(|e| tracing::warn!("singing-voice detector failed, using the heuristic: {e}"))
+            .ok()
+    });
+    if let Some(spans) = &voiced {
+        stats.vocal = voice::bar_vocal(spans, &bounds);
+    }
     let (phrase_bars, phrase_offset) = structure::phrase_lattice(&stats.novelty);
     let sections = structure::sections(&stats, phrase_bars, phrase_offset);
     let (intro, outro) = structure::instrumental_edges(&stats.vocal);
@@ -178,6 +190,7 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
         outro_instrumental_bars: outro,
         timbre,
         mood,
+        voiced,
     };
     (features, tm)
 }

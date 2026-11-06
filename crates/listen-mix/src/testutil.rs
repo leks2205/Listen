@@ -141,6 +141,7 @@ impl FeatBuilder {
             outro_instrumental_bars: self.outro as u16,
             timbre: vec![0.5; 4],
             mood: Mood { energy: 0.6, danceability: 0.7, brightness: 0.5 },
+            voiced: None,
         }
     }
 }

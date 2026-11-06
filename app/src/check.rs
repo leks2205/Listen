@@ -1142,7 +1142,7 @@ async fn run_ytm_analysis(
             }
         };
         let fetched = t.elapsed().as_secs_f32();
-        let opts = Opts { beats: beats.clone(), bpm_hint: None };
+        let opts = Opts { beats: beats.clone(), bpm_hint: None, voice: None };
         let result =
             listen_analysis::analyze_url(&source.input.as_mpv_arg(), &opts, &Cancel::default()).await;
         println!(
@@ -1187,9 +1187,13 @@ async fn run_analysis(args: Vec<String>) -> Result<(), String> {
     // One file or URL: everything about it.
     if let Some(input) = arg.as_ref().filter(|a| a.parse::<usize>().is_err()) {
         let t = std::time::Instant::now();
-        let f = listen_analysis::analyze_url(input, &Opts { beats, bpm_hint: None }, &Cancel::default())
-            .await
-            .map_err(|e| e.to_string())?;
+        let f = listen_analysis::analyze_url(
+            input,
+            &Opts { beats, bpm_hint: None, voice: None },
+            &Cancel::default(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
         println!("analysed in {:.1}s", t.elapsed().as_secs_f32());
         print_features(&f);
         return Ok(());
@@ -1227,7 +1231,7 @@ async fn run_analysis(args: Vec<String>) -> Result<(), String> {
     for song in &songs {
         let Some(url) = client.analysis_url(song) else { continue };
         let t = std::time::Instant::now();
-        let opts = Opts { beats: beats.clone(), bpm_hint: None };
+        let opts = Opts { beats: beats.clone(), bpm_hint: None, voice: None };
         let result = listen_analysis::analyze_url(&url, &opts, &Cancel::default()).await;
         let secs = t.elapsed().as_secs_f32();
         total_secs += secs;
@@ -1401,7 +1405,7 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
             && let Some(song) = queue.next()
         {
             let Some(url) = client.analysis_url(&song) else { continue };
-            let opts = Opts { beats: beats.clone(), bpm_hint: song.bpm.map(|b| b as f32) };
+            let opts = Opts { beats: beats.clone(), bpm_hint: song.bpm.map(|b| b as f32), voice: None };
             running.spawn(async move {
                 let result = listen_analysis::analyze_url(&url, &opts, &Cancel::default()).await;
                 (song, result)

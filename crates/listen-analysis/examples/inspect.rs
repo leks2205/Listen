@@ -15,7 +15,7 @@ async fn main() {
         None => BeatSource::Own,
     };
     let pcm = listen_analysis::decode(input, &Cancel::default()).await.expect("decode");
-    let opts = Opts { beats, bpm_hint: None };
+    let opts = Opts { beats, bpm_hint: None, voice: None };
     let (f, tm) = listen_analysis::analyze_timed(&pcm, &opts);
     let frames = spectral::analyze(&pcm);
     let bounds = structure::bar_bounds(f.grid.as_ref(), f.audio_start, f.audio_end);

@@ -992,7 +992,10 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
             if let Some(e) = &st.error {
                 line.push_str(&format!("\n{e}"));
             }
-            line.push_str(&format!("\nBeats: {} · this machine: {}", st.beats, st.machine));
+            line.push_str(&format!(
+                "\nBeats: {} · vocals: {} · this machine: {}",
+                st.beats, st.vocals, st.machine
+            ));
             // Its fetches are budgeted, so it's never crawled.
             if state.config.servers.iter().any(|s| s.kind == listen_core::model::SourceKind::YouTubeMusic) {
                 line.push_str(if state.config.settings.analysis.youtube_music {
@@ -1059,6 +1062,14 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
             "Analysis folder",
             "Where the results are kept. A synced folder lets your other computers reuse them.",
             dir.into(),
+        ),
+        line(
+            state,
+            "Singing-voice detector",
+            "Finds where the singing is, so transitions don't talk over a sung line. A small model (2 MB) from \
+             the DJustify research project, downloaded from its authors; free for non-commercial use only \
+             (CC BY-NC 4.0). Songs analysed without it are analysed again in the background.",
+            voice_button(state),
         ),
         line(
             state,
@@ -1195,6 +1206,30 @@ impl std::fmt::Display for EdgeChoice {
             TransitionEdges::Instrumental => tr("Instrumental only"),
             TransitionEdges::Smart => tr("Smart"),
         })
+    }
+}
+
+/// Download / Remove for the singing-voice detector.
+fn voice_button(state: &Listen) -> Element<'_, Message> {
+    let t = state.tokens;
+    let v = &state.voice_detector;
+    let (text, msg) = if v.busy {
+        ("Downloading…", None)
+    } else if v.present {
+        ("Remove", Some(Message::Setting(Setting::VoiceRemove)))
+    } else {
+        ("Download", Some(Message::Setting(Setting::VoiceDownload)))
+    };
+    let button = button(label_w(text, metrics::font_sm(), t.foreground, Weight::Semibold))
+        .padding(Padding::from([6.0, 10.0]))
+        .style(style::default_button(t))
+        .on_press_maybe(msg);
+    match &v.error {
+        Some(e) => column![button, label(e.clone(), metrics::font_sm(), t.muted)]
+            .spacing(metrics::space_xs())
+            .align_x(Alignment::End)
+            .into(),
+        None => button.into(),
     }
 }
 

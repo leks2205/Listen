@@ -3,7 +3,7 @@
 //! idle and the next job starts a fresh one. Protocol: one JSON line per request on stdin, one
 //! per answer on stdout, one job at a time.
 
-use crate::{AnalysisError, BeatModel, BeatSource, Cancel, Opts, analyze_url};
+use crate::{AnalysisError, BeatModel, BeatSource, Cancel, Opts, VoiceModel, analyze_url};
 use listen_core::analysis::Features;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -24,6 +24,9 @@ struct Request {
     input: String,
     model: Option<(PathBuf, PathBuf)>,
     bpm_hint: Option<f32>,
+    /// The singing-voice detector's weights.
+    #[serde(default)]
+    voice: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -90,7 +93,7 @@ pub fn run_worker() -> i32 {
                         Some((mel, beat)) => BeatSource::BeatThis(BeatModel { mel, beat }),
                         None => BeatSource::Own,
                     };
-                    let opts = Opts { beats, bpm_hint: req.bpm_hint };
+                    let opts = Opts { beats, bpm_hint: req.bpm_hint, voice: req.voice.map(VoiceModel::at) };
                     analyze_url(&req.input, &opts, &Cancel::default()).await.into()
                 }
                 Err(e) => Answer::Model(format!("bad request: {e}")),
@@ -186,8 +189,13 @@ impl Worker {
             BeatSource::BeatThis(m) => Some((m.mel.clone(), m.beat.clone())),
             BeatSource::Own => None,
         };
-        let mut line = serde_json::to_vec(&Request { input: input.into(), model, bpm_hint: opts.bpm_hint })
-            .map_err(|e| AnalysisError::Model(e.to_string()))?;
+        let mut line = serde_json::to_vec(&Request {
+            input: input.into(),
+            model,
+            bpm_hint: opts.bpm_hint,
+            voice: opts.voice.as_ref().map(|v| v.path.clone()),
+        })
+        .map_err(|e| AnalysisError::Model(e.to_string()))?;
         line.push(b'\n');
         let run = self.running.as_mut().expect("started above");
         let pid = run.child.id();

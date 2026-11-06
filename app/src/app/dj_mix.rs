@@ -259,6 +259,7 @@ mod tests {
                 outro_instrumental_bars: 16,
                 timbre: vec![],
                 mood: Mood { energy: 0.6, danceability: 0.7, brightness: 0.5 },
+                voiced: None,
             })),
         })
     }

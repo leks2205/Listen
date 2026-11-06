@@ -38,6 +38,29 @@ If the download fails (for example because you are offline), Listen falls back t
 
 The status line (see below) shows which one is in use: **Beats: Beat This!** or **Beats: built-in tracker**.
 
+## The singing-voice detector (optional)
+
+Where the singing is decides where a DJ transition can start and end without talking over a sung line. Without
+extra files Listen estimates it from the sound (centred, tonal sound in the voice range that changes like
+syllables). That estimate is rough: synth leads and chants can look like a voice, and a quiet first verse can be
+missed. Synced lyrics, when there are any, correct it (see [Transitions](transitions.md)).
+
+For songs without synced lyrics you can download a small neural network that listens for singing: the
+singing-voice detector of the DJustify research project (Hsu et al., 2026), trained on the Jamendo corpus. Its
+code is MIT licensed, but its weights are licensed **CC BY-NC 4.0**: free for non-commercial use only. That is
+why Listen does not ship it and you choose to download it: **Settings → Playback → DJ transitions & song
+analysis → Singing-voice detector → Download**. The file (2 MB) comes straight from the authors' repository at a
+fixed version, is checked against a fixed checksum and is stored in the `models` folder of Listen's data folder,
+so clearing caches doesn't remove it. **Remove** deletes it again.
+
+With the detector, every song analysed from then on gets its vocal curve and its instrumental intro and outro
+from the detector (it adds about a second per song). Songs that were analysed without it are analysed again in
+the background, Navidrome and local songs only: YouTube Music songs keep their analysis, because fetching them
+again would use up YouTube's request budget. The status line says **vocals: singing-voice detector** or
+**vocals: built-in heuristic**. On three songs with synced lyrics, the detector's vocal curve agreed with the
+lyrics better than the estimate (correlation 0.73 against 0.55; the start of the singing within 3 s instead of
+10 s).
+
 ## How the work is scheduled
 
 Analysis runs in a separate helper process with low priority, so it should not disturb playback. The helper stops by itself after 30 seconds without work and is started again when needed.
@@ -76,6 +99,7 @@ All switches are in **Settings → Playback → DJ transitions & song analysis**
 | **Whole library** | On | Work through the whole Navidrome library in the background. The queue always comes first. When off, only the songs in the queue are analysed (and, for YouTube Music, the DJ candidates). |
 | **Also on battery** | Off | Keep analysing the library when the laptop is unplugged. |
 | **Analysis folder** | Listen's data folder | Where the results are stored. Can be a synced folder shared between computers. |
+| **Singing-voice detector** | Not downloaded | **Download** fetches the optional detector (2 MB, CC BY-NC 4.0, see above); **Remove** deletes it. |
 
 Below the first switches there is a status line, described next.
 
@@ -88,7 +112,7 @@ The grey text under **YouTube Music songs** tells you what is going on. It can c
 - `N waiting`, the number of songs in line.
 - A reason for waiting in brackets: `paused during a DJ transition`, `library analysis is off` or `paused on battery`.
 - `Now:` the song being analysed.
-- `Beats:` the beat source and `this machine:` the name that identifies this computer in the shared folder.
+- `Beats:` the beat source, `vocals:` where the vocal curve comes from, and `this machine:` the name that identifies this computer in the shared folder.
 - An error, for example when the analysis folder cannot be written.
 - If you have a YouTube Music account: `YouTube Music: analysed on demand (queue and DJ candidates)` or `YouTube Music: not analysed`.
 

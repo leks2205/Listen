@@ -66,6 +66,7 @@ fn analysed(
             outro_instrumental_bars: 8,
             timbre: vec![],
             mood: Mood { energy: 0.6, danceability: 0.7, brightness: 0.5 },
+            voiced: None,
         })),
     })
 }

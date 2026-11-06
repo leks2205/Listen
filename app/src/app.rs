@@ -653,6 +653,8 @@ pub struct Listen {
     pub global_error: Option<String>,
     /// The shared analysis folder being typed (settings).
     pub analysis_dir_input: Option<String>,
+    /// The optional singing-voice detector (settings → DJ transitions).
+    pub voice_detector: analysis::VoiceDetector,
     /// YouTube Music analysis switches on once the folder dialog returns a folder.
     pub pending_ytm_analysis: bool,
     #[cfg(any(target_os = "linux", windows))]
@@ -1175,6 +1177,7 @@ impl Listen {
             analysis_tx: None,
             analysis_status: None,
             analysis_dir_input: None,
+            voice_detector: analysis::VoiceDetector::default(),
             pending_ytm_analysis: false,
             right_click_at: iced::Point::ORIGIN,
             dj: dj::DjState::default(),
@@ -1225,6 +1228,7 @@ impl Listen {
             #[cfg(any(target_os = "linux", windows))]
             mpris_published: MprisState::default(),
         };
+        state.voice_refresh();
         if let Some(id) = &args.theme {
             state.config.settings.appearance.follow_desktop_theme = false;
             state.config.settings.appearance.follow_system_theme = false;
