@@ -164,9 +164,9 @@ fn panel_tabs_toggle_and_the_player_stays_open() {
 fn a_tab_button_click_toggles_the_panel() {
     let mut s = state();
     let _ = s.update(Message::OpenFullscreenTab(FullscreenTab::Queue));
-    // The four tab buttons sit top right: Up Next, Related, Lyrics, Visualizer (36 px, 4 px apart).
+    // The five tab buttons sit top right: Up Next, Related, Lyrics, Visualizer, About (36 px, 4 px apart).
     let right = 1600.0 - 32.0;
-    let lyrics = (right - 40.0 - 18.0, 38.0 + 8.0 + 18.0);
+    let lyrics = (right - 2.0 * 40.0 - 18.0, 38.0 + 8.0 + 18.0);
     let messages = click(&mut s, lyrics);
     assert!(
         messages

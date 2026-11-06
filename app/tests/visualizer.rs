@@ -71,7 +71,7 @@ fn modal_open(s: &Listen) -> bool {
 fn the_settings_page_opens_the_options_modal() {
     let mut s = boot(Args { route: Some("settings".into()), ..Args::default() });
     // A tall window shows the whole page.
-    s.window_size = iced::Size::new(1600.0, 4096.0);
+    s.window_size = iced::Size::new(1600.0, 6144.0);
     let _ = s.update(Message::Shell(listen::app::settings_shell::ShellMsg::Tab(
         listen_core::settings::SettingsTab::Playback,
     )));
