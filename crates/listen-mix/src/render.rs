@@ -275,6 +275,14 @@ impl Fx {
     }
 }
 
+/// `x` through the bass swap's shelf alone at `db` (the renderer's filter, steady state): for measuring
+/// what the swap takes from a song.
+pub fn bass_shelved(x: &[f32], sr: u32, db: f32) -> Vec<f32> {
+    let mut fx = Fx::new(f64::from(sr));
+    fx.bass_db = Param::new(db);
+    x.iter().map(|&v| fx.process(v)).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

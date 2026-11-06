@@ -231,7 +231,12 @@ fn level_row(arg: &str, pcm: &listen_analysis::Pcm, f: &listen_core::analysis::F
     let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
     let times: Vec<f64> = (0..).map(|k| a + 0.5 * f64::from(k)).take_while(|t| *t <= b).collect();
     // Index k covers the 3 s ending at k · step, so the window centred on t ends at t + 1.5.
-    let at = |t: f64| measured.get(((t + 1.5) / step).round() as usize).copied();
+    // The same with the bass swap's shelf at −24 dB (what the swap leaves of the song).
+    let shelf = |x: &[f32]| listen_mix::render::bass_shelved(x, pcm.sample_rate, -24.0);
+    let (l, r) = (shelf(&pcm.left), shelf(&pcm.right));
+    let no_bass = listen_mix::verify::audio_levels_of(&[&l, &r], pcm.sample_rate, step);
+    let at_in = |v: &[f32], t: f64| v.get(((t + 1.5) / step).round() as usize).copied();
+    let at = |t: f64| at_in(&measured, t);
     let bars: Vec<f64> = f
         .grid
         .as_ref()
@@ -242,6 +247,7 @@ fn level_row(arg: &str, pcm: &listen_analysis::Pcm, f: &listen_core::analysis::F
             "song": arg, "lufs": f.lufs, "t": times,
             "model": times.iter().map(|&t| model.at(t)).collect::<Vec<_>>(),
             "measured": times.iter().map(|&t| at(t)).collect::<Vec<_>>(),
+            "measured_no_bass": times.iter().map(|&t| at_in(&no_bass, t)).collect::<Vec<_>>(),
             "bars": bars, "energy": f.bars.energy, "low": f.bars.low, "centroid": f.bars.centroid,
         })
         .to_string(),

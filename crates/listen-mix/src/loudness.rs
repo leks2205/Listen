@@ -196,12 +196,28 @@ pub const BLEND_MAX_BOOST_DB: f32 = 3.0;
 /// Largest blend trim cut.
 pub const BLEND_MAX_CUT_DB: f32 = -6.0;
 
+/// Share of a bar's (K-weighted) loudness below the bass swap's shelf when nothing else is known (a bass
+/// cut at −24 dB then takes about 2 LU).
+pub const DEFAULT_BASS_SHARE: f32 = 0.37;
+/// Share of the song's bass-heaviest bar that is below 150 Hz (K-weighted loudness). The bar curves only
+/// bound it (a low band is never more than its whole bar); fitted on the item-11 bench (bug 148).
+const BASS_SHARE_SCALE: f32 = 0.55;
+/// How much less a bar's bass counts in K-weighted loudness than in the plain power the energy curve is
+/// made of (BS.1770's high-shelf lifts what is above the bass). Fitted with [`BASS_SHARE_SCALE`].
+const BASS_WEIGHT_CUT: f32 = 0.7;
+/// K-weighted, the song's brightest bar (centroid curve 255) is this much louder against its darkest (0)
+/// than their plain power says. Fitted with [`BASS_SHARE_SCALE`].
+const BRIGHT_DB: f32 = 2.0;
+
 /// Per-bar loudness of a song in LUFS: the bar curve's dB shape anchored on the integrated loudness.
 #[derive(Debug, Clone)]
 pub struct LocalLevel {
     /// Bar boundaries in file seconds (one more than `lufs`).
     bounds: Vec<f64>,
     lufs: Vec<f32>,
+    /// Share of each bar's loudness below 150 Hz (kick and bassline, 0..1): from the low-band curve
+    /// against the energy curve.
+    bass: Vec<f32>,
 }
 
 impl LocalLevel {
@@ -210,9 +226,16 @@ impl LocalLevel {
         if !plausible(f.lufs) {
             return None;
         }
-        if f.bars.energy.is_empty() {
+        let flat = || {
             let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
-            return Some(LocalLevel { bounds: vec![a, b.max(a + 1.0)], lufs: vec![f.lufs] });
+            Some(LocalLevel {
+                bounds: vec![a, b.max(a + 1.0)],
+                lufs: vec![f.lufs],
+                bass: vec![DEFAULT_BASS_SHARE],
+            })
+        };
+        if f.bars.energy.is_empty() {
+            return flat();
         }
         // Same bars as the analyser's `bar_bounds`: the beat grid's bars, else 2 s windows.
         let bounds: Vec<f64> = match f.grid.as_ref().filter(|g| g.bar_count() > 0) {
@@ -224,32 +247,69 @@ impl LocalLevel {
         };
         let n = f.bars.energy.len().min(bounds.len().saturating_sub(1));
         if n == 0 {
-            let (a, b) = (f64::from(f.audio_start), f64::from(f.audio_end));
-            return Some(LocalLevel { bounds: vec![a, b.max(a + 1.0)], lufs: vec![f.lufs] });
+            return flat();
         }
-        // The curve is 20·log10(rms / loudest bar) mapped −30..0 dB → 0..255.
-        let db: Vec<f32> = f.bars.energy[..n].iter().map(|&e| (f32::from(e) / 255.0 - 1.0) * 30.0).collect();
+        // The curves are 20·log10(rms / loudest bar) mapped −30..0 dB → 0..255.
+        let to_db = |v: u8| (f32::from(v) / 255.0 - 1.0) * 30.0;
+        let plain: Vec<f32> = f.bars.energy[..n].iter().map(|&e| to_db(e)).collect();
+        let bass = bass_shares(&plain, &f.bars.low);
+        // K-weighted, a bass-heavy bar is quieter and a bright one louder against the rest than its plain
+        // power says (bug 148: 3 s windows against the audio, sd 1.04 → 0.75 dB on 78 songs, 0.96 → 0.72 on
+        // 47 others).
+        let bright = |i: usize| f.bars.centroid.get(i).map_or(0.0, |&c| BRIGHT_DB * f32::from(c) / 255.0);
+        let db: Vec<f32> = plain
+            .iter()
+            .zip(&bass)
+            .enumerate()
+            .map(|(i, (d, s))| d + 10.0 * (1.0 - BASS_WEIGHT_CUT * s).log10() + bright(i))
+            .collect();
         // Integrated loudness ≈ power mean of the bars above the relative gate (−10 LU, BS.1770).
         let pmean = |v: &[f32]| v.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>() / v.len().max(1) as f32;
         let ungated = 10.0 * pmean(&db).max(1e-12).log10();
         let gated: Vec<f32> = db.iter().copied().filter(|&d| d > ungated - 10.0).collect();
         let integrated = 10.0 * pmean(if gated.is_empty() { &db } else { &gated }).max(1e-12).log10();
         let offset = f.lufs - integrated;
-        Some(LocalLevel { bounds: bounds[..=n].to_vec(), lufs: db.iter().map(|d| d + offset).collect() })
+        Some(LocalLevel {
+            bounds: bounds[..=n].to_vec(),
+            lufs: db.iter().map(|d| d + offset).collect(),
+            bass,
+        })
     }
 
-    /// Loudness (LUFS) around file time `t`: power mean over [`LOCAL_WINDOW_S`], bars weighted by overlap.
-    /// Outside the analysed bars the nearest bar holds.
-    pub fn at(&self, t: f64) -> f32 {
+    /// The window [`Self::at`] averages over around `t`, clamped to the analysed bars.
+    fn window(&self, t: f64) -> (f64, f64) {
         let (a, b) = (t - LOCAL_WINDOW_S / 2.0, t + LOCAL_WINDOW_S / 2.0);
         let (first, last) = (self.bounds[0], self.bounds[self.bounds.len() - 1]);
-        let (a, b) = if b <= first {
+        if b <= first {
             (first, first + 0.01)
         } else if a >= last {
             (last - 0.01, last)
         } else {
             (a.max(first), b.min(last))
-        };
+        }
+    }
+
+    /// Loudness change (LU, ≤ 0) of a bass shelf at `db` around file time `t`: the share of the window's
+    /// loudness below 150 Hz taken down by the shelf.
+    pub fn bass_loss_lu(&self, t: f64, db: f32) -> f32 {
+        let (a, b) = self.window(t);
+        let (mut kept, mut all) = (0.0f64, 0.0f64);
+        let cut = 1.0 - 10f64.powf(f64::from(db.min(0.0)) / 10.0);
+        for (i, (l, s)) in self.lufs.iter().zip(&self.bass).enumerate() {
+            let ov = self.bounds[i + 1].min(b) - self.bounds[i].max(a);
+            if ov > 0.0 {
+                let p = ov * 10f64.powf(f64::from(*l) / 10.0);
+                all += p;
+                kept += p * (1.0 - f64::from(*s) * cut);
+            }
+        }
+        if all <= 0.0 { 0.0 } else { (10.0 * (kept / all).max(1e-6).log10()) as f32 }
+    }
+
+    /// Loudness (LUFS) around file time `t`: power mean over [`LOCAL_WINDOW_S`], bars weighted by overlap.
+    /// Outside the analysed bars the nearest bar holds.
+    pub fn at(&self, t: f64) -> f32 {
+        let (a, b) = self.window(t);
         let (mut p, mut w) = (0.0f64, 0.0f64);
         for (i, l) in self.lufs.iter().enumerate() {
             let ov = self.bounds[i + 1].min(b) - self.bounds[i].max(a);
@@ -272,6 +332,20 @@ impl LocalLevel {
     }
 }
 
+/// Each bar's share of its power below 150 Hz from the plain energy curve (dB below the loudest bar) and
+/// the low-band curve (0–255 on the same 30 dB scale, below its own loudest bar). The two curves only give
+/// the shares up to one factor per song; the low band is never more than the whole bar, so the bar where
+/// it is largest against the energy bounds that factor, and [`BASS_SHARE_SCALE`] of the bound is used.
+fn bass_shares(plain_db: &[f32], low: &[u8]) -> Vec<f32> {
+    if low.len() < plain_db.len() {
+        return vec![DEFAULT_BASS_SHARE; plain_db.len()];
+    }
+    let rel: Vec<f32> =
+        plain_db.iter().zip(low).map(|(e, &l)| (f32::from(l) / 255.0 - 1.0) * 30.0 - e).collect();
+    let top = rel.iter().copied().fold(f32::MIN, f32::max);
+    rel.iter().map(|r| (BASS_SHARE_SCALE * 10f32.powf((r - top) / 10.0)).clamp(0.0, 0.97)).collect()
+}
+
 /// Both decks' local loudness across a blend, before the deck gains.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BlendLevels {
@@ -279,8 +353,8 @@ pub struct BlendLevels {
     pub out_ref: f32,
     /// Incoming level over the [`EDGE_REF_S`] after the blend.
     pub in_ref: f32,
-    /// `(t, out, in)`: wall seconds from the blend start, both decks' loudness there (LUFS), every
-    /// [`LEVEL_STEP_S`]. Linear in between.
+    /// `(t, out, in)`: wall seconds from the blend start, both decks' loudness there (LUFS; in a plan, after
+    /// the decks' filters), every [`LEVEL_STEP_S`]. Linear in between.
     pub points: Vec<(f64, f32, f32)>,
 }
 
@@ -396,7 +470,7 @@ pub fn plan_levels(
         return None;
     }
     let out_speed = plan.out_ramp.map_or(1.0, |r| r.to);
-    BlendLevels::new(
+    let mut levels = BlendLevels::new(
         out,
         inn,
         plan.out_mix_start_s,
@@ -404,7 +478,17 @@ pub fn plan_levels(
         plan.blend_s,
         out_speed,
         plan.in_speed,
-    )
+    )?;
+    // What the decks' filters (bass swap, sweeps) take off, so the trim makes up for it (bug 148).
+    let (lo, li) = (LocalLevel::new(out), LocalLevel::new(inn));
+    let (s_out, s_in) = (out_speed.max(0.25), plan.in_speed.max(0.25));
+    for (t, o, i) in &mut levels.points {
+        let (to, ti) = (plan.out_mix_start_s + *t * s_out, plan.in_mix_start_s + *t * s_in);
+        use crate::verify::{bass_loss, eq_state};
+        *o += eq_state(plan, crate::plan::Which::Out, to, s_out, &bass_loss(lo.as_ref(), to)).0;
+        *i += eq_state(plan, crate::plan::Which::In, to, s_out, &bass_loss(li.as_ref(), ti)).0;
+    }
+    Some(levels)
 }
 
 #[cfg(test)]
@@ -548,6 +632,7 @@ mod tests {
     fn flat(lufs: f32, energy: u8) -> Features {
         let mut f = feat(lufs);
         f.bars.energy = vec![energy; f.bars.energy.len()];
+        f.bars.low = vec![energy; f.bars.low.len()];
         f
     }
 
@@ -562,8 +647,9 @@ mod tests {
         for t in [0.0, 10.0, 33.3, 60.0, 500.0] {
             assert!((l.at(t) + 9.0).abs() < 0.01, "{t}: {}", l.at(t));
         }
-        // FeatBuilder: 8-bar intro/outro at 120 (−15.9 dB), body at 200 (−6.5 dB): 9.4 dB apart, the
-        // body (most of the song) near the integrated loudness.
+        // FeatBuilder: 8-bar intro/outro at 120 (−15.9 dB), body at 200 (−6.5 dB): 9.4 dB apart in plain
+        // power, the body (most of the song) near the integrated loudness. The body's bass is 2.35 dB
+        // stronger against the rest than the intro's, so K-weighted the two are a little closer.
         let mut f = FeatBuilder::new(120.0, 96).build();
         f.lufs = -9.0;
         let l = LocalLevel::new(&f).unwrap();
@@ -571,13 +657,72 @@ mod tests {
         let intro = l.at(f64::from(2.0 * bar));
         let body = l.at(f64::from(16.0 * bar));
         assert!((body + 9.0).abs() < 1.0, "body {body}");
-        assert!((body - intro - 9.4).abs() < 0.3, "intro {intro} body {body}");
+        let (sb, si) = (BASS_SHARE_SCALE, BASS_SHARE_SCALE * 10f32.powf(-0.235));
+        let closer = 10.0 * ((1.0 - BASS_WEIGHT_CUT * si) / (1.0 - BASS_WEIGHT_CUT * sb)).log10();
+        assert!((body - intro - (9.4 - closer)).abs() < 0.3, "intro {intro} body {body} closer {closer}");
         // No loudness: nothing to go on. No curve: flat at the integrated loudness.
         assert!(LocalLevel::new(&flat(-70.0, 200)).is_none());
         let mut f = feat(-9.0);
         f.bars.energy.clear();
         let l = LocalLevel::new(&f).unwrap();
         assert!((l.at(5.0) + 9.0).abs() < 1e-4 && (l.at(1e4) + 9.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_bass_swap_takes_more_from_a_bass_heavy_bar() {
+        // 32 bars at the same plain power; bars 16.. have their bass 12 dB down.
+        let mut f = flat(-9.0, 220);
+        for (i, l) in f.bars.low.iter_mut().enumerate() {
+            if i >= 16 {
+                *l = 220 - 102;
+            }
+        }
+        let l = LocalLevel::new(&f).unwrap();
+        let bar = f64::from(f.grid.as_ref().unwrap().bar_time(1) - f.grid.as_ref().unwrap().bar_time(0));
+        let (heavy, light) = (l.bass_loss_lu(4.0 * bar, -24.0), l.bass_loss_lu(28.0 * bar, -24.0));
+        let full = 10.0 * (1.0 - BASS_SHARE_SCALE * (1.0 - 10f32.powf(-2.4))).log10();
+        assert!((heavy - full).abs() < 0.05, "{heavy} vs {full}");
+        assert!(light > -0.3 && light < 0.0, "{light}");
+        assert_eq!(l.bass_loss_lu(4.0 * bar, 0.0), 0.0);
+        // K-weighted, the bass-heavy half is quieter than the light half at the same plain power.
+        assert!(l.at(4.0 * bar) < l.at(28.0 * bar) - 0.5);
+        // No low-band curve: a typical share.
+        f.bars.low.clear();
+        let l = LocalLevel::new(&f).unwrap();
+        let typical = 10.0 * (1.0 - DEFAULT_BASS_SHARE * (1.0 - 10f32.powf(-2.4))).log10();
+        assert!((l.bass_loss_lu(4.0 * bar, -24.0) - typical).abs() < 0.05);
+    }
+
+    #[test]
+    fn the_trim_makes_up_for_what_the_filters_take() {
+        use crate::plan::{EqEvent, EqTarget, Which};
+        // Bug 148: a ShortBlend's bass swap takes the outgoing's kick and bassline at half way; the trim
+        // must not keep cutting as if the outgoing were still whole.
+        let (a, b) = (flat(-9.0, 220), flat(-9.0, 220));
+        let mixing = listen_core::settings::Mixing::default();
+        let ctx = crate::plan::PlanCtx {
+            settings: &mixing,
+            out_position_s: 30.0,
+            voice_break: None,
+            out_genres: &[],
+            in_genres: &[],
+            no_echo: false,
+        };
+        let mut p = crate::plan::plan(&a, &b, &ctx);
+        p.eq.clear();
+        let bare = plan_levels(&p, &a, &b).unwrap();
+        let half = p.out_mix_start_s + p.blend_s / 2.0;
+        p.eq.push(EqEvent { deck: Which::Out, at_out_s: half, target: EqTarget::Bass(-24.0), ramp_s: 0.0 });
+        let swapped = plan_levels(&p, &a, &b).unwrap();
+        let loss = LocalLevel::new(&a).unwrap().bass_loss_lu(half + 1.0, -24.0);
+        for (x, y) in bare.points.iter().zip(&swapped.points) {
+            let after = x.0 >= p.blend_s / 2.0 - 1e-6;
+            assert!((y.1 - (x.1 + if after { loss } else { 0.0 })).abs() < 0.05, "{x:?} {y:?}");
+            assert_eq!(x.2, y.2);
+        }
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        let t = p.blend_s * 0.75;
+        assert!(swapped.trim_db(t, h, h, 0.0, 0.0) > bare.trim_db(t, h, h, 0.0, 0.0) + 0.5);
     }
 
     #[test]

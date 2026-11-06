@@ -153,13 +153,14 @@ impl<'a> Song<'a> {
     }
 }
 
-/// Loudness change (LU, ≤ 0) a deck filter causes on typical pop (roughly pink, K-weighted): a bass
-/// shelf takes up to ~2 LU, a pass filter the share of the spectrum it removes (log-frequency).
-fn eq_loss_lu(t: EqTarget) -> f32 {
+/// Loudness change (LU, ≤ 0) a deck filter causes: a bass shelf what `bass` says for its gain (the song's
+/// own bass share there, [`LocalLevel::bass_loss_lu`]), a pass filter the share of a typical pop spectrum
+/// (roughly pink, K-weighted) it removes (log-frequency).
+fn eq_loss_lu(t: EqTarget, bass: &impl Fn(f32) -> f32) -> f32 {
     let share = |hz: f32| ((hz.max(40.0) / 40.0).ln() / (16000.0f32 / 40.0).ln()).clamp(0.0, 0.95);
     let lu = |removed: f32| 10.0 * (1.0 - removed.clamp(0.0, 0.95)).log10();
     match t {
-        EqTarget::Bass(db) => (db / 12.0).clamp(-2.0, 0.0),
+        EqTarget::Bass(db) => bass(db).min(0.0),
         EqTarget::Highpass { hz, mix } => lu(mix.clamp(0.0, 1.0) * share(hz)),
         EqTarget::Lowpass { hz, mix } => lu(mix.clamp(0.0, 1.0) * (1.0 - share(hz))),
         EqTarget::Echo { .. } => 0.0,
@@ -175,9 +176,26 @@ fn eq_vocal(t: EqTarget) -> f32 {
     }
 }
 
+/// The bass shelf's loss (LU) for `song` around its file time `t`; without a level curve a typical share.
+pub(crate) fn bass_loss(song: Option<&LocalLevel>, t: f64) -> impl Fn(f32) -> f32 + '_ {
+    move |db| match song {
+        Some(l) => l.bass_loss_lu(t, db),
+        None => {
+            let cut = 1.0 - 10f32.powf(db.min(0.0) / 10.0);
+            10.0 * (1.0 - crate::loudness::DEFAULT_BASS_SHARE * cut).log10()
+        }
+    }
+}
+
 /// Filter state of one deck: (loss LU, vocal factor) at outgoing file time `out_t`, with ramps followed
-/// linearly from the previous target of the same kind of filter.
-fn eq_state(plan: &TransitionPlan, deck: Which, out_t: f64, out_speed: f64) -> (f32, f32) {
+/// linearly from the previous target of the same kind of filter. `bass`: the deck's bass-shelf loss there.
+pub(crate) fn eq_state(
+    plan: &TransitionPlan,
+    deck: Which,
+    out_t: f64,
+    out_speed: f64,
+    bass: &impl Fn(f32) -> f32,
+) -> (f32, f32) {
     // Bass, high-pass and low-pass each hold their own state.
     let mut cur: [(f32, f32); 3] = [(0.0, 1.0); 3];
     for e in plan.eq.iter().filter(|e| e.deck == deck && e.at_out_s <= out_t + 1e-9) {
@@ -187,7 +205,7 @@ fn eq_state(plan: &TransitionPlan, deck: Which, out_t: f64, out_speed: f64) -> (
             EqTarget::Lowpass { .. } => 2,
             EqTarget::Echo { .. } => continue,
         };
-        let to = (eq_loss_lu(e.target), eq_vocal(e.target));
+        let to = (eq_loss_lu(e.target, bass), eq_vocal(e.target));
         let x = if e.ramp_s > 0.0 {
             (((out_t - e.at_out_s) / out_speed) / e.ramp_s).clamp(0.0, 1.0)
         } else {
@@ -243,8 +261,8 @@ pub fn check(plan: &TransitionPlan, out: &Song, inn: &Song, gains_db: (f32, f32)
         // An echo-out's dry signal stops at the mix point; the repeats ring on.
         let out_dry = if echo.is_some() { w < 0.0 } else { w < stop_w };
         let (go, gi) = (if out_dry { g_out * trim } else { 0.0 }, g_in * trim);
-        let (loss_o, voc_o) = eq_state(plan, Which::Out, to, s_out);
-        let (loss_i, voc_i) = eq_state(plan, Which::In, to, s_out);
+        let (loss_o, voc_o) = eq_state(plan, Which::Out, to, s_out, &bass_loss(out.level.as_ref(), to));
+        let (loss_i, voc_i) = eq_state(plan, Which::In, to, s_out, &bass_loss(inn.level.as_ref(), ti));
 
         // Vocals: the outgoing's dry signal, or an echo repeat of its last beat.
         let vo = if out_dry {
