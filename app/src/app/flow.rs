@@ -69,7 +69,7 @@ impl Listen {
         let annotated: Vec<(Song, Option<FlowFeatures>)> =
             songs.iter().map(|s| (s.clone(), lookup(s))).collect();
         let analysed = annotated.iter().filter(|a| a.1.is_some()).count();
-        let ctx = listen_mix::score::FlowCtx { weights: self.flow_weights(), ..Default::default() };
+        let ctx = self.smooth_ctx();
         let started = std::time::Instant::now();
         let order = listen_mix::order_all(&annotated, keep_first.then_some(0), &ctx);
         let took = started.elapsed();
@@ -88,11 +88,17 @@ impl Listen {
         SmoothOrder { order, analysed }
     }
 
+    /// Scorer context for "Order for smooth mixing" (playlist and queue): no history, the learnt
+    /// weights when the setting is on.
+    pub(super) fn smooth_ctx(&self) -> listen_mix::score::FlowCtx {
+        listen_mix::score::FlowCtx { weights: self.flow_weights(), ..Default::default() }
+    }
+
     /// Reorders the not-yet-played part of the queue for smooth mixing ([`listen_mix::order_queue`]).
     pub(super) fn smooth_queue(&mut self) -> Task<Message> {
         let lookup = self.flow_lookup();
         let started = std::time::Instant::now();
-        let ctx = listen_mix::score::FlowCtx::default();
+        let ctx = self.smooth_ctx();
         match listen_mix::order_queue(&mut self.queue, |s| lookup(s), &ctx) {
             listen_mix::QueueOrder::Nothing => {
                 self.toast_info("Nothing to reorder in the queue.".into());

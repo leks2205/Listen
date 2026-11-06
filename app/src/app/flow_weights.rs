@@ -76,4 +76,19 @@ mod tests {
         s.config.settings.auto_dj.learned_weights = false;
         assert_eq!(s.flow_weights(), listen_mix::Weights::default(), "off restores today's weights exactly");
     }
+
+    #[test]
+    fn ordering_the_queue_for_smooth_mixing_uses_the_learnt_weights() {
+        let (mut s, _) = Listen::boot(&crate::app::Args { demo: true, ..crate::app::Args::default() });
+        let mut l = learn(&[], 0);
+        l.weights = TermWeights { key: 0.1, ..l.weights };
+        s.flow_learnt = Some(l);
+        assert_eq!(
+            s.smooth_ctx().weights.key,
+            0.1,
+            "queue menu and playlist action share the learnt weights"
+        );
+        s.config.settings.auto_dj.learned_weights = false;
+        assert_eq!(s.smooth_ctx().weights, listen_mix::Weights::default());
+    }
 }
