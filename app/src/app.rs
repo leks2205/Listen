@@ -610,6 +610,8 @@ pub struct Listen {
     /// Flow weights learnt from early skips (`flow_weights.rs`), with the history length they were fitted on.
     flow_learnt: Option<listen_mix::learn::Learnt>,
     flow_learnt_len: usize,
+    /// When this computer last fitted the weights itself (a kept fit from another device can be older).
+    flow_fit_at: i64,
     /// DJ bridges between far-apart songs.
     bridge: bridge::BridgeState,
     /// The AI DJ (Gemini).
@@ -1169,6 +1171,7 @@ impl Listen {
             dj_picks_counted: 0,
             flow_learnt,
             flow_learnt_len: 0,
+            flow_fit_at: 0,
             bridge: Default::default(),
             lastfm: Default::default(),
             menu: None,

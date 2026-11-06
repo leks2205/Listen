@@ -1,8 +1,11 @@
 //! Flow weights learnt from early skips (item 16, [`listen_mix::learn`]): refitted from the listening
 //! history as it grows, kept in `flow-weights.json` next to it, used by the flow scorer when the setting
-//! is on. Every device fits the same synced history, so they arrive at the same weights.
+//! is on. The fit also goes through listen-server (`/v1/flow-weights`, with the history sync): the
+//! newest fit of any device wins ([`Learnt::replaces`]), so every device mixes with the same weights.
 
-use super::Listen;
+use super::history::HistoryMsg;
+use super::{Listen, Message};
+use iced::Task;
 use listen_core::history::now_secs;
 use listen_mix::learn::{Learnt, learn, transitions};
 use std::path::Path;
@@ -31,7 +34,7 @@ impl Listen {
     pub(super) fn refit_flow_weights(&mut self, force: bool) {
         let Some(handle) = self.analysis.clone() else { return };
         let len = self.history.entries.len();
-        let fresh = self.flow_learnt.as_ref().is_some_and(|l| now_secs() - l.at < REFIT_AFTER_S);
+        let fresh = self.flow_learnt.is_some() && now_secs() - self.flow_fit_at < REFIT_AFTER_S;
         if !force && fresh && len < self.flow_learnt_len + REFIT_EVERY {
             return;
         }
@@ -47,6 +50,15 @@ impl Listen {
             l.auc_default,
             started.elapsed()
         );
+        self.flow_fit_at = l.at;
+        self.flow_learnt_len = len;
+        if l.replaces(self.flow_learnt.as_ref()) {
+            self.flow_learnt_keep(l);
+        }
+    }
+
+    /// Uses `l` from now on and writes it to `flow-weights.json`.
+    fn flow_learnt_keep(&mut self, l: Learnt) {
         if let Some(dir) = self.history.path().and_then(Path::parent)
             && let Ok(text) = serde_json::to_string_pretty(&l)
             && let Err(e) = std::fs::write(dir.join(FILE_NAME), text)
@@ -54,7 +66,57 @@ impl Listen {
             tracing::warn!("saving {FILE_NAME}: {e}");
         }
         self.flow_learnt = Some(l);
-        self.flow_learnt_len = len;
+    }
+
+    /// Offers this computer's fit to listen-server (when it learnt something) or asks for the one there,
+    /// with the history sync (same address and token). A server without `/v1/flow-weights` only logs.
+    pub(super) fn flow_weights_sync(&mut self) -> Task<Message> {
+        let settings = &self.config.settings.history;
+        let base = settings.sync_server.trim();
+        if !settings.sync
+            || base.is_empty()
+            || !self.config.settings.auto_dj.learned_weights
+            || self.history.path().is_none()
+        {
+            return Task::none();
+        }
+        let Some(token) = self.history_sync_token() else { return Task::none() };
+        let url = format!("{}/v1/flow-weights", base.trim_end_matches('/'));
+        let offer = self.flow_learnt.clone().filter(Learnt::worth_sharing);
+        Task::perform(
+            async move {
+                let err = |e: reqwest::Error| e.without_url().to_string();
+                let http = reqwest::Client::builder()
+                    .connect_timeout(std::time::Duration::from_secs(8))
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build()
+                    .map_err(err)?;
+                let request = match &offer {
+                    Some(l) => http.post(url).json(l),
+                    None => http.get(url),
+                };
+                let response = request.bearer_auth(token).send().await.map_err(err)?;
+                let response = response.error_for_status().map_err(err)?;
+                response.json::<Option<Learnt>>().await.map_err(err)
+            },
+            |r| Message::History(HistoryMsg::FlowWeightsSynced(r)),
+        )
+    }
+
+    pub(super) fn flow_weights_synced(&mut self, result: Result<Option<Learnt>, String>) {
+        match result {
+            Ok(Some(theirs)) if theirs.replaces(self.flow_learnt.as_ref()) => {
+                tracing::info!(
+                    "flow weights from another device: {} handovers, trust {:.2}, fitted at {}",
+                    theirs.labels,
+                    theirs.trust,
+                    theirs.at
+                );
+                self.flow_learnt_keep(theirs);
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("syncing the flow weights: {e}"),
+        }
     }
 }
 
@@ -90,5 +152,21 @@ mod tests {
         );
         s.config.settings.auto_dj.learned_weights = false;
         assert_eq!(s.smooth_ctx().weights, listen_mix::Weights::default());
+    }
+
+    #[test]
+    fn a_newer_fit_from_another_device_replaces_this_computers_and_an_older_one_does_not() {
+        let (mut s, _) = Listen::boot(&crate::app::Args { demo: true, ..crate::app::Args::default() });
+        let mine = Learnt { at: 100, trust: 0.4, ..learn(&[], 100) };
+        s.flow_learnt = Some(mine.clone());
+        let mut theirs = Learnt { at: 200, trust: 0.6, ..learn(&[], 200) };
+        theirs.weights.key = 2.4;
+        s.flow_weights_synced(Ok(Some(theirs.clone())));
+        assert_eq!(s.flow_weights().key, 2.4, "the newest fit wins");
+        s.flow_weights_synced(Ok(Some(mine)));
+        assert_eq!(s.flow_weights().key, 2.4, "an older one does not");
+        s.flow_weights_synced(Err("404".into()));
+        s.flow_weights_synced(Ok(None));
+        assert_eq!(s.flow_learnt.as_ref(), Some(&theirs));
     }
 }

@@ -133,6 +133,22 @@ impl Learnt {
     pub fn scorer(&self) -> Weights {
         self.weights.apply(&Weights::default())
     }
+
+    /// The fit carries something learnt (at least 30 labelled handovers). Only such a fit goes to the
+    /// other devices, so one without analysed handovers never pushes the defaults over a learnt fit.
+    pub fn worth_sharing(&self) -> bool {
+        self.trust > 0.0
+    }
+
+    /// Whether this fit takes the place of `current` (a local refit or one from another device):
+    /// the newest fit wins, but a fit with nothing learnt only replaces another such fit.
+    pub fn replaces(&self, current: Option<&Learnt>) -> bool {
+        match current {
+            None => true,
+            Some(c) if !self.worth_sharing() => !c.worth_sharing(),
+            Some(c) => !c.worth_sharing() || self.at > c.at,
+        }
+    }
 }
 
 fn automatic(e: &Entry) -> bool {
@@ -556,5 +572,21 @@ mod tests {
         // Tempo gap shows in the terms.
         let t = transitions(&h[..2], |s| Some(flow(if s.id == "a" { 100.0 } else { 120.0 }, 8)));
         assert!(t[0].x[0] > 1.0, "{:?}", t[0].x);
+    }
+
+    #[test]
+    fn the_newest_fit_wins_but_an_empty_one_never_replaces_a_learnt_one() {
+        let fit = |at, trust| Learnt { at, trust, ..learn(&[], at) };
+        let desktop = fit(100, 0.5);
+        let phone_newer = fit(200, 0.2);
+        let phone_empty = fit(300, 0.0);
+        assert!(desktop.replaces(None));
+        assert!(phone_newer.replaces(Some(&desktop)), "newest fit wins");
+        assert!(!desktop.replaces(Some(&phone_newer)), "an older fit does not");
+        assert!(!desktop.replaces(Some(&desktop)), "the same fit changes nothing");
+        assert!(!phone_empty.replaces(Some(&desktop)), "nothing learnt never overwrites a fit");
+        assert!(desktop.replaces(Some(&phone_empty)), "an older learnt fit replaces an empty one");
+        assert!(fit(400, 0.0).replaces(Some(&phone_empty)), "empty refits replace each other");
+        assert!(!phone_empty.worth_sharing() && desktop.worth_sharing());
     }
 }

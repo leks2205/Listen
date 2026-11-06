@@ -27,6 +27,8 @@ pub enum HistoryMsg {
     /// Merge with the other devices now.
     Sync,
     Synced(Result<super::history_sync::Outcome, String>),
+    /// The flow weights listen-server holds after this computer's were offered (`None`: none yet).
+    FlowWeightsSynced(Result<Option<listen_mix::learn::Learnt>, String>),
     SyncToken(String),
     SaveSyncToken,
 }
@@ -239,8 +241,11 @@ impl Listen {
                 }
                 self.refresh_history_views();
             }
-            HistoryMsg::Sync => return Task::batch([self.history_sync(), self.exclude_sync()]),
+            HistoryMsg::Sync => {
+                return Task::batch([self.history_sync(), self.exclude_sync(), self.flow_weights_sync()]);
+            }
             HistoryMsg::Synced(result) => self.history_synced(result),
+            HistoryMsg::FlowWeightsSynced(result) => self.flow_weights_synced(result),
             HistoryMsg::SyncToken(token) => self.history_view.sync_token = token,
             HistoryMsg::SaveSyncToken => return self.history_sync_save_token(),
             HistoryMsg::Export(csv) => {

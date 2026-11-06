@@ -62,6 +62,22 @@ Skip the sync while the history is switched off. A private session records nothi
   do not come back. A desktop's history must not be wiped by a tap on the phone.
 - The retention limit: this device only, for the same reason.
 
+## Flow weights (listen-server 0.10.0)
+The weights learnt from early skips (`flow-weights.json`, `listen_mix::learn::Learnt`) go through the
+server too, so every device mixes with the same ones.
+
+`GET /v1/flow-weights`: the fit the server holds, `null` before the first one.
+`POST /v1/flow-weights`, body a `Learnt` as the file stores it (passed on unchanged, unknown fields kept).
+The server keeps it when it wins (below) and answers with the fit it holds afterwards.
+
+Who wins: the newest fit (`at`, unix seconds), but a fit with nothing learnt (`trust` 0, under 30
+handovers) only replaces another such fit, so a device without analysed handovers never overwrites the
+learnt weights with the defaults. Devices apply the same rule (`Learnt::replaces`) to what comes back and
+to their own refits.
+
+A device's sync, with the history sync and only with **Learn from my skips** on: POST its fit when it
+learnt something, else GET; keep the answer when it wins. A server without the route answers 404: log it.
+
 ## Release radar (listen-server 0.7.0)
 `GET /v1/releases` (same token) answers `{updated, artists, releases: [{id, title, kind, year?, image?,
 artist, artist_id, found, top}]}`: new albums and singles (YouTube Music `MPREb_…` ids) from the artists
