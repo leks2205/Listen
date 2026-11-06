@@ -20,6 +20,23 @@ pub(super) fn load(dir: &Path) -> Option<Learnt> {
     serde_json::from_str(&text).ok()
 }
 
+/// POSTs `offer` (or GETs without one) and returns the fit the server holds.
+async fn exchange(url: String, token: String, offer: Option<Learnt>) -> Result<Option<Learnt>, String> {
+    let err = |e: reqwest::Error| e.without_url().to_string();
+    let http = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(err)?;
+    let request = match &offer {
+        Some(l) => http.post(url).json(l),
+        None => http.get(url),
+    };
+    let response = request.bearer_auth(token).send().await.map_err(err)?;
+    let response = response.error_for_status().map_err(err)?;
+    response.json::<Option<Learnt>>().await.map_err(err)
+}
+
 impl Listen {
     /// The scorer's weights: learnt when the setting is on and a fit exists, else the hand-set defaults.
     pub(super) fn flow_weights(&self) -> listen_mix::Weights {
@@ -83,24 +100,7 @@ impl Listen {
         let Some(token) = self.history_sync_token() else { return Task::none() };
         let url = format!("{}/v1/flow-weights", base.trim_end_matches('/'));
         let offer = self.flow_learnt.clone().filter(Learnt::worth_sharing);
-        Task::perform(
-            async move {
-                let err = |e: reqwest::Error| e.without_url().to_string();
-                let http = reqwest::Client::builder()
-                    .connect_timeout(std::time::Duration::from_secs(8))
-                    .timeout(std::time::Duration::from_secs(30))
-                    .build()
-                    .map_err(err)?;
-                let request = match &offer {
-                    Some(l) => http.post(url).json(l),
-                    None => http.get(url),
-                };
-                let response = request.bearer_auth(token).send().await.map_err(err)?;
-                let response = response.error_for_status().map_err(err)?;
-                response.json::<Option<Learnt>>().await.map_err(err)
-            },
-            |r| Message::History(HistoryMsg::FlowWeightsSynced(r)),
-        )
+        Task::perform(exchange(url, token, offer), |r| Message::History(HistoryMsg::FlowWeightsSynced(r)))
     }
 
     pub(super) fn flow_weights_synced(&mut self, result: Result<Option<Learnt>, String>) {
@@ -168,5 +168,23 @@ mod tests {
         s.flow_weights_synced(Err("404".into()));
         s.flow_weights_synced(Ok(None));
         assert_eq!(s.flow_learnt.as_ref(), Some(&theirs));
+    }
+
+    /// Against a throwaway listen-server (temp state dir): `LISTEN_TEST_SERVER=http://… LISTEN_TEST_TOKEN=…
+    /// cargo test -p listen --lib flow_weights_live -- --ignored`.
+    #[tokio::test]
+    #[ignore = "needs a running listen-server"]
+    async fn flow_weights_live_round_trip() {
+        let base = std::env::var("LISTEN_TEST_SERVER").unwrap();
+        let url = format!("{}/v1/flow-weights", base.trim_end_matches('/'));
+        let token = std::env::var("LISTEN_TEST_TOKEN").unwrap();
+        let at = now_secs();
+        let mut mine = Learnt { at, trust: 0.5, labels: 150, ..learn(&[], at) };
+        mine.weights.key = 1.7;
+        let held = exchange(url.clone(), token.clone(), Some(mine.clone())).await.unwrap();
+        assert_eq!(held.as_ref(), Some(&mine), "the newest fit is kept");
+        let older = Learnt { at: at - 10, ..mine.clone() };
+        assert_eq!(exchange(url.clone(), token.clone(), Some(older)).await.unwrap().as_ref(), Some(&mine));
+        assert_eq!(exchange(url, token, None).await.unwrap(), Some(mine), "a device without a fit gets it");
     }
 }
