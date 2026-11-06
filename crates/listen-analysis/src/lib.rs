@@ -350,6 +350,70 @@ pub fn bridge_candidates(
     out
 }
 
+/// Bridge candidates after the scene gate ([`bridge_scene_gate`]).
+#[derive(Debug, Default)]
+pub struct SceneGated {
+    pub songs: Vec<Song>,
+    pub records: Vec<Arc<TrackAnalysis>>,
+    /// Scene score per kept candidate (0..1), for `listen_mix::bridge::choose_scored`.
+    pub scores: Vec<f32>,
+    pub tally: listen_core::scene::Tally,
+    /// The pair's scenes, for the log ("ko · pop (tags) → ko · pop (tags), one scene").
+    pub pair: String,
+}
+
+/// The scene profile of a song for the gate: `record_id` is its analysis-store id ([`record_key`] of the
+/// song that plays).
+pub fn scene_profile(
+    index: &listen_core::scene::SceneIndex,
+    song: &Song,
+    record_id: &str,
+) -> listen_core::scene::Profile {
+    let artist = song.artists.first().map(|a| a.name.as_str()).unwrap_or_default();
+    index.profile(record_id, &song.title, artist, &song.genres)
+}
+
+/// The scene profile of a song known only by its store record (the phone's bridge pair): the record's
+/// "Artist – Title" and the song's `genres`.
+pub fn record_scene_profile(
+    index: &listen_core::scene::SceneIndex,
+    record: &TrackAnalysis,
+    genres: &[String],
+) -> listen_core::scene::Profile {
+    let (title, artist) = listen_core::describe::split_hint(&record.title_hint);
+    index.profile(&record.song_id, &title, &artist, genres)
+}
+
+/// Keeps the bridge candidates (from [`bridge_candidates`]) whose scene fits the pair `out` → `inn`
+/// (`listen_core::scene::Gate`): one scene shared by both songs must be the bridge's too, two different
+/// scenes need a bridge from one of them, and a candidate of unknown scene goes when the songs' scenes are
+/// known. `out` / `inn` from [`scene_profile`] or [`record_scene_profile`]. Used by the desktop and the phone.
+pub fn bridge_scene_gate(
+    index: &listen_core::scene::SceneIndex,
+    neighbours: &listen_core::scene::Neighbours,
+    out: listen_core::scene::Profile,
+    inn: listen_core::scene::Profile,
+    songs: Vec<Song>,
+    records: Vec<Arc<TrackAnalysis>>,
+) -> SceneGated {
+    use listen_core::scene::{Gate, Reject};
+    let gate = Gate::new(out, inn, neighbours);
+    let mut g = SceneGated { pair: gate.describe(), ..Default::default() };
+    g.tally.candidates = songs.len();
+    for (song, record) in songs.into_iter().zip(records) {
+        match gate.judge(&scene_profile(index, &song, &record.song_id)) {
+            Ok(score) => {
+                g.songs.push(song);
+                g.records.push(record);
+                g.scores.push(score);
+            }
+            Err(Reject::OtherScene) => g.tally.other_scene += 1,
+            Err(Reject::UnknownScene) => g.tally.unknown_scene += 1,
+        }
+    }
+    g
+}
+
 /// Wraps a result into a store record. `file` names the analysed audio (from
 /// `MusicSource::analysis_source`, e.g. YouTube's itag and size). `None` for cancellations.
 pub fn record(

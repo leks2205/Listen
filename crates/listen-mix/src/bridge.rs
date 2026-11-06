@@ -30,6 +30,9 @@ const FAR_COST: f32 = 1.5;
 const FAR_TEMPO_PCT: f64 = 4.0;
 /// Each leg must be at least this much cheaper than a direct join that can be beat-matched.
 const MIN_GAIN: f32 = 0.25;
+/// Weight of the scene score (0..1, `listen_core::scene::Gate::judge`) in the ranking: among bridges that
+/// fit the scene, the closest one wins unless another flows clearly better.
+const SCENE_WEIGHT: f32 = 0.3;
 /// Vocal level (0..1) the blend zones of a stretch must stay under (the planner's "instrumental" bar).
 const EDGE_VOCAL: f32 = 0.4;
 
@@ -92,6 +95,19 @@ pub fn choose(
     candidates: &[&Features],
     ctx: &PlanCtx,
 ) -> Option<Choice> {
+    choose_scored(out, inn, direct_plan, candidates, &[], ctx)
+}
+
+/// [`choose`] with a scene score per candidate (`scene[i]`, 0..1, from the scene gate; empty = none): the
+/// candidates are those that fit the scene, and a closer scene lowers a candidate's cost.
+pub fn choose_scored(
+    out: &Features,
+    inn: &Features,
+    direct_plan: &TransitionPlan,
+    candidates: &[&Features],
+    scene: &[f32],
+    ctx: &PlanCtx,
+) -> Option<Choice> {
     let min_gain = if always_try(direct_plan) { 0.0 } else { MIN_GAIN };
     let (a, c) = (FlowFeatures::of(out), FlowFeatures::of(inn));
     let flows: Vec<Option<FlowFeatures>> =
@@ -132,7 +148,8 @@ pub fn choose(
         // Lower is better: the worse leg counts most, a clean stretch and good blends help.
         let cost = ab.max(bc) + 0.25 * (ab + bc) - 0.3 * cut_score - 0.05 * (leg_in.score + leg_out.score)
             + short_leg(&leg_in)
-            + short_leg(&leg_out);
+            + short_leg(&leg_out)
+            - SCENE_WEIGHT * scene.get(index).copied().unwrap_or(0.0);
         if best.as_ref().is_none_or(|(c0, _)| cost < *c0) {
             let reason = format!(
                 "flow {direct:.2} direct, {ab:.2} + {bc:.2} through the bridge; bars {}–{} ({:.0} bpm); in: {}; out: {}",
@@ -399,5 +416,100 @@ mod tests {
         // A pair that blends anyway keeps the stricter rule and the chance setting.
         let blend = plan(&with_groove(124.0, 8), &with_groove(124.5, 8), &ctx(&s, 10.0));
         assert!(!always_try(&blend), "{}", blend.reason);
+    }
+
+    mod scenes {
+        use super::*;
+        use listen_core::scene::{Gate, Neighbours, Profile, Scene};
+
+        const KPOP: &str = "K-pop, dance-pop, 2020s, South Korea, Korean, girl group, synthesizer";
+        const KPOP_B: &str = "k-pop, ballad, 2010s, south korea, korean, female solo, piano, OST";
+        const USRAP: &str = "Hip hop, boom bap, 1990s, United States, English, male solo, turntable";
+
+        fn tags(t: &str) -> Profile {
+            Profile { scene: Scene::from_tags(t), ..Default::default() }
+        }
+
+        /// The gate, then the chooser over what passed; the index is into `cands`.
+        fn gated(
+            out: (&Features, Profile),
+            inn: (&Features, Profile),
+            cands: &[(&Features, Profile)],
+        ) -> Option<usize> {
+            let s = Mixing::default();
+            let n = Neighbours::default();
+            let gate = Gate::new(out.1, inn.1, &n);
+            let kept: Vec<(usize, f32)> = cands
+                .iter()
+                .enumerate()
+                .filter_map(|(i, (_, p))| gate.judge(p).ok().map(|x| (i, x)))
+                .collect();
+            let feats: Vec<&Features> = kept.iter().map(|&(i, _)| cands[i].0).collect();
+            let scores: Vec<f32> = kept.iter().map(|&(_, x)| x).collect();
+            let direct = plan(out.0, inn.0, &ctx(&s, 10.0));
+            choose_scored(out.0, inn.0, &direct, &feats, &scores, &ctx(&s, 10.0)).map(|c| kept[c.index].0)
+        }
+
+        fn pair() -> (Features, Features) {
+            (
+                FeatBuilder::new(120.0, 96).intro(8).outro(16).build(),
+                FeatBuilder::new(133.0, 96).intro(16).outro(8).build(),
+            )
+        }
+
+        #[test]
+        fn kpop_pair_is_never_bridged_by_us_rap_even_when_it_flows_best() {
+            let (a, c) = pair();
+            let rap = with_groove(126.5, 8);
+            let kpop = with_groove(127.0, 8);
+            let s = Mixing::default();
+            let direct = plan(&a, &c, &ctx(&s, 10.0));
+            // On sound alone the rap record wins.
+            let by_sound = choose(&a, &c, &direct, &[&rap, &kpop], &ctx(&s, 10.0)).expect("a bridge");
+            assert_eq!(by_sound.index, 0, "{}", by_sound.reason);
+            let got =
+                gated((&a, tags(KPOP)), (&c, tags(KPOP_B)), &[(&rap, tags(USRAP)), (&kpop, tags(KPOP))]);
+            assert_eq!(got, Some(1));
+            // With only the rap record there is no bridge at all.
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(KPOP_B)), &[(&rap, tags(USRAP))]), None);
+        }
+
+        #[test]
+        fn a_mixed_pair_takes_a_bridge_from_either_side() {
+            let (a, c) = pair();
+            let rap = with_groove(126.5, 8);
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(USRAP)), &[(&rap, tags(USRAP))]), Some(0));
+            let kpop = with_groove(126.5, 8);
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(USRAP)), &[(&kpop, tags(KPOP_B))]), Some(0));
+            let samba = tags("samba, bossa nova, 1960s, brazil, portuguese, male solo");
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(USRAP)), &[(&kpop, samba)]), None);
+        }
+
+        #[test]
+        fn an_unknown_scene_candidate_is_rejected_when_the_pair_is_known() {
+            let (a, c) = pair();
+            let b = with_groove(126.5, 8);
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(KPOP_B)), &[(&b, Profile::default())]), None);
+            // Nothing known about the pair: the gate stays out of the way.
+            assert_eq!(
+                gated((&a, Profile::default()), (&c, Profile::default()), &[(&b, Profile::default())]),
+                Some(0)
+            );
+        }
+
+        #[test]
+        fn a_same_scene_bridge_is_still_chosen_and_the_closer_scene_wins_a_tie() {
+            let (a, c) = pair();
+            let b = with_groove(126.5, 8);
+            assert_eq!(gated((&a, tags(KPOP)), (&c, tags(KPOP_B)), &[(&b, tags(KPOP))]), Some(0));
+            // Same sound: the fully tagged K-pop song beats one known only by its Hangul title.
+            let hangul =
+                Profile { scene: Scene::from_script("너만을 느끼며", ""), ..Default::default() };
+            let b2 = with_groove(126.5, 8);
+            assert_eq!(
+                gated((&a, tags(KPOP)), (&c, tags(KPOP_B)), &[(&b, hangul), (&b2, tags(KPOP))]),
+                Some(1)
+            );
+        }
     }
 }

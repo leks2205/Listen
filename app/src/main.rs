@@ -129,6 +129,9 @@ fn main() -> iced::Result {
             .unwrap_or(3);
         std::process::exit(listen::check::analyze_library(jobs));
     }
+    if std::env::args().nth(1).as_deref() == Some("--check-bridges") {
+        std::process::exit(listen::check_bridges::run(&std::env::args().skip(2).collect::<Vec<_>>()));
+    }
     if std::env::args().nth(1).as_deref() == Some("--check-mix") {
         tracing_subscriber::fmt()
             .with_env_filter(

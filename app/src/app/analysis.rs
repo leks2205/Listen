@@ -14,6 +14,7 @@ use listen_core::analysis::{
     ANALYZER_VERSION, FileId, FlowFeatures, MIN_COMPATIBLE_VERSION, Outcome, TrackAnalysis,
 };
 use listen_core::model::{Song, SourceKind};
+use listen_core::scene::SceneIndex;
 use listen_source::{AnalysisSource, MusicSource, SongQuery, Urgency};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
@@ -32,6 +33,9 @@ pub struct AnalysisHandle {
     /// The singing-voice detector is downloaded: songs analysed without it are analysed again
     /// (Navidrome and local files; YouTube Music fetches are budgeted, so those keep their analysis).
     voice: Arc<std::sync::atomic::AtomicBool>,
+    /// The scenes of the describe-it index (`Listen/embeddings/v1/clamp3`) for the bridge scene gate;
+    /// reloaded when the index changes.
+    scenes: Arc<RwLock<Arc<SceneIndex>>>,
 }
 
 impl std::fmt::Debug for AnalysisHandle {
@@ -41,6 +45,17 @@ impl std::fmt::Debug for AnalysisHandle {
 }
 
 impl AnalysisHandle {
+    /// The scene index (empty until loaded, or without a describe-it index).
+    pub fn scenes(&self) -> Arc<SceneIndex> {
+        self.scenes.read().map(|s| s.clone()).unwrap_or_default()
+    }
+
+    /// Replaces the scene index (tests, `--check-bridges`).
+    pub fn set_scenes(&self, index: SceneIndex) {
+        if let Ok(mut s) = self.scenes.write() {
+            *s = Arc::new(index);
+        }
+    }
     /// Adds records without a store.
     pub fn insert(&self, records: impl IntoIterator<Item = Arc<TrackAnalysis>>) {
         let Ok(mut extra) = self.extra.write() else { return };
@@ -419,6 +434,7 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
         let handle = AnalysisHandle { store: Arc::new(RwLock::new(Some(store))), ..Default::default() };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<CommandBox>();
         let _ = out.send(Message::Analysis(AnalysisMsg::Ready(handle.clone(), tx))).await;
+        tokio::spawn(keep_scenes(Arc::downgrade(&handle.scenes), embeddings_dir(&dir)));
 
         // The beat model (≈11 MB, downloaded once); the built-in tracker without it.
         let beats = match BeatModel::ensure(&config.models_dir).await {
@@ -628,6 +644,61 @@ fn with_store<T>(handle: &AnalysisHandle, f: impl FnOnce(&ShardStore) -> T) -> O
 }
 
 /// Writes due records and picks up other machines' new ones (every 5 min).
+/// The describe-it index next to the analysis store: `Listen/analysis` → `Listen/embeddings/v1/clamp3`.
+pub fn embeddings_dir(shared_dir: &std::path::Path) -> PathBuf {
+    shared_dir.parent().unwrap_or(shared_dir).join("embeddings/v1").join(listen_core::describe::MODEL)
+}
+
+/// Size and newest change of the index's files (it is reloaded when they move).
+fn embeddings_stamp(dir: &std::path::Path) -> (u64, Option<std::time::SystemTime>) {
+    let mut stamp = (0, None);
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if e.path().extension().is_none_or(|x| x != "jsonl") {
+            continue;
+        }
+        if let Ok(m) = e.metadata() {
+            stamp.0 += m.len();
+            stamp.1 = stamp.1.max(m.modified().ok());
+        }
+    }
+    stamp
+}
+
+/// Loads the scene index and reloads it when the describe-it files change (checked every 10 minutes);
+/// ends with the handle.
+async fn keep_scenes(scenes: std::sync::Weak<RwLock<Arc<SceneIndex>>>, dir: PathBuf) {
+    let mut last = (0, None);
+    loop {
+        let stamp = {
+            let dir = dir.clone();
+            tokio::task::spawn_blocking(move || embeddings_stamp(&dir)).await.unwrap_or_default()
+        };
+        if stamp != last {
+            last = stamp;
+            let started = Instant::now();
+            let d = dir.clone();
+            let Ok(index) = tokio::task::spawn_blocking(move || SceneIndex::load_embeddings(&d)).await else {
+                return;
+            };
+            tracing::info!(
+                "bridge scenes: {} songs from {} ({} tagged) in {:.1}s",
+                index.len(),
+                dir.display(),
+                index.tagged(),
+                started.elapsed().as_secs_f32()
+            );
+            let Some(s) = scenes.upgrade() else { return };
+            if let Ok(mut s) = s.write() {
+                *s = Arc::new(index);
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(600)).await;
+        if scenes.strong_count() == 0 {
+            return;
+        }
+    }
+}
+
 fn housekeeping(handle: &AnalysisHandle, last_refresh: &mut Instant, status: &mut AnalysisStatus) {
     let Ok(mut guard) = handle.store.write() else { return };
     let Some(store) = guard.as_mut() else { return };

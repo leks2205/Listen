@@ -4,6 +4,7 @@
 pub mod app;
 pub mod appearance;
 pub mod check;
+pub mod check_bridges;
 pub mod check_mix;
 pub mod check_ytm;
 pub mod demo;

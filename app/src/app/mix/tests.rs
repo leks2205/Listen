@@ -989,10 +989,25 @@ fn a_far_pair_gets_a_bridge_that_is_mixed_in_and_out() {
 
 #[test]
 fn a_bridge_can_come_from_the_listening_history() {
-    // Not offered by any DJ this session, but played before and analysed: still a candidate.
+    // Not offered by any DJ this session, but played before and analysed: still a candidate. A history
+    // song has no genres, so it needs another scene signal: here it was played between the two artists.
     let (mut s, b) = bridge_rig();
     s.bridge = Default::default();
     s.history.entries.push(listen_core::history::Entry::new(&b, 1));
+    plan(&mut s);
+    assert!(
+        s.queue.peek_next().unwrap().bridge.is_none(),
+        "a history song of unknown scene doesn't bridge two songs whose genres are known"
+    );
+
+    let (mut s, b) = bridge_rig();
+    s.bridge = Default::default();
+    let (a, c) = (s.queue.current().unwrap().song.clone(), s.queue.peek_next().unwrap().song.clone());
+    for (ts, song) in [(100, &a), (200, &b), (300, &c)] {
+        let mut e = listen_core::history::Entry::new(song, 1);
+        e.ts = ts;
+        s.history.entries.push(e);
+    }
     plan(&mut s);
     let bridge = s.queue.peek_next().unwrap().clone();
     assert!(bridge.bridge.is_some(), "a bridge from the history");

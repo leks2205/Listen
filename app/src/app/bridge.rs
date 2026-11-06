@@ -92,23 +92,42 @@ impl Listen {
             return false;
         }
         let (songs, records) = self.bridge_candidates();
-        let feats: Vec<&Features> = records.iter().filter_map(|r| r.features()).collect();
-        if feats.len() != songs.len() {
+        // Only bridges from the scene the pair plays in (K-pop between K-pop songs, never US rap).
+        let Some(analysis) = self.analysis.as_ref() else { return false };
+        let neighbours = listen_core::scene::Neighbours::from_history(&self.history.entries);
+        let scenes = analysis.scenes();
+        let profile = |s: &Song| listen_analysis::scene_profile(&scenes, s, &listen_analysis::record_key(s));
+        let gated = listen_analysis::bridge_scene_gate(
+            &scenes,
+            &neighbours,
+            profile(&cur_song),
+            profile(&next_song),
+            songs,
+            records,
+        );
+        let feats: Vec<&Features> = gated.records.iter().filter_map(|r| r.features()).collect();
+        if feats.len() != gated.songs.len() {
             return false;
         }
-        let Some(choice) = listen_mix::bridge::choose(fa, fb, &direct, &feats, &ctx) else {
+        let tally = gated.tally.describe();
+        let Some(choice) = listen_mix::bridge::choose_scored(fa, fb, &direct, &feats, &gated.scores, &ctx)
+        else {
             tracing::info!(
-                "bridge: “{}” → “{}” are apart ({why}); none of {} analysed candidates fits",
+                "bridge: “{}” → “{}” are apart ({why}); {tally} [{}]; none of the {} left fits",
                 cur.song.title,
                 next.song.title,
-                songs.len()
+                gated.pair,
+                gated.songs.len()
             );
             return false;
         };
-        let song = songs[choice.index].clone();
+        let song = gated.songs[choice.index].clone();
         tracing::info!(
-            "bridge: “{}” between “{}” and “{}” ({why}): {}",
+            "bridge: {tally} [{}], chose “{}” by {} (scene {:.2}) between “{}” and “{}” ({why}): {}",
+            gated.pair,
             song.title,
+            song.artist_line(),
+            gated.scores[choice.index],
             cur.song.title,
             next.song.title,
             choice.reason

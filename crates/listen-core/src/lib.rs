@@ -12,6 +12,7 @@ pub mod peq;
 pub mod platform;
 pub mod queue;
 pub mod releases;
+pub mod scene;
 pub mod settings;
 pub mod substitute;
 pub mod theme;
