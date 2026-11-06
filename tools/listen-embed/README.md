@@ -36,7 +36,7 @@ python listen_embed.py run --navidrome       # also Navidrome songs: LISTEN_ND_U
 python listen_embed.py status
 ```
 
-The job appends and can be stopped at any time. Songs whose clip could not be fetched get a line with tags
+The job appends and can be stopped at any time: SIGTERM or Ctrl+C finishes the song in hand and exits, and a line a killed run left half-written is closed off on the next start. Songs whose clip could not be fetched get a line with tags
 only (`audio_error`); `run --retry-audio` tries them again. listen-server lists analysed songs without a line
 at `GET /v1/search/missing` (count in `/v1/status`).
 

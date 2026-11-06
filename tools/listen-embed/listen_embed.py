@@ -30,6 +30,7 @@ import os
 import random
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -127,6 +128,16 @@ def done_records(out):
                 if r.get("song_id"):
                     done[r["song_id"]] = r
     return done
+
+
+def end_torn_line(path):
+    """Ends a last line a killed run left without its newline, so the next record starts on its own line."""
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return
+    with open(path, "rb+") as f:
+        f.seek(-1, os.SEEK_END)
+        if f.read(1) != b"\n":
+            f.write(b"\n")
 
 
 def play_counts(history):
@@ -384,11 +395,17 @@ def cmd_run(a):
     clamp = Clamp3(a.clamp3, audio=True)
     os.makedirs(out_dir(a.out), exist_ok=True)
     path = os.path.join(out_dir(a.out), f"{a.machine}.jsonl")
+    end_torn_line(path)
+    stop = []  # SIGTERM / SIGINT: finish the song in hand, then stop (the next run resumes)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.append(True))
     tmp = tempfile.mkdtemp(prefix="listen-embed-")
     wav = os.path.join(tmp, "clip.wav")
     n_ok = n_fail = 0
     try:
         for b in range(0, len(todo), TAG_BATCH):
+            if stop:
+                break
             batch = todo[b : b + TAG_BATCH]
             tags = [None] * len(batch)
             have = [done.get(s) for s in batch]
@@ -408,6 +425,8 @@ def cmd_run(a):
                         time.sleep(20 * (attempt + 1))
             with open(path, "a", encoding="utf-8") as out:
                 for sid, t in zip(batch, tags):
+                    if stop:
+                        break
                     s = songs[sid]
                     rec = {
                         "song_id": sid, "title_hint": s["title_hint"], "duration_ms": s["duration_ms"],
@@ -434,9 +453,12 @@ def cmd_run(a):
                     out.write(json.dumps(rec, ensure_ascii=False) + "\n")
                     out.flush()
                     time.sleep(a.pause + random.random())
-            log(f"{min(b + TAG_BATCH, len(todo))}/{len(todo)} audio ok {n_ok}, failed {n_fail}")
+            if not stop:
+                log(f"{min(b + TAG_BATCH, len(todo))}/{len(todo)} audio ok {n_ok}, failed {n_fail}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    if stop:
+        log(f"stopped: audio ok {n_ok}, failed {n_fail}; the next run resumes")
 
 
 def cmd_export_text(a):
