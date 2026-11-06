@@ -253,6 +253,15 @@ See [Sound](../playback/sound.md#headphone-correction).
 | This output / Find your headphones | The output playing now and its profile; search the built-in AutoEq index (or paste a `ParametricEQ.txt`) to bind one. | none | `settings.playback.headphone_profiles` (output → `name`, `source`, `preamp`, `filters`) |
 | Other outputs | Profiles bound to outputs that don't play now. | none | same |
 
+### Heart-rate tempo
+
+See [Heart-rate tempo](../playback/heart-rate.md).
+
+| Row | What it does | Default | Key |
+| --- | --- | --- | --- |
+| Heart-rate tempo | The DJs pick songs whose tempo fits your heart rate from a Bluetooth heart-rate sensor (needs Bluetooth). Shows the status and the target. Not kept across restarts; the heart button in the player bar switches it too. | Off | none |
+| Sensor | The sensor last connected, tried first next time; **Forget sensor** clears it. | none | `settings.playback.heart_rate_sensor` (`id`, `name`) |
+
 ### Compressor
 
 | Row | What it does | Default | Key |
@@ -432,7 +441,7 @@ See [Hotkeys](../integration/hotkeys.md) for how to record keys and what the glo
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Each action | Browser back / forward, Favorite / Unfavorite / Toggle favorite of the current and previous song, Global search, Local search, List: navigate to page / play (default) / play last / play next / play now / show playing song, Navigate to home, Next / Previous track, Next / Previous album, Pause, Play, Play / pause, Rate 0 to 5 stars, Skip backward / forward, Stop, Toggle full-screen player, Toggle queue, Toggle repeat, Toggle shuffle, Volume up / down / mute, Zoom in / out. | Play / pause `space`; Global search `mod+k`; Local search `mod+f`; List: show playing song `mod+l`; List: navigate to page `mod+g`; List: play (default) `enter`; all others unbound | `settings.hotkeys.<action>` (for example `settings.hotkeys.playPause = "space"`) |
+| Each action | Browser back / forward, Favorite / Unfavorite / Toggle favorite of the current and previous song, Global search, Local search, List: navigate to page / play (default) / play last / play next / play now / show playing song, Navigate to home, Next / Previous track, Next / Previous album, Pause, Play, Play / pause, Rate 0 to 5 stars, Skip backward / forward, Stop, Toggle full-screen player, Toggle heart-rate tempo, Toggle queue, Toggle repeat, Toggle shuffle, Volume up / down / mute, Zoom in / out. | Play / pause `space`; Global search `mod+k`; Local search `mod+f`; List: show playing song `mod+l`; List: navigate to page `mod+g`; List: play (default) `enter`; all others unbound | `settings.hotkeys.<action>` (for example `settings.hotkeys.playPause = "space"`) |
 | global (Linux) | Registers the action system-wide. | none | `settings.hotkeys_global` (list of action ids) |
 
 **System-wide** (Linux only):

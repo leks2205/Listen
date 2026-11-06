@@ -47,16 +47,24 @@ Anything unexpected (a late deck, a skip, a seek, a pause) cancels the blend and
 
 In the prototype, the two decks stayed aligned with a median error below 0.1 ms and a 95th percentile below 1 ms once the lock converged. The design target was a median of 10 ms or less. The end-to-end test (`tools/dj-e2e.sh`, described in [Tests](tests.md)) checks real blends for gaps, level and doubled beats.
 
-## Tempo matching (Android)
+## Tempo matching (heart-rate mode)
 
-The Android app's heart-rate mode uses `listen_mix::tempo`: a reading (heart beats or steps per minute
-from a Wear OS watch, a Bluetooth strap or the phone's step detector) is smoothed with a 30-second time
+The heart-rate mode of both apps uses `listen_mix::tempo`: a reading (heart beats or steps per minute
+from a Wear OS watch, a Bluetooth strap or the phone's step detector; on the desktop a Bluetooth sensor) is smoothed with a 30-second time
 constant and turned into a tempo target clamped to 70–180 BPM, ± 8 BPM, with half and double time
 counting (85 BPM fits 170). When the target has moved more than 5 BPM since the last time, the upcoming
 automatic queue items are re-ranked: songs within 4 BPM stay, closest first, the others make room for
 tempo-targeted Auto-DJ picks. Songs added by hand and the playing song are never touched. Music does not
 measurably change heart rate during exercise; the mode picks music that fits the effort, it is not
 training guidance.
+
+The fit is judged at the faster pulse (`tempo::fit_distance` = min(|b − t|, |b − 2t|, |2b − t|)), so a
+70 BPM target fits 62–78, 132–148 and 31–39 BPM and a 130 BPM song does not fit 70.
+`TempoTarget::distance` halves a double-time song instead (130 counts as 65) and is not used for the
+fit. Fills go through `tempo::tempo_fill`: the fitting fetched songs, topped up from the analysis store
+(closest to the current song's energy and timbre, never excluded, queued or played songs), and the
+nearest misfits only when the store is short too (`TempoFill::padded_note` says so). The AI DJ's prompt
+gets `listen_dj::tempo::rule` and a `listen_dj::tempo::fit_note` per candidate, the same on both apps.
 
 ## Where to read more
 

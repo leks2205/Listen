@@ -10,6 +10,7 @@ pub mod persona;
 pub mod prompt;
 pub mod quota;
 pub mod steer;
+pub mod tempo;
 pub mod wav;
 pub mod why;
 

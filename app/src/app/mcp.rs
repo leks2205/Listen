@@ -462,6 +462,7 @@ impl Listen {
                 PlayMode::AiDj => "ai_dj",
             },
             "focus": self.focus_on(),
+            "heart_rate": self.hr_json(),
             "repeat": match self.queue.repeat {
                 Repeat::Off => "off",
                 Repeat::All => "all",
@@ -583,6 +584,19 @@ impl Listen {
                 let on = args.get("on").and_then(Value::as_bool).ok_or("on is missing")?;
                 let t = msg(self, Message::Focus(crate::app::focus::FocusMsg::Set(on)));
                 done(&reply, t, json!({ "focus": on }))
+            }
+            "set_heart_rate" => {
+                use crate::app::heart_rate::HeartRateMsg;
+                let mut tasks = Vec::new();
+                if let Some(on) = args.get("on").and_then(Value::as_bool) {
+                    tasks.push(msg(self, Message::HeartRate(HeartRateMsg::Set(on))));
+                }
+                if let Some(bpm) = args.get("sample_bpm").and_then(Value::as_f64) {
+                    let bpm = bpm.round().clamp(0.0, 300.0) as u16;
+                    let ev = crate::heart_rate::HrEvent::Sample(bpm);
+                    tasks.push(msg(self, Message::HeartRate(HeartRateMsg::Source(ev))));
+                }
+                done(&reply, Task::batch(tasks), self.hr_json())
             }
             "find_instrumental" => {
                 let uids: Vec<u64> = match args.get("uid").and_then(Value::as_u64) {

@@ -21,14 +21,62 @@ pub const MAX_SQUEEZE: u8 = 2;
 /// Narrowest the centre column may get at `squeeze`: its transport buttons side by side.
 pub(super) fn min_width(state: &Listen, squeeze: u8) -> f32 {
     let skips = state.config.settings.player_bar.skip_buttons && squeeze == 0;
+    let heart = heart_shown(state, squeeze);
     let n = if squeeze >= 2 {
         5.0
     } else if skips {
         9.0
     } else {
         7.0
+    } + if heart { 1.0 } else { 0.0 };
+    let bpm = if heart && state.hr_button_bpm().is_some() { HEART_BPM_W } else { 0.0 };
+    n * metrics::CONTROL + (n - 1.0) * metrics::space_sm() + bpm
+}
+
+/// Room for the target BPM beside the heart.
+const HEART_BPM_W: f32 = 30.0;
+
+/// The heart button shows unless the bar is at its narrowest (then only while the mode is on).
+fn heart_shown(state: &Listen, squeeze: u8) -> bool {
+    squeeze < 2 || state.hr_on()
+}
+
+/// Widget id of the player bar's heart button (UI tests click it).
+pub const HEART_ID: &str = "heart-rate-button";
+
+/// The heart-rate tempo button: the heart, and the target BPM while the mode has one. Shared with the
+/// full-screen player (its own `id`).
+pub(crate) fn heart_button<'a>(
+    state: &'a Listen,
+    icon_size: f32,
+    side: f32,
+    id: &'static str,
+) -> Element<'a, Message> {
+    use crate::app::heart_rate::{HeartRateMsg, HrStatus};
+    let t = state.tokens;
+    let on = state.hr_on();
+    let color = match state.hr_status() {
+        HrStatus::Off => t.foreground,
+        HrStatus::NotFound | HrStatus::Searching => t.muted,
+        HrStatus::On => t.primary,
     };
-    n * metrics::CONTROL + (n - 1.0) * metrics::space_sm()
+    let glyph = icon(Icon::LuHeartPulse, icon_size, if on { t.primary } else { color });
+    let content: Element<'_, Message> = match state.hr_button_bpm() {
+        Some(bpm) => row![glyph, label_w(bpm, metrics::font_sm(), color, Weight::Semibold)]
+            .spacing(2)
+            .align_y(Alignment::Center)
+            .into(),
+        None => glyph,
+    };
+    let content = container(content).id(iced::widget::Id::new(id)).center_y(Length::Fill).padding([0.0, 4.0]);
+    let b = button(content)
+        .height(side)
+        .padding(0)
+        .style(style::icon_button(t, on))
+        .on_press(Message::HeartRate(HeartRateMsg::Toggle));
+    let b: Element<'_, Message> =
+        if state.hr_button_bpm().is_some() { b.into() } else { b.width(side).into() };
+    tip_raw(state, b, &state.hr_tip(), Some("toggleHeartRate"), Position::Top)
 }
 
 use crate::app::play_mode::PlayMode;
@@ -131,6 +179,7 @@ pub(super) fn view(state: &Listen, width: f32, squeeze: u8) -> Element<'_, Messa
                 Position::Top,
             )
         })
+        .push(heart_shown(state, squeeze).then(|| heart_button(state, size, metrics::CONTROL, HEART_ID)))
         .push(ctl(Icon::LuSkipBack, size, false, Message::PreviousClick, "Previous track", Some("previous")));
     if skips {
         controls = controls.push(ctl(

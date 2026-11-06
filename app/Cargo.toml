@@ -70,6 +70,10 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 tokio-tungstenite = "0.26"
 futures-util = "0.3"
 
+# Heart-rate tempo: Bluetooth LE heart-rate sensors (BlueZ over D-Bus on Linux, WinRT on Windows).
+[target.'cfg(any(target_os = "linux", windows))'.dependencies]
+btleplug = "0.13"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 khronos-egl = { version = "6", features = ["dynamic"] }
 glow = "0.16"

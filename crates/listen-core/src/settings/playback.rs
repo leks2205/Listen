@@ -140,6 +140,14 @@ impl std::fmt::Display for AudioPlayer {
     }
 }
 
+/// A remembered Bluetooth heart-rate sensor: the platform's device id and the name it advertises.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeartRateSensor {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EqBand {
     pub freq: f32,
@@ -203,6 +211,8 @@ pub struct Playback {
     pub dlna_enabled: bool,
     /// Play a YouTube Music song from the user's own server when it has the same song.
     pub prefer_own_servers: bool,
+    /// Heart-rate tempo: the Bluetooth heart-rate sensor last connected (tried first next time).
+    pub heart_rate_sensor: Option<HeartRateSensor>,
     pub scrobble: bool,
     pub scrobble_at_percent: u8,
     pub scrobble_at_secs: u32,
@@ -244,6 +254,7 @@ impl Default for Playback {
             audio_player: AudioPlayer::Mpv,
             dlna_enabled: true,
             prefer_own_servers: true,
+            heart_rate_sensor: None,
             scrobble: true,
             scrobble_at_percent: 75,
             scrobble_at_secs: 240,

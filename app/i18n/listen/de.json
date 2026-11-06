@@ -2287,5 +2287,19 @@
 "in-ear": "In-Ear-Kopfhörer",
 "earbud": "Ohrhörer",
 "Learn from my skips": "Aus meinen Überspringern lernen",
-"Weighs tempo, key, energy and sound by the songs you skip early after a handover.": "Gewichtet Tempo, Tonart, Energie und Klang nach den Songs, die du kurz nach einem Übergang überspringst."
+"Weighs tempo, key, energy and sound by the songs you skip early after a handover.": "Gewichtet Tempo, Tonart, Energie und Klang nach den Songs, die du kurz nach einem Übergang überspringst.",
+"Heart-rate tempo": "Herzfrequenz-Tempo",
+"Heart-rate tempo off": "Herzfrequenz-Tempo aus",
+"Heart-rate tempo on": "Herzfrequenz-Tempo an",
+"Looking for a heart-rate source…": "Suche nach einer Herzfrequenzquelle …",
+"No heart-rate source found": "Keine Herzfrequenzquelle gefunden",
+"{} · target {} BPM": "{} · Ziel {} BPM",
+"Heart-rate tempo off: the DJs pick as usual again.": "Herzfrequenz-Tempo aus: Die DJs wählen wieder wie gewohnt.",
+"Heart-rate tempo on: songs that fit your heart rate.": "Herzfrequenz-Tempo an: Songs, die zu deiner Herzfrequenz passen.",
+"The Auto-DJ and AI DJ pick songs whose tempo fits your heart rate (half and double time count); songs you queued and the song that plays stay. Needs Bluetooth on this computer and a Bluetooth heart-rate sensor (a chest strap or a watch that sends its heart rate). The heart button in the player bar switches it too.": "Auto-DJ und KI-DJ wählen Songs, deren Tempo zu deiner Herzfrequenz passt (halbes und doppeltes Tempo zählen); Songs, die du eingereiht hast, und der laufende Song bleiben. Braucht Bluetooth an diesem Computer und einen Bluetooth-Herzfrequenzsensor (einen Brustgurt oder eine Uhr, die ihre Herzfrequenz sendet). Der Herz-Knopf in der Wiedergabeleiste schaltet es ebenfalls.",
+"Sensor": "Sensor",
+"The first heart-rate sensor found is remembered and tried first next time.": "Der erste gefundene Herzfrequenzsensor wird gemerkt und beim nächsten Mal zuerst versucht.",
+"Forget sensor": "Sensor vergessen",
+"None yet": "Noch keiner",
+"Toggle heart-rate tempo": "Herzfrequenz-Tempo umschalten"
 }

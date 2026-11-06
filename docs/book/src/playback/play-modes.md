@@ -88,3 +88,7 @@ With Focus on:
 Songs you start yourself always play as they are. Turn Focus off and the next fill is an ordinary one again. The MCP server's `set_focus` tool switches it, and `get_state` reports it as `focus`.
 
 `listen --focus` checks Focus on your own data: it splits your history's analysed songs into Auto-DJ-sized candidate pools and prints, as JSON, the mean sung share of eight ordinary five-song fills and of eight Focus fills, and their ratio (`--history FILE`, `--store DIR`, `--fills N`, `--per-fill N`, `--pool N`, `--seed N`). Instrumental swaps come on top of that number.
+
+## Heart-rate tempo
+
+The heart button next to the play-mode button plays songs whose tempo fits your heart rate, from a Bluetooth heart-rate sensor. In Off or Shuffle it switches to Auto-DJ. See [Heart-rate tempo](heart-rate.md).

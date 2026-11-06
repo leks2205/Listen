@@ -88,6 +88,18 @@ pub fn definitions() -> Vec<Value> {
             &["on"],
         ),
         tool(
+            "set_heart_rate",
+            "Heart-rate tempo on or off: upcoming Auto-DJ / AI DJ picks are re-ranked and every fill picks songs \
+             whose tempo fits the heart rate (half and double time count); songs you queued stay, the current \
+             song keeps playing. In Off or Shuffle it switches to Auto-DJ. sample_bpm feeds one reading as if \
+             it came from the sensor (testing without a strap). Returns the status and the target BPM.",
+            json!({
+                "on": { "type": "boolean", "description": "On (true) or off (false); leave out to keep" },
+                "sample_bpm": { "type": "number", "description": "A heart-rate reading to feed (30-240)" }
+            }),
+            &[],
+        ),
+        tool(
             "find_instrumental",
             "Searches the instrumental version of a sung queue item now (no per-fill limit) and, with Focus on, \
              puts it in the item's place. Without uid: every upcoming DJ pick. The log shows each search and \

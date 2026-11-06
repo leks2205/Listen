@@ -38,7 +38,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 
 | Tool | Description | Arguments |
 |---|---|---|
-| `get_now_playing` | The playing song, position and duration (seconds), whether it plays, volume, muted, play mode, repeat, speed and the server it comes from. | none |
+| `get_now_playing` | The playing song, position and duration (seconds), whether it plays, volume, muted, play mode, focus, heart-rate tempo (`heart_rate`), repeat, speed and the server it comes from. | none |
 | `play` | Resume playback. Error `The queue is empty.` if nothing is queued. | none |
 | `pause` | Pause playback. | none |
 | `toggle_play` | Play or pause. | none |
@@ -47,6 +47,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 | `seek` | Jump to a position in the playing song. | `seconds` (number, required): position in seconds |
 | `set_volume` | Set the volume. | `volume` (integer, required): 0 to 100 |
 | `set_focus` | Focus mode on or off: the DJs pick songs with little singing and calm energy, swap sung picks for instrumental versions, and the AI DJ doesn't talk. | `on` (boolean, required) |
+| `set_heart_rate` | [Heart-rate tempo](../playback/heart-rate.md) on or off, and/or one reading fed as if it came from the sensor (testing without a strap). Replies with the mode as in `get_now_playing`'s `heart_rate`. | `on` (boolean); `sample_bpm` (number, 30 to 240) |
 | `find_instrumental` | Searches the instrumental version of a sung queue item right away (no per-fill limit) and, with Focus on, puts it in the item's place. Replies with the searched `uid`s and queries; the log has one `Focus: instrumental of …` line per search, found or not. In demo mode the demo library is searched ("Glass Cities" has one). | `uid` (integer): a queue item; without it every upcoming DJ pick |
 | `set_play_mode` | What happens when the queue runs out. `ai_dj` needs a Gemini key. | `mode` (string, required): `off`, `shuffle`, `auto_dj`, `ai_dj` |
 | `set_repeat` | Repeat nothing, the whole queue or the current song. | `repeat` (string, required): `off`, `all`, `one` |

@@ -24,6 +24,7 @@
 
 - [Player bar and queue](playback/queue.md)
 - [Play modes and Auto-DJ](playback/play-modes.md)
+- [Heart-rate tempo](playback/heart-rate.md)
 - [Sound](playback/sound.md)
 - [Full-screen player and Now Playing](playback/fullscreen.md)
 - [Lyrics](playback/lyrics.md)

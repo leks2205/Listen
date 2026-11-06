@@ -81,10 +81,10 @@ fn dbg(m: Option<Message>) -> String {
 }
 
 #[test]
-fn there_are_42_actions_with_unique_ids() {
-    assert_eq!(HOTKEY_ACTIONS.len(), 42);
+fn there_are_43_actions_with_unique_ids() {
+    assert_eq!(HOTKEY_ACTIONS.len(), 43);
     let ids: std::collections::BTreeSet<_> = HOTKEY_ACTIONS.iter().map(|a| a.id).collect();
-    assert_eq!(ids.len(), 42);
+    assert_eq!(ids.len(), 43);
     // Feishin's defaults: six bound actions, none global.
     let s = listen_core::settings::Settings::default();
     assert_eq!(s.hotkeys.len(), 6);
@@ -109,6 +109,7 @@ fn every_action_dispatches_the_right_message() {
         ("skipBackward", "SkipBackward"),
         ("toggleShuffle", "ToggleShuffle"),
         ("toggleRepeat", "CycleRepeat"),
+        ("toggleHeartRate", "HeartRate(Toggle)"),
         ("volumeUp", "VolumeWheel(1.0)"),
         ("volumeDown", "VolumeWheel(-1.0)"),
         ("volumeMute", "ToggleMute"),

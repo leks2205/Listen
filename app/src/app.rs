@@ -44,6 +44,7 @@ pub mod focus;
 pub mod fullscreen_state;
 pub mod handoff;
 pub mod headphone;
+pub mod heart_rate;
 pub mod helpers;
 pub mod history;
 pub mod history_sync;
@@ -635,6 +636,8 @@ pub struct Listen {
     fader: fade::Fader,
     level: levelling::LevelState,
     pub headphone: headphone::HeadphoneState,
+    /// Heart-rate tempo mode.
+    pub hr: heart_rate::HrState,
     /// Text of the accent field on the settings page.
     pub accent_input: String,
     /// Path typed into "Import from Feishin".
@@ -754,6 +757,8 @@ pub enum Message {
     LevelSent(u8, f32, Result<(), String>),
     /// Headphone correction (AutoEq per output device).
     Headphone(headphone::HeadphoneMsg),
+    /// Heart-rate tempo mode.
+    HeartRate(heart_rate::HeartRateMsg),
     /// A file was dropped onto the window (cookies file / Feishin settings).
     FileDropped(std::path::PathBuf),
     Navigate(Route),
@@ -1190,6 +1195,7 @@ impl Listen {
             fader: fade::Fader::default(),
             level: levelling::LevelState::default(),
             headphone: headphone::HeadphoneState::default(),
+            hr: heart_rate::HrState::default(),
             sleep_timer: None,
             fs: Default::default(),
             about: Default::default(),
@@ -2326,6 +2332,17 @@ impl Listen {
                 // Focus mode: only the least sung, calmest songs (low-vocal history songs join the pool).
                 let focus = s.focus;
                 let picked = if focus { self.focus_fill(picked, &queued, &blocked, n) } else { picked };
+                // Heart-rate mode: only songs that fit the tempo (topped up from the analysis store).
+                let tempo = self.hr_target();
+                let picked = match &tempo {
+                    Some(target) => {
+                        let mut skip: std::collections::HashSet<String> =
+                            queued.iter().chain(&self.session_played).chain(&blocked).cloned().collect();
+                        skip.extend(self.queue.current().map(|i| song_key(&i.song)));
+                        self.hr_fill(picked, &skip, target, n)
+                    }
+                    None => picked,
+                };
                 let picked = match self.queue.current().map(|i| i.song.clone()) {
                     Some(current) => self.flow_order(&current, picked, n),
                     None => picked.into_iter().take(n).collect(),
@@ -2347,7 +2364,10 @@ impl Listen {
                     .into_iter()
                     .map(|song| {
                         let seed = similar.contains(&song.id).then_some(seed.as_str());
-                        let why = if focus && self.focus_friendly(&song) {
+                        let tempo_why = tempo.as_ref().and_then(|t| self.hr_why(&song, t));
+                        let why = if let Some(why) = tempo_why {
+                            why
+                        } else if focus && self.focus_friendly(&song) {
                             listen_core::queue::Why::new(
                                 listen_core::history::Picker::AutoDj,
                                 listen_core::queue::WhyCode::FocusFriendly,
@@ -2361,7 +2381,8 @@ impl Listen {
                 // One pick in eight: a forgotten favourite from the history.
                 let skip: std::collections::HashSet<String> =
                     queued.iter().chain(&self.session_played).chain(&blocked).cloned().collect();
-                let picked = self.with_forgotten(picked, &skip);
+                // Not in heart-rate mode: a favourite at another tempo would break the run.
+                let picked = if tempo.is_some() { picked } else { self.with_forgotten(picked, &skip) };
                 let uids = self.queue.add_picked(picked);
                 // Focus mode: sung picks are swapped for their instrumental version when the source has one.
                 let instrumentals = if focus { self.focus_instrumentals(&uids) } else { Task::none() };
@@ -4068,6 +4089,7 @@ impl Listen {
             Message::Steer(m) => return self.on_steer(m),
             Message::Handoff(m) => return self.on_handoff(m),
             Message::Headphone(m) => return self.on_headphone(m),
+            Message::HeartRate(m) => return self.on_heart_rate(m),
             Message::Radio(m) => return self.on_radio(m),
             Message::Dlna(m) => return self.on_dlna(m),
             Message::Servers(m) => return self.on_servers(m),
@@ -4409,6 +4431,7 @@ impl Listen {
                 subs.push(crate::visualizer::subscription(self.deck_b_needed()));
             }
         }
+        subs.extend(self.hr_subscription());
         subs.extend(self.radio_subscriptions());
         subs.extend(self.dlna_subscriptions());
         subs.push(self.remote_subscription());

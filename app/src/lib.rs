@@ -12,6 +12,7 @@ pub mod dialog;
 pub mod discord;
 #[cfg(target_os = "linux")]
 pub mod global_shortcuts;
+pub mod heart_rate;
 pub mod hotkeys;
 pub mod i18n;
 pub mod icons;

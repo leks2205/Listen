@@ -96,6 +96,7 @@ impl Listen {
             "rate5" => hk(HotkeysMsg::Rate(5)),
             "zoomIn" => Some(Message::Zoom(ZoomStep::In)),
             "zoomOut" => Some(Message::Zoom(ZoomStep::Out)),
+            "toggleHeartRate" => Some(Message::HeartRate(super::heart_rate::HeartRateMsg::Toggle)),
             "toggleQueue" => Some(Message::ToggleQueue),
             "toggleFullscreenPlayer" => Some(Message::ToggleFullscreen),
             "browserBack" => Some(Message::Back),

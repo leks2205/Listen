@@ -24,6 +24,7 @@ pub(super) fn playback(state: &Listen) -> Vec<Element<'_, Message>> {
         equalizer(state),
         headphone(state),
         compressor(state),
+        heart_rate(state),
     ];
     if state.transcoding_available() {
         v.push(transcoding(state));
@@ -547,6 +548,59 @@ fn headphone(state: &Listen) -> Element<'_, Message> {
         rows.push(line(state, "Other outputs", "Profiles that apply when these outputs play.", list.into()));
     }
     section(state, "Headphone correction", rows)
+}
+
+/// Heart-rate tempo: on/off with its status, the remembered sensor and "Forget sensor".
+fn heart_rate(state: &Listen) -> Element<'_, Message> {
+    use crate::app::heart_rate::HeartRateMsg as H;
+    let t = state.tokens;
+    let status = match state.hr_target() {
+        Some(target) => crate::i18n::trf(
+            "{} · target {} BPM",
+            &[&crate::i18n::tr(state.hr_status().text()), &format!("{:.0}", target.bpm)],
+        ),
+        None => crate::i18n::tr(state.hr_status().text()).to_string(),
+    };
+    let sensor: Element<'_, Message> = match &state.config.settings.playback.heart_rate_sensor {
+        Some(sensor) => row![
+            label(
+                if sensor.name.is_empty() { sensor.id.clone() } else { sensor.name.clone() },
+                metrics::font_md(),
+                t.foreground
+            ),
+            small_button(state, "Forget sensor", Some(Message::HeartRate(H::Forget))),
+        ]
+        .spacing(metrics::space_sm())
+        .align_y(Alignment::Center)
+        .into(),
+        None => label(crate::i18n::tr("None yet").to_string(), metrics::font_md(), t.muted).into(),
+    };
+    section(
+        state,
+        "Heart-rate tempo",
+        vec![
+            line(
+                state,
+                "Heart-rate tempo",
+                "The Auto-DJ and AI DJ pick songs whose tempo fits your heart rate (half and double time count); \
+                 songs you queued and the song that plays stay. Needs Bluetooth on this computer and a Bluetooth \
+                 heart-rate sensor (a chest strap or a watch that sends its heart rate). The heart button in the \
+                 player bar switches it too.",
+                column![
+                    toggler(state.hr_on()).on_toggle(|v| Message::HeartRate(H::Set(v))).size(20),
+                    label(status, metrics::font_sm(), t.muted),
+                ]
+                .spacing(4)
+                .into(),
+            ),
+            line(
+                state,
+                "Sensor",
+                "The first heart-rate sensor found is remembered and tried first next time.",
+                sensor,
+            ),
+        ],
+    )
 }
 
 fn compressor(state: &Listen) -> Element<'_, Message> {

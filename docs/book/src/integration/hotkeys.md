@@ -55,6 +55,7 @@ Notes:
 | Skip forward | Jump forward by the skip amount | none | Yes |
 | Stop | Stop playback | none | Yes |
 | Toggle full-screen player | Open or close the [full-screen player](../playback/fullscreen.md) | none | No |
+| Toggle heart-rate tempo | Switch [heart-rate tempo](../playback/heart-rate.md) on or off | none | Yes |
 | Toggle queue | Show or hide the queue | none | No |
 | Toggle repeat | Cycle repeat: off, all, one | none | Yes |
 | Toggle shuffle | Switch shuffle on or off | none | Yes |

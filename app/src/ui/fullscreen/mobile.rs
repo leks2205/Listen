@@ -194,6 +194,12 @@ pub fn mobile(state: &Listen) -> iced::Element<'_, Message> {
                 Position::Top,
             )
         },
+        crate::ui::player_bar::heart_button(
+            state,
+            metrics::font_xl(),
+            metrics::CONTROL + 4.0,
+            "heart-rate-button-fs"
+        ),
         btn(
             repeat_icon,
             metrics::font_xl(),

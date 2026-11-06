@@ -49,6 +49,7 @@ pub const HOTKEY_ACTIONS: &[HotkeyAction] = &[
     action("skipForward", "Skip forward", true),
     action("stop", "Stop", true),
     action("toggleFullscreenPlayer", "Toggle full-screen player", false),
+    action("toggleHeartRate", "Toggle heart-rate tempo", true),
     action("toggleQueue", "Toggle queue", false),
     action("toggleRepeat", "Toggle repeat", true),
     action("toggleShuffle", "Toggle shuffle", true),

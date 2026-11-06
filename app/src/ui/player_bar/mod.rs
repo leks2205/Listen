@@ -3,6 +3,8 @@
 //! layout (window <= 768 px) has its own bar in `compact`.
 
 mod center;
+pub use center::HEART_ID;
+pub(crate) use center::heart_button;
 pub mod compact;
 mod left;
 mod right;

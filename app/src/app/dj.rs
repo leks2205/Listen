@@ -794,6 +794,11 @@ impl Listen {
             .chain(self.session_played.iter().cloned())
             .chain(self.auto_blocked())
             .collect();
+        // Heart-rate mode: the pool is narrowed to (and topped up with) songs that fit the tempo.
+        let tempo = self.hr_target();
+        let tempo_store = tempo.map(|_| self.hr_store());
+        let mut tempo_skip = exclude.clone();
+        tempo_skip.extend(self.queue.current().map(|i| song_key(&i.song)));
         let picks = self.dj.listener_picks.clone();
         let requests = self.dj.requests.clone();
         let requests_fresh = std::mem::take(&mut self.dj.requests_fresh);
@@ -869,6 +874,26 @@ impl Listen {
                     tracing::info!("AI DJ requests: {} of {before} candidates kept", pool.len());
                     pool
                 };
+                // Heart-rate mode: the candidates whose tempo fits; a short pool is topped up to a dozen
+                // with fitting songs from the analysis store, the closest misfits pad it only when the
+                // store is short too.
+                let pool = match (&tempo, tempo_store) {
+                    (Some(target), Some(store)) => {
+                        let here = lookup(&current);
+                        let fill = listen_mix::tempo::tempo_fill(
+                            &pool,
+                            |s| super::heart_rate::song_bpm(&lookup, s),
+                            || store.candidates(),
+                            &tempo_skip,
+                            target,
+                            super::heart_rate::TEMPO_POOL,
+                            here.as_ref(),
+                        );
+                        super::heart_rate::log_fill("AI DJ", &fill, target, super::heart_rate::TEMPO_POOL);
+                        fill.songs
+                    }
+                    _ => pool,
+                };
                 // Nothing queued by the Auto-DJ to learn from: take what it would
                 // have picked (the seed's similar songs, in order).
                 let looked_up = if seed_context.is_empty() {
@@ -902,6 +927,19 @@ impl Listen {
                         notes.insert(s.id.clone(), listen_dj::facts::candidate_note(&f, here.as_ref()));
                     }
                 }
+                // Heart-rate mode: each candidate says whether its tempo fits (the pool holds misfits only
+                // when too few songs fit anywhere).
+                if let Some(target) = &tempo {
+                    for song in &pool {
+                        let fits = super::heart_rate::song_bpm(&lookup, song)
+                            .map(|b| listen_mix::tempo::fits(target, b));
+                        listen_dj::tempo::add_fit_note(notes.entry(song.id.clone()).or_default(), fits);
+                    }
+                }
+                let show_notes = match &tempo {
+                    Some(t) => listen_dj::tempo::rule(&s.notes, t.bpm, t.tol),
+                    None => s.notes.clone(),
+                };
                 let familiar = listening.tags(pool.iter());
                 // How each candidate would be mixed in, so the DJ knows its craft.
                 if let Some(preview) = &mix_preview {
@@ -928,7 +966,7 @@ impl Listen {
                     show: listen_dj::Show {
                         language: crate::i18n::english_name(crate::i18n::dj_language(&s.language)),
                         location: &s.location,
-                        notes: &s.notes,
+                        notes: &show_notes,
                     },
                     requests: &requests,
                     requests_fresh,
