@@ -874,7 +874,7 @@ fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) 
     if n >= 2 {
         let knots: Vec<f64> = (0..=n).map(|j| o.t(m + j as f64) - o.t(m)).collect();
         if let Some((r, w)) = fit_curve(&pts, &knots)
-            && local.drift_s - w > GLIDE_MIN_GAIN_S
+            && curve_wins(local.drift_s, w)
         {
             local.glide = Some((r[0], r[n]));
             local.drift_s = w;
@@ -882,6 +882,13 @@ fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) 
         }
     }
     Some(local)
+}
+
+/// Whether a speed curve leaving `curved` s of drift replaces a ramp leaving `ramp`: when it takes
+/// [`GLIDE_MIN_GAIN_S`] off, or when the ramp drifts past [`DRIFT_FREE_S`] and the curve gets closer
+/// (a 4-bar blend at 3.9 % glide: 4.1 → 2.8 ms).
+fn curve_wins(ramp: f64, curved: f64) -> bool {
+    ramp - curved > GLIDE_MIN_GAIN_S || (ramp > DRIFT_FREE_S && curved < ramp - 0.0002)
 }
 
 /// Least-squares speed curve through `pts` (outgoing, incoming file s since the shared first downbeat):
@@ -2001,6 +2008,17 @@ mod tests {
         let back: TransitionPlan = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(back.in_curve, p.in_curve);
         assert!(!serde_json::to_string(&ramp).unwrap().contains("in_curve"));
+    }
+
+    #[test]
+    fn a_curve_replaces_a_ramp_that_drifts_past_four_ms() {
+        // Within the free margin a curve has to take 2 ms off...
+        assert!(!curve_wins(0.0035, 0.002));
+        assert!(curve_wins(0.0060, 0.0039));
+        // ...past it, any real improvement counts (bug 136: 4.1 -> 2.8 ms on a 4-bar ShortBlend).
+        assert!(curve_wins(0.0041, 0.0028));
+        assert!(!curve_wins(0.0041, 0.0040));
+        assert!(!curve_wins(0.0041, 0.0050));
     }
 
     #[test]

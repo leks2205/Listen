@@ -112,6 +112,10 @@ impl AnalysisHandle {
         self.voice.store(present, std::sync::atomic::Ordering::Relaxed);
     }
 
+    fn voice(&self) -> bool {
+        self.voice.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// True the first time it's called for `song` (the pool is requested once).
     fn first_pool(&self, song: &Song) -> bool {
         let Ok(mut pooled) = self.pooled.lock() else { return false };
@@ -444,6 +448,9 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
                 let Some(cmd) = cmd.0.lock().ok().and_then(|mut c| c.take()) else { continue };
                 apply(cmd, &mut queue, &handle, &mut hold, &mut status, &mut out).await;
             }
+            // Download / Remove in Settings flip the handle; the status follows
+            // without waiting for a job (a YouTube-Music-only profile has none).
+            status.vocals = vocals_label(handle.voice());
             let allow_library = config.library && !hold && (config.on_battery || !on_battery());
             // Pool work is on demand (no library setting, also on battery),
             // but leaves the CPU to a running DJ transition.
@@ -569,9 +576,7 @@ impl Listen {
             Ok(()) => {
                 tracing::info!("singing-voice detector downloaded");
                 self.voice_refresh();
-                if let Some(handle) = &self.analysis {
-                    handle.set_voice(true);
-                }
+                self.voice_changed();
                 // The library songs analysed without it are listed again.
                 self.analysis_crawl();
             }
@@ -589,9 +594,23 @@ impl Listen {
             self.voice_detector.error = Some(e.to_string());
         }
         self.voice_refresh();
+        self.voice_changed();
+    }
+
+    /// Tells the worker and the status line whether the detector is there now.
+    fn voice_changed(&mut self) {
+        let present = self.voice_detector.present;
         if let Some(handle) = &self.analysis {
-            handle.set_voice(self.voice_detector.present);
+            handle.set_voice(present);
         }
+        show_vocals(&mut self.analysis_status, present);
+    }
+}
+
+/// The status line names the vocal source right away (the worker's next status agrees).
+fn show_vocals(status: &mut Option<AnalysisStatus>, present: bool) {
+    if let Some(status) = status {
+        status.vocals = vocals_label(present);
     }
 }
 
@@ -1095,5 +1114,17 @@ mod tests {
         assert!(handle.done(&nd));
         handle.set_voice(false);
         assert!(handle.done(&nd));
+    }
+
+    #[test]
+    fn the_status_line_names_the_detector_right_after_download_and_remove() {
+        let mut status = Some(AnalysisStatus { vocals: vocals_label(false), ..Default::default() });
+        show_vocals(&mut status, true);
+        assert_eq!(status.as_ref().unwrap().vocals, "singing-voice detector");
+        show_vocals(&mut status, false);
+        assert_eq!(status.as_ref().unwrap().vocals, "built-in heuristic");
+        let mut none = None;
+        show_vocals(&mut none, true);
+        assert!(none.is_none());
     }
 }
