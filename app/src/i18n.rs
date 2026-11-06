@@ -291,6 +291,13 @@ pub fn why(why: &listen_core::queue::Why) -> String {
     trf(pattern, &args)
 }
 
+/// Tests: the `code` translation of `s` without switching the app's language.
+#[cfg(test)]
+pub(crate) fn translate_in(code: &str, s: &str) -> Option<String> {
+    let code = LANGUAGES.iter().find(|(c, _)| *c == code).map_or("en", |(c, _)| *c);
+    build_table(code, source(code)).map.get(s).map(|t| t.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

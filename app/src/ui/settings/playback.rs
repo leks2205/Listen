@@ -243,8 +243,8 @@ fn levelling(state: &Listen) -> Element<'_, Message> {
             "Play every song equally loud: Quiet −19, Normal −14, Loud −11 LUFS. Uses the analysis, \
              YouTube's loudness or ReplayGain tags; a limiter keeps boosted songs from clipping. \
              Replaces ReplayGain while on.",
-            pick_list(settings::Levelling::ALL, Some(p.levelling), |v| {
-                Message::Setting(Setting::Levelling(v))
+            pick_list(LEVELLING_CHOICES, Some(LevellingChoice(p.levelling)), |v| {
+                Message::Setting(Setting::Levelling(v.0))
             })
             .into(),
         )],
@@ -1166,6 +1166,23 @@ pub(super) fn lyrics(state: &Listen) -> Element<'_, Message> {
     section(state, "Lyrics", rows)
 }
 
+/// An entry of the volume levelling picker, shown translated.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct LevellingChoice(settings::Levelling);
+
+const LEVELLING_CHOICES: [LevellingChoice; 4] = [
+    LevellingChoice(settings::Levelling::Off),
+    LevellingChoice(settings::Levelling::Quiet),
+    LevellingChoice(settings::Levelling::Normal),
+    LevellingChoice(settings::Levelling::Loud),
+];
+
+impl std::fmt::Display for LevellingChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(crate::i18n::tr(&self.0.to_string()))
+    }
+}
+
 /// An entry of the transition edges picker, shown translated.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct EdgeChoice(TransitionEdges);
@@ -1210,4 +1227,19 @@ fn dj_languages() -> Vec<DjLanguage> {
     let mut v = vec![DjLanguage("", crate::i18n::tr("Same as the app").to_string())];
     v.extend(crate::i18n::LANGUAGES.iter().map(|(c, n)| DjLanguage(c, (*n).to_string())));
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Bug 123: the German UI shows the four levels in German, not Off/Quiet/Normal/Loud.
+    #[test]
+    fn levelling_levels_are_german_in_the_german_ui() {
+        let de: Vec<_> = LEVELLING_CHOICES
+            .iter()
+            .map(|c| crate::i18n::translate_in("de", &c.0.to_string()).unwrap_or_else(|| c.0.to_string()))
+            .collect();
+        assert_eq!(de, ["Aus", "Leise", "Normal", "Laut"]);
+    }
 }

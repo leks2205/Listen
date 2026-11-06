@@ -289,15 +289,36 @@ impl Listen {
     pub fn levelling_describe(&self, song: &Song) -> Option<String> {
         let g = self.levelling_gain(song);
         (g.source != GainSource::Off).then(|| match g.lufs {
-            Some(l) => format!("{:+.1} dB ({l:.1} LUFS, from {})", g.db, g.source.as_str()),
-            None => format!("{:+.1} dB (loudness unknown)", g.db),
+            Some(l) => format!("{:+.1} dB ({l:.1} LUFS, {})", g.db, crate::i18n::tr(source_label(g.source))),
+            None => format!("{:+.1} dB ({})", g.db, crate::i18n::tr("loudness unknown")),
         })
+    }
+}
+
+/// Get info: where a gain came from, in English (translated by the caller).
+fn source_label(source: GainSource) -> &'static str {
+    match source {
+        GainSource::Analysis => "from analysis",
+        GainSource::YouTube => "from YouTube",
+        GainSource::ReplayGain => "from ReplayGain",
+        GainSource::Off | GainSource::Unknown => "loudness unknown",
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Bug 123: Get info names the gain's source in German too.
+    #[test]
+    fn levelling_sources_are_german_in_the_german_ui() {
+        let de: Vec<_> =
+            [GainSource::Analysis, GainSource::YouTube, GainSource::ReplayGain, GainSource::Unknown]
+                .into_iter()
+                .map(|s| crate::i18n::translate_in("de", source_label(s)).unwrap_or_default())
+                .collect();
+        assert_eq!(de, ["aus der Analyse", "von YouTube", "aus ReplayGain", "Lautheit unbekannt"]);
+    }
     use listen_core::model::GainInfo;
 
     fn g(db: f32) -> Option<GainDb> {
