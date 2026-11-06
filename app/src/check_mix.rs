@@ -109,6 +109,10 @@ async fn check(
         plan.in_load_at_s,
         plan.blend_s,
         match plan.in_glide {
+            Some(_) if !plan.in_curve.is_empty() => {
+                let speeds: Vec<String> = plan.in_curve.iter().map(|&(_, v)| format!("{v:.4}")).collect();
+                format!("{} (curve, one point per bar)", speeds.join(" → "))
+            }
             Some(g) => format!("{:.4} → {:.4} (glide)", g.from, g.to),
             None => format!("{:.4}", plan.in_speed),
         },

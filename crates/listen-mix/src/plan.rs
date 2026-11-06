@@ -170,6 +170,11 @@ pub struct TransitionPlan {
     /// without the glide) and `in_settle` starts from the glide's end. See [`TransitionPlan::in_speed_at`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub in_glide: Option<SpeedRamp>,
+    /// The glide as a curve, when one ramp can't follow the overlapping beats (a grid that slows down and
+    /// picks up again): `(wall s after the mix point, incoming speed)`, one point per outgoing bar, the
+    /// speed linear in between. `in_glide` then holds its first and last speed. Empty otherwise.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub in_curve: Vec<(f64, f64)>,
     /// Incoming back to 1.0× after the outgoing stops.
     pub in_settle: Option<SpeedRamp>,
     pub gain: Envelope,
@@ -199,6 +204,7 @@ impl TransitionPlan {
             in_speed: 1.0,
             out_ramp: None,
             in_glide: None,
+            in_curve: Vec::new(),
             in_settle: None,
             gain: Envelope { points: vec![(0.0, 0.0, 1.0)] },
             eq: Vec::new(),
@@ -210,6 +216,17 @@ impl TransitionPlan {
     /// Incoming deck speed `blend_wall_s` wall seconds after the mix point, until the outgoing stops
     /// (then `in_settle` takes over).
     pub fn in_speed_at(&self, blend_wall_s: f64) -> f64 {
+        if let (Some(&(w0, v0)), Some(&(w1, v1))) = (self.in_curve.first(), self.in_curve.last()) {
+            if blend_wall_s <= w0 {
+                return v0;
+            }
+            if blend_wall_s >= w1 {
+                return v1;
+            }
+            let j = self.in_curve.partition_point(|&(w, _)| w <= blend_wall_s);
+            let ((wa, va), (wb, vb)) = (self.in_curve[j - 1], self.in_curve[j]);
+            return va + (vb - va) * (blend_wall_s - wa) / (wb - wa).max(1e-9);
+        }
         match self.in_glide {
             Some(r) if r.secs > 0.0 => r.from + (r.to - r.from) * (blend_wall_s / r.secs).clamp(0.0, 1.0),
             Some(r) => r.to,
@@ -340,6 +357,12 @@ impl<'a> Side<'a> {
         f64::from(self.g.bpm)
     }
 
+    /// Whether (fractional) bar `bar` lies within the beats the analyser found (not extrapolated).
+    fn detected(&self, bar: f64) -> bool {
+        let per = f64::from(self.g.beats_per_bar.max(1));
+        f64::from(self.g.downbeat_phase) + bar * per <= self.g.beats.len().saturating_sub(1) as f64 + 1e-6
+    }
+
     /// File time of (fractional) bar `bar`.
     pub(crate) fn t(&self, bar: f64) -> f64 {
         let per = f64::from(self.g.beats_per_bar.max(1));
@@ -436,7 +459,7 @@ enum CandKind {
     Filter,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Cand {
     kind: CandKind,
     /// Outgoing mix-out bar, incoming mix-in bar, blend length (outgoing bars).
@@ -447,6 +470,8 @@ struct Cand {
     k: f64,
     /// Incoming/outgoing speed ratio at the blend's start and end ([`Local::glide`]).
     glide: Option<(f64, f64)>,
+    /// [`Local::curve`].
+    curve: Vec<(f64, f64)>,
     score: f32,
     tempo: Tempo,
     clash: f32,
@@ -498,7 +523,7 @@ fn plan_inner(out: &Features, inn: &Features, ctx: &PlanCtx, opts: Opts) -> Tran
             None => fade_plan(out, inn, ctx, &reason),
         };
     }
-    match (candidates(&o, &i, k, ctx, opts).first().copied(), hand) {
+    match (candidates(&o, &i, k, ctx, opts).into_iter().next(), hand) {
         (Some(c), Some(h)) if h.score > c.score => build_handover(&o, &i, h, "vocals on both edges"),
         (Some(c), _) => build(&o, &i, c, ctx, opts),
         (None, Some(h)) => build_handover(&o, &i, h, "no beat-matched mix point left"),
@@ -725,6 +750,7 @@ fn build_handover(o: &Side, i: &Side, h: Hand, why: &str) -> TransitionPlan {
         in_speed: 1.0,
         out_ramp: None,
         in_glide: None,
+        in_curve: Vec::new(),
         in_settle: None,
         gain: Envelope { points: gain },
         eq,
@@ -758,7 +784,7 @@ fn tempo_for(o: &Side, m: usize, lr: f64, ctx: &PlanCtx) -> Option<Tempo> {
 }
 
 /// How the overlapping beats of one candidate line up (see [`local_match`]).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Local {
     /// Outgoing bars per incoming bar (1, 2 or ½).
     k: f64,
@@ -768,6 +794,9 @@ struct Local {
     /// Incoming/outgoing speed ratio at the start and the end of the blend, when a glide keeps the beats
     /// together better than the constant `e^-lr`.
     glide: Option<(f64, f64)>,
+    /// The glide as knots `(outgoing file s after the mix point, speed ratio)`, one per outgoing bar, when
+    /// that keeps the beats together better than one ramp; `glide` then holds its ends.
+    curve: Vec<(f64, f64)>,
     /// Largest beat offset left inside the blend (s), with the glide if there is one.
     drift_s: f64,
 }
@@ -783,9 +812,11 @@ const DRIFT_FREE_S: f64 = 0.004;
 /// Picks `k` from the `n` overlapping bars from out bar `m` and in bar `inb` (`k_song`, from the songs'
 /// average tempos, unless another octave is clearly closer), then fits the incoming beats to the
 /// outgoing ones by least squares, anchored at the shared first downbeat: once at one constant speed
-/// ratio, once with a linear glide. A grid whose tempo moves away from its average (a slow intro, a
-/// live drummer) would otherwise slide off by tens of ms per beat. `None` without room on the incoming
-/// side.
+/// ratio, once with a linear glide, once with a speed curve through one knot per bar ([`fit_curve`]).
+/// A grid whose tempo moves away from its average (a slow intro, a live drummer, a ritardando that picks
+/// up again) would otherwise slide off by tens of ms per beat. Only beats the analyser found count: a
+/// grid past its last beat is extrapolated at the nominal tempo, which the music needn't follow. `None`
+/// without room on the incoming side.
 fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) -> Option<Local> {
     let (m, inb, nf) = (m as f64, inb as f64, n as f64);
     let out_span = o.t(m + nf) - o.t(m);
@@ -804,12 +835,17 @@ fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) 
         .0;
     // Every beat of the overlap (quarter bars): outgoing (x) and incoming (y) file time since the first
     // downbeat.
-    let pts: Vec<(f64, f64)> = (1..=4 * n)
-        .map(|q| {
-            let f = q as f64 / 4.0;
-            (o.t(m + f) - o.t(m), i.t(inb + f / k) - i.t(inb))
-        })
+    let beat = |q: usize| {
+        let f = q as f64 / 4.0;
+        (o.t(m + f) - o.t(m), i.t(inb + f / k) - i.t(inb))
+    };
+    let mut pts: Vec<(f64, f64)> = (1..=4 * n)
+        .filter(|&q| o.detected(m + q as f64 / 4.0) && i.detected(inb + q as f64 / 4.0 / k))
+        .map(beat)
         .collect();
+    if pts.len() < 4 {
+        pts = (1..=4 * n).map(beat).collect();
+    }
     let sum = |f: &dyn Fn(f64, f64) -> f64| pts.iter().map(|&(x, y)| f(x, y)).sum::<f64>();
     let (xx, xy) = (sum(&|x, _| x * x), sum(&|x, y| x * y));
     // Incoming file seconds per outgoing file second.
@@ -821,7 +857,7 @@ fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) 
     let flat = worst(&|x| ratio * x);
     // Below the grid's precision (f32 beat times): the same tempo.
     let lr = if ratio.ln().abs() < 1e-5 { 0.0 } else { -ratio.ln() };
-    let mut local = Local { k, lr, glide: None, drift_s: flat };
+    let mut local = Local { k, lr, glide: None, curve: Vec::new(), drift_s: flat };
     // y = a·x + b·x²: the speed ratio glides from a to a + 2b·span.
     let (x3, x4, x2y) = (sum(&|x, _| x.powi(3)), sum(&|x, _| x.powi(4)), sum(&|x, y| x * x * y));
     let det = xx * x4 - x3 * x3;
@@ -835,7 +871,101 @@ fn local_match(o: &Side, i: &Side, m: usize, inb: usize, n: usize, k_song: f64) 
             local.drift_s = curved;
         }
     }
+    if n >= 2 {
+        let knots: Vec<f64> = (0..=n).map(|j| o.t(m + j as f64) - o.t(m)).collect();
+        if let Some((r, w)) = fit_curve(&pts, &knots)
+            && local.drift_s - w > GLIDE_MIN_GAIN_S
+        {
+            local.glide = Some((r[0], r[n]));
+            local.drift_s = w;
+            local.curve = knots.into_iter().zip(r).collect();
+        }
+    }
     Some(local)
+}
+
+/// Least-squares speed curve through `pts` (outgoing, incoming file s since the shared first downbeat):
+/// the ratio is linear between `knots` (outgoing file s, the first 0) and its integral meets the incoming
+/// beats. Second differences of the knots are penalised, more until the curve stays within
+/// [`GLIDE_MAX`] (beat-grid jitter must not turn into a wobbling speed). Returns the knots' speed ratios
+/// and the largest beat offset left (s).
+fn fit_curve(pts: &[(f64, f64)], knots: &[f64]) -> Option<(Vec<f64>, f64)> {
+    let kn = knots.len();
+    if kn < 3 || pts.len() < kn {
+        return None;
+    }
+    // Incoming position at `x` = Σ r_j · w_j(x).
+    let weights = |x: f64| {
+        let mut w = vec![0.0; kn];
+        for s in 0..kn - 1 {
+            let (a, b) = (knots[s], knots[s + 1]);
+            if x <= a || b <= a {
+                break;
+            }
+            let (l, u) = (b - a, ((x - a) / (b - a)).min(1.0));
+            w[s] += l * (u - u * u / 2.0);
+            w[s + 1] += l * u * u / 2.0;
+        }
+        w
+    };
+    let rows: Vec<Vec<f64>> = pts.iter().map(|&(x, _)| weights(x)).collect();
+    for lambda in [1e-2, 1e-1, 1.0, 10.0] {
+        let mut a = vec![vec![0.0; kn]; kn];
+        let mut rhs = vec![0.0; kn];
+        for (w, &(_, y)) in rows.iter().zip(pts) {
+            for p in 0..kn {
+                rhs[p] += w[p] * y;
+                for q in 0..kn {
+                    a[p][q] += w[p] * w[q];
+                }
+            }
+        }
+        for j in 1..kn - 1 {
+            let d = [(j - 1, 1.0), (j, -2.0), (j + 1, 1.0)];
+            for &(p, dp) in &d {
+                for &(q, dq) in &d {
+                    a[p][q] += lambda * dp * dq;
+                }
+            }
+        }
+        let r = solve(a, rhs)?;
+        let (lo, hi) = r.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+        if lo > 0.0 && (hi / lo).ln() <= GLIDE_MAX {
+            let worst = rows
+                .iter()
+                .zip(pts)
+                .map(|(w, &(_, y))| (y - w.iter().zip(&r).map(|(a, b)| a * b).sum::<f64>()).abs())
+                .fold(0.0, f64::max);
+            return Some((r, worst));
+        }
+    }
+    None
+}
+
+/// Gaussian elimination with partial pivoting; `None` for a singular system.
+fn solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Option<Vec<f64>> {
+    let n = b.len();
+    for c in 0..n {
+        let p = (c..n).max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs()))?;
+        if a[p][c].abs() < 1e-12 {
+            return None;
+        }
+        a.swap(c, p);
+        b.swap(c, p);
+        let (pivot, rhs) = (a[c].clone(), b[c]);
+        for (row, br) in a.iter_mut().zip(b.iter_mut()).skip(c + 1) {
+            let f = row[c] / pivot[c];
+            for (x, &pv) in row.iter_mut().zip(&pivot).skip(c) {
+                *x -= f * pv;
+            }
+            *br -= f * rhs;
+        }
+    }
+    let mut x = vec![0.0; n];
+    for r in (0..n).rev() {
+        x[r] = (b[r] - (r + 1..n).map(|k| a[r][k] * x[k]).sum::<f64>()) / a[r][r];
+    }
+    Some(x)
 }
 
 /// Every beat-matched candidate, best first.
@@ -969,7 +1099,19 @@ fn candidates(o: &Side, i: &Side, k: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand
                     score += 1.5 * (secs / v.clip_secs.max(1.0)).min(1.0) as f32;
                 }
                 let sampled = kind == CandKind::Beat && raw_clash > clash && raw_clash > 0.1 * n as f32;
-                consider(Cand { kind, m, i: inb, n, k, glide: local.glide, score, tempo, clash, sampled });
+                consider(Cand {
+                    kind,
+                    m,
+                    i: inb,
+                    n,
+                    k,
+                    glide: local.glide,
+                    curve: local.curve.clone(),
+                    score,
+                    tempo,
+                    clash,
+                    sampled,
+                });
             }
         }
     }
@@ -1100,6 +1242,7 @@ fn build(o: &Side, i: &Side, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPl
         start_out_s: out_mix_start_s,
         secs: blend_s,
     });
+    let in_curve = c.curve.iter().map(|&(x, r)| (x / s_out, r * s_out)).collect();
     let in_end = in_glide.map_or(s_in, |g| g.to);
     let in_settle = (s.tempo_ramps && (in_end - 1.0).abs() > 1e-4).then(|| SpeedRamp {
         from: in_end,
@@ -1132,6 +1275,7 @@ fn build(o: &Side, i: &Side, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPl
         in_speed: s_in,
         out_ramp,
         in_glide,
+        in_curve,
         in_settle,
         gain: Envelope { points },
         eq,
@@ -1197,6 +1341,7 @@ fn fade_plan(out: &Features, inn: &Features, ctx: &PlanCtx, why: &str) -> Transi
         in_speed: 1.0,
         out_ramp: None,
         in_glide: None,
+        in_curve: Vec::new(),
         in_settle: None,
         gain: Envelope { points: vec![(0.0, 1.0, 0.0), (secs, 0.0, 1.0)] },
         eq: Vec::new(),
@@ -1827,6 +1972,86 @@ mod tests {
         // One constant speed would drift apart.
         let flat = TransitionPlan { in_glide: None, ..p.clone() };
         assert!(worst_drift_ms(&flat, &out, &inn) > 2.0 * drift.max(1.0));
+    }
+
+    #[test]
+    fn a_grid_that_slows_down_and_picks_up_again_gets_a_speed_curve() {
+        let s = settings();
+        let out = FeatBuilder::new(120.0, 96).build();
+        // Its first 16 bars sag from 120 to 116 bpm and back: no single ramp follows that.
+        let sag = |j: usize| 120.0 - 4.0 * (std::f64::consts::PI * j.min(64) as f64 / 64.0).sin();
+        let inn = with_tempo(&FeatBuilder::new(120.0, 96).build(), sag);
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        assert!(matches!(p.kind, Kind::BeatBlend { .. }), "{}", p.reason);
+        let n = match p.kind {
+            Kind::BeatBlend { bars, .. } => usize::from(bars),
+            _ => unreachable!(),
+        };
+        assert_eq!(p.in_curve.len(), n + 1, "{:?}", p.in_curve);
+        let g = p.in_glide.expect("glide ends");
+        assert_eq!((g.from, g.to), (p.in_curve[0].1, p.in_curve[n].1));
+        assert!((p.in_curve[n].0 - p.blend_s).abs() < 1e-9);
+        assert_eq!(p.in_settle.map(|r| r.from), Some(g.to));
+        let drift = worst_drift_ms(&p, &out, &inn);
+        assert!(drift <= 4.0, "{drift:.1} ms");
+        // The same ends as one ramp drift apart.
+        let ramp = TransitionPlan { in_curve: Vec::new(), ..p.clone() };
+        assert!(worst_drift_ms(&ramp, &out, &inn) > 4.0, "{:.1}", worst_drift_ms(&ramp, &out, &inn));
+        // It round-trips, and a plan without a curve serializes as before.
+        let back: TransitionPlan = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        assert_eq!(back.in_curve, p.in_curve);
+        assert!(!serde_json::to_string(&ramp).unwrap().contains("in_curve"));
+    }
+
+    #[test]
+    fn beats_past_the_end_of_the_grid_do_not_bend_the_glide() {
+        // The outgoing slows down into its last detected beat; the grid extrapolates at the nominal tempo
+        // after it.
+        let s = settings();
+        let mut out = with_tempo(&FeatBuilder::new(120.0, 96).build(), |j| {
+            120.0 - 6.0 * (j.saturating_sub(320) as f64 / 64.0).min(1.0)
+        });
+        let inn =
+            with_tempo(&FeatBuilder::new(120.0, 96).build(), |j| 120.0 - 6.0 * (j as f64 / 64.0).min(1.0));
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        let full = worst_drift_ms(&p, &out, &inn);
+        assert!(full <= 4.0, "{full:.1} ms: {}", p.reason);
+        // Drop the outgoing's last beats: the plan still matches the beats that are left.
+        let g = out.grid.as_mut().unwrap();
+        let keep = g.beat_at(p.out_stop_s as f32).floor() as usize - 2;
+        g.beats.truncate(keep);
+        let q = plan(&out, &inn, &ctx(&s, 30.0));
+        assert_eq!(
+            (q.out_mix_start_s, q.in_mix_start_s),
+            (p.out_mix_start_s, p.in_mix_start_s),
+            "{}",
+            q.reason
+        );
+        let mut worst: f64 = 0.0;
+        // Only over the detected beats (worst_drift_ms would read the extrapolated ones).
+        let (go, gi) = (out.grid.as_ref().unwrap(), inn.grid.as_ref().unwrap());
+        let s_out = q.out_ramp.map_or(1.0, |r| r.to);
+        let (bo, bi) =
+            (go.beat_at(q.out_mix_start_s as f32).round(), gi.beat_at(q.in_mix_start_s as f32).round());
+        let (mut w, mut pos, mut j) = (0.0f64, q.in_mix_start_s, 0.0f32);
+        while w <= q.blend_s && ((bo + j) as usize) < go.beats.len() {
+            if w >= (f64::from(go.time_of(bo + j)) - q.out_mix_start_s) / s_out {
+                worst = worst.max((f64::from(gi.time_of(bi + j)) - pos).abs() * 1000.0);
+                j += 1.0;
+            }
+            pos += q.in_speed_at(w) * 0.001;
+            w += 0.001;
+        }
+        assert!(worst <= 4.0, "{worst:.1} ms over the detected beats: {}", q.reason);
+    }
+
+    #[test]
+    fn in_speed_at_follows_the_curve() {
+        let mut p = TransitionPlan::gapless(100.0, "x");
+        p.in_glide = Some(SpeedRamp { from: 1.0, to: 1.0, start_out_s: 90.0, secs: 4.0 });
+        p.in_curve = vec![(0.0, 1.0), (2.0, 1.02), (4.0, 1.0)];
+        assert_eq!((p.in_speed_at(-1.0), p.in_speed_at(2.0), p.in_speed_at(9.0)), (1.0, 1.02, 1.0));
+        assert!((p.in_speed_at(1.0) - 1.01).abs() < 1e-12 && (p.in_speed_at(3.5) - 1.005).abs() < 1e-12);
     }
 
     #[test]

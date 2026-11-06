@@ -304,6 +304,7 @@ mod tests {
             in_speed: 1.0,
             out_ramp: None,
             in_glide: None,
+            in_curve: Vec::new(),
             in_settle: None,
             gain: Envelope { points: vec![(0.0, 1.0, 0.0), (2.0, 0.0, 1.0)] },
             eq,
