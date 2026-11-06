@@ -1009,6 +1009,25 @@ fn a_bridge_can_come_from_the_listening_history() {
         s.history.entries.push(e);
     }
     plan(&mut s);
+    // The two songs' eras are known (their years), the history song's is not: heard next to them is not
+    // enough any more (a neighbour never bridges eras).
+    assert!(s.queue.peek_next().unwrap().bridge.is_none(), "an undated neighbour doesn't bridge dated songs");
+
+    // Its describe-it tags (the genre and decade of the pair) place it.
+    let (mut s, b) = bridge_rig();
+    s.bridge = Default::default();
+    let a = s.queue.current().unwrap().song.clone();
+    s.history.entries.push(listen_core::history::Entry::new(&b, 1));
+    let decade = a.year.map(|y| format!("{}s", y / 10 * 10)).unwrap_or_default();
+    let rec = listen_core::scene::SceneRecord {
+        song_id: listen_analysis::record_key(&b),
+        title_hint: format!("{} – {}", b.artist_line(), b.title),
+        tags_en: format!("synthwave, electronic, {decade}, instrumental"),
+        audio: None,
+        at: 0,
+    };
+    s.analysis.as_ref().unwrap().set_scenes(listen_core::scene::SceneIndex::from_records([rec]));
+    plan(&mut s);
     let bridge = s.queue.peek_next().unwrap().clone();
     assert!(bridge.bridge.is_some(), "a bridge from the history");
     assert_eq!(bridge.song.id, b.id);

@@ -875,20 +875,23 @@ impl Listen {
                     pool
                 };
                 // Heart-rate mode: the candidates whose tempo fits; a short pool is topped up to a dozen
-                // with fitting songs from the analysis store, the closest misfits pad it only when the
-                // store is short too.
+                // with fitting songs from the analysis store that belong to the session's scene (heard
+                // ones first), the closest misfits of the pool pad it only when those are short too.
                 let pool = match (&tempo, tempo_store) {
                     (Some(target), Some(store)) => {
                         let here = lookup(&current);
-                        let fill = listen_mix::tempo::tempo_fill(
-                            &pool,
-                            |s| super::heart_rate::song_bpm(&lookup, s),
-                            || store.candidates(),
-                            &tempo_skip,
-                            target,
-                            super::heart_rate::TEMPO_POOL,
-                            here.as_ref(),
-                        );
+                        let fill = store.with_scene(|scene| {
+                            listen_mix::tempo::tempo_fill(
+                                &pool,
+                                |s| super::heart_rate::song_bpm(&lookup, s),
+                                || store.candidates(),
+                                &tempo_skip,
+                                target,
+                                super::heart_rate::TEMPO_POOL,
+                                here.as_ref(),
+                                scene,
+                            )
+                        });
                         super::heart_rate::log_fill("AI DJ", &fill, target, super::heart_rate::TEMPO_POOL);
                         fill.songs
                     }

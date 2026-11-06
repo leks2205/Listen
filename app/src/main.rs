@@ -132,6 +132,9 @@ fn main() -> iced::Result {
     if std::env::args().nth(1).as_deref() == Some("--check-bridges") {
         std::process::exit(listen::check_bridges::run(&std::env::args().skip(2).collect::<Vec<_>>()));
     }
+    if std::env::args().nth(1).as_deref() == Some("--check-tempo") {
+        std::process::exit(listen::check_tempo::run(&std::env::args().skip(2).collect::<Vec<_>>()));
+    }
     if std::env::args().nth(1).as_deref() == Some("--check-mix") {
         tracing_subscriber::fmt()
             .with_env_filter(

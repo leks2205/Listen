@@ -13,6 +13,7 @@ use crate::pick::TempoTarget;
 use listen_core::analysis::FlowFeatures;
 use listen_core::model::Song;
 use listen_core::queue::{Picker, Queue, Why, WhyCode};
+use listen_core::scene::{SceneFilter, Tally};
 use listen_core::versions::song_key;
 use std::collections::HashSet;
 
@@ -30,6 +31,8 @@ pub const KEEP_TOLERANCE: f32 = TOLERANCE / 2.0;
 pub const SMOOTH_S: f64 = 30.0;
 /// Below this beat-grid confidence a song's tempo counts as unknown (as in the flow scorer).
 const MIN_CONFIDENCE: f32 = 0.35;
+/// How much a closer scene (score 0..1) lowers a store song's sound cost (as for bridges).
+const SCENE_WEIGHT: f32 = 0.3;
 
 /// The tempo target for a heart rate or cadence of `rate` per minute: clamped to 70–180, ± 8 BPM, half
 /// and double time count.
@@ -204,6 +207,12 @@ pub struct TempoFill {
     pub from_store: usize,
     /// How many songs that do not fit (or have no known tempo) were padded in.
     pub padded: usize,
+    /// How many of the store's songs were ones the listener played or liked.
+    pub heard: usize,
+    /// Fitting store songs the scene gate turned away (`candidates`: how many it judged).
+    pub scene: Tally,
+    /// The session's scene ([`SceneFilter::session`]) when a gate was active.
+    pub session: Option<String>,
 }
 
 impl TempoFill {
@@ -211,8 +220,27 @@ impl TempoFill {
     pub fn stats(&self, target: &TempoTarget, want: usize) -> serde_json::Value {
         serde_json::json!({
             "target": target.bpm, "want": want, "fitting": self.fitting, "from_store": self.from_store,
-            "padded": self.padded, "note": self.padded_note(target),
+            "padded": self.padded, "note": self.padded_note(target), "heard": self.heard,
+            "scene_judged": self.scene.candidates, "other_scene": self.scene.other_scene,
+            "other_era": self.scene.other_era, "unknown_scene": self.scene.unknown_scene,
+            "session": self.session, "scene_note": self.scene_note(target),
         })
+    }
+
+    /// The scene gate's log line, `None` when no gate was active:
+    /// "heart-rate tempo: 9 fit 146, 31 rejected (other scene 20, other era 3, unknown 8) [session scene …]".
+    pub fn scene_note(&self, target: &TempoTarget) -> Option<String> {
+        let session = self.session.as_ref()?;
+        let t = &self.scene;
+        Some(format!(
+            "heart-rate tempo: {} fit {:.0}, {} rejected (other scene {}, other era {}, unknown {}) [{session}]",
+            self.fitting,
+            target.bpm,
+            t.rejected(),
+            t.other_scene,
+            t.other_era,
+            t.unknown_scene
+        ))
     }
 
     /// The log line for a padded fill, `None` when every song fits.
@@ -261,6 +289,13 @@ pub fn store_bpm(song: &Song, f: &FlowFeatures) -> Option<f32> {
 /// `skip` (excluded, blocked, queued, played, worn out) are never taken, nor a second copy of a song.
 /// `here`: the current song's analysis, for the sound ranking. When at least `want` pool songs fit, every
 /// fitting pool song comes back (closest first).
+///
+/// `scene` (the session's scene, `listen_analysis::tempo_scene_filter`): a store song must belong to the
+/// scene of what is playing, and a closer scene ranks it higher; songs the listener played or liked come
+/// before never-heard store records, which are only taken when those run short. When the gate leaves too
+/// few, fewer store songs are taken: the padding then comes from the DJ's own pool, never from another
+/// scene. [`TempoFill::scene_note`] says what the gate did.
+#[allow(clippy::too_many_arguments)]
 pub fn tempo_fill(
     pool: &[Song],
     bpm_of: impl Fn(&Song) -> Option<f32>,
@@ -269,6 +304,7 @@ pub fn tempo_fill(
     target: &TempoTarget,
     want: usize,
     here: Option<&FlowFeatures>,
+    scene: Option<&SceneFilter>,
 ) -> TempoFill {
     use crate::score::{TimbreStats, Weights, flow_terms};
     let bpms: Vec<Option<f32>> = pool.iter().map(&bpm_of).collect();
@@ -276,6 +312,7 @@ pub fn tempo_fill(
     let mut out = TempoFill {
         songs: fit.iter().map(|&i| pool[i].clone()).collect(),
         fitting: fit.len(),
+        session: scene.filter(|g| g.active).map(|g| g.session.clone()),
         ..Default::default()
     };
     if out.songs.len() >= want {
@@ -283,7 +320,8 @@ pub fn tempo_fill(
     }
     // Top up from the store: fitting songs not in the pool and not skipped, one per song key.
     let mut seen: HashSet<String> = pool.iter().map(song_key).collect();
-    let mut extra: Vec<(Song, FlowFeatures, f32)> = Vec::new();
+    // (song, analysis, tempo distance, scene score, heard)
+    let mut extra: Vec<(Song, FlowFeatures, f32, f32, bool)> = Vec::new();
     for (song, f) in store() {
         let Some(d) = store_bpm(&song, &f).map(|b| fit_distance(target, b)).filter(|d| *d <= target.tol)
         else {
@@ -294,28 +332,45 @@ pub fn tempo_fill(
         if skip.contains(&key) || skip.contains(&ytm_id) || skip.contains(&song.id) || !seen.insert(key) {
             continue;
         }
-        extra.push((song, f, d));
+        let (score, heard) = match scene {
+            Some(g) => {
+                out.scene.candidates += 1;
+                match (g.judge)(&song) {
+                    Ok(s) => (s, (g.heard)(&song)),
+                    Err(r) => {
+                        out.scene.count(r);
+                        continue;
+                    }
+                }
+            }
+            None => (0.0, false),
+        };
+        extra.push((song, f, d, score, heard));
     }
-    // Closest to the current song's sound (energy and timbre, as the flow scorer weighs them), then tempo.
+    // Heard songs first; then closest to the current song's sound (energy and timbre, as the flow scorer
+    // weighs them) and scene, then tempo.
     let w = Weights::default();
     let stats = TimbreStats::from_vectors(
         here.into_iter().chain(extra.iter().map(|e| &e.1)).map(|f| f.timbre.as_slice()),
     );
-    let mut scored: Vec<(f32, f32, usize)> = extra
+    let mut scored: Vec<(bool, f32, f32, usize)> = extra
         .iter()
         .enumerate()
-        .map(|(i, (_, f, d))| {
+        .map(|(i, (_, f, d, score, heard))| {
             let sound = here.map_or(0.0, |h| {
                 let t = flow_terms(h, f, &[], stats.as_ref());
                 w.energy * t[2] + w.timbre * t[3]
             });
-            (sound, *d, i)
+            (!heard, sound - SCENE_WEIGHT * score, *d, i)
         })
         .collect();
-    scored.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
+    scored.sort_by(|a, b| {
+        a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.total_cmp(&b.2)).then(a.3.cmp(&b.3))
+    });
     let room = want - out.songs.len();
     let taken = scored.len().min(room);
-    out.songs.extend(scored.iter().take(room).map(|&(_, _, i)| extra[i].0.clone()));
+    out.songs.extend(scored.iter().take(room).map(|&(_, _, _, i)| extra[i].0.clone()));
+    out.heard = scored.iter().take(room).filter(|s| !s.0).count();
     out.fitting += taken;
     out.from_store = taken;
     if out.songs.len() >= want {
@@ -549,7 +604,7 @@ mod tests {
         let bpm_of =
             |s: &Song| tag(s).or_else(|| store.iter().find(|(x, _)| x.id == s.id).and_then(|(_, f)| f.bpm));
         let here = flow(70.0, 0.3);
-        let r = tempo_fill(&bug_pool(), bpm_of, || store.clone(), &HashSet::new(), &t, 12, Some(&here));
+        let r = tempo_fill(&bug_pool(), bpm_of, || store.clone(), &HashSet::new(), &t, 12, Some(&here), None);
         assert_eq!(r.songs.len(), 12);
         assert_eq!((r.fitting, r.from_store, r.padded), (12, 10, 0));
         assert!(r.songs.iter().all(|s| fits(&t, bpm_of(s).unwrap())));
@@ -564,7 +619,7 @@ mod tests {
     #[test]
     fn empty_store_pads_with_the_nearest_misfits_and_says_so() {
         let t = target(70.0);
-        let r = tempo_fill(&bug_pool(), tag, Vec::new, &HashSet::new(), &t, 12, None);
+        let r = tempo_fill(&bug_pool(), tag, Vec::new, &HashSet::new(), &t, 12, None, None);
         assert_eq!(r.songs.len(), 12);
         assert_eq!((r.fitting, r.from_store, r.padded), (2, 0, 10));
         assert_eq!(
@@ -595,7 +650,7 @@ mod tests {
             "ytm:ytmplayed".to_string(),
         ]
         .into();
-        let r = tempo_fill(&bug_pool(), tag, || store, &skip, &t, 12, None);
+        let r = tempo_fill(&bug_pool(), tag, || store, &skip, &t, 12, None, None);
         let ids: Vec<&str> = r.songs.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(&ids[..3], ["fit2", "fit1", "ok"]);
         assert_eq!(ids.iter().filter(|i| **i == "fit1").count(), 1);
@@ -614,7 +669,7 @@ mod tests {
             (fsong("double", None), flow(300.0, 0.5)),
             (fsong("no", None), flow(100.0, 0.5)),
         ];
-        let r = tempo_fill(&[], tag, || store, &HashSet::new(), &t, 5, None);
+        let r = tempo_fill(&[], tag, || store, &HashSet::new(), &t, 5, None, None);
         let ids: Vec<&str> = r.songs.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids.len(), 2, "store misfits never pad: {ids:?}");
         assert!(ids.contains(&"half") && ids.contains(&"double"));
@@ -625,7 +680,7 @@ mod tests {
     fn enough_fitting_pool_songs_stay_as_before_and_the_store_is_not_asked() {
         let t = target(120.0);
         let p: Vec<Song> = (0..20).map(|i| fsong(&format!("p{i}"), Some(112 + i))).collect();
-        let r = tempo_fill(&p, tag, || panic!("store asked"), &HashSet::new(), &t, 5, None);
+        let r = tempo_fill(&p, tag, || panic!("store asked"), &HashSet::new(), &t, 5, None, None);
         assert_eq!(r.songs.len(), 17, "every fitting pool song (112–128)");
         assert_eq!((r.from_store, r.padded), (0, 0));
         assert_eq!(r.songs[0].id, "p8");
@@ -639,5 +694,172 @@ mod tests {
         assert_eq!(store_bpm(&fsong("x", None), &f), None);
         f.bpm_confidence = 0.9;
         assert_eq!(store_bpm(&fsong("x", Some(140)), &f), Some(100.0));
+    }
+
+    // ---- the scene gate on the store top-up ----
+
+    mod scenes {
+        use super::*;
+        use listen_core::scene::{Neighbours, Profile, Reject, Scene, SceneFilter, Session};
+        use std::collections::HashMap;
+
+        const KPOP: &str = "K-pop, dance-pop, 2020s, South Korea, Korean, girl group, energetic";
+        const KPOP10: &str = "K-pop, dance-pop, 2010s, South Korea, Korean, girl group";
+        const KPOP90: &str = "K-pop, dance-pop, 1990s, South Korea, Korean, girl group, 1st-generation K-pop";
+        const UKPOP: &str = "pop, dance-pop, 2000s, United Kingdom, English, girl group, electropop";
+        const JROCK: &str = "J-rock, anime, 2020s, Japan, Japanese, male vocals";
+        const USRAP: &str = "hip hop, trap, 2020s, United States, English, male solo";
+
+        /// Songs by id with their tags ("" unknown).
+        struct World(HashMap<String, &'static str>);
+
+        impl World {
+            fn profile(&self, s: &Song) -> Profile {
+                let t = self.0.get(&s.id).copied().unwrap_or("");
+                Profile { scene: Scene::from_tags(t), ..Default::default() }
+            }
+        }
+
+        fn filter<'a>(w: &'a World, session: &'a Session<'a>, heard: &'a HashSet<String>) -> SceneFilter<'a> {
+            SceneFilter {
+                judge: Box::new(
+                    move |s| if session.active() { session.judge(&w.profile(s)) } else { Ok(0.0) },
+                ),
+                heard: Box::new(move |s| heard.contains(&s.id)),
+                active: session.active(),
+                session: session.describe(),
+            }
+        }
+
+        /// The phone queue of 2026-11-06: a K-pop AI DJ set at 146 BPM; the store's fitting songs are
+        /// Girls Aloud, PIROKALPIN, LAST ALLIANCE, KACHISAN (unknown) and two K-pop songs.
+        fn store() -> Vec<(Song, FlowFeatures)> {
+            ["biology", "piro", "shisso", "kachisan", "weareyoung", "kpop2", "kpop90"]
+                .iter()
+                .map(|id| (fsong(id, None), flow(146.0, 0.5)))
+                .collect()
+        }
+
+        fn world() -> World {
+            World(HashMap::from([
+                ("now".into(), KPOP),
+                ("prev1".into(), KPOP),
+                ("prev2".into(), KPOP10),
+                ("biology".into(), UKPOP),
+                ("piro".into(), JROCK),
+                ("weareyoung".into(), KPOP),
+                ("kpop2".into(), KPOP10),
+                ("kpop90".into(), KPOP90),
+                ("rap".into(), USRAP),
+            ]))
+        }
+
+        fn ids(r: &TempoFill) -> Vec<&str> {
+            r.songs.iter().map(|s| s.id.as_str()).collect()
+        }
+
+        #[test]
+        fn a_kpop_session_never_gets_uk_pop_japanese_or_unknown_store_songs() {
+            let w = world();
+            let n = Neighbours::default();
+            let session = Session::new(["now", "prev1", "prev2"].map(|id| w.profile(&fsong(id, None))), &n);
+            let heard = HashSet::new();
+            let g = filter(&w, &session, &heard);
+            let t = target(146.0);
+            let pool = vec![fsong("dj1", Some(146)), fsong("dj2", Some(100))];
+            let r = tempo_fill(&pool, tag, store, &HashSet::new(), &t, 6, None, Some(&g));
+            let got = ids(&r);
+            assert_eq!(&got[..3], ["dj1", "weareyoung", "kpop2"], "{got:?}");
+            for bad in ["biology", "piro", "shisso", "kachisan", "kpop90"] {
+                assert!(!got.contains(&bad), "{bad} in {got:?}");
+            }
+            // Fewer tempo picks; the DJ's own song pads, not another scene.
+            assert_eq!((r.fitting, r.from_store, r.padded), (3, 2, 1));
+            assert_eq!(got[3], "dj2");
+            assert_eq!(
+                (r.scene.candidates, r.scene.other_scene, r.scene.other_era, r.scene.unknown_scene),
+                (7, 2, 1, 2)
+            );
+            let note = r.scene_note(&t).unwrap();
+            assert!(
+                note.starts_with("heart-rate tempo: 3 fit 146, 5 rejected (other scene 2, other era 1, unknown 2) [session scene ko · pop · 2020s"),
+                "{note}"
+            );
+            assert_eq!(r.stats(&t, 6)["other_era"], 1);
+            // Without the gate the old fill takes them all.
+            let old = tempo_fill(&pool, tag, store, &HashSet::new(), &t, 6, None, None);
+            assert_eq!(old.from_store, 5);
+            assert!(old.scene_note(&t).is_none());
+        }
+
+        #[test]
+        fn a_mixed_session_takes_either_scene() {
+            let w = world();
+            let n = Neighbours::default();
+            let session = Session::new(["now", "rap"].map(|id| w.profile(&fsong(id, None))), &n);
+            let heard = HashSet::new();
+            let g = filter(&w, &session, &heard);
+            let mut st = store();
+            st.push((fsong("rap", None), flow(146.0, 0.5)));
+            let r = tempo_fill(&[], tag, || st, &HashSet::new(), &target(146.0), 10, None, Some(&g));
+            let got = ids(&r);
+            assert!(got.contains(&"rap") && got.contains(&"weareyoung"), "{got:?}");
+            assert!(!got.contains(&"piro") && !got.contains(&"shisso"), "{got:?}");
+        }
+
+        #[test]
+        fn nothing_known_is_the_old_fill() {
+            let w = World(HashMap::new());
+            let n = Neighbours::default();
+            let session = Session::new([w.profile(&fsong("now", None))], &n);
+            let heard = HashSet::new();
+            let g = filter(&w, &session, &heard);
+            let t = target(146.0);
+            let gated = tempo_fill(&[], tag, store, &HashSet::new(), &t, 10, None, Some(&g));
+            let old = tempo_fill(&[], tag, store, &HashSet::new(), &t, 10, None, None);
+            assert_eq!(ids(&gated), ids(&old));
+            assert_eq!(gated.from_store, 7);
+            assert!(gated.scene_note(&t).is_none(), "no gate, no scene line");
+        }
+
+        #[test]
+        fn heard_songs_come_before_never_heard_store_records() {
+            let w = world();
+            let n = Neighbours::default();
+            let session = Session::new([w.profile(&fsong("now", None))], &n);
+            // kpop2 was played; weareyoung (never heard) sounds closer.
+            let heard: HashSet<String> = ["kpop2".to_string()].into();
+            let g = filter(&w, &session, &heard);
+            let here = flow(146.0, 0.5);
+            let st =
+                vec![(fsong("weareyoung", None), flow(146.0, 0.5)), (fsong("kpop2", None), flow(146.0, 0.9))];
+            let r = tempo_fill(
+                &[],
+                tag,
+                || st.clone(),
+                &HashSet::new(),
+                &target(146.0),
+                1,
+                Some(&here),
+                Some(&g),
+            );
+            assert_eq!(ids(&r), ["kpop2"]);
+            assert_eq!(r.heard, 1);
+            // Without the history the closer sound wins.
+            let none = HashSet::new();
+            let g = filter(&w, &session, &none);
+            let r = tempo_fill(&[], tag, || st, &HashSet::new(), &target(146.0), 1, Some(&here), Some(&g));
+            assert_eq!(ids(&r), ["weareyoung"]);
+            assert_eq!(r.heard, 0);
+        }
+
+        #[test]
+        fn a_reject_is_counted_by_reason() {
+            let mut t = Tally::default();
+            for r in [Reject::OtherScene, Reject::OtherEra, Reject::UnknownScene, Reject::UnknownScene] {
+                t.count(r);
+            }
+            assert_eq!((t.other_scene, t.other_era, t.unknown_scene, t.rejected()), (1, 1, 2, 4));
+        }
     }
 }

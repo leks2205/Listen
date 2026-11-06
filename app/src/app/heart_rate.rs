@@ -19,17 +19,21 @@ use listen_core::analysis::FlowFeatures;
 use listen_core::history::Picker;
 use listen_core::model::{ServerId, Song, SourceKind as SongSource};
 use listen_core::queue::Why;
+use listen_core::scene::{Neighbours, SceneFilter, SceneIndex};
 use listen_core::settings::HeartRateSensor;
 use listen_core::versions::song_key;
 use listen_mix::pick::TempoTarget;
 use listen_mix::tempo::{TempoFill, Tracker, flow_bpm, tempo_fill};
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// The AI DJ plans a set from this many candidates in heart-rate mode (topped up from the store).
 pub const TEMPO_POOL: usize = 12;
 /// History entries (newest first) offered to the store top-up.
 const HISTORY_LOOK: usize = 5000;
+/// Songs before and after the current one that may tell the session's scene.
+const SESSION_LOOK: usize = 8;
 
 /// What the heart button says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,14 +100,21 @@ pub(super) struct TempoStore {
     /// History songs of connected servers, newest first, one per song.
     known: Vec<Song>,
     ytm: Option<ServerId>,
+    /// The scene of what is playing: the describe-it index, the artists heard next to each other, the
+    /// current song then the ones played before it (newest first) and the queued ones.
+    scenes: Arc<SceneIndex>,
+    neighbours: Neighbours,
+    around: Vec<Song>,
+    /// Song keys and record ids of songs played (not skipped) in the history.
+    heard: HashSet<String>,
 }
 
 impl TempoStore {
     /// Analysed history songs, then every other analysed YouTube Music song of the store.
-    pub(super) fn candidates(self) -> Vec<(Song, FlowFeatures)> {
-        let Some(analysis) = self.analysis else { return Vec::new() };
+    pub(super) fn candidates(&self) -> Vec<(Song, FlowFeatures)> {
+        let Some(analysis) = &self.analysis else { return Vec::new() };
         let (songs, records) = listen_analysis::bridge_candidates(
-            self.known,
+            self.known.iter().cloned(),
             |s| analysis.lookup(s),
             analysis.all_records(),
             self.ytm.as_ref(),
@@ -116,10 +127,20 @@ impl TempoStore {
             .filter_map(|(s, r)| r.features().map(|f| (s, FlowFeatures::of(f))))
             .collect()
     }
+
+    /// Runs a fill with the session's scene gate (`listen_mix::tempo::tempo_fill`'s `scene`).
+    pub(super) fn with_scene<R>(&self, fill: impl FnOnce(Option<&SceneFilter>) -> R) -> R {
+        let session = listen_analysis::tempo_session(&self.scenes, &self.neighbours, self.around.iter());
+        let filter = listen_analysis::tempo_scene_filter(&self.scenes, &session, &self.heard);
+        fill(Some(&filter))
+    }
 }
 
-/// Logs what a tempo fill took (a warning when it had to pad with misfits).
+/// Logs what a tempo fill took (a warning when it had to pad with misfits) and what the scene gate did.
 pub(super) fn log_fill(who: &str, fill: &TempoFill, target: &TempoTarget, want: usize) {
+    if let Some(note) = fill.scene_note(target) {
+        tracing::info!("{who}: {note}");
+    }
     match fill.padded_note(target) {
         Some(note) => tracing::warn!("{who}: {note}"),
         None => tracing::info!(
@@ -333,7 +354,38 @@ impl Listen {
             .collect();
         let ytm =
             self.sources.iter().find(|(_, s)| s.kind() == SongSource::YouTubeMusic).map(|(id, _)| id.clone());
-        TempoStore { analysis: self.analysis.clone(), known, ytm }
+        let scenes = self.analysis.as_ref().map(|a| a.scenes()).unwrap_or_default();
+        let neighbours = Neighbours::from_history(&self.history.entries);
+        let heard = self
+            .history
+            .entries
+            .iter()
+            .filter(|e| e.played())
+            .flat_map(|e| {
+                let s = e.to_song();
+                [song_key(&s), listen_analysis::record_key(&s)]
+            })
+            .collect();
+        TempoStore {
+            analysis: self.analysis.clone(),
+            known,
+            ytm,
+            scenes,
+            neighbours,
+            around: self.hr_around(),
+            heard,
+        }
+    }
+
+    /// The current song, then the songs before it in the queue (newest first), then the queued ones: what
+    /// tells the session's scene.
+    fn hr_around(&self) -> Vec<Song> {
+        let Some(pos) = self.queue.current_position() else { return Vec::new() };
+        let at = |i: usize| self.queue.item_at(i).filter(|it| it.bridge.is_none()).map(|it| it.song.clone());
+        let mut out: Vec<Song> = at(pos).into_iter().collect();
+        out.extend((pos.saturating_sub(SESSION_LOOK)..pos).rev().filter_map(at));
+        out.extend((pos + 1..self.queue.len().min(pos + 1 + SESSION_LOOK)).filter_map(at));
+        out
     }
 
     /// An Auto-DJ fill in heart-rate mode: the songs of `picked` that fit `target`, topped up from the
@@ -349,15 +401,18 @@ impl Listen {
         let lookup = self.flow_lookup();
         let here = self.queue.current().and_then(|i| lookup(&i.song));
         let store = self.hr_store();
-        let fill = tempo_fill(
-            &picked,
-            |s| song_bpm(&lookup, s),
-            || store.candidates(),
-            skip,
-            target,
-            n,
-            here.as_ref(),
-        );
+        let fill = store.with_scene(|scene| {
+            tempo_fill(
+                &picked,
+                |s| song_bpm(&lookup, s),
+                || store.candidates(),
+                skip,
+                target,
+                n,
+                here.as_ref(),
+                scene,
+            )
+        });
         log_fill("Auto-DJ", &fill, target, n);
         self.hr.last_fill = Some(fill.stats(target, n));
         fill.songs

@@ -6,6 +6,7 @@ pub mod appearance;
 pub mod check;
 pub mod check_bridges;
 pub mod check_mix;
+pub mod check_tempo;
 pub mod check_ytm;
 pub mod demo;
 pub mod desktop_theme;

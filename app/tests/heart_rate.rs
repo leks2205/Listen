@@ -83,6 +83,25 @@ fn analyse(s: &Listen, song: &Song, bpm: f32) {
     s.analysis.as_ref().unwrap().insert([analysed(song, bpm)]);
 }
 
+/// Describe-it tags in `now`'s scene (its genre and decade) for `songs`, plus `other` for `others`: the scene
+/// index the heart-rate top-up's scene gate reads.
+fn tag_scenes(s: &Listen, now: &Song, songs: &[Song], others: &[(Song, &str)]) {
+    use listen_core::scene::{SceneIndex, SceneRecord};
+    let decade = now.year.map(|y| format!("{}s", y / 10 * 10)).unwrap_or_default();
+    let tags = format!("synthwave, electronic, {decade}, instrumental");
+    let rec = |x: &Song, t: &str| SceneRecord {
+        song_id: listen_analysis::record_key(x),
+        title_hint: format!("{} – {}", x.artist_line(), x.title),
+        tags_en: t.into(),
+        audio: None,
+        at: 0,
+    };
+    let records = std::iter::once(rec(now, &tags))
+        .chain(songs.iter().map(|x| rec(x, &tags)))
+        .chain(others.iter().map(|(x, t)| rec(x, t)));
+    s.analysis.as_ref().unwrap().set_scenes(SceneIndex::from_records(records));
+}
+
 /// A distinct song (own id, title and artist) from the demo library.
 fn song(i: usize) -> Song {
     let mut s = demo::album_songs(i / 8)[i % 8 % demo::album_songs(i / 8).len()].clone();
@@ -224,6 +243,17 @@ fn auto_dj_fills_take_fitting_songs_topped_up_from_the_store_and_off_is_normal_a
         analyse(&s, x, if i == 0 { 120.0 } else { 146.0 + i as f32 });
         s.history.entries.push(listen_core::history::Entry::new(x, 1_000 + i as i64));
     }
+    // A history song that fits the tempo but is K-pop from the 1990s: an instrumental synthwave session
+    // takes any language and pop is near electronic, but the 1990s are more than a decade away.
+    let kpop = song(28);
+    analyse(&s, &kpop, 150.0);
+    s.history.entries.push(listen_core::history::Entry::new(&kpop, 2_000));
+    tag_scenes(
+        &s,
+        &now,
+        &store,
+        &[(kpop.clone(), "K-pop, dance-pop, 1990s, South Korea, Korean, girl group")],
+    );
     let _ = s.update(hr(HeartRateMsg::Set(true)));
     let _ = s.update(sample(150));
     let before = s.queue.len();
@@ -245,9 +275,15 @@ fn auto_dj_fills_take_fitting_songs_topped_up_from_the_store_and_off_is_normal_a
     }
     assert!(added.iter().any(|i| i.song.id == fetched[0].id), "the fitting fetched song");
     assert!(!added.iter().any(|i| i.song.id == store[0].id), "the store's misfit stays out");
+    assert!(!added.iter().any(|i| i.song.id == kpop.id), "another era stays out");
     let fill = s.hr.last_fill.clone().unwrap();
     assert_eq!(fill["padded"], 0);
     assert_eq!(fill["from_store"], (n - 1) as u64);
+    assert_eq!(fill["other_era"], 1, "{fill}");
+    assert!(
+        fill["scene_note"].as_str().unwrap().contains("[session scene instrumental · electronic"),
+        "{fill}"
+    );
     let tempo_picks: Vec<u64> = added.iter().map(|i| i.uid).collect();
 
     // Off: the next fill is an ordinary one; the tempo picks already queued stay.

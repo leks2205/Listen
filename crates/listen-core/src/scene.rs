@@ -16,9 +16,18 @@
 //! scene. Same artist is always the same scene; an artist heard right next to another in the listening
 //! history ([`Neighbours`]) is too when nothing else is known.
 //!
+//! A scene also has an **era** (the decade: before 1980, the 1980s, …, the 2020s), read from the tags
+//! ("2020s", "90s ballad", "1st-generation K-pop"), else the song's year, else the artist's other tagged
+//! songs, else the eras of the songs that sound closest (CLaMP 3, ≥ [`AUDIO_SAME`]). Two songs whose eras
+//! are both known must be at most one decade apart (the 2010s and the 2020s are one scene, the 1980s and
+//! the 2020s are not). When only one era is known, language and genre must both match, and the score is
+//! lower.
+//!
 //! [`Gate`] applies this to a bridge: when the two songs it joins share a scene the bridge must belong to
 //! it, when they differ it must match one of them, and a candidate whose scene is unknown is rejected
-//! when the songs' scenes are known (no bridge is better than a wrong one).
+//! when the songs' scenes are known (no bridge is better than a wrong one). [`Session`] applies it to the
+//! songs the heart-rate tempo mode adds: they must belong to the scene of what is playing (the majority of
+//! the last few known scenes, or one of them when the session is mixed).
 
 use crate::describe::{EmbedRecord, decode_vec, split_hint};
 use crate::history::Entry as Play;
@@ -32,6 +41,14 @@ use std::path::Path;
 pub const AUDIO_SAME: f32 = 0.60;
 /// Plays at most this far apart (seconds, start to start) count as heard next to each other.
 const NEIGHBOUR_GAP_S: i64 = 20 * 60;
+/// Two known eras at most this many years apart (decade starts) are one scene.
+pub const ERA_SPAN: u16 = 10;
+/// Eras before this decade count as one ("before 1980").
+const EARLY_ERA: u16 = 1970;
+/// A [`Session`] is read from at most this many songs with a known scene.
+pub const SESSION_LEN: usize = 5;
+/// Score factor when only one of two songs has a known era.
+const ONE_ERA: f32 = 0.85;
 
 /// Genre families as bits; a song may have several ("K-pop, hip hop" is pop and hip hop).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -122,6 +139,61 @@ pub struct Scene {
     pub instrumental: bool,
     pub families: Families,
     pub source: Source,
+    /// The decade it comes from (1980, 1990, …; 1970 stands for everything before 1980).
+    pub era: Option<u16>,
+}
+
+/// The era of a year: its decade, everything before 1980 as one.
+pub fn era_of_year(year: i32) -> Option<u16> {
+    if !(1900..=2099).contains(&year) {
+        return None;
+    }
+    Some((year as u16 / 10 * 10).max(EARLY_ERA))
+}
+
+/// "2020s", "before 1980" for logs.
+pub fn era_label(era: u16) -> String {
+    if era <= EARLY_ERA { "before 1980".into() } else { format!("{era}s") }
+}
+
+/// The era a tag names: a decade ("2020s", "90s ballad", "90skpop"), a year ("1999"), or a K-pop
+/// generation ("1st-generation K-pop": the 1990s … "5th-generation": the 2020s). The second value is
+/// true for an explicit decade or year (it beats a generation).
+fn era_of_tag(tag: &str) -> Option<(u16, bool)> {
+    let w = words(tag);
+    for x in &w {
+        let digits: String = x.chars().take_while(|c| c.is_ascii_digit()).collect();
+        let rest = &x[digits.len()..];
+        let decade = match (digits.len(), rest.starts_with('s')) {
+            (4, true) => digits.parse::<i32>().ok().filter(|y| y % 10 == 0),
+            // "80s", "90s", "00s", "10s"; "20s" could be the 1920s.
+            (2, true) => match digits.as_str() {
+                "30" | "40" | "50" | "60" | "70" | "80" | "90" => {
+                    digits.parse::<i32>().ok().map(|d| 1900 + d)
+                }
+                "00" | "10" => digits.parse::<i32>().ok().map(|d| 2000 + d),
+                _ => None,
+            },
+            (4, false) if rest.is_empty() => digits.parse::<i32>().ok().filter(|y| (1930..=2029).contains(y)),
+            _ => None,
+        };
+        if let Some(e) = decade.and_then(era_of_year) {
+            return Some((e, true));
+        }
+    }
+    if w.iter().any(|x| x.starts_with("generation")) {
+        let gen_era = |x: &str| match x {
+            "1st" | "first" => Some(1990),
+            "2nd" | "second" => Some(2000),
+            "3rd" | "third" => Some(2010),
+            "4th" | "fourth" | "5th" | "fifth" => Some(2020),
+            _ => None,
+        };
+        if let Some(e) = w.iter().find_map(|x| gen_era(x)) {
+            return Some((e, false));
+        }
+    }
+    None
 }
 
 /// Language words and country names as they appear in tags and genres.
@@ -300,10 +372,16 @@ impl Scene {
     fn from_labels<'a>(labels: impl Iterator<Item = &'a str>, source: Source) -> Scene {
         let mut s = Scene::default();
         let mut langs: Vec<&'static str> = Vec::new();
+        let mut generation = None;
         for label in labels {
             let l = label.to_lowercase();
             if l.is_empty() || l == "unknown" {
                 continue;
+            }
+            match era_of_tag(&l) {
+                Some((e, true)) if s.era.is_none() => s.era = Some(e),
+                Some((e, false)) if generation.is_none() => generation = Some(e),
+                _ => {}
             }
             if l == "instrumental" {
                 s.instrumental = true;
@@ -316,6 +394,7 @@ impl Scene {
         }
         // The explicit language tag (or the first one named) wins; "K-pop" in English is still Korean pop.
         s.lang = langs.first().copied();
+        s.era = s.era.or(generation);
         if s.lang.is_some() || s.instrumental || !s.families.is_empty() {
             s.source = source;
         }
@@ -349,23 +428,25 @@ impl Scene {
     /// Fills what `self` doesn't know from a weaker `other`.
     pub fn or(self, other: Scene) -> Scene {
         if !self.is_known() {
-            return other;
+            return Scene { era: self.era.or(other.era), ..other };
         }
         Scene {
             lang: self.lang.or(if self.instrumental { None } else { other.lang }),
             instrumental: self.instrumental,
             families: if self.families.is_empty() { other.families } else { self.families },
             source: self.source,
+            era: self.era.or(other.era),
         }
     }
 
-    /// "ko · pop, hip hop (tags)" for logs.
+    /// "ko · pop, hip hop · 2020s (tags)" for logs.
     pub fn label(&self) -> String {
         if !self.is_known() {
             return "unknown".into();
         }
         let lang = if self.instrumental { "instrumental" } else { self.lang.unwrap_or("?") };
-        format!("{lang} · {} ({:?})", self.families.label(), self.source).to_lowercase()
+        let era = self.era.map(|e| format!(" · {}", era_label(e))).unwrap_or_default();
+        format!("{lang} · {}{era} ({:?})", self.families.label(), self.source).to_lowercase()
     }
 }
 
@@ -387,7 +468,9 @@ impl Fit {
 }
 
 /// Compares two scenes on what both know: the language (unless either is instrumental) and the genre
-/// families. One dimension alone gives a weaker score.
+/// families. One dimension alone gives a weaker score. Eras known on both sides must be at most
+/// [`ERA_SPAN`] apart; when only one side's era is known, language and genre must both match (else nothing
+/// comparable is known) and the score is lower.
 pub fn compare(a: &Scene, b: &Scene) -> Fit {
     let mut parts: Vec<f32> = Vec::new();
     if let (Some(x), Some(y)) = (a.lang, b.lang)
@@ -406,10 +489,23 @@ pub fn compare(a: &Scene, b: &Scene) -> Fit {
         }
         parts.push(o);
     }
-    match parts.len() {
-        0 => Fit::Unknown,
-        1 => Fit::Same(0.6 * parts[0]),
-        _ => Fit::Same(parts.iter().sum::<f32>() / parts.len() as f32),
+    if let (Some(x), Some(y)) = (a.era, b.era)
+        && x.abs_diff(y) > ERA_SPAN
+    {
+        return Fit::Other("era");
+    }
+    let score = match parts.len() {
+        0 => return Fit::Unknown,
+        1 => 0.6 * parts[0],
+        _ => parts.iter().sum::<f32>() / parts.len() as f32,
+    };
+    match (a.era, b.era) {
+        // A decade apart is one scene, a little less close.
+        (Some(x), Some(y)) => Fit::Same(if x == y { score } else { 0.9 * score }),
+        (None, None) => Fit::Same(score),
+        // One era unknown: only a full match (language and genre) places it.
+        _ if parts.len() >= 2 => Fit::Same(ONE_ERA * score),
+        _ => Fit::Unknown,
     }
 }
 
@@ -551,6 +647,20 @@ impl Neighbours {
 pub struct SceneIndex {
     songs: HashMap<String, (Scene, Option<Quant>, String)>,
     artists: HashMap<String, Scene>,
+    /// Eras of songs without one of their own (nor their artist's), from the songs that sound closest.
+    audio_eras: HashMap<String, u16>,
+}
+
+/// The era most of `eras` agree on: the median when at least 60 % are within a decade of it.
+fn common_era(eras: &[u16]) -> Option<u16> {
+    if eras.is_empty() {
+        return None;
+    }
+    let mut v = eras.to_vec();
+    v.sort_unstable();
+    let mid = v[(v.len() - 1) / 2];
+    let near = v.iter().filter(|e| e.abs_diff(mid) <= ERA_SPAN).count();
+    (near as f32 >= 0.6 * v.len() as f32).then_some(mid)
 }
 
 impl SceneIndex {
@@ -599,12 +709,34 @@ impl SceneIndex {
                 }
             }
             let instrumental = scenes.iter().all(|s| s.instrumental);
-            let scene = Scene { lang, instrumental, families: Families(families), source: Source::Artist };
+            let eras: Vec<u16> = scenes.iter().filter_map(|s| s.era).collect();
+            let era = common_era(&eras);
+            let scene =
+                Scene { lang, instrumental, families: Families(families), source: Source::Artist, era };
             if scene.is_known() {
                 artists.insert(artist.to_string(), scene);
             }
         }
-        SceneIndex { songs, artists }
+        // Songs that still have no era: the era of the (up to 5) songs that sound closest, when they agree.
+        let dated: Vec<(&Quant, u16)> =
+            songs.values().filter_map(|(s, q, _)| Some((q.as_ref()?, s.era?))).collect();
+        let mut audio_eras = HashMap::new();
+        for (id, (scene, audio, artist)) in &songs {
+            let Some(q) = audio else { continue };
+            if scene.era.is_some() || artists.get(artist).is_some_and(|a| a.era.is_some()) {
+                continue;
+            }
+            let mut near: Vec<(f32, u16)> =
+                dated.iter().map(|(d, e)| (q.cos(d), *e)).filter(|(c, _)| *c >= AUDIO_SAME).collect();
+            near.sort_by(|a, b| b.0.total_cmp(&a.0));
+            near.truncate(5);
+            if near.len() >= 3
+                && let Some(e) = common_era(&near.iter().map(|n| n.1).collect::<Vec<_>>())
+            {
+                audio_eras.insert(id.clone(), e);
+            }
+        }
+        SceneIndex { songs, artists, audio_eras }
     }
 
     /// Reads the describe-it index folder (`…/embeddings/v1/clamp3`, every `*.jsonl` in name order).
@@ -654,6 +786,19 @@ impl SceneIndex {
     /// The scene of a song: its own tags, else its genres, else its artist's, else its script.
     /// `song_id` is the analysis store's id; `artist` and `title` as shown.
     pub fn profile(&self, song_id: &str, title: &str, artist: &str, genres: &[String]) -> Profile {
+        self.profile_dated(song_id, title, artist, genres, None)
+    }
+
+    /// [`Self::profile`] with the song's release `year` where the source has one: the era comes from the
+    /// tags, else the year, else the artist's other songs, else the songs that sound closest.
+    pub fn profile_dated(
+        &self,
+        song_id: &str,
+        title: &str,
+        artist: &str,
+        genres: &[String],
+        year: Option<i32>,
+    ) -> Profile {
         let own = self.songs.get(song_id);
         let mut key = artist_key(artist);
         if key.is_empty() {
@@ -661,7 +806,13 @@ impl SceneIndex {
         }
         let tags = own.map(|o| o.0).unwrap_or_default();
         let by_artist = self.artists.get(&key).copied().unwrap_or_default();
-        let scene = tags.or(Scene::from_genres(genres)).or(by_artist).or(Scene::from_script(title, artist));
+        let mut scene =
+            tags.or(Scene::from_genres(genres)).or(by_artist).or(Scene::from_script(title, artist));
+        scene.era = tags
+            .era
+            .or(year.and_then(era_of_year))
+            .or(by_artist.era)
+            .or_else(|| self.audio_eras.get(song_id).copied());
         Profile { scene, artist: key, audio: own.and_then(|o| o.1.clone()) }
     }
 }
@@ -726,9 +877,13 @@ pub fn fit(a: &Profile, b: &Profile, neighbours: &Neighbours) -> Fit {
         (Fit::Unknown, Some(_)) => Fit::Other("sound"),
         (f, _) => f,
     };
+    // History neighbours fill an unknown, never a known other scene, and never across eras: when one
+    // song's era is known the other's must be too.
     if !f.is_same()
         && f != Fit::Other("language")
         && f != Fit::Other("genre")
+        && f != Fit::Other("era")
+        && a.scene.era.is_some() == b.scene.era.is_some()
         && !a.artist.is_empty()
         && !b.artist.is_empty()
         && neighbours.contains(&a.artist, &b.artist)
@@ -743,8 +898,24 @@ pub fn fit(a: &Profile, b: &Profile, neighbours: &Neighbours) -> Fit {
 pub enum Reject {
     /// Its scene is known and is neither song's.
     OtherScene,
+    /// Language and genre fit, but it is from another era (more than a decade apart).
+    OtherEra,
     /// Its scene is unknown while the songs' are known.
     UnknownScene,
+}
+
+/// Why a candidate that fits none of `fits` is rejected: another era when that is the only known
+/// difference, another scene for any other known difference, else unknown.
+fn reject_of(fits: &[Fit]) -> Reject {
+    let others: Vec<&str> =
+        fits.iter().filter_map(|f| if let Fit::Other(w) = f { Some(*w) } else { None }).collect();
+    if others.is_empty() {
+        Reject::UnknownScene
+    } else if others.iter().all(|w| *w == "era") {
+        Reject::OtherEra
+    } else {
+        Reject::OtherScene
+    }
 }
 
 /// The scene rule for one pair: built from the outgoing and incoming songs, asked about each candidate.
@@ -784,13 +955,7 @@ impl<'a> Gate<'a> {
         }
         let (fo, fi) = (fit(c, &self.out, self.neighbours), fit(c, &self.inn, self.neighbours));
         let score = |f: Fit| if let Fit::Same(s) = f { s } else { 0.0 };
-        let reject = || {
-            if matches!(fo, Fit::Other(_)) || matches!(fi, Fit::Other(_)) {
-                Reject::OtherScene
-            } else {
-                Reject::UnknownScene
-            }
-        };
+        let reject = || reject_of(&[fo, fi]);
         match self.pair {
             // One scene: the bridge must be in it.
             Fit::Same(_) => {
@@ -813,7 +978,7 @@ impl<'a> Gate<'a> {
                 let sides = [(self.out.is_known(), fo), (self.inn.is_known(), fi)];
                 let known: Vec<Fit> = sides.iter().filter(|(k, _)| *k).map(|(_, f)| *f).collect();
                 if known.iter().any(|f| matches!(f, Fit::Other(_))) {
-                    Err(Reject::OtherScene)
+                    Err(reject_of(&known))
                 } else if known.iter().any(|f| f.is_same()) {
                     Ok(known.iter().map(|&f| score(f)).sum::<f32>() / known.len() as f32)
                 } else {
@@ -830,11 +995,36 @@ pub struct Tally {
     pub candidates: usize,
     pub other_scene: usize,
     pub unknown_scene: usize,
+    pub other_era: usize,
 }
 
 impl Tally {
     pub fn rejected(&self) -> usize {
-        self.other_scene + self.unknown_scene
+        self.other_scene + self.unknown_scene + self.other_era
+    }
+
+    /// Counts one decision.
+    pub fn count(&mut self, r: Reject) {
+        match r {
+            Reject::OtherScene => self.other_scene += 1,
+            Reject::OtherEra => self.other_era += 1,
+            Reject::UnknownScene => self.unknown_scene += 1,
+        }
+    }
+
+    /// "30 other scene, 2 other era, 3 unknown scene" (empty when none was rejected).
+    pub fn reasons(&self) -> String {
+        let mut parts = Vec::new();
+        if self.other_scene > 0 {
+            parts.push(format!("{} other scene", self.other_scene));
+        }
+        if self.other_era > 0 {
+            parts.push(format!("{} other era", self.other_era));
+        }
+        if self.unknown_scene > 0 {
+            parts.push(format!("{} unknown scene", self.unknown_scene));
+        }
+        parts.join(", ")
     }
 
     /// "41 candidates, 33 rejected (30 other scene, 3 unknown scene)".
@@ -842,15 +1032,194 @@ impl Tally {
         if self.rejected() == 0 {
             return format!("{} candidates, none rejected by scene", self.candidates);
         }
-        let mut parts = Vec::new();
-        if self.other_scene > 0 {
-            parts.push(format!("{} other scene", self.other_scene));
-        }
-        if self.unknown_scene > 0 {
-            parts.push(format!("{} unknown scene", self.unknown_scene));
-        }
-        format!("{} candidates, {} rejected ({})", self.candidates, self.rejected(), parts.join(", "))
+        format!("{} candidates, {} rejected ({})", self.candidates, self.rejected(), self.reasons())
     }
+}
+
+/// The scene of what is playing, for the songs the heart-rate tempo mode adds from outside the DJ's
+/// pool: read from the current song and the songs around it (at most [`SESSION_LEN`] with a known
+/// scene, the current song first). When most of them share one scene, a candidate must belong to it (its
+/// language and genre, its era within a decade of theirs); a mixed session takes a candidate from any of
+/// its scenes. A candidate of unknown scene is rejected; when nothing is known there is no gate.
+#[derive(Debug, Clone)]
+pub struct Session<'a> {
+    members: Vec<Profile>,
+    /// The majority's scene (`None`: mixed).
+    anchor: Option<Profile>,
+    /// Indices of the members in the majority.
+    cluster: Vec<usize>,
+    /// The artists of every song given, known scene or not.
+    artists: HashSet<String>,
+    neighbours: &'a Neighbours,
+}
+
+impl<'a> Session<'a> {
+    /// `profiles`: the current song first, then the songs before and after it; unknown ones are skipped.
+    pub fn new(profiles: impl IntoIterator<Item = Profile>, neighbours: &'a Neighbours) -> Session<'a> {
+        let mut artists = HashSet::new();
+        let mut members: Vec<Profile> = Vec::new();
+        for p in profiles {
+            if members.len() >= SESSION_LEN {
+                break;
+            }
+            if !p.artist.is_empty() {
+                artists.insert(p.artist.clone());
+            }
+            if p.is_known() {
+                members.push(p);
+            }
+        }
+        let n = members.len();
+        let same: Vec<Vec<usize>> = (0..n)
+            .map(|i| {
+                (0..n).filter(|&j| i == j || fit(&members[i], &members[j], neighbours).is_same()).collect()
+            })
+            .collect();
+        // The member most others share a scene with (the current song on a tie).
+        let best = (0..n).max_by_key(|&i| (same[i].len(), std::cmp::Reverse(i)));
+        let (anchor, cluster) = match best {
+            Some(i) if same[i].len() * 2 > n => {
+                let cluster = same[i].clone();
+                (Some(merge(cluster.iter().map(|&j| &members[j]))), cluster)
+            }
+            _ => (None, (0..n).collect()),
+        };
+        Session { members, anchor, cluster, artists, neighbours }
+    }
+
+    /// Whether anything is known (else every candidate passes, as before scenes).
+    pub fn active(&self) -> bool {
+        !self.members.is_empty()
+    }
+
+    /// "ko · pop · 2020s (tags), 4 of 5 songs" or "mixed: ko · pop · 2020s (tags) / en · hip hop (tags)".
+    pub fn describe(&self) -> String {
+        match &self.anchor {
+            _ if !self.active() => "session scene unknown".into(),
+            Some(a) => format!(
+                "session scene {}, {} of {} songs",
+                a.scene.label(),
+                self.cluster.len(),
+                self.members.len()
+            ),
+            None => {
+                let mut labels: Vec<String> = Vec::new();
+                for m in &self.members {
+                    let l = m.scene.label();
+                    if !labels.contains(&l) {
+                        labels.push(l);
+                    }
+                }
+                format!("session scene mixed: {}", labels.join(" / "))
+            }
+        }
+    }
+
+    /// The candidate's scene score (0..1, higher is closer) or why it is rejected.
+    pub fn judge(&self, c: &Profile) -> Result<f32, Reject> {
+        if !self.active() {
+            return Ok(0.0);
+        }
+        let score = |f: Fit| if let Fit::Same(s) = f { s } else { 0.0 };
+        let in_cluster: Vec<&Profile> = self.cluster.iter().map(|&i| &self.members[i]).collect();
+        // The same artist as a song of the session (the current one too, scene known or not) belongs.
+        if !c.artist.is_empty() && self.artists.contains(&c.artist) {
+            return Ok(1.0);
+        }
+        let fits: Vec<Fit> = in_cluster.iter().map(|m| fit(c, m, self.neighbours)).collect();
+        match &self.anchor {
+            Some(anchor) => {
+                // The majority's scene decides; where tags can't compare, most of its songs must fit (by
+                // sound or the history) and none may be a known other scene.
+                match compare(&c.scene, &anchor.scene) {
+                    Fit::Same(s) => match fits.iter().find(|f| **f == Fit::Other("era")) {
+                        // Within a decade of the session's middle, but far from one of its songs: lower.
+                        Some(_) => Ok(0.8 * s),
+                        None => Ok(s),
+                    },
+                    Fit::Other(why) => Err(reject_of(&[Fit::Other(why)])),
+                    Fit::Unknown => {
+                        let same = fits.iter().filter(|f| f.is_same()).count();
+                        if fits.iter().any(|f| matches!(f, Fit::Other(_))) {
+                            Err(reject_of(&fits))
+                        } else if same * 2 > fits.len() {
+                            Ok(0.8 * fits.iter().map(|&f| score(f)).sum::<f32>() / same as f32)
+                        } else {
+                            Err(Reject::UnknownScene)
+                        }
+                    }
+                }
+            }
+            // Mixed: any of its scenes.
+            None => match fits.iter().copied().filter(|f| f.is_same()).map(score).reduce(f32::max) {
+                Some(s) => Ok(s),
+                None => Err(reject_of(&fits)),
+            },
+        }
+    }
+}
+
+/// A song's scene score (0..1) or why it doesn't belong ([`SceneFilter::judge`]).
+pub type SongJudge<'a> = Box<dyn Fn(&crate::model::Song) -> Result<f32, Reject> + 'a>;
+
+/// The scene rule a tempo fill applies to the songs it adds from outside the DJ's pool
+/// (`listen_mix::tempo::tempo_fill`; built by `listen_analysis::tempo_scene_filter`).
+pub struct SceneFilter<'a> {
+    /// The song's scene score (0..1) or why it doesn't belong.
+    pub judge: SongJudge<'a>,
+    /// The listener played or liked it (such songs come first).
+    pub heard: Box<dyn Fn(&crate::model::Song) -> bool + 'a>,
+    /// Whether the session's scene is known (else `judge` passes everything).
+    pub active: bool,
+    /// [`Session::describe`], for the log.
+    pub session: String,
+}
+
+impl std::fmt::Debug for SceneFilter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SceneFilter").field("active", &self.active).field("session", &self.session).finish()
+    }
+}
+
+/// One profile for a group sharing a scene: the language most have, the families at least half have (the
+/// most common one when none reach half), the era most have (on a tie the first song's, i.e. the current
+/// one); no artist or sound of its own.
+fn merge<'p>(members: impl Iterator<Item = &'p Profile>) -> Profile {
+    let members: Vec<&Profile> = members.collect();
+    let scenes: Vec<&Scene> = members.iter().map(|m| &m.scene).filter(|s| s.is_known()).collect();
+    let mut langs: HashMap<&str, usize> = HashMap::new();
+    for s in &scenes {
+        if let (Some(l), false) = (s.lang, s.instrumental) {
+            *langs.entry(l).or_default() += 1;
+        }
+    }
+    let lang = langs.into_iter().max_by_key(|(l, c)| (*c, std::cmp::Reverse(*l))).map(|(l, _)| l);
+    let with_families: Vec<&&Scene> = scenes.iter().filter(|s| !s.families.is_empty()).collect();
+    let counts: Vec<usize> =
+        (0..16).map(|bit| with_families.iter().filter(|s| s.families.0 & (1 << bit) != 0).count()).collect();
+    let mut families = 0u16;
+    for (bit, &c) in counts.iter().enumerate() {
+        if c * 2 >= with_families.len() && c > 0 {
+            families |= 1 << bit;
+        }
+    }
+    if families == 0
+        && let Some((bit, _)) = counts.iter().enumerate().filter(|(_, c)| **c > 0).max_by_key(|(_, c)| **c)
+    {
+        families = 1 << bit;
+    }
+    let eras: Vec<u16> = scenes.iter().filter_map(|s| s.era).collect();
+    let count = |e: u16| eras.iter().filter(|x| **x == e).count();
+    // `max_by_key` keeps the last of equals: walk backwards so the first song wins a tie.
+    let era = eras.iter().rev().copied().max_by_key(|&e| count(e));
+    let scene = Scene {
+        lang,
+        instrumental: !scenes.is_empty() && scenes.iter().all(|s| s.instrumental),
+        families: Families(families),
+        source: scenes.iter().map(|s| s.source).max().unwrap_or_default(),
+        era,
+    };
+    Profile { scene, artist: String::new(), audio: None }
 }
 
 #[cfg(test)]
@@ -911,7 +1280,9 @@ mod tests {
         let mut b = tags("pop, disco, 2020s, english, boy group");
         b.artist = "bts".into();
         assert!(fit(&a, &b, &Neighbours::default()).is_same());
+        // (Same era: a neighbour never bridges eras, see `history_neighbours_never_bridge_eras`.)
         let mut c = Profile { artist: "someone".into(), ..Default::default() };
+        c.scene.era = Some(2020);
         let n =
             Neighbours(HashSet::from([("someone".into(), "bts".into()), ("bts".into(), "someone".into())]));
         assert_eq!(fit(&c, &a, &Neighbours::default()), Fit::Unknown);
@@ -1016,5 +1387,217 @@ mod tests {
         let cos = p.audio.as_ref().unwrap().cos(idx.profile("ytm:b", "", "", &[]).audio.as_ref().unwrap());
         assert!((cos - 1.0).abs() < 1e-3);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- eras ----
+
+    const KPOP80: &str = "Korean pop, ballad, 1980s, South Korea, Korean, female solo, retro, 80s ballad";
+    const KPOP90: &str = "K-pop, dance-pop, 1990s, South Korea, Korean, girl group, 1st-generation K-pop";
+    const KPOP10: &str = "K-pop, dance-pop, 2010s, South Korea, Korean, girl group, 3rd-generation K-pop";
+
+    #[test]
+    fn eras_come_from_decades_years_and_generations() {
+        assert_eq!(Scene::from_tags(KPOP).era, Some(2020));
+        assert_eq!(Scene::from_tags(KPOP80).era, Some(1980));
+        assert_eq!(Scene::from_tags(SAMBA).era, Some(1970), "before 1980 is one era");
+        assert_eq!(Scene::from_tags("K-pop, girl group, 1st-generation K-pop").era, Some(1990));
+        assert_eq!(Scene::from_tags("K-pop, 4th-generation K-pop").era, Some(2020));
+        assert_eq!(
+            Scene::from_tags("K-pop, 5th-generation K-pop, 2010s").era,
+            Some(2010),
+            "a decade beats a generation"
+        );
+        assert_eq!(Scene::from_tags("k-pop, 90skpop, dance").era, Some(1990));
+        assert_eq!(Scene::from_tags("ballad, 1999, korean").era, Some(1990));
+        assert_eq!(Scene::from_tags("pop, 20s jazz age").era, None, "\"20s\" is ambiguous");
+        assert_eq!(Scene::from_tags("hip hop, 808s, english").era, None);
+        assert_eq!(era_of_year(2024), Some(2020));
+        assert_eq!(era_of_year(1964), Some(1970));
+        assert_eq!(era_label(1970), "before 1980");
+        assert!(Scene::from_tags(KPOP).label().contains("2020s"), "{}", Scene::from_tags(KPOP).label());
+    }
+
+    #[test]
+    fn eras_more_than_a_decade_apart_are_other_scenes() {
+        let n = Neighbours::default();
+        assert_eq!(fit(&tags(KPOP80), &tags(KPOP), &n), Fit::Other("era"));
+        assert_eq!(fit(&tags(KPOP90), &tags(KPOP), &n), Fit::Other("era"));
+        let next = fit(&tags(KPOP10), &tags(KPOP), &n);
+        let same = fit(&tags(KPOP2.replace("2010s", "2020s").as_str()), &tags(KPOP), &n);
+        assert!(next.is_same() && same.is_same());
+        let (Fit::Same(a), Fit::Same(b)) = (next, same) else { unreachable!() };
+        assert!(a < b, "a decade apart scores a little lower: {a} {b}");
+        // One era unknown: a full match (language and genre) passes with a lower score.
+        let undated = tags("K-pop, dance-pop, South Korea, Korean, girl group");
+        let Fit::Same(u) = fit(&undated, &tags(KPOP), &n) else { panic!("full match passes") };
+        assert!(u < b);
+        // Language only (the Hangul title of 바꿔), era unknown: not comparable.
+        let script = Profile { scene: Scene::from_script("바꿔", "Lee Jung-hyun"), ..Default::default() };
+        assert_eq!(fit(&script, &tags(KPOP), &n), Fit::Unknown);
+        // Both eras unknown, language only: as before.
+        assert!(
+            fit(&script, &Profile { scene: Scene::from_script("너만을", "x"), ..Default::default() }, &n)
+                .is_same()
+        );
+    }
+
+    #[test]
+    fn a_bridge_between_2020s_kpop_songs_is_from_the_2010s_or_2020s() {
+        let n = Neighbours::default();
+        let g = Gate::new(tags(KPOP), tags(KPOP), &n);
+        assert!(g.judge(&tags(KPOP10)).is_ok());
+        assert_eq!(g.judge(&tags(KPOP90)), Err(Reject::OtherEra));
+        assert_eq!(g.judge(&tags(KPOP80)), Err(Reject::OtherEra));
+        let script = Profile { scene: Scene::from_script("바꿔", "Lee Jung-hyun"), ..Default::default() };
+        assert_eq!(g.judge(&script), Err(Reject::UnknownScene));
+        // A 1990s → 2020s pair may take a bridge from either era.
+        let mixed = Gate::new(tags(KPOP90), tags(KPOP), &n);
+        assert!(mixed.judge(&tags(KPOP90)).is_ok() && mixed.judge(&tags(KPOP)).is_ok());
+        assert!(mixed.judge(&tags(KPOP80)).is_ok(), "the 1980s are within a decade of the 1990s side");
+    }
+
+    #[test]
+    fn history_neighbours_never_bridge_eras() {
+        let mut old = Profile { artist: "lee jung-hyun".into(), ..Default::default() };
+        let mut new = tags(KPOP);
+        new.artist = "aespa".into();
+        let n = Neighbours(HashSet::from([
+            ("lee jung-hyun".into(), "aespa".into()),
+            ("aespa".into(), "lee jung-hyun".into()),
+        ]));
+        assert!(!fit(&old, &new, &n).is_same(), "the new song's era is known, the old one's is not");
+        old.scene.era = Some(1990);
+        assert_eq!(fit(&old, &new, &n), Fit::Other("era"));
+        old.scene.era = Some(2020);
+        assert!(fit(&old, &new, &n).is_same());
+    }
+
+    #[test]
+    fn the_index_dates_songs_by_year_artist_and_sound() {
+        let v = |x: f32| {
+            let mut v = vec![0.0f32; 8];
+            v[0] = 1.0;
+            v[1] = x;
+            Some(Quant::new(&v).unwrap().encode())
+        };
+        let rec = |id: &str, hint: &str, t: &str, audio: Option<String>| SceneRecord {
+            song_id: id.into(),
+            title_hint: hint.into(),
+            tags_en: t.into(),
+            audio,
+            at: 0,
+        };
+        let idx = SceneIndex::from_records([
+            rec("ytm:a", "Fin.K.L – Blue Rain", KPOP90, v(0.0)),
+            rec("ytm:b", "Fin.K.L – White", KPOP90, v(0.05)),
+            rec("ytm:c", "S.E.S. – Love", KPOP90, v(0.1)),
+            rec("ytm:d", "Nobody – Untagged era", "K-pop, dance-pop, Korean", v(0.02)),
+            rec("ytm:e", "aespa – Whiplash", KPOP, v(5.0)),
+        ]);
+        // The artist's other songs.
+        assert_eq!(idx.profile("ytm:new", "Ruby", "Fin.K.L", &[]).scene.era, Some(1990));
+        // The tags beat the year, the year beats the artist.
+        assert_eq!(idx.profile_dated("ytm:e", "Whiplash", "aespa", &[], Some(1999)).scene.era, Some(2020));
+        assert_eq!(idx.profile_dated("x", "Ruby", "Fin.K.L", &[], Some(2016)).scene.era, Some(2010));
+        // No tag era, no artist era: the closest-sounding songs (three 1990s songs).
+        assert_eq!(idx.profile("ytm:d", "Untagged era", "Nobody", &[]).scene.era, Some(1990));
+    }
+
+    // ---- the session gate (heart-rate tempo picks) ----
+
+    const UKPOP: &str = "pop, dance-pop, 2000s, United Kingdom, English, girl group, electropop";
+    const JROCK: &str = "J-rock, anime, 2020s, Japan, Japanese, male vocals, energetic";
+    const USRAP2: &str = "hip hop, trap, 2020s, United States, English, male solo";
+
+    fn session<'a>(t: &[&str], n: &'a Neighbours) -> Session<'a> {
+        Session::new(t.iter().map(|x| tags(x)), n)
+    }
+
+    #[test]
+    fn a_kpop_session_never_takes_uk_pop_japanese_or_unknown_songs() {
+        let n = Neighbours::default();
+        let s = session(&[KPOP, KPOP, KPOP2.replace("2010s", "2020s").as_str(), KPOP10, KPOP], &n);
+        assert!(s.active());
+        assert!(s.describe().contains("ko · pop · 2020s"), "{}", s.describe());
+        assert!(s.judge(&tags(KPOP)).is_ok());
+        assert!(s.judge(&tags(KPOP10)).is_ok());
+        assert_eq!(s.judge(&tags(UKPOP)), Err(Reject::OtherScene));
+        assert_eq!(s.judge(&tags(JROCK)), Err(Reject::OtherScene));
+        assert_eq!(s.judge(&Profile::default()), Err(Reject::UnknownScene));
+        assert_eq!(
+            s.judge(&Profile {
+                scene: Scene::from_script("シェイクスピアのダイアリー", "PIROKALPIN"),
+                ..Default::default()
+            }),
+            Err(Reject::OtherScene)
+        );
+        // 1980s and 1990s K-pop: another era.
+        assert_eq!(s.judge(&tags(KPOP80)), Err(Reject::OtherEra));
+        assert_eq!(s.judge(&tags(KPOP90)), Err(Reject::OtherEra));
+        // A Korean title without tags: language only, era unknown — not enough.
+        assert_eq!(
+            s.judge(&Profile { scene: Scene::from_script("바꿔", "Lee Jung-hyun"), ..Default::default() }),
+            Err(Reject::UnknownScene)
+        );
+        // An undated full match passes, below a dated one.
+        let undated = s.judge(&tags("K-pop, dance-pop, South Korea, Korean")).unwrap();
+        assert!(undated < s.judge(&tags(KPOP)).unwrap());
+    }
+
+    #[test]
+    fn the_majority_of_the_session_decides_and_a_mixed_one_takes_either() {
+        let n = Neighbours::default();
+        // One English song among four K-pop songs: still a K-pop session.
+        let s = session(&[UKPOP, KPOP, KPOP, KPOP, KPOP], &n);
+        assert!(s.judge(&tags(KPOP)).is_ok());
+        assert!(s.judge(&tags(UKPOP)).is_err());
+        // Mixed: K-pop and US rap, two each.
+        let m = session(&[KPOP, USRAP2, KPOP, USRAP2], &n);
+        assert!(m.describe().contains("mixed"), "{}", m.describe());
+        assert!(m.judge(&tags(KPOP)).is_ok() && m.judge(&tags(USRAP2)).is_ok());
+        assert_eq!(m.judge(&tags(SAMBA)), Err(Reject::OtherScene));
+        assert_eq!(m.judge(&Profile::default()), Err(Reject::UnknownScene));
+        // Unknown songs don't count; the first five known ones do.
+        let u = Session::new([Profile::default(), tags(KPOP), Profile::default()], &n);
+        assert!(u.active() && u.judge(&tags(UKPOP)).is_err());
+    }
+
+    #[test]
+    fn nothing_known_means_no_session_gate() {
+        let n = Neighbours::default();
+        let s = Session::new([Profile::default(), Profile::default()], &n);
+        assert!(!s.active());
+        assert_eq!(s.judge(&tags(UKPOP)), Ok(0.0));
+        assert_eq!(s.judge(&Profile::default()), Ok(0.0));
+    }
+
+    #[test]
+    fn the_sessions_artists_and_history_neighbours_belong() {
+        let mut cur = tags(KPOP);
+        cur.artist = "tri.be".into();
+        let n = Neighbours(HashSet::from([
+            ("tri.be".into(), "kiiikiii".into()),
+            ("kiiikiii".into(), "tri.be".into()),
+        ]));
+        let s = Session::new([cur], &n);
+        let same_artist = Profile { artist: "tri.be".into(), ..Default::default() };
+        assert_eq!(s.judge(&same_artist), Ok(1.0));
+        // Heard next to the session's artist, but the session's era is known and the candidate's is not.
+        let neighbour = Profile { artist: "kiiikiii".into(), ..Default::default() };
+        assert_eq!(s.judge(&neighbour), Err(Reject::UnknownScene));
+        let dated = Profile {
+            artist: "kiiikiii".into(),
+            scene: Scene { era: Some(2020), ..Default::default() },
+            ..Default::default()
+        };
+        assert!(s.judge(&dated).is_ok());
+        // The current song's artist belongs even when its scene is unknown.
+        let unknown_now = Profile { artist: "tri.be".into(), ..Default::default() };
+        let s = Session::new([unknown_now, tags(KPOP10), tags(KPOP)], &n);
+        assert_eq!(s.judge(&Profile { artist: "tri.be".into(), ..Default::default() }), Ok(1.0));
+        // A tie between the 2010s and the 2020s goes to the first known song's era.
+        assert!(s.describe().contains("2010s"), "{}", s.describe());
+        let s = Session::new([tags(KPOP), tags(KPOP10), tags(KPOP10), tags(KPOP)], &n);
+        assert!(s.describe().contains("2020s"), "{}", s.describe());
     }
 }

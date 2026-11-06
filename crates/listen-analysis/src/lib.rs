@@ -370,7 +370,7 @@ pub fn scene_profile(
     record_id: &str,
 ) -> listen_core::scene::Profile {
     let artist = song.artists.first().map(|a| a.name.as_str()).unwrap_or_default();
-    index.profile(record_id, &song.title, artist, &song.genres)
+    index.profile_dated(record_id, &song.title, artist, &song.genres, song.year)
 }
 
 /// The scene profile of a song known only by its store record (the phone's bridge pair): the record's
@@ -396,7 +396,7 @@ pub fn bridge_scene_gate(
     songs: Vec<Song>,
     records: Vec<Arc<TrackAnalysis>>,
 ) -> SceneGated {
-    use listen_core::scene::{Gate, Reject};
+    use listen_core::scene::Gate;
     let gate = Gate::new(out, inn, neighbours);
     let mut g = SceneGated { pair: gate.describe(), ..Default::default() };
     g.tally.candidates = songs.len();
@@ -407,11 +407,49 @@ pub fn bridge_scene_gate(
                 g.records.push(record);
                 g.scores.push(score);
             }
-            Err(Reject::OtherScene) => g.tally.other_scene += 1,
-            Err(Reject::UnknownScene) => g.tally.unknown_scene += 1,
+            Err(r) => g.tally.count(r),
         }
     }
     g
+}
+
+/// The scene of what is playing for the heart-rate tempo mode's own picks
+/// (`listen_core::scene::Session`): `around` is the current song first, then the songs played before it
+/// (newest first), then the queued ones; the first five with a known scene count.
+pub fn tempo_session<'a>(
+    index: &listen_core::scene::SceneIndex,
+    neighbours: &'a listen_core::scene::Neighbours,
+    around: impl IntoIterator<Item = &'a Song>,
+) -> listen_core::scene::Session<'a> {
+    listen_core::scene::Session::new(
+        around.into_iter().map(|s| scene_profile(index, s, &record_key(s))),
+        neighbours,
+    )
+}
+
+/// The scene gate for the heart-rate tempo mode's store top-up (`listen_core::scene::SceneFilter`, for `listen_mix::tempo::tempo_fill`):
+/// `session` from [`tempo_session`], `heard` the song keys and record ids of songs the listener played or
+/// liked (they come before never-heard store records).
+pub fn tempo_scene_filter<'a>(
+    index: &'a listen_core::scene::SceneIndex,
+    session: &'a listen_core::scene::Session<'a>,
+    heard: &'a HashSet<String>,
+) -> listen_core::scene::SceneFilter<'a> {
+    listen_core::scene::SceneFilter {
+        judge: Box::new(move |s: &Song| {
+            if !session.active() {
+                return Ok(0.0);
+            }
+            session.judge(&scene_profile(index, s, &record_key(s)))
+        }),
+        heard: Box::new(move |s: &Song| {
+            s.favorite
+                || heard.contains(&listen_core::versions::song_key(s))
+                || heard.contains(&record_key(s))
+        }),
+        active: session.active(),
+        session: session.describe(),
+    }
 }
 
 /// Wraps a result into a store record. `file` names the analysed audio (from
