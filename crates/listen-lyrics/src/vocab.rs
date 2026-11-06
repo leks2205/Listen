@@ -1,12 +1,10 @@
 //! A vocab-hub client: which Korean words the listener knows (Lute is the source of truth behind
-//! the hub) and "Add to Lute" for a word from the lyrics.
+//! the hub). Read only: Listen never writes to Lute (decision round 1).
 //!
-//! Hub routes: `GET /api/words` → `{version, terms: {word: status}}` (single-token Lute terms,
-//! status 1-5 learning, 99 well known, 98 ignored) and `POST /api/lute/term {text, translation,
-//! status}` → 201 created / 409 exists (with its status) / 404 when the hub has no such route yet.
+//! Hub route: `GET /api/words` → `{version, terms: {word: status}}` (single-token Lute terms,
+//! status 1-5 learning, 99 well known, 98 ignored).
 
 use serde::Deserialize;
-use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -50,16 +48,6 @@ impl Words {
     }
 }
 
-/// What "Add to Lute" did.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Added {
-    Created,
-    /// Lute already has the term (with this status); nothing was changed.
-    Exists(i32),
-    /// The hub has no term route (older hub).
-    Unsupported,
-}
-
 fn url(base: &str, path: &str) -> Option<String> {
     let base = base.trim().trim_end_matches('/');
     (base.starts_with("http://") || base.starts_with("https://")).then(|| format!("{base}{path}"))
@@ -93,46 +81,6 @@ pub async fn words(http: &reqwest::Client, base: &str) -> Result<Words, String> 
         .ok_or_else(|| "unreadable word list".to_string())
 }
 
-/// The body of an "Add to Lute" request: new terms start at status 1 (learning).
-pub fn add_body(text: &str, translation: &str) -> serde_json::Value {
-    json!({ "text": text.trim(), "translation": translation.trim(), "status": 1, "source": "listen" })
-}
-
-/// Maps the hub's answer to [`Added`].
-pub fn parse_added(status: u16, body: &str) -> Result<Added, String> {
-    match status {
-        200 | 201 => Ok(Added::Created),
-        409 => {
-            let v: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
-            Ok(Added::Exists(v["status"].as_i64().unwrap_or(0) as i32))
-        }
-        404 | 405 => Ok(Added::Unsupported),
-        s => Err(format!("vocab-hub answered {s}")),
-    }
-}
-
-/// Adds a word (dictionary form) with its meaning to Lute through the hub.
-pub async fn add_term(
-    http: &reqwest::Client,
-    base: &str,
-    text: &str,
-    translation: &str,
-) -> Result<Added, String> {
-    let url = url(base, "/api/lute/term").ok_or("no vocab-hub address set")?;
-    let resp = http
-        .post(url)
-        .timeout(Duration::from_secs(15))
-        .json(&add_body(text, translation))
-        .send()
-        .await
-        .map_err(|e| e.without_url().to_string())?;
-    let status = resp.status().as_u16();
-    let body = resp.text().await.unwrap_or_default();
-    let out = parse_added(status, &body);
-    tracing::info!("Add to Lute “{}”: {out:?}", text.trim());
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,16 +104,6 @@ mod tests {
         assert_eq!(w.status("골랐다는", Some("고르다")), Some(3));
         assert_eq!(w.status("골랐다는", None), None);
         assert!(parse_words("<html>").is_none());
-    }
-
-    #[test]
-    fn add_requests_and_answers() {
-        assert_eq!(add_body(" 고르다 ", "auswählen")["text"], "고르다");
-        assert_eq!(add_body("고르다", "x")["status"], 1);
-        assert_eq!(parse_added(201, "{}"), Ok(Added::Created));
-        assert_eq!(parse_added(409, r#"{"exists":true,"status":5}"#), Ok(Added::Exists(5)));
-        assert_eq!(parse_added(404, ""), Ok(Added::Unsupported));
-        assert!(parse_added(500, "").is_err());
     }
 
     #[test]

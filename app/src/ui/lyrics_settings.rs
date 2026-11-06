@@ -307,7 +307,7 @@ pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) 
     ));
     v.push(mk(
         "vocab-hub address",
-        "Your vocab-hub (https://…) for Lute: words mode shows whether you know a word and adds new ones to Lute. Empty = off.",
+        "Your vocab-hub (https://…) for Lute: words mode shows whether you know a word (Listen only reads your Lute words). Empty = off.",
         text_input("https://…", &s.vocab_hub_url)
             .on_input(|u| set(LyricsSetting::VocabHubUrl(u)))
             .style(style::input(t))
