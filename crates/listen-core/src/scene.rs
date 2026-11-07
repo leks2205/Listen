@@ -483,6 +483,12 @@ pub fn compare(a: &Scene, b: &Scene) -> Fit {
         parts.push(1.0);
     }
     if !a.families.is_empty() && !b.families.is_empty() {
+        // Trot is its own scene: a trot song (even one also tagged pop) never sits next to a song that
+        // isn't trot, and the other way round.
+        let trot = |f: Families| f.0 & Families::TROT != 0;
+        if trot(a.families) != trot(b.families) {
+            return Fit::Other("genre");
+        }
         let o = a.families.overlap(b.families);
         if o == 0.0 {
             return Fit::Other("genre");
@@ -1599,5 +1605,21 @@ mod tests {
         assert!(s.describe().contains("2010s"), "{}", s.describe());
         let s = Session::new([tags(KPOP), tags(KPOP10), tags(KPOP10), tags(KPOP)], &n);
         assert!(s.describe().contains("2020s"), "{}", s.describe());
+    }
+}
+
+#[cfg(test)]
+mod trot_tests {
+    use super::*;
+
+    #[test]
+    fn trot_is_its_own_scene() {
+        let idol = Scene::from_tags("K-pop, dance-pop, 2020s, South Korea, Korean");
+        let trot_pop = Scene::from_tags("trot, K-pop, 2020s, South Korea, Korean");
+        let trot = Scene::from_tags("trot, 2020s, Korean");
+        assert!(!compare(&idol, &trot_pop).is_same(), "{:?}", compare(&idol, &trot_pop));
+        assert!(!compare(&trot_pop, &idol).is_same());
+        assert!(compare(&trot, &trot_pop).is_same());
+        assert!(compare(&idol, &idol).is_same());
     }
 }
