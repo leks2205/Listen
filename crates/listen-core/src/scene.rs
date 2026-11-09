@@ -938,15 +938,15 @@ fn sung(p: &Profile) -> Option<&'static str> {
 }
 
 /// The vocal rule between songs sung in known languages (`langs`, the songs' `families`): a candidate must
-/// be sung in one of those languages (an instrumental version of such a song, tagged with the language,
-/// counts); one with no language (an instrumental record, or language unknown) only when the listener
-/// played it (`heard`) and it shares a family with every song beyond the generic pop/electronic. The same
-/// artist as one of the songs always passes.
+/// be sung in one of those languages (a bridge plays the instrumental stretch of a sung song anyway); a
+/// record tagged instrumental (even with a country, like a Korean game soundtrack) or of unknown language
+/// only when the listener played it (`heard`) and it shares a family with every song beyond the generic
+/// pop/electronic. The same artist as one of the songs always passes.
 fn vocal_rule(c: &Profile, langs: &[&'static str], families: &[Families], heard: bool) -> Result<(), Reject> {
     if langs.is_empty() {
         return Ok(());
     }
-    match c.scene.lang {
+    match sung(c) {
         Some(l) if langs.contains(&l) => Ok(()),
         Some(_) => Err(Reject::OtherScene),
         None => {
@@ -1482,8 +1482,10 @@ mod tests {
         let krnb_session = Session::led([tags("R&B, 2020s, Korean, female solo")], &n);
         assert_eq!(krnb_session.judge_with(&lofi_rnb, false), Err(Reject::NoLanguage));
         assert!(krnb_session.judge_with(&lofi_rnb, true).is_ok(), "played, and R&B like the session");
-        let ko_inst = tags("K-pop, dance-pop, 2020s, Korean, girl group, instrumental");
-        assert!(session.judge_with(&ko_inst, false).is_ok());
+        // A record tagged instrumental counts as language-less even with a Korean tag (a game soundtrack).
+        let ko_inst = tags("soundtrack, electronic, 2020s, south korea, instrumental, video game ost");
+        assert_eq!(session.judge_with(&ko_inst, true), Err(Reject::NoLanguage));
+        assert!(session.judge_with(&tags(KPOP2), false).is_ok());
     }
 
     #[test]

@@ -635,17 +635,18 @@ mod tests {
                     None
                 );
             }
-            // A Korean song's own stretch (an instrumental version tagged Korean) is what a bridge should be.
+            // Nor a Korean game soundtrack tagged instrumental: the stretch of a sung Korean song is the bridge.
+            let ost = tags("soundtrack, electronic, 2020s, south korea, instrumental, video game ost");
             let inst = with_groove(126.5, 8);
-            let inst_tags = tags("K-pop, dance-pop, 2020s, South Korea, Korean, girl group, instrumental");
+            let sung = with_groove(126.5, 8);
             assert_eq!(
                 gated_heard(
                     (&a, tags(KPOP)),
                     (&c, tags(KPOP)),
-                    &[(&house, house_tags), (&inst, inst_tags)],
+                    &[(&house, house_tags), (&inst, ost), (&sung, tags(KPOP))],
                     &[]
                 ),
-                Some(1)
+                Some(2)
             );
             // Lo-fi hip hop between two Korean hip hop songs: only when the listener played it.
             let krap = tags("Korean hip hop, 2020s, South Korea, Korean, male solo");

@@ -152,7 +152,7 @@ fn check(
             let s = &gated.songs[c.index];
             let p = scene_profile(&index, s, &gated.records[c.index].song_id);
             let l = &c.legs;
-            let electronic = p.scene.lang.is_none() && p.scene.families.0 & Families::ELECTRONIC != 0;
+            let electronic = (p.scene.lang.is_none() || p.scene.instrumental) && p.scene.families.0 & Families::ELECTRONIC != 0;
             let eras: Vec<u16> = [pa.scene.era, pb.scene.era].into_iter().flatten().collect();
             let era_miss = p.scene.era.is_some_and(|e| eras.iter().any(|x| x.abs_diff(e) > 10));
             counts.bridged += 1;
