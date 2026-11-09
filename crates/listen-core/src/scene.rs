@@ -1262,8 +1262,15 @@ impl<'a> Session<'a> {
         }
         let score = |f: Fit| if let Fit::Same(s) = f { s } else { 0.0 };
         let in_cluster: Vec<&Profile> = self.cluster.iter().map(|&i| &self.members[i]).collect();
-        // The same artist as a song of the session (the current one too, scene known or not) belongs.
+        // The same artist as a song of the session (the current one too, scene known or not) belongs,
+        // unless the song is from another era than the session's (an artist's later decade).
         if !c.artist.is_empty() && self.artists.contains(&c.artist) {
+            let era = self.anchor.as_ref().and_then(|a| a.scene.era);
+            if let (Some(x), Some(y)) = (era, c.scene.era)
+                && x.abs_diff(y) > ERA_SPAN
+            {
+                return Err(Reject::OtherEra);
+            }
             return Ok(1.0);
         }
         let fits: Vec<Fit> = in_cluster.iter().map(|m| fit(c, m, self.neighbours)).collect();
@@ -1769,6 +1776,10 @@ mod tests {
         let s = Session::new([cur], &n);
         let same_artist = Profile { artist: "tri.be".into(), ..Default::default() };
         assert_eq!(s.judge(&same_artist), Ok(1.0));
+        // …but not with a song from another era than the session's.
+        let mut old = tags(KPOP90);
+        old.artist = "tri.be".into();
+        assert_eq!(s.judge(&old), Err(Reject::OtherEra));
         // Heard next to the session's artist, but the session's era is known and the candidate's is not.
         let neighbour = Profile { artist: "kiiikiii".into(), ..Default::default() };
         assert_eq!(s.judge(&neighbour), Err(Reject::UnknownScene));
