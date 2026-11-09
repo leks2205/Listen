@@ -40,6 +40,10 @@ pub struct PoolGate {
     pub scene: Option<Scene>,
     /// The scene of each song of `songs` (song id, scene), for the DJ's notes.
     pub scenes: Vec<(String, Scene)>,
+    /// Nothing of the scene was left anywhere, so the candidates whose scene is unknown were kept (never
+    /// one of a known other scene): the DJ doesn't run dry where little is known (the phone without the
+    /// server's scene data).
+    pub kept_unknown: usize,
 }
 
 impl PoolGate {
@@ -60,6 +64,12 @@ impl PoolGate {
         if self.topped_up > 0 {
             line.push_str(&format!(", {} from the store ({} heard)", self.topped_up, self.heard));
         }
+        if self.kept_unknown > 0 {
+            line.push_str(&format!(
+                ", nothing of the scene left: kept {} of unknown scene",
+                self.kept_unknown
+            ));
+        }
         line.push_str(&format!(" [{session}]"));
         Some(line)
     }
@@ -71,7 +81,7 @@ impl PoolGate {
             "kept": self.kept, "rejected": r.rejected(), "other_scene": r.other_scene + r.weak,
             "other_era": r.other_era, "unknown_scene": r.unknown_scene, "no_language": r.no_language,
             "topped_up": self.topped_up, "heard": self.heard, "session": self.session,
-            "store_judged": self.store_rejected.candidates,
+            "store_judged": self.store_rejected.candidates, "kept_unknown": self.kept_unknown,
         })
     }
 }
@@ -97,13 +107,19 @@ pub fn gate_pool(
     let mut out = PoolGate { session: Some(g.session.clone()), scene: g.scene, ..Default::default() };
     out.rejected.candidates = pool.len();
     let mut seen: HashSet<String> = HashSet::new();
+    let mut unknown: Vec<Song> = Vec::new();
     for song in pool {
         match (g.judge)(&song) {
             Ok(_) => {
                 seen.insert(song_key(&song));
                 out.songs.push(song);
             }
-            Err(r) => out.rejected.count(r),
+            Err(r) => {
+                out.rejected.count(r);
+                if r == listen_core::scene::Reject::UnknownScene {
+                    unknown.push(song);
+                }
+            }
         }
     }
     out.kept = out.songs.len();
@@ -136,6 +152,11 @@ pub fn gate_pool(
         out.songs.push(extra[i].0.clone());
     }
     out.topped_up = room.min(order.len());
+    if out.songs.is_empty() {
+        unknown.truncate(top_up_to);
+        out.kept_unknown = unknown.len();
+        out.songs = unknown;
+    }
     out.scenes = out.songs.iter().map(|s| (s.id.clone(), (g.scene_of)(s))).collect();
     out
 }
@@ -274,6 +295,24 @@ mod tests {
             ["Supersonic"],
             "house is turned away even when heard (only pop/electronic shared)"
         );
+    }
+
+    #[test]
+    fn with_nothing_of_the_scene_left_unknown_songs_keep_the_dj_going() {
+        let n = Neighbours::default();
+        // Known only by a Hangul title (the phone without the server's scene data).
+        let current =
+            Profile { scene: Scene::from_script("너만을 느끼며", "더 블루"), ..Default::default() };
+        let session = Session::led([current], &n);
+        let cands =
+            vec![tagged("Supersonic", "fromis_9", ""), tagged("Rap", "MC", "hip hop, english, 2020s")];
+        let f = filter(&session, &cands, &[]);
+        let pool = cands.iter().map(|c| c.0.clone()).collect();
+        let g = gate_pool(pool, Some(&f), Vec::new, &HashSet::new(), MIN_POOL, TOP_UP_TO, None);
+        let titles: Vec<&str> = g.songs.iter().map(|s| s.title.as_str()).collect();
+        assert_eq!(titles, ["Supersonic"], "the unknown one, never the English rap song");
+        assert_eq!(g.kept_unknown, 1);
+        assert!(g.note("AI DJ").unwrap().contains("kept 1 of unknown scene"));
     }
 
     #[test]
