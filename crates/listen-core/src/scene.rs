@@ -85,11 +85,15 @@ impl Families {
         "country",
         "reggae",
     ];
-    /// Families close enough that one may bridge the other (half a match).
-    const NEAR: [(u16, u16); 7] = [
-        (Self::POP, Self::RNB),
+    /// Not a family: set by a bare "dance" tag, which is pop unless the song is electronic ("dance, house").
+    const DANCE: u16 = 1 << 15;
+    /// Families too broad to place a song on their own: an instrumental record shares a scene with vocal
+    /// songs only through another family (a K-pop song and a house track are both "pop"/"electronic").
+    pub const GENERIC: u16 = Self::POP | Self::ELECTRONIC;
+    /// Families close enough that one may bridge the other (half a match). Pop is near none: Korean R&B
+    /// or hip hop, or an electronic record, never stands in for K-pop.
+    const NEAR: [(u16, u16); 5] = [
         (Self::HIPHOP, Self::RNB),
-        (Self::POP, Self::ELECTRONIC),
         (Self::ROCK, Self::FOLK),
         (Self::JAZZ, Self::LATIN),
         (Self::RNB, Self::BLUES),
@@ -257,11 +261,13 @@ fn families_of(tag: &str) -> u16 {
     }
     let mut f = 0;
     if w.iter().any(|x| x.ends_with("pop") || matches!(*x, "ballad" | "balad" | "ost" | "idol" | "disco"))
-        || has("dance")
         || has_seq("girl", "group")
         || has_seq("boy", "group")
     {
         f |= Families::POP;
+    } else if has("dance") {
+        // Pop unless the song turns out electronic (see `Scene::from_labels`).
+        f |= Families::DANCE;
     }
     if has_seq("hip", "hop")
         || w.iter().any(|x| matches!(*x, "hiphop" | "rap" | "trap" | "drill" | "grime" | "rapper"))
@@ -392,6 +398,13 @@ impl Scene {
             }
             s.families.0 |= families_of(&l);
         }
+        // A bare "dance" is pop, except on an electronic record ("dance, house, techno").
+        if s.families.0 & Families::DANCE != 0 {
+            s.families.0 &= !Families::DANCE;
+            if s.families.0 & Families::ELECTRONIC == 0 {
+                s.families.0 |= Families::POP;
+            }
+        }
         // The explicit language tag (or the first one named) wins; "K-pop" in English is still Korean pop.
         s.lang = langs.first().copied();
         s.era = s.era.or(generation);
@@ -467,16 +480,15 @@ impl Fit {
     }
 }
 
-/// Compares two scenes on what both know: the language (unless either is instrumental) and the genre
+/// Compares two scenes on what both know: the language (where both name one) and the genre
 /// families. One dimension alone gives a weaker score. Eras known on both sides must be at most
 /// [`ERA_SPAN`] apart; when only one side's era is known, language and genre must both match (else nothing
 /// comparable is known) and the score is lower.
 pub fn compare(a: &Scene, b: &Scene) -> Fit {
     let mut parts: Vec<f32> = Vec::new();
-    if let (Some(x), Some(y)) = (a.lang, b.lang)
-        && !a.instrumental
-        && !b.instrumental
-    {
+    // An instrumental song has no language of its own unless its tags name one (an instrumental version
+    // of a Korean song is still Korean in scene).
+    if let (Some(x), Some(y)) = (a.lang, b.lang) {
         if x != y {
             return Fit::Other("language");
         }
@@ -908,6 +920,41 @@ pub enum Reject {
     OtherEra,
     /// Its scene is unknown while the songs' are known.
     UnknownScene,
+    /// The songs around it are sung in a known language and it has none (an instrumental record or an
+    /// unknown language), and it isn't one the listener played in a family of theirs beyond pop/electronic.
+    NoLanguage,
+    /// A record the listener never played whose scene fits only loosely ([`MIN_UNHEARD_BRIDGE`]).
+    Weak,
+}
+
+/// A bridge the listener never played must fit the pair's scene at least this well (0..1, `Gate::judge`):
+/// two tagged songs of one language, genre and decade score 0.75 or more, a loose match (one shared
+/// dimension: 0.6, half a genre: 0.75 × …) less.
+pub const MIN_UNHEARD_BRIDGE: f32 = 0.75;
+
+/// The languages songs are sung in (`None`: none known; an instrumental song has none).
+fn sung(p: &Profile) -> Option<&'static str> {
+    if p.scene.instrumental { None } else { p.scene.lang }
+}
+
+/// The vocal rule between songs sung in known languages (`langs`, the songs' `families`): a candidate must
+/// be sung in one of those languages (an instrumental version of such a song, tagged with the language,
+/// counts); one with no language (an instrumental record, or language unknown) only when the listener
+/// played it (`heard`) and it shares a family with every song beyond the generic pop/electronic. The same
+/// artist as one of the songs always passes.
+fn vocal_rule(c: &Profile, langs: &[&'static str], families: &[Families], heard: bool) -> Result<(), Reject> {
+    if langs.is_empty() {
+        return Ok(());
+    }
+    match c.scene.lang {
+        Some(l) if langs.contains(&l) => Ok(()),
+        Some(_) => Err(Reject::OtherScene),
+        None => {
+            let own = c.scene.families.0 & !Families::GENERIC;
+            let shared = own != 0 && families.iter().all(|f| f.0 & own != 0);
+            if heard && shared { Ok(()) } else { Err(Reject::NoLanguage) }
+        }
+    }
 }
 
 /// Why a candidate that fits none of `fits` is rejected: another era when that is the only known
@@ -952,6 +999,31 @@ impl<'a> Gate<'a> {
             Fit::Unknown => "scenes not comparable".to_string(),
         };
         format!("{} → {}, {rel}", self.out.scene.label(), self.inn.scene.label())
+    }
+
+    /// A bridge candidate's scene score with the bridge rules on top of [`Self::judge`]: between two songs
+    /// sung in known languages it must be sung in one of them (an instrumental record only when the
+    /// listener played it, `heard`, and it shares a family beyond pop/electronic with both songs), and a
+    /// record the listener never played must score at least [`MIN_UNHEARD_BRIDGE`]. The same artist as one
+    /// of the songs always passes.
+    pub fn judge_bridge(&self, c: &Profile, heard: bool) -> Result<f32, Reject> {
+        let score = self.judge(c)?;
+        if !self.active() {
+            return Ok(score);
+        }
+        let same_artist =
+            !c.artist.is_empty() && (c.artist == self.out.artist || c.artist == self.inn.artist);
+        if same_artist {
+            return Ok(score);
+        }
+        if let (Some(a), Some(b)) = (sung(&self.out), sung(&self.inn)) {
+            let langs = if a == b { vec![a] } else { vec![a, b] };
+            vocal_rule(c, &langs, &[self.out.scene.families, self.inn.scene.families], heard)?;
+        }
+        if !heard && score < MIN_UNHEARD_BRIDGE {
+            return Err(Reject::Weak);
+        }
+        Ok(score)
     }
 
     /// The candidate's scene score (0..1, higher is closer) or why it is rejected.
@@ -1002,11 +1074,15 @@ pub struct Tally {
     pub other_scene: usize,
     pub unknown_scene: usize,
     pub other_era: usize,
+    /// Rejected by the vocal rule ([`Reject::NoLanguage`]).
+    pub no_language: usize,
+    /// Never-heard records that fit only loosely ([`Reject::Weak`]).
+    pub weak: usize,
 }
 
 impl Tally {
     pub fn rejected(&self) -> usize {
-        self.other_scene + self.unknown_scene + self.other_era
+        self.other_scene + self.unknown_scene + self.other_era + self.no_language + self.weak
     }
 
     /// Counts one decision.
@@ -1015,6 +1091,8 @@ impl Tally {
             Reject::OtherScene => self.other_scene += 1,
             Reject::OtherEra => self.other_era += 1,
             Reject::UnknownScene => self.unknown_scene += 1,
+            Reject::NoLanguage => self.no_language += 1,
+            Reject::Weak => self.weak += 1,
         }
     }
 
@@ -1029,6 +1107,12 @@ impl Tally {
         }
         if self.unknown_scene > 0 {
             parts.push(format!("{} unknown scene", self.unknown_scene));
+        }
+        if self.no_language > 0 {
+            parts.push(format!("{} without the language", self.no_language));
+        }
+        if self.weak > 0 {
+            parts.push(format!("{} unheard and too loose", self.weak));
         }
         parts.join(", ")
     }
@@ -1093,9 +1177,59 @@ impl<'a> Session<'a> {
         Session { members, anchor, cluster, artists, neighbours }
     }
 
+    /// A session led by what plays now (the AI DJ's pool, the Auto-DJ's fill, the tempo picks): when the
+    /// current song's (the first profile's) scene is known it decides, and the songs before it only count
+    /// where they share that scene, so a song the listener just picked from another decade isn't outvoted
+    /// by the ones before it. When the current song's scene is unknown, the others decide as in
+    /// [`Self::new`] (its artist still belongs).
+    pub fn led(profiles: impl IntoIterator<Item = Profile>, neighbours: &'a Neighbours) -> Session<'a> {
+        let mut it = profiles.into_iter();
+        let Some(current) = it.next() else { return Session::new([], neighbours) };
+        if !current.is_known() {
+            return Session::new(std::iter::once(current).chain(it), neighbours);
+        }
+        let rest: Vec<Profile> =
+            it.filter(|p| p.is_known() && fit(&current, p, neighbours).is_same()).collect();
+        Session::new(std::iter::once(current).chain(rest), neighbours)
+    }
+
     /// Whether anything is known (else every candidate passes, as before scenes).
     pub fn active(&self) -> bool {
         !self.members.is_empty()
+    }
+
+    /// The majority's scene (language, families, era), `None` when the session is mixed or unknown.
+    pub fn scene(&self) -> Option<&Scene> {
+        self.anchor.as_ref().map(|a| &a.scene)
+    }
+
+    /// [`Self::judge`] plus the vocal rule: when the session's songs are sung in a known language, a
+    /// candidate must be too (an instrumental record only when the listener played it, `heard`, and it
+    /// shares a family beyond pop/electronic with the session). The session's artists always pass.
+    pub fn judge_with(&self, c: &Profile, heard: bool) -> Result<f32, Reject> {
+        let score = self.judge(c)?;
+        if !self.active() || (!c.artist.is_empty() && self.artists.contains(&c.artist)) {
+            return Ok(score);
+        }
+        let (langs, families): (Vec<&'static str>, Vec<Families>) = match &self.anchor {
+            Some(a) => (sung(a).into_iter().collect(), vec![a.scene.families]),
+            None => {
+                let mut langs: Vec<&'static str> = Vec::new();
+                for m in &self.members {
+                    match sung(m) {
+                        Some(l) if !langs.contains(&l) => langs.push(l),
+                        Some(_) => {}
+                        // A mixed session with an instrumental or unknown-language member: no vocal rule.
+                        None => return Ok(score),
+                    }
+                }
+                // Any one member's families will do in a mixed session.
+                let any = Families(self.members.iter().fold(0, |f, m| f | m.scene.families.0));
+                (langs, vec![any])
+            }
+        };
+        vocal_rule(c, &langs, &families, heard)?;
+        Ok(score)
     }
 
     /// "ko · pop · 2020s (tags), 4 of 5 songs" or "mixed: ko · pop · 2020s (tags) / en · hip hop (tags)".
@@ -1179,6 +1313,10 @@ pub struct SceneFilter<'a> {
     pub active: bool,
     /// [`Session::describe`], for the log.
     pub session: String,
+    /// [`Session::scene`]: the session's scene when one leads (for the AI DJ's prompt).
+    pub scene: Option<Scene>,
+    /// A song's scene (for the AI DJ's notes on its candidates).
+    pub scene_of: Box<dyn Fn(&crate::model::Song) -> Scene + 'a>,
 }
 
 impl std::fmt::Debug for SceneFilter<'_> {
@@ -1296,6 +1434,49 @@ mod tests {
         // A neighbour doesn't override a known other scene.
         c.scene = Scene::from_tags(USRAP);
         assert!(!fit(&c, &tags(KPOP), &n).is_same());
+    }
+
+    #[test]
+    fn the_current_song_leads_the_session() {
+        let n = Neighbours::default();
+        // The listener picked a 1980s ballad after four 2020s idol songs.
+        let ballad = tags(KPOP80);
+        let idols: Vec<Profile> = (0..4).map(|_| tags(KPOP)).collect();
+        let led = Session::led(std::iter::once(ballad.clone()).chain(idols.clone()), &n);
+        assert_eq!(led.scene().and_then(|s| s.era), Some(1980), "{}", led.describe());
+        assert!(led.judge(&tags(KPOP)).is_err(), "no 2020s idol song after the ballad");
+        assert!(led.judge(&tags(KPOP90)).is_ok(), "1990s Korean pop is within a decade");
+        // The old majority rule let the four idol songs outvote it.
+        let majority = Session::new(std::iter::once(ballad).chain(idols), &n);
+        assert_eq!(majority.scene().and_then(|s| s.era), Some(2020));
+        // Unknown current song: the songs before it decide.
+        let led = Session::led([Profile::default(), tags(KPOP), tags(KPOP)], &n);
+        assert_eq!(led.scene().and_then(|s| s.era), Some(2020));
+    }
+
+    #[test]
+    fn korean_rnb_house_and_dance_records_are_not_kpop() {
+        let n = Neighbours::default();
+        let krnb = tags("R&B, soul, 2020s, South Korea, Korean, female solo");
+        assert_eq!(fit(&krnb, &tags(KPOP), &n), Fit::Other("genre"), "pop is near no other family");
+        let house = Scene::from_tags("tech house, dance, electronic, 2020s, club");
+        assert_eq!(
+            house.families.0,
+            Families::ELECTRONIC,
+            "a bare \"dance\" on an electronic record isn't pop"
+        );
+        assert_eq!(Scene::from_tags("dance, 1990s, korean").families.0, Families::POP);
+        // The vocal rule: a session sung in Korean takes no language-less record, unless played and sharing
+        // a family beyond pop/electronic.
+        let session = Session::led([tags(KPOP)], &n);
+        let inst = tags("synthwave, electronic, pop, 2020s, instrumental");
+        assert_eq!(session.judge_with(&inst, true), Err(Reject::NoLanguage));
+        let lofi_rnb = tags("lo-fi, r&b, 2020s, instrumental");
+        let krnb_session = Session::led([tags("R&B, 2020s, Korean, female solo")], &n);
+        assert_eq!(krnb_session.judge_with(&lofi_rnb, false), Err(Reject::NoLanguage));
+        assert!(krnb_session.judge_with(&lofi_rnb, true).is_ok(), "played, and R&B like the session");
+        let ko_inst = tags("K-pop, dance-pop, 2020s, Korean, girl group, instrumental");
+        assert!(session.judge_with(&ko_inst, false).is_ok());
     }
 
     #[test]

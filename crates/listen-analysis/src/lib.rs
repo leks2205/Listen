@@ -360,6 +360,8 @@ pub struct SceneGated {
     pub tally: listen_core::scene::Tally,
     /// The pair's scenes, for the log ("ko · pop (tags) → ko · pop (tags), one scene").
     pub pair: String,
+    /// Per kept candidate: the listener played it.
+    pub heard: Vec<bool>,
 }
 
 /// The scene profile of a song for the gate: `record_id` is its analysis-store id ([`record_key`] of the
@@ -384,10 +386,38 @@ pub fn record_scene_profile(
     index.profile(&record.song_id, &title, &artist, genres)
 }
 
+/// How much a bridge the listener played adds to its scene score in the ranking (bridges from songs they
+/// know come first among those that mix as well).
+pub const HEARD_BRIDGE_BONUS: f32 = 0.5;
+
+/// Whether the listener played (or liked) `song`: its song key or record id is in `heard` (the history's
+/// played entries, see [`heard_keys`]).
+pub fn is_heard(heard: &HashSet<String>, song: &Song) -> bool {
+    song.favorite
+        || heard.contains(&listen_core::versions::song_key(song))
+        || heard.contains(&record_key(song))
+}
+
+/// The song keys and record ids of the songs played (not skipped) in a listening history.
+pub fn heard_keys(entries: &[listen_core::history::Entry]) -> HashSet<String> {
+    entries
+        .iter()
+        .filter(|e| e.played())
+        .flat_map(|e| {
+            let s = e.to_song();
+            [listen_core::versions::song_key(&s), record_key(&s)]
+        })
+        .collect()
+}
+
 /// Keeps the bridge candidates (from [`bridge_candidates`]) whose scene fits the pair `out` → `inn`
-/// (`listen_core::scene::Gate`): one scene shared by both songs must be the bridge's too, two different
-/// scenes need a bridge from one of them, and a candidate of unknown scene goes when the songs' scenes are
-/// known. `out` / `inn` from [`scene_profile`] or [`record_scene_profile`]. Used by the desktop and the phone.
+/// (`listen_core::scene::Gate::judge_bridge`): one scene shared by both songs must be the bridge's too,
+/// two different scenes need a bridge from one of them, a candidate of unknown scene goes when the songs'
+/// scenes are known; between songs sung in a known language the bridge is sung in it too (an instrumental
+/// record only when the listener played it and it shares a family beyond pop/electronic with both), and a
+/// record the listener never played (`heard`, see [`heard_keys`]) must fit closely. A played one ranks
+/// higher ([`HEARD_BRIDGE_BONUS`] on its score). `out` / `inn` from [`scene_profile`] or
+/// [`record_scene_profile`]. Used by the desktop and the phone.
 pub fn bridge_scene_gate(
     index: &listen_core::scene::SceneIndex,
     neighbours: &listen_core::scene::Neighbours,
@@ -395,17 +425,20 @@ pub fn bridge_scene_gate(
     inn: listen_core::scene::Profile,
     songs: Vec<Song>,
     records: Vec<Arc<TrackAnalysis>>,
+    heard: &HashSet<String>,
 ) -> SceneGated {
     use listen_core::scene::Gate;
     let gate = Gate::new(out, inn, neighbours);
     let mut g = SceneGated { pair: gate.describe(), ..Default::default() };
     g.tally.candidates = songs.len();
     for (song, record) in songs.into_iter().zip(records) {
-        match gate.judge(&scene_profile(index, &song, &record.song_id)) {
+        let played = is_heard(heard, &song);
+        match gate.judge_bridge(&scene_profile(index, &song, &record.song_id), played) {
             Ok(score) => {
                 g.songs.push(song);
                 g.records.push(record);
-                g.scores.push(score);
+                g.scores.push(score + if played { HEARD_BRIDGE_BONUS } else { 0.0 });
+                g.heard.push(played);
             }
             Err(r) => g.tally.count(r),
         }
@@ -413,15 +446,16 @@ pub fn bridge_scene_gate(
     g
 }
 
-/// The scene of what is playing for the heart-rate tempo mode's own picks
-/// (`listen_core::scene::Session`): `around` is the current song first, then the songs played before it
-/// (newest first), then the queued ones; the first five with a known scene count.
+/// The scene of what is playing, for the songs the DJs add (the AI DJ's pool, the Auto-DJ's fill, the
+/// heart-rate tempo picks; `listen_core::scene::Session::led`): `around` is the current song first, then
+/// the songs played before it (newest first), then the queued ones. The current song's scene leads; the
+/// others count where they share it (the first five with a known scene).
 pub fn tempo_session<'a>(
     index: &listen_core::scene::SceneIndex,
     neighbours: &'a listen_core::scene::Neighbours,
     around: impl IntoIterator<Item = &'a Song>,
 ) -> listen_core::scene::Session<'a> {
-    listen_core::scene::Session::new(
+    listen_core::scene::Session::led(
         around.into_iter().map(|s| scene_profile(index, s, &record_key(s))),
         neighbours,
     )
@@ -440,15 +474,13 @@ pub fn tempo_scene_filter<'a>(
             if !session.active() {
                 return Ok(0.0);
             }
-            session.judge(&scene_profile(index, s, &record_key(s)))
+            session.judge_with(&scene_profile(index, s, &record_key(s)), is_heard(heard, s))
         }),
-        heard: Box::new(move |s: &Song| {
-            s.favorite
-                || heard.contains(&listen_core::versions::song_key(s))
-                || heard.contains(&record_key(s))
-        }),
+        heard: Box::new(move |s: &Song| is_heard(heard, s)),
         active: session.active(),
         session: session.describe(),
+        scene: session.scene().copied(),
+        scene_of: Box::new(move |s: &Song| scene_profile(index, s, &record_key(s)).scene),
     }
 }
 

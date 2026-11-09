@@ -9,6 +9,7 @@ pub mod judge;
 pub mod persona;
 pub mod prompt;
 pub mod quota;
+pub mod scene;
 pub mod steer;
 pub mod tempo;
 pub mod wav;

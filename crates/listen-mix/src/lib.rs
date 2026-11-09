@@ -7,6 +7,7 @@
 //! - [`plan`](mod@plan): where and how to mix two analysed songs ([`TransitionPlan`]),
 //!   and which queue pairs may be mixed at all ([`mix_eligible`]).
 //! - [`learn`]: flow weights fitted to the listener's early skips after automatic handovers.
+//! - [`pool`]: the scene gate for the DJs' candidate pools (AI DJ, Auto-DJ).
 //! - [`pick`]: what automatic fills aim for: tempo, focus, forgotten-favourite slot (contract C4).
 //! - [`lyric`]: synced lyrics as a vocal map and cue flags for the planner.
 //! - [`loudness`]: playback and blend gain from measured loudness (contract C5).
@@ -24,6 +25,7 @@ pub mod loudness;
 pub mod lyric;
 pub mod pick;
 pub mod plan;
+pub mod pool;
 pub mod render;
 pub mod score;
 pub mod sequence;

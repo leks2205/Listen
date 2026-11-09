@@ -22,6 +22,10 @@ const POOL_MAX: usize = 400;
 /// Few songs have a usable instrumental stretch at a tempo between both sides, so the whole store is
 /// needed (a few ms per pair).
 const MAX_CANDIDATES: usize = 6000;
+/// A planned mix out of a bridge that hasn't started this long after the stretch ends is given up.
+pub(super) const WATCH_GRACE_S: f64 = 1.0;
+/// A blend out of a bridge ends before the stretch does; one still running this long after is stuck.
+pub(super) const WATCH_STUCK_S: f64 = 4.0;
 
 #[derive(Debug, Default)]
 pub struct BridgeState {
@@ -97,6 +101,7 @@ impl Listen {
         let neighbours = listen_core::scene::Neighbours::from_history(&self.history.entries);
         let scenes = analysis.scenes();
         let profile = |s: &Song| listen_analysis::scene_profile(&scenes, s, &listen_analysis::record_key(s));
+        let heard = listen_analysis::heard_keys(&self.history.entries);
         let gated = listen_analysis::bridge_scene_gate(
             &scenes,
             &neighbours,
@@ -104,6 +109,7 @@ impl Listen {
             profile(&next_song),
             songs,
             records,
+            &heard,
         );
         let feats: Vec<&Features> = gated.records.iter().filter_map(|r| r.features()).collect();
         if feats.len() != gated.songs.len() {
@@ -122,14 +128,19 @@ impl Listen {
             return false;
         };
         let song = gated.songs[choice.index].clone();
+        let l = &choice.legs;
         tracing::info!(
-            "bridge: {tally} [{}], chose “{}” by {} (scene {:.2}) between “{}” and “{}” ({why}): {}",
+            "bridge: {tally} [{}], chose “{}” by {} (scene {:.2}{}) between “{}” and “{}” ({why}): {} bars, {:.0} s ({:.0} s alone); {}",
             gated.pair,
             song.title,
             song.artist_line(),
             gated.scores[choice.index],
+            if gated.heard[choice.index] { ", played before" } else { "" },
             cur.song.title,
             next.song.title,
+            choice.cut.bars,
+            l.cut_s,
+            l.alone_s,
             choice.reason
         );
         let why = listen_dj::why::bridge(&cur.song.title, &next.song.title);
@@ -205,15 +216,38 @@ impl Listen {
         Some(self.start_current())
     }
 
-    /// The bridge's stretch is over and no mix took it out: the next song starts.
+    /// The bridge's stretch is over and no mix took it out: the next song starts. A mix out of it that is
+    /// planned but hasn't started by [`WATCH_GRACE_S`] past the stretch (or a blend still running
+    /// [`WATCH_STUCK_S`] past it) is given up: a bridge never plays on as a song of its own.
     pub(super) fn bridge_watch(&mut self, pos: Duration) -> Option<Task<Message>> {
         let item = self.queue.current()?;
         let cut = item.bridge?;
-        if self.mix.owns_next() || pos.as_secs_f64() < cut.end_s || !self.playback.playing {
+        // Never entered through its mix (a restored queue, a skip into it): it goes at once.
+        if self.mix.entered_uid != Some(item.uid) && self.playback.playing {
+            return self.bridge_unentered();
+        }
+        let past = pos.as_secs_f64() - cut.end_s;
+        if past < 0.0 || !self.playback.playing {
             return None;
         }
-        tracing::info!("bridge “{}” reached the end of its stretch unmixed; next song", item.song.title);
+        let title = item.song.title.clone();
+        let mut cancel = Task::none();
+        if self.mix.owns_next() {
+            use super::mix::Phase;
+            let blending = matches!(self.mix.phase, Phase::Starting | Phase::Running | Phase::Settling);
+            if past < if blending { WATCH_STUCK_S } else { WATCH_GRACE_S } {
+                return None;
+            }
+            tracing::warn!(
+                "bridge “{title}” is {past:.1} s past its stretch and its mix out {} ({:?}); next song",
+                if blending { "is stuck" } else { "hasn't started" },
+                self.mix.phase
+            );
+            cancel = self.mix_cancel("the bridge's stretch is over");
+        } else {
+            tracing::info!("bridge “{title}” reached the end of its stretch unmixed; next song");
+        }
         self.queue.advance();
-        Some(self.start_current())
+        Some(Task::batch([cancel, self.start_current()]))
     }
 }

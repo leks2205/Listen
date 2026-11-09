@@ -25,7 +25,9 @@ A new installation starts in **Auto-DJ**. The first-start wizard can turn it off
 
 Shuffle changes the order of the queue itself, so you see the new order in the queue panel. The sleep timer's **End of album** option is not available while Shuffle is on.
 
-With the AI DJ on, clicking a single song in a list plays that song alone and makes it the new mood for the DJ's next set, instead of queueing the whole list.
+With the AI DJ on, clicking a single song in a list plays that song alone and makes it the new mood for the DJ's next set, instead of queueing the whole list. A song you add with **Play next** or **Add to queue** becomes the DJ's new starting point once it plays.
+
+**The DJs stay in the scene of what is playing.** Every song the Auto-DJ or the AI DJ adds (similar songs, favourites from your history, random filler) must belong to the scene of the playing song: the same language, the same genre and an era within a decade (the 1990s fit the 1980s, the 2020s don't). The playing song leads: after you pick a 1980s ballad, the next songs are from the 1980s or 1990s even if the songs before it were recent K-pop. When too few candidates are left, songs of that scene from your history and your analysed songs fill up (ones you have played first), never songs of another scene. The AI DJ is also told the scene and each candidate's scene. Without anything known about the playing song's scene, nothing is filtered. The log line: `AI DJ pool: 23 kept, 17 rejected (other scene 9, other era 6, unknown 2, no language 0) [session scene ko · pop · 1980s …]`. `listen --check-ai-dj-pool <analysis copy> <embeddings dir> <history.jsonl> [--at TITLE]` replays the pool at a moment of your history.
 
 ## Repeat
 

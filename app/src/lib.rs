@@ -4,6 +4,7 @@
 pub mod app;
 pub mod appearance;
 pub mod check;
+pub mod check_ai_dj_pool;
 pub mod check_bridges;
 pub mod check_mix;
 pub mod check_tempo;

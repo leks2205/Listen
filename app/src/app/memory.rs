@@ -58,6 +58,8 @@ impl Listen {
                 .filter(|s| self.demo || self.sources.contains_key(&s.server_id))
                 .take(FORGOTTEN_CANDIDATES)
                 .collect();
+            // Only from the scene that plays now (no 2020s favourite after a 1980s ballad).
+            let candidates = self.keep_in_scene(candidates);
             let best = match &current {
                 Some(c) => self.flow_order(c, candidates, 1).into_iter().next(),
                 None => candidates.into_iter().next(),

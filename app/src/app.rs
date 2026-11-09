@@ -1515,6 +1515,7 @@ impl Listen {
         }
     }
 
+    /// Restores the saved queue and position at start-up.
     fn restore_queue(&mut self) {
         if self.ephemeral || self.demo || !self.config.settings.queue.save_play_queue {
             return;
@@ -1523,8 +1524,12 @@ impl Listen {
         if saved.queue.current().is_none() {
             return;
         }
-        let at = Duration::from_secs_f64(saved.position_secs.max(0.0));
-        self.queue = saved.queue;
+        let mut queue = saved.queue;
+        let at = drop_restored_bridge(&mut queue, Duration::from_secs_f64(saved.position_secs.max(0.0)));
+        if queue.current().is_none() {
+            return;
+        }
+        self.queue = queue;
         self.playback.position = at;
         self.restored = Some(at);
     }
@@ -2329,6 +2334,14 @@ impl Listen {
                 }
                 // Best flow from the current song first (tempo, key, energy), when analysed.
                 let n = s.item_count.max(1) as usize;
+                // Only songs of the scene that plays now (its language, genre and decade).
+                let picked = {
+                    let mut skip: std::collections::HashSet<String> =
+                        queued.iter().chain(&self.session_played).chain(&blocked).cloned().collect();
+                    skip.extend(self.queue.current().map(|i| song_key(&i.song)));
+                    self.autodj_scene_gate(picked, &skip, n)
+                };
+                let s = &self.config.settings.auto_dj;
                 // Focus mode: only the least sung, calmest songs (low-vocal history songs join the pool).
                 let focus = s.focus;
                 let picked = if focus { self.focus_fill(picked, &queued, &blocked, n) } else { picked };
@@ -4700,6 +4713,17 @@ fn shellexpand_home(p: &str) -> std::path::PathBuf {
         (Some(rest), Some(home)) => home.join(rest),
         _ => std::path::PathBuf::from(p),
     }
+}
+
+/// A restored queue whose current item is a DJ bridge: the bridge goes (it only ever plays mixed in, never
+/// as a song from its start) and the song after it starts from the beginning. Returns the position to
+/// resume at. A bridge further on keeps its stretch (`QueueItem::bridge` is saved with the queue).
+pub(crate) fn drop_restored_bridge(queue: &mut Queue, at: Duration) -> Duration {
+    let Some(item) = queue.current().filter(|i| i.bridge.is_some()) else { return at };
+    tracing::info!("restored queue: the bridge “{}” was playing; starting after it", item.song.title);
+    let uid = item.uid;
+    queue.remove(uid);
+    Duration::ZERO
 }
 
 #[cfg(test)]

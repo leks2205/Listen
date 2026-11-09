@@ -1079,6 +1079,67 @@ fn a_bridge_not_mixed_out_hands_over_when_its_stretch_ends() {
 }
 
 #[test]
+fn a_bridge_whose_mix_out_never_starts_hands_over_at_its_end() {
+    let (mut s, _) = bridge_rig();
+    let c_uid = uid(&s, 1);
+    plan(&mut s);
+    let bridge = s.queue.peek_next().unwrap().clone();
+    let cut = bridge.bridge.unwrap();
+    run(&mut s);
+    let (out, inn) = (s.mix.out_deck, s.mix.in_deck);
+    let p = plan_of(&s);
+    pos(&mut s, inn, p.in_mix_start_s + 1.0);
+    pos(&mut s, out, p.out_stop_s + 0.01);
+    tick(&mut s);
+    assert_eq!(s.queue.current().unwrap().uid, bridge.uid);
+    // The way out is planned ("armed") but its blend never starts (say the deck never loads).
+    assert_eq!(s.mix.pair(), Some((bridge.uid, c_uid)));
+    assert!(s.mix.owns_next());
+    pos(&mut s, inn, cut.end_s + 0.5);
+    assert_eq!(s.queue.current().unwrap().uid, bridge.uid, "a short grace past the stretch");
+    pos(&mut s, inn, cut.end_s + crate::app::bridge::WATCH_GRACE_S + 0.1);
+    assert_eq!(s.queue.current().unwrap().uid, c_uid, "the bridge never plays on as a song");
+    assert!(!s.mix.owns_next());
+}
+
+#[test]
+fn a_bridge_that_comes_up_without_its_mix_never_plays() {
+    // As after a restore or a skip into it: the bridge is current, but no mix brought it in.
+    let (mut s, b) = bridge_rig();
+    let c_uid = uid(&s, 1);
+    let cut = listen_core::queue::BridgeCut { start_s: 60.0, end_s: 105.0, start_bar: 32, bars: 24 };
+    let bridge_uid = s.queue.insert_bridge(b, cut, false).unwrap();
+    s.queue.advance();
+    assert_eq!(s.queue.current().unwrap().uid, bridge_uid);
+    let deck = s.decks.active;
+    pos(&mut s, deck, 3.0);
+    assert_eq!(s.queue.current().unwrap().uid, c_uid, "skipped at once, not played from its start");
+    assert!(s.queue.iter().all(|i| i.bridge.is_none()));
+}
+
+#[test]
+fn a_restored_queue_never_plays_a_bridge_as_a_song() {
+    let (a, b, c) = (song(0, 0), song(2, 0), song(1, 0));
+    let cut = listen_core::queue::BridgeCut { start_s: 60.0, end_s: 105.0, start_bar: 32, bars: 24 };
+    let mut q = listen_core::queue::Queue::default();
+    q.set(vec![a, c.clone()], 0);
+    q.insert_bridge(b, cut, false).unwrap();
+    // Saved and loaded again: the bridge keeps its stretch.
+    let json = serde_json::to_string(&q).unwrap();
+    let mut back: listen_core::queue::Queue = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.item_at(1).unwrap().bridge, Some(cut));
+    // Not current: nothing changes.
+    let at = crate::app::drop_restored_bridge(&mut back, Duration::from_secs(70));
+    assert_eq!((at, back.len()), (Duration::from_secs(70), 3));
+    // Current (the app quit while it played): it goes, and the song after it starts from the beginning.
+    back.advance();
+    let at = crate::app::drop_restored_bridge(&mut back, Duration::from_secs(70));
+    assert_eq!(at, Duration::ZERO);
+    assert_eq!(back.current().unwrap().song.id, c.id);
+    assert!(back.iter().all(|i| i.bridge.is_none()));
+}
+
+#[test]
 fn no_bridge_when_switched_off_or_the_pair_is_close() {
     let (mut s, _) = bridge_rig();
     s.config.settings.mixing.bridges = false;

@@ -406,6 +406,19 @@ impl Listen {
         self.dj.caption = None;
     }
 
+    /// The seed follows the listener: a song they picked or queued themselves (play next, add to queue)
+    /// leads the next set once it plays, so the DJ continues from it, not from an older seed.
+    pub(super) fn dj_seed_follows(&mut self) {
+        let Some(item) = self.queue.current().filter(|i| !i.auto && i.bridge.is_none()) else { return };
+        if self.dj.seed.as_ref().is_some_and(|s| song_key(s) == song_key(&item.song)) {
+            return;
+        }
+        tracing::info!("AI DJ: the listener's pick “{}” is the new seed", item.song.title);
+        self.dj.seed = Some(item.song.clone());
+        self.dj.seed_context.clear();
+        self.dj.seed_mood = None;
+    }
+
     /// Notes that the current song ended (naturally or skipped).
     fn dj_finished(&mut self, skipped: bool) {
         if let Some(item) = self.queue.current() {
@@ -533,6 +546,7 @@ impl Listen {
             return Task::none();
         }
         self.dj_note_entered();
+        self.dj_seed_follows();
         let current = self.queue.current().map(|i| i.uid);
         let mut start = Task::none();
         match self.dj.brk.clone() {
@@ -797,6 +811,8 @@ impl Listen {
         // Heart-rate mode: the pool is narrowed to (and topped up with) songs that fit the tempo.
         let tempo = self.hr_target();
         let tempo_store = tempo.map(|_| self.hr_store());
+        // The scene of what plays now (the current song, then the ones before it) for the pool gate.
+        let scene_store = self.dj_scene_store();
         let mut tempo_skip = exclude.clone();
         tempo_skip.extend(self.queue.current().map(|i| song_key(&i.song)));
         let picks = self.dj.listener_picks.clone();
@@ -853,6 +869,28 @@ impl Listen {
                     &flow_ctx,
                 )
                 .await;
+                // Only songs of the scene that plays now (its language, genre and decade: no 2020s idol
+                // song after a 1980s ballad); a short pool is topped up with songs of that scene from the
+                // history and the analysis store, never with another scene.
+                let here_flow = lookup(&current);
+                let gated = scene_store.with_scene(|scene| {
+                    listen_mix::pool::gate_pool(
+                        pool,
+                        scene,
+                        || scene_store.candidates(),
+                        &tempo_skip,
+                        listen_mix::pool::MIN_POOL,
+                        listen_mix::pool::TOP_UP_TO,
+                        here_flow.as_ref(),
+                    )
+                });
+                if let Some(note) = gated.note("AI DJ") {
+                    tracing::info!("{note}");
+                }
+                let session_scene = gated.scene;
+                let pool_scenes: std::collections::HashMap<String, listen_core::scene::Scene> =
+                    gated.scenes.into_iter().collect();
+                let pool = gated.songs;
                 // Focus mode: the least sung, calmest candidates (instrumentals first).
                 let pool = if focus { super::focus::focus_songs(pool, &lookup, FOCUS_POOL) } else { pool };
                 // Tell the DJ: keep the candidates that fit the requests (energy, tempo, what the listener knows).
@@ -939,9 +977,16 @@ impl Listen {
                         listen_dj::tempo::add_fit_note(notes.entry(song.id.clone()).or_default(), fits);
                     }
                 }
+                // Each candidate names its scene, and the session's scene is a hard rule.
+                for song in &pool {
+                    if let Some(scene) = pool_scenes.get(&song.id) {
+                        listen_dj::scene::add_note(notes.entry(song.id.clone()).or_default(), scene);
+                    }
+                }
+                let show_notes = listen_dj::scene::rule(&s.notes, session_scene.as_ref());
                 let show_notes = match &tempo {
-                    Some(t) => listen_dj::tempo::rule(&s.notes, t.bpm, t.tol),
-                    None => s.notes.clone(),
+                    Some(t) => listen_dj::tempo::rule(&show_notes, t.bpm, t.tol),
+                    None => show_notes,
                 };
                 let familiar = listening.tags(pool.iter());
                 // How each candidate would be mixed in, so the DJ knows its craft.

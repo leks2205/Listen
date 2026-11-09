@@ -31,8 +31,6 @@ pub const KEEP_TOLERANCE: f32 = TOLERANCE / 2.0;
 pub const SMOOTH_S: f64 = 30.0;
 /// Below this beat-grid confidence a song's tempo counts as unknown (as in the flow scorer).
 const MIN_CONFIDENCE: f32 = 0.35;
-/// How much a closer scene (score 0..1) lowers a store song's sound cost (as for bridges).
-const SCENE_WEIGHT: f32 = 0.3;
 
 /// The tempo target for a heart rate or cadence of `rate` per minute: clamped to 70–180, ± 8 BPM, half
 /// and double time count.
@@ -306,7 +304,6 @@ pub fn tempo_fill(
     here: Option<&FlowFeatures>,
     scene: Option<&SceneFilter>,
 ) -> TempoFill {
-    use crate::score::{TimbreStats, Weights, flow_terms};
     let bpms: Vec<Option<f32>> = pool.iter().map(&bpm_of).collect();
     let (fit, rest) = split(&bpms, target);
     let mut out = TempoFill {
@@ -349,24 +346,9 @@ pub fn tempo_fill(
     }
     // Heard songs first; then closest to the current song's sound (energy and timbre, as the flow scorer
     // weighs them) and scene, then tempo.
-    let w = Weights::default();
-    let stats = TimbreStats::from_vectors(
-        here.into_iter().chain(extra.iter().map(|e| &e.1)).map(|f| f.timbre.as_slice()),
-    );
-    let mut scored: Vec<(bool, f32, f32, usize)> = extra
-        .iter()
-        .enumerate()
-        .map(|(i, (_, f, d, score, heard))| {
-            let sound = here.map_or(0.0, |h| {
-                let t = flow_terms(h, f, &[], stats.as_ref());
-                w.energy * t[2] + w.timbre * t[3]
-            });
-            (!heard, sound - SCENE_WEIGHT * score, *d, i)
-        })
-        .collect();
-    scored.sort_by(|a, b| {
-        a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.total_cmp(&b.2)).then(a.3.cmp(&b.3))
-    });
+    let order = crate::pool::rank_store(extra.iter().map(|e| (&e.1, e.3, e.4, e.2)), here);
+    let scored: Vec<(bool, f32, f32, usize)> =
+        order.iter().map(|&i| (!extra[i].4, 0.0, extra[i].2, i)).collect();
     let room = want - out.songs.len();
     let taken = scored.len().min(room);
     out.songs.extend(scored.iter().take(room).map(|&(_, _, _, i)| extra[i].0.clone()));
@@ -728,6 +710,8 @@ mod tests {
                 heard: Box::new(move |s| heard.contains(&s.id)),
                 active: session.active(),
                 session: session.describe(),
+                scene: session.scene().copied(),
+                scene_of: Box::new(move |s| w.profile(s).scene),
             }
         }
 

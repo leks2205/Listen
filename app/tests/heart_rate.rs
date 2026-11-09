@@ -243,17 +243,11 @@ fn auto_dj_fills_take_fitting_songs_topped_up_from_the_store_and_off_is_normal_a
         analyse(&s, x, if i == 0 { 120.0 } else { 146.0 + i as f32 });
         s.history.entries.push(listen_core::history::Entry::new(x, 1_000 + i as i64));
     }
-    // A history song that fits the tempo but is K-pop from the 1990s: an instrumental synthwave session
-    // takes any language and pop is near electronic, but the 1990s are more than a decade away.
+    // A history song that fits the tempo and is synthwave too, but from the 1990s: more than a decade away.
     let kpop = song(28);
     analyse(&s, &kpop, 150.0);
     s.history.entries.push(listen_core::history::Entry::new(&kpop, 2_000));
-    tag_scenes(
-        &s,
-        &now,
-        &store,
-        &[(kpop.clone(), "K-pop, dance-pop, 1990s, South Korea, Korean, girl group")],
-    );
+    tag_scenes(&s, &now, &store, &[(kpop.clone(), "synthwave, electronic, 1990s, instrumental")]);
     let _ = s.update(hr(HeartRateMsg::Set(true)));
     let _ = s.update(sample(150));
     let before = s.queue.len();

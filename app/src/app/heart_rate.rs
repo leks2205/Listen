@@ -341,6 +341,57 @@ impl Listen {
 
     /// What the store top-up chooses from now (history of connected servers, analysed YouTube Music songs).
     pub(super) fn hr_store(&self) -> TempoStore {
+        self.scene_store(self.hr_around())
+    }
+
+    /// The same for the DJs' candidate pools: the session's scene is read from the current song and the
+    /// ones played before it only (the queued songs are the DJ's own picks).
+    pub(super) fn dj_scene_store(&self) -> TempoStore {
+        let mut around = Vec::new();
+        if let Some(pos) = self.queue.current_position() {
+            let at =
+                |i: usize| self.queue.item_at(i).filter(|it| it.bridge.is_none()).map(|it| it.song.clone());
+            around.extend(at(pos));
+            around.extend((pos.saturating_sub(SESSION_LOOK)..pos).rev().filter_map(at));
+        }
+        self.scene_store(around)
+    }
+
+    /// The songs of `songs` that belong to the scene that plays now (forgotten favourites).
+    pub(super) fn keep_in_scene(&self, songs: Vec<Song>) -> Vec<Song> {
+        let store = self.dj_scene_store();
+        store.with_scene(|f| match f.filter(|f| f.active) {
+            Some(f) => songs.into_iter().filter(|s| (f.judge)(s).is_ok()).collect(),
+            None => songs,
+        })
+    }
+
+    /// An Auto-DJ fill's songs (similar and random ones) that belong to the scene that plays now; fewer
+    /// than `n` are topped up with songs of that scene from the history and the analysis store
+    /// (`listen_mix::pool::gate_pool`), never with another scene.
+    pub(super) fn autodj_scene_gate(&self, picked: Vec<Song>, skip: &HashSet<String>, n: usize) -> Vec<Song> {
+        let lookup = self.flow_lookup();
+        let here = self.queue.current().and_then(|i| lookup(&i.song));
+        let store = self.dj_scene_store();
+        let g = store.with_scene(|scene| {
+            listen_mix::pool::gate_pool(
+                picked,
+                scene,
+                || store.candidates(),
+                skip,
+                n.max(1),
+                n.max(listen_mix::pool::TOP_UP_TO),
+                here.as_ref(),
+            )
+        });
+        if let Some(note) = g.note("Auto-DJ") {
+            tracing::info!("{note}");
+        }
+        g.songs
+    }
+
+    /// A store view whose session scene is read from `around` (the current song first).
+    fn scene_store(&self, around: Vec<Song>) -> TempoStore {
         let mut seen = HashSet::new();
         let known = self
             .history
@@ -356,25 +407,8 @@ impl Listen {
             self.sources.iter().find(|(_, s)| s.kind() == SongSource::YouTubeMusic).map(|(id, _)| id.clone());
         let scenes = self.analysis.as_ref().map(|a| a.scenes()).unwrap_or_default();
         let neighbours = Neighbours::from_history(&self.history.entries);
-        let heard = self
-            .history
-            .entries
-            .iter()
-            .filter(|e| e.played())
-            .flat_map(|e| {
-                let s = e.to_song();
-                [song_key(&s), listen_analysis::record_key(&s)]
-            })
-            .collect();
-        TempoStore {
-            analysis: self.analysis.clone(),
-            known,
-            ytm,
-            scenes,
-            neighbours,
-            around: self.hr_around(),
-            heard,
-        }
+        let heard = listen_analysis::heard_keys(&self.history.entries);
+        TempoStore { analysis: self.analysis.clone(), known, ytm, scenes, neighbours, around, heard }
     }
 
     /// The current song, then the songs before it in the queue (newest first), then the queued ones: what

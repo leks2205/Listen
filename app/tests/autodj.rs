@@ -152,3 +152,72 @@ fn autodj_picks_carry_a_reason() {
         assert!(!listen::i18n::why(why).is_empty());
     }
 }
+
+/// The scene of what plays now gates the fill: a 1980s Korean ballad playing (picked after a run of 2020s
+/// idol songs) is followed by songs of its scene, never by the 2020s idol songs the source also offered;
+/// with too few left, same-scene songs the listener played come from the history.
+#[test]
+fn autodj_fills_stay_in_the_scene_and_decade_of_the_current_song() {
+    use listen_core::scene::{SceneIndex, SceneRecord};
+    let (mut s, _) = Listen::boot(&Args { demo: true, ..Args::default() });
+    s.history.entries.clear();
+    s.analysis = Some(listen::app::analysis::AnalysisHandle::default());
+    let mk = |i: usize, artist: &str| {
+        let mut x = demo::album_songs(i / 8)[i % 8 % demo::album_songs(i / 8).len()].clone();
+        x.id = format!("scene-song-{i}");
+        x.title = format!("Scene song {i}");
+        x.artists[0].name = artist.into();
+        x.genres.clear();
+        x.year = None;
+        x
+    };
+    const BALLAD80: &str = "Korean pop, ballad, 1980s, South Korea, Korean, male solo, 80s ballad";
+    const BALLAD90: &str = "K-pop, ballad, 1990s, South Korea, Korean, female solo";
+    const IDOL20: &str = "K-pop, dance-pop, 2020s, South Korea, Korean, girl group, 4th-generation K-pop";
+    let idols_before: Vec<_> = (0..4).map(|i| mk(i, &format!("Idol group {i}"))).collect();
+    let ballad = mk(10, "Ballad singer");
+    let mut queue = idols_before.clone();
+    queue.push(ballad.clone());
+    s.queue.set(queue, 4);
+    let offered: Vec<_> = (20..26).map(|i| mk(i, &format!("Offered idol {i}"))).collect();
+    let old: Vec<_> = (30..32).map(|i| mk(i, &format!("Old singer {i}"))).collect();
+    let history: Vec<_> = (40..46).map(|i| mk(i, &format!("History singer {i}"))).collect();
+    let rec = |x: &listen_core::model::Song, t: &str| SceneRecord {
+        song_id: listen_analysis::record_key(x),
+        title_hint: format!("{} – {}", x.artist_line(), x.title),
+        tags_en: t.into(),
+        audio: None,
+        at: 0,
+    };
+    let records: Vec<SceneRecord> = idols_before
+        .iter()
+        .chain(&offered)
+        .map(|x| rec(x, IDOL20))
+        .chain([rec(&ballad, BALLAD80)])
+        .chain(old.iter().map(|x| rec(x, BALLAD80)))
+        .chain(history.iter().map(|x| rec(x, BALLAD90)))
+        .collect();
+    let a = s.analysis.as_ref().unwrap();
+    a.set_scenes(SceneIndex::from_records(records));
+    for (i, x) in history.iter().enumerate() {
+        a.insert([analysed(x, 80.0, 8)]);
+        s.history.entries.push(listen_core::history::Entry::new(x, 1_000 + i as i64));
+    }
+    let mut fetched = offered.clone();
+    fetched.extend(old.clone());
+    let before = s.queue.len();
+    let _ = s.update(Message::AutoDjLoaded(Ok(fetched)));
+    let added: Vec<_> = s.queue.iter().skip(before).map(|i| i.song.clone()).collect();
+    let n = s.config.settings.auto_dj.item_count as usize;
+    assert!(!added.is_empty());
+    assert!(added.len() <= n);
+    assert!(
+        added.iter().all(|x| !offered.iter().any(|o| o.id == x.id)),
+        "no 2020s idol song after the 1980s ballad: {:?}",
+        added.iter().map(|x| &x.title).collect::<Vec<_>>()
+    );
+    assert!(old.iter().all(|o| added.iter().any(|x| x.id == o.id)), "the 1980s songs offered are kept");
+    if n > old.len() {
+        assert!(added.iter().any(|x| history.iter().any(|h| h.id == x.id)), "topped up from the history");
+    }
+}
