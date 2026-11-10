@@ -164,6 +164,11 @@ pub enum QueueMove {
     Bottom,
 }
 
+/// Songs of one queueing that count as the listener's picks for the AI DJ.
+const PICKS_PER_QUEUEING: usize = 5;
+/// Listener picks the AI DJ keeps.
+const PICKS_KEPT: usize = 10;
+
 /// The songs of a menu target: known now, or a fetch to run.
 pub enum TargetSongs {
     Ready(Vec<Song>),
@@ -862,11 +867,13 @@ impl Listen {
         Task::batch([images, task])
     }
 
-    /// Songs the listener queued steer the AI DJ (the latest ten).
+    /// Songs the listener queued steer the AI DJ: the first [`PICKS_PER_QUEUEING`] songs of each
+    /// queueing, the latest [`PICKS_KEPT`] in all (one album queued doesn't push out every
+    /// earlier pick).
     pub(in crate::app) fn note_listener_picks(&mut self, songs: &[Song]) {
         let picks = &mut self.dj.listener_picks;
-        picks.extend(songs.iter().take(5).cloned());
-        let excess = picks.len().saturating_sub(10);
+        picks.extend(songs.iter().take(PICKS_PER_QUEUEING).cloned());
+        let excess = picks.len().saturating_sub(PICKS_KEPT);
         picks.drain(..excess);
     }
 
