@@ -1,4 +1,6 @@
-//! Runs mpv for the lifetime of the app and forwards its events as messages.
+//! Runs one mpv per [`PlayerConfig`] (deck 0, deck 1, the AI DJ's voice) and forwards its events as
+//! messages. After `Crashed` (or a failed start) the stream parks instead of restarting mpv in a loop:
+//! the deck stays dead until a new `generation` (Reload mpv, `AudioMsg::ReloadMpv`) restarts it.
 
 use crate::app::Message;
 use iced::Subscription;
