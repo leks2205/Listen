@@ -2539,12 +2539,15 @@ impl Listen {
         self.start_current()
     }
 
-    /// Replaces what mpv plays with the queue's current (and next) track.
+    /// Invalidates every stream resolve and prefetch still in flight (`StreamsResolved` checks the token):
+    /// call it on every change of the current item. It does not start anything itself.
     fn bump_token(&mut self) {
         self.play_token += 1;
         self.live_token.store(self.play_token, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Plays the queue's current item from its start, replacing what mpv plays: a running mix is
+    /// cancelled and only this item's stream is resolved (the next one is prefetched later).
     fn start_current(&mut self) -> Task<Message> {
         // A mix in progress stops; the new song plays on the active deck.
         let cancel = self.mix_cancel("another song was started");
