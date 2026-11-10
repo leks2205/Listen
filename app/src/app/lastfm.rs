@@ -100,9 +100,9 @@ impl Listen {
         })
     }
 
-    /// Now playing / a finished play of `song` (the song as queued, not an own-server copy: one play, one
-    /// scrobble). `started` = Unix seconds the play began.
-    pub(super) fn lastfm_report(&self, song: &Song, submission: Option<i64>) -> Task<Message> {
+    /// Reports `song` (the song as queued, not an own-server copy: one play, one scrobble): `None` =
+    /// now playing, `Some(started)` = a finished play that began at `started` (Unix seconds).
+    pub(super) fn lastfm_report(&self, song: &Song, started: Option<i64>) -> Task<Message> {
         let Some(s) = self.lastfm.scrobbler.clone() else { return Task::none() };
         if !self.config.settings.integrations.lastfm.scrobble {
             return Task::none();
@@ -110,7 +110,7 @@ impl Listen {
         let song = song.clone();
         Task::perform(
             async move {
-                let r = match submission {
+                let r = match started {
                     Some(ts) => s.scrobble(&song, ts).await,
                     None => s.now_playing(&song).await.map(|()| 0),
                 };
