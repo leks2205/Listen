@@ -109,7 +109,8 @@ pub struct LyricsUi {
     pub words_mode: bool,
     /// The word whose gloss is open.
     pub gloss_word: Option<String>,
-    /// Lute word statuses from the vocab-hub (loaded once per session).
+    /// Lute word statuses from the vocab-hub (`Listen::learn_vocab` loads it and asks again once it
+    /// is older than `learnable::VOCAB_FRESH`).
     pub vocab: Option<listen_lyrics::vocab::Words>,
     /// Gemini results for the current song (`key`), mirrored to the cache dir.
     ai_cache: listen_lyrics::gemini::SongCache,
@@ -331,7 +332,6 @@ pub enum LyricsMsg {
     Glossed(String, String, Result<std::collections::BTreeMap<String, listen_lyrics::gemini::Gloss>, String>),
     /// A word was clicked in words mode.
     Word(String),
-    Vocab(Option<listen_lyrics::vocab::Words>),
     SearchOpen,
     SearchClose,
     SearchName(String),
@@ -649,6 +649,7 @@ impl Listen {
         )
     }
 
+    /// The word list arrives as `LearnMsg::Vocab` (`app/learnable.rs` owns its loading and freshness).
     fn load_vocab(&mut self) -> Task<Message> {
         self.learn_vocab()
     }
@@ -821,12 +822,6 @@ impl Listen {
                 self.lyrics_ui.gloss_word = Some(w);
                 self.open_modal(GLOSS_MODAL);
                 return Task::batch([self.load_glosses(), self.load_vocab()]);
-            }
-            LyricsMsg::Vocab(words) => {
-                if words.is_some() {
-                    self.learn.vocab_at = Some(std::time::Instant::now());
-                }
-                self.lyrics_ui.vocab = words;
             }
             LyricsMsg::SearchOpen => {
                 let (name, artist) = self
