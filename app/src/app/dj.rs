@@ -24,7 +24,11 @@ const KEY_ENTRY: &str = "gemini-api-key";
 /// Songs offered to the model per set.
 const POOL: usize = 40;
 /// Of those, at most this many come from the listening history (heavy rotation, not heard for a while).
+/// ("Only favourites" raises it to half the pool.)
 const HISTORY_SLOTS: usize = 5;
+/// Places kept free for random library songs (variety); at least this many of the pool are random
+/// when the source returns enough.
+const RANDOM_SLOTS: usize = 6;
 /// History songs looked at per bucket before keeping the ones that fit the moment.
 const HISTORY_LOOKUP: usize = 30;
 /// Voice level before the user's offset (music with ReplayGain sits around here).
@@ -1420,8 +1424,12 @@ async fn candidates(
         }
         out
     };
-    let (a, b, c, d) =
-        tokio::join!(source.similar_songs(seed, 30), from_current, source.random_songs(8, None), from_picks);
+    let (a, b, c, d) = tokio::join!(
+        source.similar_songs(seed, 30),
+        from_current,
+        source.random_songs(RANDOM_SLOTS + 2, None),
+        from_picks
+    );
     let seed_similar = a.unwrap_or_default();
     let current_key = song_key(current);
     let usable = |s: &Song| {
@@ -1461,7 +1469,7 @@ async fn candidates(
         listen_dj::familiarity::mix_buckets(fitting(from_history.0), fitting(from_history.1), history_slots);
     let history_keys: HashSet<String> = history.iter().map(song_key).collect();
     pool.retain(|s| !history_keys.contains(&song_key(s)));
-    pool.truncate(POOL - 6 - history.len());
+    pool.truncate(POOL - RANDOM_SLOTS - history.len());
     pool.extend(history);
     let mut keys: HashSet<String> = pool.iter().map(song_key).collect();
     let random = dedupe_versions(c.unwrap_or_default().into_iter().filter(usable).collect());
