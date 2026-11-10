@@ -1862,11 +1862,12 @@ pub fn known_words(args: &[String]) -> i32 {
     let lemmas = rt.block_on(known::hub_lemmas(&http, &hub, &lines)).ok().flatten();
     let resolved = lemmas.is_some();
     let tokens = known::tokens(&lines, &lemmas.unwrap_or_default());
-    let local = known::coverage(&words, &tokens, 5);
+    let local = known::coverage(&words, &tokens, listen_lyrics::vocab::DEFAULT_KNOWN_MIN);
     let mut store = known::Store::default();
     store.record("song", &lines, &std::collections::HashMap::new(), 0);
     let text = store.songs.get("song").map(|s| s.text()).unwrap_or_default();
-    let hub_cov = rt.block_on(known::hub_coverage(&http, &hub, &text, 5));
+    let hub_cov =
+        rt.block_on(known::hub_coverage(&http, &hub, &text, listen_lyrics::vocab::DEFAULT_KNOWN_MIN));
     let name = |k: Knowledge| match k {
         Knowledge::Known => "known",
         Knowledge::Learning(_) => "learning",
@@ -1879,9 +1880,14 @@ pub fn known_words(args: &[String]) -> i32 {
             let status = known::status_of(&words, &t.form, t.lemma.as_deref());
             // As the lyrics show it: words the list does not have are classed by the hub.
             let shown = match status {
-                Some(_) => Knowledge::from_status(status, 5),
+                Some(_) => Knowledge::from_status(status, listen_lyrics::vocab::DEFAULT_KNOWN_MIN),
                 None => rt
-                    .block_on(known::hub_coverage(&http, &hub, &t.form, 5))
+                    .block_on(known::hub_coverage(
+                        &http,
+                        &hub,
+                        &t.form,
+                        listen_lyrics::vocab::DEFAULT_KNOWN_MIN,
+                    ))
                     .map(|c| known::class_of(&c))
                     .unwrap_or(Knowledge::New),
             };

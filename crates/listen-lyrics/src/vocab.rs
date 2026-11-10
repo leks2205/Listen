@@ -8,6 +8,10 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
 
+/// The `known_min` every Listen view passes: Lute status 5 ("learned") and up counts as known. One
+/// value for all of them, or the Learnable mix, the coverage line and the word colours disagree.
+pub const DEFAULT_KNOWN_MIN: i32 = 5;
+
 /// Lute's statuses as the lyrics show them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Knowledge {
@@ -22,7 +26,8 @@ pub enum Knowledge {
 }
 
 impl Knowledge {
-    /// From a Lute status; `known_min` = lowest learning status that counts as known (5 by default).
+    /// From a Lute status; `known_min` = lowest learning status that counts as known
+    /// ([`DEFAULT_KNOWN_MIN`] in the app).
     pub fn from_status(status: Option<i32>, known_min: i32) -> Self {
         match status {
             Some(99) => Self::Known,

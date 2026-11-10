@@ -160,7 +160,12 @@ impl Listen {
                 iced::futures::stream::iter(ask)
                     .map(|w| {
                         let (http, base) = (http.clone(), base.clone());
-                        async move { known::hub_coverage(&http, &base, &w, 5).await.ok().map(|c| (w, c)) }
+                        async move {
+                            known::hub_coverage(&http, &base, &w, listen_lyrics::vocab::DEFAULT_KNOWN_MIN)
+                                .await
+                                .ok()
+                                .map(|c| (w, c))
+                        }
                     })
                     .buffer_unordered(HUB_BATCH)
                     .filter_map(|x| async move { x })
@@ -178,7 +183,7 @@ impl Listen {
         {
             return *k;
         }
-        Knowledge::from_status(known::status_of(words, form, lemma), 5)
+        Knowledge::from_status(known::status_of(words, form, lemma), listen_lyrics::vocab::DEFAULT_KNOWN_MIN)
     }
 
     /// Lets the hub count the stored songs still counted locally (a few at a time).
@@ -189,7 +194,7 @@ impl Listen {
         if self.learn.hub_busy || self.learn.hub_off {
             return Task::none();
         }
-        let version = Store::version(&words, 5);
+        let version = Store::version(&words, listen_lyrics::vocab::DEFAULT_KNOWN_MIN);
         let pending = self.learn_store().hub_pending(HUB_BATCH);
         if pending.is_empty() {
             return Task::none();
@@ -200,7 +205,13 @@ impl Listen {
             async move {
                 let jobs = pending.into_iter().map(|(key, text)| {
                     let (http, base) = (http.clone(), base.clone());
-                    async move { (key, known::hub_coverage(&http, &base, &text, 5).await) }
+                    async move {
+                        (
+                            key,
+                            known::hub_coverage(&http, &base, &text, listen_lyrics::vocab::DEFAULT_KNOWN_MIN)
+                                .await,
+                        )
+                    }
                 });
                 iced::futures::future::join_all(jobs).await
             },
@@ -220,7 +231,8 @@ impl Listen {
         let words = self.lyrics_ui.vocab.as_ref()?;
         let lines = self.shown_lyric_lines();
         let lemmas = known::gloss_lemmas(&self.lyrics_ui.glosses);
-        let c = known::coverage(words, &known::tokens(&lines, &lemmas), 5);
+        let c =
+            known::coverage(words, &known::tokens(&lines, &lemmas), listen_lyrics::vocab::DEFAULT_KNOWN_MIN);
         (c.words > 0).then_some(c)
     }
 
@@ -231,7 +243,7 @@ impl Listen {
     /// Recomputes coverage (only where the word list changed) and the mix.
     fn learn_recount(&mut self) {
         let Some(words) = self.lyrics_ui.vocab.clone() else { return };
-        let changed = self.learn_store().refresh(&words, 5);
+        let changed = self.learn_store().refresh(&words, listen_lyrics::vocab::DEFAULT_KNOWN_MIN);
         if changed {
             self.learn_save();
         }
