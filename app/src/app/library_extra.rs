@@ -20,6 +20,17 @@ const FOLDER_SONG_CAP: usize = 3000;
 const FOLDER_VISIT_CAP: usize = 400;
 /// Songs a "play genre" fetches.
 const GENRE_PLAY_CAP: usize = 1000;
+/// Un-favourited albums / artists kept for a revert (the most recent ones).
+const REMOVED_KEEP: usize = 20;
+
+/// Remembers an item that left a favourites list, keeping the newest `REMOVED_KEEP`: the one
+/// just removed is the one a refused change may need to put back.
+fn remember_removed<T>(removed: &mut Vec<T>, item: T) {
+    removed.push(item);
+    if removed.len() > REMOVED_KEEP {
+        removed.drain(..removed.len() - REMOVED_KEEP);
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GenreSort {
@@ -826,8 +837,7 @@ impl Listen {
                     }
                 } else if let Some(i) = self.extra.fav_albums.iter().position(same) {
                     let gone = self.extra.fav_albums.remove(i);
-                    self.extra.removed_albums.push(gone);
-                    self.extra.removed_albums.truncate(20);
+                    remember_removed(&mut self.extra.removed_albums, gone);
                     self.lists.reset(&ListId::Favorites(FavoritesTab::Albums));
                 }
             }
@@ -849,8 +859,7 @@ impl Listen {
                     }
                 } else if let Some(i) = self.extra.fav_artists.iter().position(same) {
                     let gone = self.extra.fav_artists.remove(i);
-                    self.extra.removed_artists.push(gone);
-                    self.extra.removed_artists.truncate(20);
+                    remember_removed(&mut self.extra.removed_artists, gone);
                     self.lists.reset(&ListId::Favorites(FavoritesTab::Artists));
                 }
             }
@@ -1108,6 +1117,17 @@ mod tests {
 
     fn g(name: &str, albums: u32, songs: u32) -> Genre {
         Genre { id: name.into(), name: name.into(), album_count: Some(albums), song_count: Some(songs) }
+    }
+
+    #[test]
+    fn removed_favourites_keep_the_newest() {
+        let mut removed = Vec::new();
+        for i in 0..REMOVED_KEEP + 5 {
+            remember_removed(&mut removed, i);
+        }
+        assert_eq!(removed.len(), REMOVED_KEEP);
+        assert_eq!(removed.last(), Some(&(REMOVED_KEEP + 4)), "the one just removed stays");
+        assert_eq!(removed.first(), Some(&5));
     }
 
     #[test]
