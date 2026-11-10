@@ -92,7 +92,8 @@ pub fn filter_playlists(playlists: &[Playlist], search: &str) -> Vec<Playlist> {
         .collect()
 }
 
-/// `list` in `sort` order (ties by name).
+/// `list` in `sort` order; ties by name, A to Z ascending and Z to A with `desc` (the whole
+/// list is reversed).
 pub fn sort_playlists(list: &mut [Playlist], sort: PlaylistSort, desc: bool) {
     list.sort_by_cached_key(|p| p.name.to_lowercase());
     match sort {
