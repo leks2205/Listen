@@ -478,7 +478,7 @@ fn user_actions_cancel_and_the_pair_is_planned_again() {
     }
 }
 
-/// An incoming deck not ready in time: the pair plays gapless and isn't tried again.
+/// A planned mix far from its first timed step needs only the 1 s clock; the 30 ms clock returns before it.
 #[test]
 fn a_far_planned_mix_runs_the_slow_clock_until_its_first_step_comes_close() {
     let mut s = auto_rig();
@@ -507,6 +507,7 @@ fn a_far_planned_mix_runs_the_slow_clock_until_its_first_step_comes_close() {
     assert_eq!(s.mix.phase, Phase::Preloading);
 }
 
+/// An incoming deck not ready in time: the pair plays gapless and isn't tried again.
 #[test]
 fn a_late_incoming_deck_falls_back_to_gapless() {
     let mut s = auto_rig();

@@ -338,7 +338,6 @@ impl Listen {
         self.mix.pos[deck.min(1)] = (pos.as_secs_f64(), Some(Instant::now()));
     }
 
-    /// A deck's position now (extrapolated a little since its last report).
     /// Outgoing position at which the incoming deck must start so its mix-in point meets `plan`'s
     /// outgoing mix point at the outgoing deck's current speed.
     pub(super) fn mix_start_out(&self, plan: &TransitionPlan) -> f64 {
@@ -362,6 +361,7 @@ impl Listen {
         self.deck_now(self.mix.out_deck) < first - PLANNED_WAKE_S
     }
 
+    /// A deck's position now (extrapolated a little since its last report).
     fn deck_now(&self, deck: usize) -> f64 {
         let (p, at) = self.mix.pos[deck];
         let ahead = at.map_or(0.0, |t| t.elapsed().as_secs_f64().min(0.25));
