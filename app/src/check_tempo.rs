@@ -7,12 +7,11 @@
 //!
 //! The analysis dir is opened as a store (its own machine shard is created): point it at a copy.
 
-use listen_analysis::store::ShardStore;
 use listen_analysis::{record_key, scene_profile, song_of_record, tempo_scene_filter, tempo_session};
 use listen_core::analysis::{FileId, FlowFeatures};
 use listen_core::history::Entry;
 use listen_core::model::{ServerId, Song, SourceKind};
-use listen_core::scene::{Families, Neighbours, SceneIndex};
+use listen_core::scene::{Families, Neighbours};
 use listen_core::versions::song_key;
 use std::collections::HashSet;
 use std::path::Path;
@@ -44,10 +43,8 @@ pub fn run(args: &[String]) -> i32 {
 fn check(store_dir: &Path, emb_dir: &Path, history: &Path, args: &[String]) -> Result<(), String> {
     let bpm: f32 = arg(args, "--bpm").and_then(|b| b.parse().ok()).unwrap_or(146.0);
     let want: usize = arg(args, "--want").and_then(|b| b.parse().ok()).unwrap_or(12);
-    let store = ShardStore::open(store_dir, "check-tempo").map_err(|e| e.to_string())?;
-    let index = SceneIndex::load_embeddings(emb_dir);
-    let text = std::fs::read_to_string(history).map_err(|e| format!("{}: {e}", history.display()))?;
-    let entries: Vec<Entry> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let (store, index, entries) =
+        crate::check_bridges::replay_inputs(store_dir, emb_dir, history, "check-tempo")?;
     let neighbours = Neighbours::from_history(&entries);
     let ytm: ServerId = entries
         .iter()

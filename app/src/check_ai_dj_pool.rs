@@ -10,12 +10,11 @@
 //!
 //! The analysis dir is opened as a store (its own machine shard is created): point it at a copy.
 
-use listen_analysis::store::ShardStore;
 use listen_analysis::{bridge_candidates, record_key, scene_profile, song_of_record};
 use listen_core::analysis::{FileId, FlowFeatures};
 use listen_core::history::Entry;
 use listen_core::model::{ServerId, Song, SourceKind};
-use listen_core::scene::{Neighbours, SceneIndex};
+use listen_core::scene::Neighbours;
 use listen_core::versions::song_key;
 use std::collections::HashSet;
 use std::path::Path;
@@ -49,10 +48,8 @@ pub fn run(args: &[String]) -> i32 {
 }
 
 fn check(store_dir: &Path, emb_dir: &Path, history: &Path, at: &[String]) -> Result<(), String> {
-    let store = ShardStore::open(store_dir, "check-ai-dj-pool").map_err(|e| e.to_string())?;
-    let index = SceneIndex::load_embeddings(emb_dir);
-    let text = std::fs::read_to_string(history).map_err(|e| format!("{}: {e}", history.display()))?;
-    let entries: Vec<Entry> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let (store, index, entries) =
+        crate::check_bridges::replay_inputs(store_dir, emb_dir, history, "check-ai-dj-pool")?;
     let neighbours = Neighbours::from_history(&entries);
     println!(
         "store {} songs; scene index {} songs ({} tagged); history {} plays",

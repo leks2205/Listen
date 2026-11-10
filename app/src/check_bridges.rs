@@ -7,7 +7,8 @@
 //! margin each leg must beat a direct join that can't be beat-matched by (to measure it).
 //!
 //! The analysis dir is opened as a store (its own machine shard is created): point it at a copy of
-//! `Listen/analysis`, not the synced folder.
+//! `Listen/analysis` (the folder holding `v1/`), not the synced folder. [`replay_inputs`] refuses a folder
+//! without `v1/` and inputs that read as empty, so a wrong path never passes as "nothing found".
 
 use listen_analysis::store::ShardStore;
 use listen_analysis::{bridge_candidates, bridge_scene_gate, record_key, scene_profile};
@@ -18,6 +19,38 @@ use listen_core::scene::{Families, Neighbours, SceneIndex};
 use listen_mix::plan::PlanCtx;
 use std::collections::HashSet;
 use std::path::Path;
+
+/// The three inputs of the offline replay tools (`--check-bridges`, `--check-tempo`, `--check-ai-dj-pool`):
+/// the analysis store (`store_dir` must hold `v1/`; opened under the shard name `tool`), the scene index
+/// and the history. Any of them empty is an error naming the path, because an empty input makes every
+/// replay look like "the gate rejects everything".
+pub(crate) fn replay_inputs(
+    store_dir: &Path,
+    emb_dir: &Path,
+    history: &Path,
+    tool: &str,
+) -> Result<(ShardStore, SceneIndex, Vec<Entry>), String> {
+    if !store_dir.join("v1").is_dir() {
+        return Err(format!(
+            "{}: no v1/ inside; pass the folder that holds the analysis store's v1/ (a copy of Listen/analysis)",
+            store_dir.display()
+        ));
+    }
+    let store = ShardStore::open(store_dir, tool).map_err(|e| e.to_string())?;
+    if store.is_empty() {
+        return Err(format!("{}: the analysis store has 0 songs", store_dir.display()));
+    }
+    let index = SceneIndex::load_embeddings(emb_dir);
+    if index.is_empty() {
+        return Err(format!("{}: no embeddings found (pass …/embeddings/v1/clamp3)", emb_dir.display()));
+    }
+    let text = std::fs::read_to_string(history).map_err(|e| format!("{}: {e}", history.display()))?;
+    let entries: Vec<Entry> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    if entries.is_empty() {
+        return Err(format!("{}: no history entries (expected history.jsonl lines)", history.display()));
+    }
+    Ok((store, index, entries))
+}
 
 pub fn run(args: &[String]) -> i32 {
     let (Some(store_dir), Some(emb_dir), Some(history)) = (args.first(), args.get(1), args.get(2)) else {
@@ -44,6 +77,20 @@ pub fn run(args: &[String]) -> i32 {
     }
 }
 
+#[cfg(test)]
+mod replay_input_tests {
+    #[test]
+    fn a_folder_without_v1_is_refused_and_left_alone() {
+        let d = std::env::temp_dir().join(format!("listen-replay-inputs-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let p = std::path::Path::new("/nonexistent");
+        let Err(err) = super::replay_inputs(&d, p, p, "test") else { panic!("refused") };
+        assert!(err.contains("no v1/ inside"), "{err}");
+        assert!(!d.join("v1").exists(), "nothing created in the wrong folder");
+        std::fs::remove_dir_all(d).ok();
+    }
+}
+
 /// What the summary counts over the chosen bridges.
 #[derive(Default)]
 struct Counts {
@@ -64,10 +111,7 @@ fn check(
     all: bool,
     gain: Option<f32>,
 ) -> Result<(), String> {
-    let store = ShardStore::open(store_dir, "check-bridges").map_err(|e| e.to_string())?;
-    let index = SceneIndex::load_embeddings(emb_dir);
-    let text = std::fs::read_to_string(history).map_err(|e| format!("{}: {e}", history.display()))?;
-    let entries: Vec<Entry> = text.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let (store, index, entries) = replay_inputs(store_dir, emb_dir, history, "check-bridges")?;
     let neighbours = Neighbours::from_history(&entries);
     let heard = listen_analysis::heard_keys(&entries);
     println!(
