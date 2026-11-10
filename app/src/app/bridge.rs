@@ -234,8 +234,7 @@ impl Listen {
         let title = item.song.title.clone();
         let mut cancel = Task::none();
         if self.mix.owns_next() {
-            use super::mix::Phase;
-            let blending = matches!(self.mix.phase, Phase::Starting | Phase::Running | Phase::Settling);
+            let blending = self.mix.phase.blending();
             if past < if blending { WATCH_STUCK_S } else { WATCH_GRACE_S } {
                 return None;
             }

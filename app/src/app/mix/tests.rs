@@ -1325,3 +1325,14 @@ fn a_song_that_came_in_by_echo_out_does_not_echo_out_again() {
     let p2 = plan_of(&s);
     assert!(!matches!(p2.kind, Kind::EchoOut { .. }), "two echo-outs in a row: {}", p2.reason);
 }
+
+#[test]
+fn a_planned_transition_is_neither_blending_nor_holding_the_decks() {
+    assert!(!Phase::Planned.blending() && !Phase::Planned.decks_busy());
+    assert!(!Phase::Ready.decks_busy(), "a loaded, waiting incoming deck can have its chain rebuilt");
+    assert!(Phase::Preloading.decks_busy() && !Phase::Preloading.blending());
+    for p in [Phase::Starting, Phase::Running, Phase::Settling] {
+        assert!(p.blending() && p.decks_busy(), "{p:?}");
+    }
+    assert!(!Phase::Idle.blending() && !Phase::Idle.decks_busy());
+}

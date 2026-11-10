@@ -58,7 +58,7 @@ fn default_sink() -> Option<String> {
 /// chain would reset the decks' mix filters mid-transition). A merely planned transition, or one
 /// whose incoming deck is ready and paused, does not hold it up.
 fn headphone_defers(phase: Phase) -> bool {
-    matches!(phase, Phase::Preloading | Phase::Starting | Phase::Running | Phase::Settling)
+    phase.decks_busy()
 }
 
 impl Listen {

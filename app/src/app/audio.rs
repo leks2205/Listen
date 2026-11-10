@@ -236,7 +236,8 @@ impl Listen {
         self.mixing_possible()
     }
 
-    /// Sends the effective speed to the decks; never touches them during a blend.
+    /// Sends the effective speed to the decks; never touches them while a transition is planned or
+    /// running (the plan owns the decks' speed from the moment it exists).
     pub(super) fn apply_speed(&self) -> Task<Message> {
         if self.mix.phase != super::mix::Phase::Idle {
             return Task::none();

@@ -44,8 +44,12 @@ const LOCKED_AFTER_S: f64 = 2.0;
 /// Phase readings with a longer IPC round trip are discarded.
 const MAX_RTT: Duration = Duration::from_millis(2);
 
+/// Where the transition to the next song is. With DJ transitions on, `Planned` holds for most of every
+/// song (from when the next song is queued until shortly before the mix), so `phase != Idle` means "a
+/// plan exists", not "two decks are in use": ask [`Phase::blending`] or [`Phase::decks_busy`] for that.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Phase {
+    /// No transition is planned: mpv plays the queue gaplessly on the active deck.
     #[default]
     Idle,
     /// A plan exists; mpv's "next" slot is empty so mpv doesn't advance.
@@ -58,6 +62,21 @@ pub enum Phase {
     Running,
     /// The outgoing deck stopped; the incoming one glides back to 1.0×.
     Settling,
+}
+
+impl Phase {
+    /// The blend is starting or playing: from the incoming deck's scheduled unpause until it has
+    /// settled back to its own speed.
+    pub fn blending(self) -> bool {
+        matches!(self, Phase::Starting | Phase::Running | Phase::Settling)
+    }
+
+    /// The incoming deck is loading or the blend is starting or playing: rebuilding a deck's filter
+    /// chain now would reset the transition's filters mid-way. A merely planned transition, or one whose
+    /// incoming deck is loaded and waiting (`Ready`), does not hold the decks.
+    pub fn decks_busy(self) -> bool {
+        self == Phase::Preloading || self.blending()
+    }
 }
 
 /// One filter value moving over time.
