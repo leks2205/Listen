@@ -40,5 +40,8 @@ details.
   (DJ dedupe, exclusions); `Listen::server_song_key` is one exact song on one server (caches).
 - Every song a DJ adds from outside its own pool (fills, bridges, tempo picks) must pass the scene
   gate (`listen_mix::pool::gate_pool`, `listen_analysis::bridge_scene_gate`).
+- An iced `Task` is lazy: a method that returns one (`dlna_call`, `player_task`, `start_current`, …)
+  has done nothing until the task is returned from `update` or batched into what is. `let _ =`
+  silences `#[must_use]` and drops the work.
 - "The music stopped with songs queued" is handled in one place, `keep_going` (`app/src/app/transport.rs`);
   extend it instead of adding another special case.

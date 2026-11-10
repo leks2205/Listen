@@ -283,7 +283,8 @@ impl Listen {
         Message::Dlna(DlnaMsg::Done(result.map_err(err)))
     }
 
-    /// Runs an action on the connected renderer.
+    /// An action on the connected renderer. Like every iced `Task` it does nothing until it is
+    /// returned to the runtime (or batched into what is returned); `let _ =` drops the call.
     fn dlna_call<F, Fut>(&self, f: F) -> Task<Message>
     where
         F: FnOnce(Renderer) -> Fut,
@@ -655,11 +656,13 @@ impl Listen {
             }
             Message::Volume(v) => {
                 self.playback.volume = v.round().clamp(0.0, 100.0) as u8;
-                if self.playback.muted {
+                let unmute = if self.playback.muted {
                     self.playback.muted = false;
-                    let _ = self.dlna_call(|r| async move { r.set_mute(false).await });
-                }
-                Some(self.dlna_send_volume(self.playback.volume))
+                    self.dlna_call(|r| async move { r.set_mute(false).await })
+                } else {
+                    Task::none()
+                };
+                Some(Task::batch([unmute, self.dlna_send_volume(self.playback.volume)]))
             }
             Message::ToggleMute => {
                 self.playback.muted = !self.playback.muted;
