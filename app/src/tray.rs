@@ -7,31 +7,8 @@ use iced::futures::{SinkExt, Stream, StreamExt, channel::mpsc};
 use ksni::TrayMethods;
 use ksni::menu::{MenuItem, StandardItem};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrayCmd {
-    PlayPause,
-    Next,
-    Previous,
-    Stop,
-    /// "Open main window".
-    Show,
-    /// A click on the icon.
-    Toggle,
-    Quit,
-}
-
-/// The menu's labels in order (`None` = separator).
-pub fn menu_labels(playing: bool) -> Vec<Option<&'static str>> {
-    vec![
-        Some(if playing { "Pause" } else { "Play" }),
-        Some("Next Track"),
-        Some("Previous Track"),
-        Some("Stop"),
-        None,
-        Some("Open main window"),
-        Some("Quit"),
-    ]
-}
+pub use crate::tray_menu::TrayCmd;
+use crate::tray_menu::menu;
 
 /// The app icon (rendered from `packaging/io.github.leks2205.Listen.svg`) at 64 and
 /// 32 px, as ARGB32 in network byte order.
@@ -87,21 +64,11 @@ impl ksni::Tray for ListenTray {
             }
             .into()
         };
-        const CMDS: [Option<TrayCmd>; 7] = [
-            Some(TrayCmd::PlayPause),
-            Some(TrayCmd::Next),
-            Some(TrayCmd::Previous),
-            Some(TrayCmd::Stop),
-            None,
-            Some(TrayCmd::Show),
-            Some(TrayCmd::Quit),
-        ];
-        menu_labels(self.playing)
+        menu(self.playing)
             .into_iter()
-            .zip(CMDS)
-            .map(|(label, cmd)| match (label, cmd) {
-                (Some(label), Some(cmd)) => item(label, cmd),
-                _ => MenuItem::Separator,
+            .map(|entry| match entry {
+                Some((label, cmd)) => item(label, cmd),
+                None => MenuItem::Separator,
             })
             .collect()
     }
@@ -160,27 +127,4 @@ fn worker() -> impl Stream<Item = Message> {
         }
         std::future::pending::<()>().await;
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn menu_has_feishins_entries() {
-        let labels = menu_labels(false);
-        assert_eq!(
-            labels,
-            [
-                Some("Play"),
-                Some("Next Track"),
-                Some("Previous Track"),
-                Some("Stop"),
-                None,
-                Some("Open main window"),
-                Some("Quit")
-            ]
-        );
-        assert_eq!(menu_labels(true)[0], Some("Pause"));
-    }
 }

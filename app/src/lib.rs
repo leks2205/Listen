@@ -42,6 +42,8 @@ pub mod tray;
 #[cfg(windows)]
 #[path = "tray_win.rs"]
 pub mod tray;
+#[cfg(any(target_os = "linux", windows))]
+pub mod tray_menu;
 pub mod ui;
 pub mod visualizer;
 

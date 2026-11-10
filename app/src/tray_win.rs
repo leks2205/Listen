@@ -11,31 +11,8 @@ use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging as wm;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrayCmd {
-    PlayPause,
-    Next,
-    Previous,
-    Stop,
-    /// "Open main window".
-    Show,
-    /// A click on the icon.
-    Toggle,
-    Quit,
-}
-
-/// The menu's labels in order (`None` = separator).
-pub fn menu_labels(playing: bool) -> Vec<Option<&'static str>> {
-    vec![
-        Some(if playing { "Pause" } else { "Play" }),
-        Some("Next Track"),
-        Some("Previous Track"),
-        Some("Stop"),
-        None,
-        Some("Open main window"),
-        Some("Quit"),
-    ]
-}
+pub use crate::tray_menu::TrayCmd;
+use crate::tray_menu::menu as tray_menu;
 
 /// The 64 px app icon (rendered from `packaging/io.github.leks2205.Listen.svg`).
 const ICON_PNG: &[u8] = include_bytes!("../../packaging/windows/tray-64.png");
@@ -83,18 +60,12 @@ fn run_thread(
 ) {
     use windows_sys::Win32::System::Threading::GetCurrentThreadId;
     let menu = Menu::new();
-    let items: Vec<(Option<MenuItem>, Option<TrayCmd>)> = menu_labels(false)
+    let items: Vec<(Option<MenuItem>, Option<TrayCmd>)> = tray_menu(false)
         .into_iter()
-        .zip([
-            Some(TrayCmd::PlayPause),
-            Some(TrayCmd::Next),
-            Some(TrayCmd::Previous),
-            Some(TrayCmd::Stop),
-            None,
-            Some(TrayCmd::Show),
-            Some(TrayCmd::Quit),
-        ])
-        .map(|(label, cmd)| (label.map(|l| MenuItem::new(l, true, None)), cmd))
+        .map(|entry| match entry {
+            Some((label, cmd)) => (Some(MenuItem::new(label, true, None)), Some(cmd)),
+            None => (None, None),
+        })
         .collect();
     for (item, _) in &items {
         let added = match item {
@@ -150,7 +121,7 @@ fn run_thread(
             if msg.hwnd.is_null() && msg.message == wm::WM_APP {
                 while let Ok((playing, title)) = updates.try_recv() {
                     if let Some(Some(play)) = items.first().map(|(i, _)| i.as_ref()) {
-                        play.set_text(menu_labels(playing)[0].unwrap_or("Play"));
+                        play.set_text(tray_menu(playing)[0].map_or("Play", |(label, _)| label));
                     }
                     let tip =
                         if title.is_empty() { "Listen".to_string() } else { format!("Listen\n{title}") };
