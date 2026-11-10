@@ -22,6 +22,8 @@ pub const HR_SERVICE: u16 = 0x180D;
 pub const HR_MEASUREMENT: u16 = 0x2A37;
 /// How long a scan looks for a sensor before it reports "not found".
 const SCAN_FOR: Duration = Duration::from_secs(20);
+/// How long connecting to a found sensor may take before it counts as not reachable.
+const CONNECT_FOR: Duration = Duration::from_secs(20);
 /// With a remembered sensor, other sensors are taken only after this long without it.
 const PREFER_FOR: Duration = Duration::from_secs(6);
 /// A connected sensor that sends nothing for this long counts as lost.
@@ -199,7 +201,7 @@ mod ble {
             .and_then(|p| p.local_name.or(p.advertisement_name))
             .unwrap_or_else(|| id.clone());
         if !sensor.is_connected().await.unwrap_or(false) {
-            tokio::time::timeout(SCAN_FOR, sensor.connect())
+            tokio::time::timeout(CONNECT_FOR, sensor.connect())
                 .await
                 .map_err(|_| "connecting timed out".to_string())?
                 .map_err(err)?;
