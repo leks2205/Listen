@@ -1027,24 +1027,10 @@ fn remote_song(item: &listen_core::queue::QueueItem, rating_ok: bool, cover: boo
     })
 }
 
-/// The album cover Last.fm knows (`album.getinfo`), for Discord.
+/// The album cover Last.fm knows (`album.getInfo`), for Discord.
 async fn lastfm_cover(key: &str, artist: &str, album: &str) -> Option<String> {
-    let url = url::Url::parse_with_params(
-        "https://ws.audioscrobbler.com/2.0/",
-        [
-            ("method", "album.getinfo"),
-            ("api_key", key),
-            ("artist", artist),
-            ("album", album),
-            ("format", "json"),
-        ],
-    )
-    .ok()?;
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(8)).build().ok()?;
-    let text = client.get(url).send().await.ok()?.text().await.ok()?;
-    let v: Value = serde_json::from_str(&text).ok()?;
-    let image = v["album"]["image"].as_array()?.get(3)?["#text"].as_str()?.to_string();
-    (image.starts_with("https://")).then_some(image)
+    let creds = listen_lastfm::Creds { api_key: key.to_string(), secret: String::new() };
+    listen_lastfm::Client::new(creds).album_image(artist, album).await.ok().flatten()
 }
 
 #[cfg(test)]

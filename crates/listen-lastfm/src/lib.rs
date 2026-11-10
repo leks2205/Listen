@@ -246,6 +246,18 @@ impl Client {
         }
     }
 
+    /// The largest cover image (`extralarge`, https only) Last.fm has for an album, `None` when it
+    /// has none or doesn't know the album. Needs only the API key: a [`Creds`] with an empty secret
+    /// is enough.
+    pub async fn album_image(&self, artist: &str, album: &str) -> Result<Option<String>, Error> {
+        let p = vec![("artist".into(), artist.into()), ("album".into(), album.into())];
+        match self.call("album.getInfo", p, false, false).await {
+            Ok(v) => Ok(album_image_of(&v)),
+            Err(Error::Api { code: 6, .. }) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// (corrected title, listeners) of an album.
     async fn album(&self, artist: &str, album: &str) -> Result<Option<(String, u64)>, Error> {
         let p = vec![
@@ -291,6 +303,12 @@ fn same_artist(a: &ArtistInfo, b: &ArtistInfo) -> bool {
 
 fn same_title(a: &str, b: &str) -> bool {
     fold(a) == fold(b)
+}
+
+/// The `extralarge` (4th) image of an `album.getInfo` answer, if it is an https URL.
+fn album_image_of(v: &Value) -> Option<String> {
+    let image = v["album"]["image"].as_array()?.get(3)?["#text"].as_str()?;
+    image.starts_with("https://").then(|| image.to_string())
 }
 
 fn num(v: &Value) -> u64 {
@@ -585,6 +603,11 @@ mod tests {
         assert!(!mentions("an IUD", "IU"));
         assert!(!mentions(bio, "BXB"));
         assert!(same_title("좋은 날", "좋은날"));
+        let info = serde_json::json!({"album": {"image": [
+            {"#text": "https://a/s.png"}, {"#text": "https://a/m.png"}, {"#text": "https://a/l.png"},
+            {"#text": "https://a/xl.png"}]}});
+        assert_eq!(album_image_of(&info).as_deref(), Some("https://a/xl.png"));
+        assert_eq!(album_image_of(&serde_json::json!({"album": {"image": [{"#text": ""}]}})), None);
         assert!(!same_title("좋은 날", "좋은 날 (Instrumental)"));
     }
 
