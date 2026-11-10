@@ -163,7 +163,8 @@ pub fn build(opts: &DiscordSettings, input: &Input) -> Option<Presence> {
     if input.playing {
         let start = input.now - input.position_secs as i64;
         p.started_at = Some(start);
-        p.ends_at = Some(start + input.duration_secs as i64);
+        // No known length (internet radio): an end equal to the start would show a finished bar.
+        p.ends_at = (input.duration_secs > 0.0).then(|| start + input.duration_secs as i64);
         if opts.state_icon {
             p.small_image = Some("playing");
             p.small_text = Some("Playing");
@@ -264,8 +265,10 @@ fn activity(p: &Presence) -> Activity<'_> {
     if let Some(u) = &p.state_url {
         a = a.state_url(u);
     }
-    if let (Some(start), Some(end)) = (p.started_at, p.ends_at) {
-        a = a.timestamps(Timestamps::new().start(start).end(end));
+    match (p.started_at, p.ends_at) {
+        (Some(start), Some(end)) => a = a.timestamps(Timestamps::new().start(start).end(end)),
+        (Some(start), None) => a = a.timestamps(Timestamps::new().start(start)),
+        _ => {}
     }
     let mut assets = Assets::new().large_image(&p.large_image).large_text(&p.large_text);
     if let Some(u) = &p.large_url {
@@ -312,6 +315,13 @@ mod tests {
         assert_eq!(p.large_image, "icon");
         assert_eq!(p.large_text, "Album");
         assert!(p.details_url.is_none() && p.state_url.is_none());
+    }
+
+    #[test]
+    fn a_stream_without_length_shows_elapsed_time_only() {
+        let radio = Input { position_secs: 0.0, duration_secs: 0.0, ..input(true) };
+        let p = build(&DiscordSettings::default(), &radio).unwrap();
+        assert_eq!((p.started_at, p.ends_at), (Some(1_000_000), None));
     }
 
     #[test]
