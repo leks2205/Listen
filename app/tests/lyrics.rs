@@ -2,6 +2,7 @@
 //! karaoke display, export, follow, and the settings.
 
 use iced_test::simulator::Simulator;
+use listen::app::learnable::LearnMsg;
 use listen::app::lyrics_state::{LyricsMsg, LyricsSetting, SEARCH_MODAL};
 use listen::app::{INTER, Listen, Message, Setting};
 use listen::{Args, FONTS};
@@ -384,7 +385,7 @@ fn words_mode_opens_a_gloss_with_the_lute_status() {
     assert!(!has_text(&s, "In Lute: learning (3/5)"));
     s.config.settings.lyrics.vocab_hub_url = "https://hub.example".into();
     let words = listen_lyrics::vocab::parse_words(r#"{"version":"v","terms":{"고르다":3}}"#).unwrap();
-    let _ = s.update(Message::Lyrics(LyricsMsg::Vocab(Some(words))));
+    let _ = s.update(Message::Learn(LearnMsg::Vocab(Some(words))));
     assert!(has_text(&s, "In Lute: learning (3/5)"));
     // Listen never writes to Lute (decision round 1): no Add to Lute button.
     assert!(!has_text(&s, "Add to Lute"));
