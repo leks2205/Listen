@@ -301,8 +301,9 @@ impl Listen {
             return Task::none();
         }
         let strip = &self.playlist_page.recommended;
-        // A fetch still running for this playlist; one for another playlist is left to finish
-        // (its answer is dropped by the generation check) and does not block this one.
+        // A fetch still running for this playlist (a stale answer for the same playlist fetches
+        // again, see `Recommended`); one for another playlist is left to finish (its answer is
+        // dropped by the generation check) and does not block this one.
         let busy = strip.loading && strip.id.as_deref() == Some(id.as_str());
         if busy || (!again && strip.fresh(&id)) {
             return Task::none();
@@ -683,6 +684,15 @@ impl Listen {
             P::RecommendAdd(index) => return self.recommend_add(index),
             P::Recommended(generation, result) => {
                 if generation != self.library.playlist_gen {
+                    // The open playlist was loaded again while this fetch ran. If it is the same
+                    // playlist, the reload's own fetch was refused as busy (`load_recommendations`),
+                    // so this stale answer must end the loading and fetch again.
+                    let open = self.library.playlist.as_ref().map(|p| p.playlist.id.clone());
+                    let strip = &mut self.playlist_page.recommended;
+                    if strip.loading && strip.id.is_some() && strip.id == open {
+                        strip.loading = false;
+                        return self.load_recommendations(false);
+                    }
                     return Task::none();
                 }
                 let strip = &mut self.playlist_page.recommended;
