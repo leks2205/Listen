@@ -1,6 +1,7 @@
-//! `listen --check-bridges <analysis dir> <embeddings dir> <history.jsonl> [--pairs N] [--all]`: runs the DJ
-//! bridge chooser over consecutive plays of the listening history as the player would (candidates from the
-//! history and the whole analysis store) and prints the bridge chosen without and with the scene gate
+//! `listen --check-bridges <analysis dir> <embeddings dir> <history.jsonl> [--pairs N] [--all] [--gain X]`: runs
+//! the DJ bridge chooser over consecutive plays of the listening history as the player would with the
+//! default mixing settings (candidates from the history and the whole analysis store; the user's own
+//! mixing settings are not read, so runs compare across machines) and prints the bridge chosen without and with the scene gate
 //! (`listen_core::scene`). By default only pairs of two Korean pop songs are checked (`--all`: every pair).
 //! Each bridge shows how its legs mix (kinds and flow costs against the direct join) and how long it
 //! plays; the summary counts instrumental electronic records and era misses. `--gain X` overrides the
@@ -125,6 +126,7 @@ fn check(
     let ytm: Option<ServerId> =
         entries.iter().find(|e| e.source == SourceKind::YouTubeMusic).map(|e| e.server_id.clone());
     let lookup = |s: &Song| store.lookup(&record_key(s), &FileId::of(s)).cloned();
+    // Default settings on purpose: runs on different machines must compare (see the module doc).
     let settings = listen_core::settings::Mixing::default();
     let known: Vec<Song> = entries.iter().rev().map(Entry::to_song).collect();
     // In a fixed order, so runs compare (the candidate cap takes the first ones).
