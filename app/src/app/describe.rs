@@ -18,14 +18,8 @@ pub const LIMIT: usize = 100;
 pub struct Request {
     base: String,
     token: String,
-}
-
-fn http(timeout: Duration) -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(5))
-        .timeout(timeout)
-        .build()
-        .map_err(|e| e.to_string())
+    /// The app's shared client.
+    http: reqwest::Client,
 }
 
 /// The ranked songs for `query`, as songs of the configured servers (`servers`, `history` for covers).
@@ -37,8 +31,10 @@ pub async fn search(
 ) -> Result<SearchResults, String> {
     let url = format!("{}/v1/search", req.base);
     let limit = LIMIT.to_string();
-    let response = http(Duration::from_secs(20))?
+    let response = req
+        .http
         .get(&url)
+        .timeout(Duration::from_secs(20))
         .query(&[("q", query.as_str()), ("limit", limit.as_str())])
         .bearer_auth(&req.token)
         .send()
@@ -66,8 +62,9 @@ pub async fn search(
 pub async fn warm(req: Request) {
     let url = format!("{}/v1/search/warm", req.base);
     let sent = async {
-        http(Duration::from_secs(30))?
+        req.http
             .post(&url)
+            .timeout(Duration::from_secs(30))
             .bearer_auth(&req.token)
             .send()
             .await
@@ -82,12 +79,11 @@ pub async fn warm(req: Request) {
 impl Listen {
     /// The listen-server to ask, when Describe it can be offered.
     pub fn describe_request(&self) -> Option<Request> {
-        let s = &self.config.settings.history;
-        let base = s.sync_server.trim().trim_end_matches('/');
-        if self.demo || !s.sync || base.is_empty() {
+        if self.demo || !self.config.settings.history.sync {
             return None;
         }
-        Some(Request { base: base.to_string(), token: self.history_sync_token()? })
+        let server = self.listen_server()?;
+        Some(Request { base: server.base, token: server.token, http: self.http.clone() })
     }
 
     pub fn describe_available(&self) -> bool {
@@ -162,7 +158,11 @@ mod tests {
             url: String::new(),
             username: String::new(),
         }];
-        let req = Request { base: format!("http://127.0.0.1:{port}"), token: "tok".into() };
+        let req = Request {
+            base: format!("http://127.0.0.1:{port}"),
+            token: "tok".into(),
+            http: reqwest::Client::new(),
+        };
         let r = search(req.clone(), "slow 90s ballad".into(), servers.clone(), vec![]).await.unwrap();
         // The Navidrome hit of another server is left out.
         assert_eq!(r.songs.len(), 1);

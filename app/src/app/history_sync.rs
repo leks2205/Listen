@@ -127,6 +127,24 @@ fn local_entry(record: &Value, servers: &[ServerConfig]) -> Option<Entry> {
     Some(entry)
 }
 
+/// Address and token of listen-server; from [`Listen::listen_server`].
+#[derive(Debug, Clone)]
+pub struct ListenServer {
+    /// `https://host[:port][/prefix]`, without a trailing `/`.
+    pub base: String,
+    pub token: String,
+}
+
+impl ListenServer {
+    /// `path` (`v1/...`, with or without a leading `/`) on this server.
+    pub fn url(&self, path: &str) -> String {
+        format!("{}/{}", self.base, path.trim_start_matches('/'))
+    }
+}
+
+/// Whole-request limit of the history, exclusions and flow-weight exchanges.
+pub(super) const SYNC_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn failed(e: reqwest::Error) -> String {
     e.without_url().to_string()
 }
@@ -134,6 +152,7 @@ fn failed(e: reqwest::Error) -> String {
 async fn post(http: &reqwest::Client, job: &Job, path: &str, body: &Value) -> Result<(), String> {
     let response = http
         .post(format!("{}{path}", job.base))
+        .timeout(SYNC_TIMEOUT)
         .bearer_auth(&job.token)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .body(body.to_string())
@@ -143,12 +162,7 @@ async fn post(http: &reqwest::Client, job: &Job, path: &str, body: &Value) -> Re
     response.error_for_status().map(|_| ()).map_err(failed)
 }
 
-async fn run(job: Job) -> Result<Outcome, String> {
-    let http = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(8))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(failed)?;
+async fn run(http: reqwest::Client, job: Job) -> Result<Outcome, String> {
     let mut out = Outcome {
         pushed_ts: job.pushed_ts,
         cursor: job.cursor,
@@ -166,7 +180,8 @@ async fn run(job: Job) -> Result<Outcome, String> {
     }
     loop {
         let url = format!("{}v1/history?after={}&limit={PAGE}", job.base, out.cursor);
-        let response = http.get(url).bearer_auth(&job.token).send().await.map_err(failed)?;
+        let response =
+            http.get(url).timeout(SYNC_TIMEOUT).bearer_auth(&job.token).send().await.map_err(failed)?;
         let text = response.error_for_status().map_err(failed)?.text().await.map_err(failed)?;
         let page: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
         let Some(items) = page.get("items").and_then(Value::as_array).filter(|i| !i.is_empty()) else {
@@ -211,6 +226,18 @@ impl Listen {
         Task::done(Message::History(HistoryMsg::Sync))
     }
 
+    /// listen-server as set under "Merge with other devices": the address (no trailing `/`) and the
+    /// saved token, or `None` without either. Every listen-server feature starts here (history,
+    /// exclusions, flow weights, release radar, Describe it, handoff) and adds its own on/off check;
+    /// send its requests with the shared `self.http` and a per-request `.timeout(..)`.
+    pub(super) fn listen_server(&self) -> Option<ListenServer> {
+        let base = self.config.settings.history.sync_server.trim().trim_end_matches('/');
+        if base.is_empty() {
+            return None;
+        }
+        Some(ListenServer { base: base.to_string(), token: self.history_sync_token()? })
+    }
+
     pub(super) fn history_sync_token(&self) -> Option<String> {
         let id = ServerId(TOKEN_SECRET.into());
         self.secrets.as_ref().and_then(|s| s.get(&id)).filter(|t| !t.is_empty())
@@ -237,22 +264,25 @@ impl Listen {
     /// Skipped while the history is off, without a server or token, in a demo, or while one runs.
     pub(super) fn history_sync(&mut self) -> Task<Message> {
         let settings = &self.config.settings.history;
-        let base = settings.sync_server.trim();
-        if !settings.enabled || !settings.sync || base.is_empty() || self.history_view.syncing {
+        if !settings.enabled
+            || !settings.sync
+            || settings.sync_server.trim().is_empty()
+            || self.history_view.syncing
+        {
             return Task::none();
         }
         if self.history.path().is_none() {
             return Task::none();
         }
-        let Some(token) = self.history_sync_token() else {
+        let Some(server) = self.listen_server() else {
             self.history_view.sync_status = Some(SyncStatus::Failed("no token saved".into()));
             return Task::none();
         };
         let state = &self.history_view.sync;
         let servers = self.config.servers.clone();
         let job = Job {
-            base: format!("{}/", base.trim_end_matches('/')),
-            token,
+            base: format!("{}/", server.base),
+            token: server.token,
             device: listen_analysis::store::machine_id(),
             plays: (self.history.entries.iter().filter(|e| e.ts >= state.pushed_ts))
                 .map(|e| Play { server_key: server_key(e, &servers), entry: e.clone() })
@@ -263,7 +293,7 @@ impl Listen {
             servers,
         };
         self.history_view.syncing = true;
-        Task::perform(run(job), |r| Message::History(HistoryMsg::Synced(r)))
+        Task::perform(run(self.http.clone(), job), |r| Message::History(HistoryMsg::Synced(r)))
     }
 
     pub(super) fn history_synced(&mut self, result: Result<Outcome, String>) {
@@ -338,20 +368,28 @@ mod tests {
             cursor,
         };
         let plays = vec![Play { server_key: server_key(&play, &desktop), entry: play.clone() }];
-        let sent = run(job("desktop", &desktop, plays.clone(), Vec::new(), 0)).await.unwrap();
+        let sent = run(reqwest::Client::new(), job("desktop", &desktop, plays.clone(), Vec::new(), 0))
+            .await
+            .unwrap();
         assert_eq!(sent.pushed_ts, ts);
 
-        let got = run(job("phone", &phone, Vec::new(), Vec::new(), 0)).await.unwrap();
+        let got = run(reqwest::Client::new(), job("phone", &phone, Vec::new(), Vec::new(), 0)).await.unwrap();
         let there = got.incoming.iter().find(|e| e.song_id == song).unwrap();
         assert_eq!(there.server_id.0, "phone-id");
         assert_eq!(there.ts, ts);
 
         // A repeated push adds nothing, and the removal goes to the other device.
-        let again = run(job("desktop", &desktop, plays, Vec::new(), sent.cursor)).await.unwrap();
+        let again = run(reqwest::Client::new(), job("desktop", &desktop, plays, Vec::new(), sent.cursor))
+            .await
+            .unwrap();
         assert_eq!(again.cursor, sent.cursor);
         let key = Key { ts, song_id: song.clone() };
-        run(job("desktop", &desktop, Vec::new(), vec![key], again.cursor)).await.unwrap();
-        let gone = run(job("phone", &phone, Vec::new(), Vec::new(), got.cursor)).await.unwrap();
+        run(reqwest::Client::new(), job("desktop", &desktop, Vec::new(), vec![key], again.cursor))
+            .await
+            .unwrap();
+        let gone = run(reqwest::Client::new(), job("phone", &phone, Vec::new(), Vec::new(), got.cursor))
+            .await
+            .unwrap();
         assert!(gone.gone.contains(&(ts, song)));
     }
 

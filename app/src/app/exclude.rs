@@ -240,24 +240,19 @@ impl Listen {
     /// Sends the state to listen-server and merges what comes back (with "Merge with other devices"
     /// on, the same address and token as the history). A server without `/v1/exclusions` only logs.
     pub(super) fn exclude_sync(&mut self) -> Task<Message> {
-        let settings = &self.config.settings.history;
-        let base = settings.sync_server.trim();
-        if !settings.sync || base.is_empty() || self.exclusions.syncing || self.exclusions.path.is_none() {
+        if !self.config.settings.history.sync || self.exclusions.syncing || self.exclusions.path.is_none() {
             return Task::none();
         }
-        let Some(token) = self.history_sync_token() else { return Task::none() };
-        let url = format!("{}/v1/exclusions", base.trim_end_matches('/'));
+        let Some(server) = self.listen_server() else { return Task::none() };
+        let (url, token) = (server.url("v1/exclusions"), server.token);
+        let http = self.http.clone();
         let body = self.exclusions.set.clone();
         self.exclusions.syncing = true;
         Task::perform(
             async move {
-                let http = reqwest::Client::builder()
-                    .connect_timeout(std::time::Duration::from_secs(8))
-                    .timeout(std::time::Duration::from_secs(30))
-                    .build()
-                    .map_err(|e| e.to_string())?;
                 let response = http
                     .post(url)
+                    .timeout(super::history_sync::SYNC_TIMEOUT)
                     .bearer_auth(token)
                     .json(&body)
                     .send()

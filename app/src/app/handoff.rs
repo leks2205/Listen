@@ -237,13 +237,11 @@ async fn get_json<T: serde::de::DeserializeOwned>(
 
 impl Listen {
     fn handoff_base(&self) -> Option<(String, String)> {
-        let h = &self.config.settings.history;
-        let base = h.sync_server.trim();
-        if !h.handoff || base.is_empty() || self.ephemeral || self.demo || self.mock_playback() {
+        if !self.config.settings.history.handoff || self.ephemeral || self.demo || self.mock_playback() {
             return None;
         }
-        let token = self.history_sync_token()?;
-        Some((format!("{}/", base.trim_end_matches('/')), token))
+        let server = self.listen_server()?;
+        Some((format!("{}/", server.base), server.token))
     }
 
     /// A song plays here. (A fresh mpv reports "not paused" while idle with an empty queue.)

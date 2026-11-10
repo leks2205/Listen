@@ -17,6 +17,8 @@ pub struct Request {
     url: String,
     token: String,
     server: ServerId,
+    /// The app's shared client.
+    http: reqwest::Client,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,13 +49,10 @@ pub fn shelf(server: &ServerId, releases: Vec<Release>) -> Option<HomeShelf> {
 /// Asks listen-server; `None` on any failure (the shelf is left out, the rest of Home loads).
 pub async fn fetch(req: Request) -> Option<HomeShelf> {
     let get = async {
-        let http = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(10))
-            .build()
-            .map_err(|e| e.to_string())?;
-        let response = http
+        let response = req
+            .http
             .get(&req.url)
+            .timeout(Duration::from_secs(10))
             .bearer_auth(&req.token)
             .send()
             .await
@@ -77,8 +76,7 @@ impl Listen {
     /// The radar request for the active server, if the shelf applies.
     pub(super) fn releases_request(&self) -> Option<Request> {
         let s = &self.config.settings;
-        let base = s.history.sync_server.trim();
-        if !s.home.new_releases || !s.history.sync || base.is_empty() || self.demo {
+        if !s.home.new_releases || !s.history.sync || self.demo {
             return None;
         }
         let server = self.config.active_server.clone()?;
@@ -86,8 +84,13 @@ impl Listen {
         if cfg.kind != SourceKind::YouTubeMusic {
             return None;
         }
-        let token = self.history_sync_token()?;
-        Some(Request { url: format!("{}/v1/releases", base.trim_end_matches('/')), token, server })
+        let listen_server = self.listen_server()?;
+        Some(Request {
+            url: listen_server.url("v1/releases"),
+            token: listen_server.token,
+            server,
+            http: self.http.clone(),
+        })
     }
 }
 
@@ -143,6 +146,7 @@ mod tests {
             url: format!("http://127.0.0.1:{port}/v1/releases"),
             token: "tok".into(),
             server: ServerId("ytm".into()),
+            http: reqwest::Client::new(),
         };
         let s = fetch(req).await.unwrap();
         assert_eq!(s.albums[0].id, "MPREb_a");
@@ -152,6 +156,7 @@ mod tests {
             url: format!("http://127.0.0.1:{port}/v1/releases"),
             token: "t".into(),
             server: ServerId("y".into()),
+            http: reqwest::Client::new(),
         };
         assert!(fetch(req).await.is_none());
     }
