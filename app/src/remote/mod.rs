@@ -30,7 +30,8 @@ const CLOSE_AUTH: u16 = 4004;
 pub struct Config {
     pub bind: String,
     pub port: u16,
-    /// Both empty = no authentication.
+    /// Either set = the browser asks for this login; both empty = no sign-in. Whether the page may be
+    /// offered to the network is a different, stricter rule: [`has_login`].
     pub username: String,
     pub password: String,
 }
@@ -55,6 +56,12 @@ impl Config {
         let p = constant_eq(pass.as_bytes(), self.password.as_bytes());
         u & p
     }
+}
+
+/// The one rule for "the remote has a login": a user name AND a password. Only then may the page listen on
+/// the configured network address; without it the caller binds loopback and the settings page says so.
+pub fn has_login(username: &str, password_set: bool) -> bool {
+    !username.trim().is_empty() && password_set
 }
 
 pub(crate) fn constant_eq(a: &[u8], b: &[u8]) -> bool {

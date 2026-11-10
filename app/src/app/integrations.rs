@@ -562,9 +562,9 @@ impl Listen {
     fn remote_config(&self) -> Option<remote::Config> {
         let r = &self.config.settings.integrations.remote;
         let password = &self.integ.remote.password;
-        // Without a user name and password the page is only offered on this computer.
+        // Without a full login (remote::has_login) the page is only offered on this computer.
         let bind =
-            if r.username.trim().is_empty() || password.is_empty() { "127.0.0.1" } else { r.bind.as_str() };
+            if remote::has_login(&r.username, !password.is_empty()) { r.bind.as_str() } else { "127.0.0.1" };
         (r.enabled && !self.demo).then(|| remote::Config {
             bind: bind.into(),
             port: r.port,

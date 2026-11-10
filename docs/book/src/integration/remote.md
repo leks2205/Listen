@@ -19,7 +19,7 @@ Listen can serve a small web page that works as a remote control for your phone 
 | **Remote server username** | User name for sign-in. | empty |
 | **Remote server password** | Password for sign-in. Stored in the system keyring, not in the settings file. Press `Enter` to save; `Enter` on an empty field clears it. | empty |
 
-Leave both username and password empty for no sign-in. If you set either, the browser asks for a login (HTTP basic authentication) before it shows the page.
+Leave both username and password empty for no sign-in. If you set either, the browser asks for a login (HTTP basic authentication) before it shows the page. Other devices can only connect when both are set: without a username and password the page is only offered on this computer (`127.0.0.1`), whatever the address setting says.
 
 ## What the page can do
 
@@ -39,7 +39,8 @@ The star rating only appears for songs from a server that supports ratings. The 
 ## Security
 
 - The page and the connection use plain HTTP and WebSocket, without encryption. A basic-auth password is therefore visible to anyone who can watch your network traffic. Use the remote only on a network you trust, or keep the address at `127.0.0.1` and reach it through your own secure tunnel.
-- With an empty username and password and an address other than `127.0.0.1`, Listen shows a red warning: "Anyone in your network can control Listen. Set a username and password."
+- With an address other than `127.0.0.1` but no full login, Listen shows a red note: "Without a username and password the page is only offered on this computer. Set both to use it from another device."
+- Without a login, the server refuses requests from web pages of other sites and from any host name other than this computer's, so a website you visit cannot control Listen through the browser.
 - The page only receives what it needs: the song's details and the cover, which Listen serves itself at `/cover`. Your music server's address, login and tokens never leave Listen.
 - Do not forward the port to the internet.
 - Some systems ask you to allow Listen through the firewall the first time the server listens on a network address.

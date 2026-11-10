@@ -222,6 +222,7 @@
 "Any OpenSubsonic-compatible server works (Navidrome, Gonic, Airsonic…).": "Jeder OpenSubsonic-kompatible Server funktioniert (Navidrome, Gonic, Airsonic …).",
 "Any font installed on this computer.": "Jede auf diesem Computer installierte Schrift.",
 "Anyone in your network can control Listen. Set a username and password.": "Jeder in deinem Netzwerk kann Listen steuern. Lege einen Benutzernamen und ein Passwort fest.",
+"Without a username and password the page is only offered on this computer. Set both to use it from another device.": "Ohne Benutzernamen und Passwort ist die Seite nur auf diesem Computer erreichbar. Lege beides fest, um sie von einem anderen Gerät zu nutzen.",
 "Anyone in your network with the token can control Listen and change its settings.": "Alle in deinem Netzwerk mit dem Token können Listen steuern und seine Einstellungen ändern.",
 "Anything the hosts should know: your name, what you like, topics to avoid. Sent to Gemini with every break.": "Alles, was die Moderatoren wissen sollten: dein Name, was du magst, Themen, die sie meiden sollen. Wird bei jeder Pause an Gemini gesendet.",
 "Appearance": "Darstellung",

@@ -279,13 +279,15 @@ pub(super) fn remote(state: &Listen) -> Element<'_, Message> {
             ),
         ),
     ];
+    // Same rule as the bind decision (remote::has_login): without it the server only listens on loopback.
     let warn: Element<'_, Message> = if r.enabled
-        && r.username.is_empty()
-        && !state.integ.remote_password_set()
         && r.bind != "127.0.0.1"
+        && !crate::remote::has_login(&r.username, state.integ.remote_password_set())
     {
         row![
-            crate::ui::t_text("Anyone in your network can control Listen. Set a username and password.")
+            crate::ui::t_text(
+                "Without a username and password the page is only offered on this computer. Set both to use it from another device.",
+            )
                 .size(crate::style::metrics::font_sm())
                 .color(t.error)
         ]
