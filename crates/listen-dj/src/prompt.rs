@@ -483,24 +483,28 @@ pub fn response_schema(persona: &Persona, set_min: usize, set_max: usize, new: b
 }
 
 fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
+    // The picks and their notes are the same with and without a co-host; only
+    // the spoken part differs (one line vs. turns between two voices).
+    let picks = json!({
+        "type": "array",
+        "items": { "type": "integer" },
+        "minItems": set_min,
+        "maxItems": set_max,
+        "description": "Candidate numbers in play order"
+    });
+    let notes = json!({
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": set_min,
+        "maxItems": set_max,
+        "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
+    });
     if let Some(co) = &persona.cohost {
         return json!({
             "type": "object",
             "properties": {
-                "picks": {
-                    "type": "array",
-                    "items": { "type": "integer" },
-                    "minItems": set_min,
-                    "maxItems": set_max,
-                    "description": "Candidate numbers in play order"
-                },
-                "notes": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "minItems": set_min,
-                    "maxItems": set_max,
-                    "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
-                },
+                "picks": picks,
+                "notes": notes,
                 "mood": { "type": "string" },
                 "turns": {
                     "type": "array",
@@ -523,20 +527,8 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
     json!({
         "type": "object",
         "properties": {
-            "picks": {
-                "type": "array",
-                "items": { "type": "integer" },
-                "minItems": set_min,
-                "maxItems": set_max,
-                "description": "Candidate numbers in play order"
-            },
-            "notes": {
-                "type": "array",
-                "items": { "type": "string" },
-                "minItems": set_min,
-                "maxItems": set_max,
-                "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
-            },
+            "picks": picks,
+            "notes": notes,
             "mood": { "type": "string" },
             "line": { "type": "string", "description": "The spoken break, in the show's language" },
             "style": { "type": "string", "description": "Voice direction for the speech model, in English" }
