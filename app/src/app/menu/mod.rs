@@ -223,7 +223,7 @@ pub enum MenuAction {
     AddToQueue,
     StartRadio,
     ChoosePlaylist,
-    /// (playlist id, name)
+    /// (playlist id, name). An empty id creates a new playlist named `name` with the songs.
     AddToPlaylist(String, String),
     CreatePlaylist,
     ChooseRename,
