@@ -123,12 +123,9 @@ impl Listen {
         let skip = self.config.settings.lists.skip_duplicates && !ytm && !id.is_empty();
         let browsing = self.config.active_server.as_ref() == Some(&server);
         // Adding to the playlist on screen: its rows and song count changed, so the page is
-        // loaded again afterwards (dropping the detail without that left the page empty).
+        // loaded again once the add is done (another playlist's page is not affected).
         let reopen = browsing && self.library.playlist.as_ref().is_some_and(|p| p.playlist.id == id);
         let reopen_id = id.clone();
-        if browsing && !reopen {
-            self.library.playlist = self.library.playlist.take().filter(|p| p.playlist.id != id);
-        }
         if !id.is_empty() {
             self.playlist_page.recent.insert(server.clone(), id.clone());
         }
