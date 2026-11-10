@@ -283,7 +283,7 @@ async fn session_async(write: bool) -> Result<i32, String> {
     }
     let secret = {
         let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-        tokio::task::spawn_blocking(move || crate::secrets::Secrets::new(&dir).get(&id))
+        tokio::task::spawn_blocking(move || crate::secrets::Secrets::for_user(&dir).get(&id))
             .await
             .map_err(|e| e.to_string())?
             .ok_or("no stored YouTube Music session (sign in once in Listen)")?

@@ -208,7 +208,7 @@ async fn input_for(
     // The keyring client blocks (its own runtime): off the async threads.
     let password = {
         let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-        tokio::task::spawn_blocking(move || crate::secrets::Secrets::new(&dir).get(&id))
+        tokio::task::spawn_blocking(move || crate::secrets::Secrets::for_user(&dir).get(&id))
             .await
             .map_err(|e| e.to_string())?
             .ok_or("no stored password for the Navidrome server (sign in once in Listen)")?

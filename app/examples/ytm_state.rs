@@ -12,7 +12,7 @@ async fn main() {
     let config = listen_core::config::Config::load(&paths.config_file()).unwrap();
     let server = config.servers.iter().find(|s| s.kind == SourceKind::YouTubeMusic).unwrap();
     let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-    let secret = tokio::task::spawn_blocking(move || listen::secrets::Secrets::new(&dir).get(&id))
+    let secret = tokio::task::spawn_blocking(move || listen::secrets::Secrets::for_user(&dir).get(&id))
         .await
         .unwrap()
         .unwrap();

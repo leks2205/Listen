@@ -41,8 +41,24 @@ pub struct Secrets {
 }
 
 impl Secrets {
-    pub fn new(config_dir: &Path) -> Self {
+    /// The "Auto" store whatever the user chose (tests, and cleanup that must reach both stores). To
+    /// read the user's secrets use [`Secrets::for_user`] (CLI tools) or `with_store` with the loaded
+    /// config: with "File" chosen the keyring must not even be asked (it may prompt or hang).
+    pub(crate) fn new(config_dir: &Path) -> Self {
         Self::with_store(config_dir, SecretStore::Auto)
+    }
+
+    /// The store the user chose in `config.toml` of `config_dir` (Auto when it cannot be read): what the
+    /// app itself uses, for the `--check-*` tools and examples. Safe to call on any thread.
+    pub fn for_user(config_dir: &Path) -> Self {
+        let file = listen_core::config::Paths {
+            config_dir: config_dir.to_path_buf(),
+            cache_dir: PathBuf::new(),
+            data_dir: PathBuf::new(),
+        }
+        .config_file();
+        let store = listen_core::config::Config::load(&file).map(|c| c.secret_store).unwrap_or_default();
+        Self::with_store(config_dir, store)
     }
 
     pub fn with_store(config_dir: &Path, store: SecretStore) -> Self {
@@ -285,6 +301,15 @@ mod tests {
         assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o077, 0);
         assert_eq!(secrets.get(&ServerId("other".into())).as_deref(), Some("kept"));
         assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temp file left behind");
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn tools_use_the_store_the_user_chose() {
+        let d = dir("for-user");
+        assert_eq!(Secrets::for_user(&d).store(), SecretStore::Auto, "no config: Auto");
+        std::fs::write(d.join("config.toml"), "secret_store = \"file\"\n").unwrap();
+        assert_eq!(Secrets::for_user(&d).store(), SecretStore::File);
         std::fs::remove_dir_all(d).ok();
     }
 

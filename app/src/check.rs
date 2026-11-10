@@ -434,7 +434,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     use std::collections::{HashMap, HashSet};
     let key = std::env::var("LISTEN_GEMINI_API_KEY").ok().filter(|k| !k.trim().is_empty()).or_else(|| {
         let paths = listen_core::config::Paths::discover().ok()?;
-        crate::secrets::Secrets::new(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
+        crate::secrets::Secrets::for_user(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
     });
     let key = match key {
         _ if check.offline => None,
@@ -937,7 +937,7 @@ async fn run_cd() -> i32 {
     );
 
     println!("\nNavidrome:");
-    let secrets = paths.as_ref().map(|p| crate::secrets::Secrets::new(&p.config_dir));
+    let secrets = paths.as_ref().map(|p| crate::secrets::Secrets::for_user(&p.config_dir));
     let nd = |s: &&listen_core::config::ServerConfig| s.kind == listen_core::model::SourceKind::Subsonic;
     let server = config.active().filter(nd).or_else(|| config.servers.iter().find(nd));
     match (server, secrets) {
@@ -1052,7 +1052,7 @@ async fn run_ytm_analysis(
         .ok_or("no YouTube Music server configured")?;
     let secret = {
         let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-        tokio::task::spawn_blocking(move || crate::secrets::Secrets::new(&dir).get(&id))
+        tokio::task::spawn_blocking(move || crate::secrets::Secrets::for_user(&dir).get(&id))
             .await
             .map_err(|e| e.to_string())?
             .ok_or("no stored sign-in for the YouTube Music server (sign in once in Listen)")?
@@ -1179,10 +1179,10 @@ async fn run_analysis(args: Vec<String>) -> Result<(), String> {
         .filter(nd)
         .or_else(|| config.servers.iter().find(nd))
         .ok_or("no Navidrome server configured")?;
-    // The keyring client blocks (its own runtime): off the async threads.
+    // Config + keyring reads block: off the async threads.
     let password = {
         let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-        tokio::task::spawn_blocking(move || crate::secrets::Secrets::new(&dir).get(&id))
+        tokio::task::spawn_blocking(move || crate::secrets::Secrets::for_user(&dir).get(&id))
             .await
             .map_err(|e| e.to_string())?
             .ok_or("no stored password for the Navidrome server (sign in once in Listen)")?
@@ -1320,7 +1320,7 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
         .ok_or("no Navidrome server configured")?;
     let password = {
         let (dir, id) = (paths.config_dir.clone(), server.id.clone());
-        tokio::task::spawn_blocking(move || crate::secrets::Secrets::new(&dir).get(&id))
+        tokio::task::spawn_blocking(move || crate::secrets::Secrets::for_user(&dir).get(&id))
             .await
             .map_err(|e| e.to_string())?
             .ok_or("no stored password for the Navidrome server (sign in once in Listen)")?
@@ -1427,7 +1427,7 @@ pub fn song_card(args: &[String]) -> i32 {
     };
     let key = std::env::var("LISTEN_GEMINI_API_KEY").ok().filter(|k| !k.trim().is_empty()).or_else(|| {
         let paths = listen_core::config::Paths::discover().ok()?;
-        crate::secrets::Secrets::new(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
+        crate::secrets::Secrets::for_user(&paths.config_dir).get(&ServerId("gemini-api-key".into()))
     });
     let Some(key) = key else {
         eprintln!("no key: set LISTEN_GEMINI_API_KEY or save one in Settings → AI DJ");
