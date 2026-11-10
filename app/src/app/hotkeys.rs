@@ -112,7 +112,8 @@ impl Listen {
         }
     }
 
-    /// Actions whose hotkey the desktop portal handles instead of the window.
+    /// Whether this run may use the desktop portal for global shortcuts at all (Linux, a real
+    /// session: not demo, screenshot or ephemeral runs). Which actions it handles: `portal_wanted`.
     pub(super) fn portal_active(&self) -> bool {
         cfg!(target_os = "linux") && !self.demo && self.screenshot.is_none() && !self.ephemeral
     }

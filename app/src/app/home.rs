@@ -259,7 +259,7 @@ pub fn wrap_index(index: usize, step: usize, len: usize, dir: i8) -> usize {
     if dir >= 0 { (index + step) % len } else { (index + len - step) % len }
 }
 
-/// Moves `key` in the visible list `sections` by `dir` places.
+/// Moves the entry at `i` of the visible list `sections` by `dir` places (a no-op at either end).
 pub fn move_section(sections: &mut [String], i: usize, dir: i8) {
     let Some(j) = i.checked_add_signed(isize::from(dir)).filter(|j| *j < sections.len()) else { return };
     if i < sections.len() {
@@ -732,7 +732,6 @@ impl Listen {
     }
 }
 
-/// One page of a section from the source.
 /// The source's own feed, asked again when the first answer is empty or does not come.
 async fn feed_shelves(source: Arc<dyn MusicSource>) -> Vec<HomeShelf> {
     let mut last = Vec::new();
@@ -757,6 +756,8 @@ async fn feed_shelves(source: Arc<dyn MusicSource>) -> Vec<HomeShelf> {
     last
 }
 
+/// One page (`LIMIT` cards after the first `start`) of a section from the source. Playlists come
+/// in one piece: any `start` above 0 answers empty.
 async fn fetch_section(
     source: Arc<dyn MusicSource>,
     section: Section,
