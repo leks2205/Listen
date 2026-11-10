@@ -724,11 +724,7 @@ async fn apply(
     out: &mut iced::futures::channel::mpsc::Sender<Message>,
 ) {
     match cmd {
-        Command::Want(jobs) => {
-            for job in jobs {
-                queue.push(job);
-            }
-        }
+        Command::Want(jobs) => queue.push_all(jobs),
         Command::Hold(h) => *hold = h,
         Command::Crawl(source) => {
             // Page through the library (a few requests per thousand songs).
@@ -841,6 +837,18 @@ impl JobQueue {
         }
         self.ids.insert(key, job.priority);
         self.enqueue(job);
+    }
+
+    /// Queues a batch so its order holds within each priority: the first `Now` job of the batch
+    /// is analysed first (`Now` goes to the front, so a plain loop over `push` would reverse them).
+    fn push_all(&mut self, jobs: Vec<Job>) {
+        let (now, rest): (Vec<Job>, Vec<Job>) = jobs.into_iter().partition(|j| j.priority == Priority::Now);
+        for job in rest {
+            self.push(job);
+        }
+        for job in now.into_iter().rev() {
+            self.push(job);
+        }
     }
 
     fn enqueue(&mut self, job: Job) {
@@ -1052,6 +1060,21 @@ mod tests {
         assert_eq!(q.next(now, pool_only, |_| false).map(|j| j.song.id).as_deref(), Some("pool2"));
         assert!(q.next(now, pool_only, |_| false).is_none());
         assert_eq!(q.next(now, ALL, |s| s.id == "lib3").map(|j| j.song.id), None);
+    }
+
+    #[test]
+    fn a_batch_keeps_its_order_within_each_priority() {
+        let mut q = JobQueue::default();
+        q.push(job("older", Priority::Now));
+        q.push_all(vec![
+            job("current", Priority::Now),
+            job("next", Priority::Now),
+            job("q1", Priority::Queue),
+            job("q2", Priority::Queue),
+        ]);
+        let order: Vec<String> =
+            std::iter::from_fn(|| q.next(Instant::now(), ALL, |_| false)).map(|j| j.song.id).collect();
+        assert_eq!(order, ["current", "next", "older", "q1", "q2"]);
     }
 
     #[test]
