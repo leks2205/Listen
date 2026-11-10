@@ -96,14 +96,16 @@ impl Listen {
     }
 
     /// Adds `songs` to playlist `id` (an empty id makes a new playlist called `name`),
-    /// remembers it as the most recent one and tells how it went.
+    /// remembers it as the most recent one and tells how it went. The playlist's server is
+    /// the songs' (all of one server); no songs, nothing happens.
     pub(in crate::app) fn add_songs_to_playlist(
         &mut self,
         id: String,
         name: String,
         songs: Vec<Song>,
     ) -> Task<Message> {
-        let server = songs[0].server_id.clone();
+        let Some(first) = songs.first() else { return Task::none() };
+        let (server, ytm) = (first.server_id.clone(), first.source == SourceKind::YouTubeMusic);
         let Some(source) = self.sources.get(&server).cloned() else {
             if self.demo {
                 // Nothing to send; the list of playlists is local.
@@ -119,7 +121,6 @@ impl Listen {
             self.toast_error(format!("Not connected to {server_name} — try again in a moment."));
             return Task::none();
         };
-        let ytm = songs[0].source == SourceKind::YouTubeMusic;
         let skip = self.config.settings.lists.skip_duplicates && !ytm && !id.is_empty();
         let browsing = self.config.active_server.as_ref() == Some(&server);
         // Adding to the playlist on screen: its rows and song count changed, so the page is
