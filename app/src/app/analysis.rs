@@ -452,7 +452,10 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
         let mut worker = listen_analysis::Worker::new();
         let mut queue = JobQueue::default();
         let mut hold = false;
+        // Songs resolved (analysed or given up) this session: not tried again. Cleared when the
+        // singing-voice detector appears, because then songs analysed without it are due again.
         let mut tried: HashSet<String> = HashSet::new();
+        let mut voice_seen = voice;
         let mut last_refresh = Instant::now();
         let mut tick = tokio::time::interval(Duration::from_secs(10));
         let server_hint = String::new();
@@ -467,6 +470,10 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
             // Download / Remove in Settings flip the handle; the status follows
             // without waiting for a job (a YouTube-Music-only profile has none).
             status.vocals = vocals_label(handle.voice());
+            if handle.voice() && !voice_seen {
+                tried.clear();
+            }
+            voice_seen = handle.voice();
             let allow_library = config.library && !hold && (config.on_battery || !on_battery());
             // Pool work is on demand (no library setting, also on battery),
             // but leaves the CPU to a running DJ transition.
