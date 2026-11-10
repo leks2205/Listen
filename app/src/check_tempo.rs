@@ -61,8 +61,15 @@ fn check(store_dir: &Path, emb_dir: &Path, history: &Path, args: &[String]) -> R
         p.scene.label()
     };
     // The session: the current song, then the songs before it.
+    // Hints match the store's title hint ("Artist – Title") exactly; one that matches nothing is an error
+    // (current) or reported (before), never silently replaced by another song.
     let current = arg(args, "--current").unwrap_or("TRI.BE – WE ARE YOUNG");
-    let mut around: Vec<Song> = by_hint(current).into_iter().collect();
+    let current_song = by_hint(current).ok_or_else(|| {
+        format!(
+            "--current \"{current}\": not in the store (the match is the store's \"Artist – Title\" hint)"
+        )
+    })?;
+    let mut around: Vec<Song> = vec![current_song];
     let before = args_of(args, "--before");
     if before.is_empty() {
         let korean_pop = |s: &Song| {
@@ -79,7 +86,12 @@ fn check(store_dir: &Path, emb_dir: &Path, history: &Path, args: &[String]) -> R
                 .take(4),
         );
     } else {
-        around.extend(before.iter().filter_map(|h| by_hint(h)));
+        for h in &before {
+            match by_hint(h) {
+                Some(s) => around.push(s),
+                None => println!("  --before \"{h}\": not in the store, left out"),
+            }
+        }
     }
     let session = tempo_session(&index, &neighbours, around.iter());
     println!(
