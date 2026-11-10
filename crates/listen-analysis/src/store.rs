@@ -378,7 +378,7 @@ mod tests {
         let dir = TempDir::new("layout");
         let v1 = dir.0.join("v1");
         fs::create_dir_all(v1.join("desk-aaaaaa")).unwrap();
-        let err = ShardStore::open(&v1, "m-1").err().expect("v1/ itself is refused");
+        let Err(err) = ShardStore::open(&v1, "m-1") else { panic!("v1/ itself is refused") };
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         assert!(err.to_string().contains("pass the folder that contains it"), "{err}");
         assert!(!v1.join("v1").exists(), "nothing is created under the wrong folder");
