@@ -54,5 +54,5 @@ cd dist
 sha256sum listen-*.rpm listen-*.tar.gz Listen-Setup-*.exe > SHA256SUMS
 ```
 
-The in-app updater (`app/src/app/updater.rs`) reads the repository's releases through the GitHub API, picks the asset that fits how Listen was installed (the RPM on Fedora, the installer on Windows, or the tarball, whose binary replaces the one in `~/.local/bin`), downloads it and refuses to install it unless its SHA-256 matches the line in `SHA256SUMS`. A release without `SHA256SUMS` cannot be installed by the updater. Pre-releases are only offered to users who chose the beta update channel. See [Updates](../getting-started/updates.md) for the user side.
+The in-app updater (`app/src/app/updater.rs`) reads the repository's releases through the GitHub API, picks the asset that fits how Listen was installed (the RPM on Fedora, the installer on Windows, or the tarball, whose binary replaces the one in `~/.local/bin`), downloads it and refuses to install it unless its SHA-256 matches the line in `SHA256SUMS`. A release without `SHA256SUMS` cannot be installed by the updater. Pre-releases are only offered to users who chose the beta update channel, and a release is only offered when it carries the package this install needs (a release without the Windows installer is not offered on Windows). See [Updates](../getting-started/updates.md) for the user side.
 

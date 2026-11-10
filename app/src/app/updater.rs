@@ -185,15 +185,30 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
 }
 
 /// The newest release on `channel` that is newer than `current`, with the changes of all
-/// releases in between.
+/// releases in between. Ignores whether the release can be installed here; the app
+/// uses [`pick_update_for`].
 pub fn pick_update(releases: &[Release], current: &Version, channel: UpdateChannel) -> Option<Release> {
+    pick_update_for(releases, current, channel, |_| true)
+}
+
+/// [`pick_update`] limited to releases `installable` accepts (e.g. one that carries this
+/// system's package, [`has_package`]). The changes still cover every newer release up to
+/// the pick, so a skipped release's changes are not lost.
+pub fn pick_update_for(
+    releases: &[Release],
+    current: &Version,
+    channel: UpdateChannel,
+    installable: impl Fn(&Release) -> bool,
+) -> Option<Release> {
     let mut newer: Vec<&Release> = releases
         .iter()
         .filter(|r| channel == UpdateChannel::Beta || !r.prerelease)
         .filter(|r| r.version > *current)
         .collect();
     newer.sort_by(|a, b| b.version.cmp(&a.version));
-    let mut pick = (*newer.first()?).clone();
+    let at = newer.iter().position(|r| installable(r))?;
+    let newer = &newer[at..];
+    let mut pick = (*newer[0]).clone();
     pick.changes = if newer.len() == 1 {
         changelog(&pick.body)
     } else {
@@ -257,6 +272,34 @@ pub enum Package {
 
 pub const SUMS_NAME: &str = "SHA256SUMS";
 
+/// The package an install mode downloads; `None` when Listen cannot update itself.
+pub fn package_for(mode: &InstallMode) -> Option<Package> {
+    match mode {
+        InstallMode::Rpm => Some(Package::Rpm),
+        InstallMode::Local(_) => Some(Package::Tarball),
+        InstallMode::WindowsInstaller => Some(Package::WindowsInstaller),
+        InstallMode::Unsupported(_) => None,
+    }
+}
+
+/// Whether `release` carries `package` and the checksums, i.e. [`select_assets`] can
+/// pick it (the architecture check aside).
+pub fn has_package(release: &Release, package: Package) -> bool {
+    !package_assets(release, package).is_empty() && release.assets.iter().any(|a| a.name == SUMS_NAME)
+}
+
+fn package_assets(release: &Release, package: Package) -> Vec<&Asset> {
+    release
+        .assets
+        .iter()
+        .filter(|a| match package {
+            Package::Rpm => a.name.starts_with("listen-") && a.name.ends_with(".x86_64.rpm"),
+            Package::Tarball => a.name.starts_with("listen-") && a.name.ends_with("-x86_64.tar.gz"),
+            Package::WindowsInstaller => a.name.starts_with("Listen-Setup-") && a.name.ends_with(".exe"),
+        })
+        .collect()
+}
+
 /// The package asset and the `SHA256SUMS` asset. `dist_tag` (e.g. `fc44`) prefers that Fedora's RPM.
 pub fn select_assets(
     release: &Release,
@@ -266,15 +309,7 @@ pub fn select_assets(
     if std::env::consts::ARCH != "x86_64" {
         return Err(format!("releases are built for x86_64 only, this is {}", std::env::consts::ARCH));
     }
-    let candidates: Vec<&Asset> = release
-        .assets
-        .iter()
-        .filter(|a| match package {
-            Package::Rpm => a.name.starts_with("listen-") && a.name.ends_with(".x86_64.rpm"),
-            Package::Tarball => a.name.starts_with("listen-") && a.name.ends_with("-x86_64.tar.gz"),
-            Package::WindowsInstaller => a.name.starts_with("Listen-Setup-") && a.name.ends_with(".exe"),
-        })
-        .collect();
+    let candidates = package_assets(release, package);
     let chosen = dist_tag
         .and_then(|d| candidates.iter().find(|a| a.name.contains(&format!(".{d}."))))
         .or(candidates.first())
@@ -528,12 +563,10 @@ pub enum Installed {
 
 /// Downloads, verifies and installs `release`. `work` is a scratch folder (removed afterwards).
 pub async fn install(release: Release, mode: InstallMode, work: PathBuf) -> Result<Installed, String> {
-    let package = match &mode {
-        InstallMode::Rpm => Package::Rpm,
-        InstallMode::Local(_) => Package::Tarball,
-        InstallMode::WindowsInstaller => Package::WindowsInstaller,
-        InstallMode::Unsupported(why) => return Err(why.clone()),
-    };
+    if let InstallMode::Unsupported(why) = &mode {
+        return Err(why.clone());
+    }
+    let package = package_for(&mode).expect("every mode but Unsupported has a package");
     let (asset, sums) = select_assets(&release, package, fedora_dist_tag().as_deref())?;
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
@@ -706,7 +739,15 @@ impl Listen {
                             self.toast_error(e);
                         }
                     }
-                    Ok(releases) => match pick_update(&releases, &Version::current(), a.update_channel) {
+                    // Only releases that carry this system's package are offered (a
+                    // release may ship without the Windows installer); a copy that
+                    // cannot update itself still hears about every release.
+                    Ok(releases) => match pick_update_for(
+                        &releases,
+                        &Version::current(),
+                        a.update_channel,
+                        |r| package_for(&detect_install()).is_none_or(|p| has_package(r, p)),
+                    ) {
                         None => {
                             self.adv.update.available = None;
                             self.adv.update.status =
@@ -854,6 +895,23 @@ mod tests {
         let r2 = parse_releases(r#"[{"tag_name":"v0.30.0","prerelease":false,"assets":[]}]"#).unwrap();
         assert!(pick_update(&r2, &v("0.30.0-beta.1"), UpdateChannel::Stable).is_some());
         assert!(pick_update(&[], &cur, UpdateChannel::Beta).is_none());
+    }
+
+    #[test]
+    fn an_update_without_this_systems_package_is_not_offered() {
+        let r = parse_releases(
+            r####"[{"tag_name":"v0.31.0","body":"### Changes\n- c","assets":[{"name":"listen-0.31.0-x86_64.tar.gz","url":"u","size":1},{"name":"SHA256SUMS","url":"u","size":1}]},
+                {"tag_name":"v0.30.0","body":"### Changes\n- b","assets":[{"name":"Listen-Setup-0.30.0.exe","url":"u","size":1},{"name":"SHA256SUMS","url":"u","size":1}]},
+                {"tag_name":"v0.29.0","body":"### Changes\n- a","assets":[{"name":"Listen-Setup-0.29.0.exe","url":"u","size":1}]}]"####,
+        )
+        .unwrap();
+        let win = |r: &Release| has_package(r, Package::WindowsInstaller);
+        let pick = pick_update_for(&r, &v("0.28.0"), UpdateChannel::Stable, win).unwrap();
+        assert_eq!(pick.tag, "v0.30.0", "0.31.0 has no installer; 0.29.0 has no checksums");
+        assert_eq!(pick.changes, "## Listen 0.30.0\n\n- b\n\n## Listen 0.29.0\n\n- a");
+        assert!(pick_update_for(&r, &v("0.30.0"), UpdateChannel::Stable, win).is_none());
+        let tar = |r: &Release| has_package(r, Package::Tarball);
+        assert_eq!(pick_update_for(&r, &v("0.28.0"), UpdateChannel::Stable, tar).unwrap().tag, "v0.31.0");
     }
 
     #[test]
