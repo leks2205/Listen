@@ -597,9 +597,10 @@ impl Listen {
                 Some(self.jukebox_task(JukeboxCmd::Stop))
             }
             Message::Seek(secs) => {
+                let Some(pos) = super::seek_position(*secs) else { return Some(Task::none()) };
                 let index = self.radio.jukebox.index.max(0) as usize;
-                self.playback.position = Duration::from_secs_f32(secs.max(0.0));
-                Some(self.jukebox_task(JukeboxCmd::Skip { index, offset_secs: secs.max(0.0) as u32 }))
+                self.playback.position = pos;
+                Some(self.jukebox_task(JukeboxCmd::Skip { index, offset_secs: pos.as_secs() as u32 }))
             }
             Message::Volume(v) => {
                 self.playback.volume = v.round().clamp(0.0, 100.0) as u8;

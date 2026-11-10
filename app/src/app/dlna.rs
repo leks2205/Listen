@@ -646,7 +646,7 @@ impl Listen {
                 Some(self.dlna_call(|r| async move { r.stop().await }))
             }
             Message::Seek(secs) => {
-                let pos = Duration::from_secs_f32(secs.max(0.0));
+                let Some(pos) = super::seek_position(*secs) else { return Some(Task::none()) };
                 self.playback.position = pos;
                 if !loaded {
                     self.dlna.resume = Some(pos).filter(|a| *a >= MIN_RESUME);

@@ -564,7 +564,12 @@ impl Listen {
                 done(&reply, t, json!({ "ok": true }))
             }
             "seek" => {
-                let s = args.get("seconds").and_then(Value::as_f64).ok_or("seconds is missing")?.max(0.0);
+                let s = args
+                    .get("seconds")
+                    .and_then(Value::as_f64)
+                    .filter(|s| s.is_finite())
+                    .ok_or("seconds is missing or not a finite number")?
+                    .max(0.0);
                 let t = msg(self, Message::Seek(s as f32));
                 done(&reply, t, json!({ "position": s }))
             }

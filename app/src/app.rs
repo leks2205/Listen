@@ -787,6 +787,8 @@ pub enum Message {
     Previous,
     SkipBackward,
     SkipForward,
+    /// Seconds from the song's start. Remote and MCP clients can send any number: every handler turns it
+    /// into a `Duration` through `seek_position`, never `Duration::from_secs_f32` (it panics on inf/huge).
     Seek(f32),
     /// The seek slider is being dragged: only the shown time moves.
     SeekPreview(f32),
@@ -1003,6 +1005,12 @@ pub enum Message {
     VideoTick,
     /// The video address of a song (song id) or why there is none.
     VideoUrl(String, Result<String, String>),
+}
+
+/// The target of `Message::Seek(secs)`: a negative (or NaN) value seeks to the start; an infinite or
+/// out-of-range one gives `None`, so the seek is dropped instead of panicking in `Duration`.
+pub(crate) fn seek_position(secs: f32) -> Option<Duration> {
+    Duration::try_from_secs_f32(secs.max(0.0)).ok()
 }
 
 fn err<E: std::fmt::Display>(e: E) -> String {
@@ -3398,7 +3406,10 @@ impl Listen {
                 return self.update(Message::Seek(pos.as_secs_f32()));
             }
             Message::Seek(secs) => {
-                let pos = Duration::from_secs_f32(secs.max(0.0));
+                let Some(pos) = seek_position(secs) else {
+                    tracing::warn!("seek to {secs} s ignored: not a finite position");
+                    return Task::none();
+                };
                 if self.mock_playback() {
                     self.demo_seek(pos);
                     return Task::none();
@@ -4752,5 +4763,24 @@ mod screenshot_size_tests {
         let normal = pin_screenshot_size(base, false);
         assert!(normal.resizable);
         assert_eq!(normal.max_size, None);
+    }
+}
+
+#[cfg(test)]
+mod seek_tests {
+    use super::*;
+
+    #[test]
+    fn a_seek_position_is_never_a_duration_panic() {
+        assert_eq!(seek_position(-3.0), Some(Duration::ZERO));
+        assert_eq!(seek_position(f32::NAN), Some(Duration::ZERO));
+        assert_eq!(seek_position(f32::INFINITY), None);
+        assert_eq!(seek_position(1e30), None);
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.queue.set(crate::demo::album_songs(0), 0);
+        let _ = s.update(Message::Seek(f32::INFINITY));
+        let _ = s.update(Message::Seek(1e30));
+        let _ = s.update(Message::Seek(12.0));
+        assert_eq!(s.playback.position, Duration::from_secs(12));
     }
 }

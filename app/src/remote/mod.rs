@@ -575,10 +575,14 @@ async fn connection(mut stream: TcpStream, ctx: Arc<Ctx>) -> Result<(), String> 
     result.map_err(|e| e.to_string())
 }
 
-/// Reads a number that may arrive as JSON number or string.
+/// Reads a number that may arrive as JSON number or string. Only finite numbers count: `"inf"` and `"NaN"`
+/// parse as f64, and an infinite seek position or index would panic or overflow further on.
 fn num(v: &Value) -> Option<f64> {
-    v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+    v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())).filter(|n: &f64| n.is_finite())
 }
+
+/// Highest `startIndex` a browse request may ask for (keeps `start + limit` far from overflowing).
+const MAX_START: f64 = 1_000_000.0;
 
 /// One client message to a command (`None` = unknown or malformed).
 fn parse_client(msg: &Value, reply: &Reply) -> Option<Command> {
@@ -588,7 +592,7 @@ fn parse_client(msg: &Value, reply: &Reply) -> Option<Command> {
         Some(Command::Browse {
             kind,
             search: text("searchTerm").filter(|s| !s.is_empty()),
-            start: msg.get("startIndex").and_then(num).map_or(0, |n| n.max(0.0) as usize),
+            start: msg.get("startIndex").and_then(num).map_or(0, |n| n.clamp(0.0, MAX_START) as usize),
             limit: msg.get("limit").and_then(num).map_or(50, |n| (n.max(1.0) as usize).min(500)),
             request_id: request_id.clone()?,
             reply: reply.clone(),
@@ -785,6 +789,15 @@ async fn socket(
 #[cfg(test)]
 mod head_tests {
     use super::*;
+
+    #[test]
+    fn client_numbers_must_be_finite() {
+        assert_eq!(num(&json!("12.5")), Some(12.5));
+        assert_eq!(num(&json!(3)), Some(3.0));
+        assert_eq!(num(&json!("inf")), None);
+        assert_eq!(num(&json!("NaN")), None);
+        assert_eq!(num(&json!(1e300)), Some(1e300));
+    }
 
     #[tokio::test]
     async fn a_client_that_sends_no_head_is_dropped() {
