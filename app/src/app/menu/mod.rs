@@ -194,6 +194,25 @@ impl TargetSongs {
     }
 }
 
+impl MenuAction {
+    /// Puts songs into the queue as the listener's own pick: they pass the player filters and a
+    /// played playlist leaves out its hidden songs. `PlayDefault` is not here: `menu_action`
+    /// turns it into Play / PlayNext / AddToQueue before anything is applied.
+    pub fn queues_songs(&self) -> bool {
+        matches!(
+            self,
+            MenuAction::Play
+                | MenuAction::Shuffle
+                | MenuAction::PlaySmooth
+                | MenuAction::PlayNext
+                | MenuAction::AddToQueue
+                | MenuAction::PlayNextShuffled
+                | MenuAction::AddToQueueShuffled
+                | MenuAction::InsertBefore(_)
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MenuAction {
     Play,
@@ -689,19 +708,8 @@ impl Listen {
                 v.iter().filter_map(|a| Some((source_of(&a.server_id)?, Fetch::Album(a.id.clone())))),
             ),
             MenuTarget::Playlists(v) => work.extend(v.iter().filter_map(|p| {
-                // Playing a playlist leaves out the songs hidden in it (copying it does not).
-                let plays = matches!(
-                    action,
-                    MenuAction::Play
-                        | MenuAction::PlayDefault
-                        | MenuAction::Shuffle
-                        | MenuAction::PlaySmooth
-                        | MenuAction::PlayNext
-                        | MenuAction::AddToQueue
-                        | MenuAction::PlayNextShuffled
-                        | MenuAction::AddToQueueShuffled
-                );
-                let hidden: std::collections::HashSet<String> = match plays {
+                // Playing or queueing a playlist leaves out the songs hidden in it (copying it does not).
+                let hidden: std::collections::HashSet<String> = match action.queues_songs() {
                     true => self.exclusions.set.hidden_keys(&p.id).cloned().collect(),
                     false => Default::default(),
                 };
@@ -762,17 +770,7 @@ impl Listen {
             return Task::none();
         }
         // Songs the user puts into the queue pass the player filters (the DJs' do not).
-        if matches!(
-            action,
-            MenuAction::Play
-                | MenuAction::Shuffle
-                | MenuAction::PlaySmooth
-                | MenuAction::PlayNext
-                | MenuAction::AddToQueue
-                | MenuAction::PlayNextShuffled
-                | MenuAction::AddToQueueShuffled
-                | MenuAction::InsertBefore(_)
-        ) {
+        if action.queues_songs() {
             songs = self.queue_filter(songs);
             if songs.is_empty() {
                 return Task::none();
@@ -944,6 +942,25 @@ fn new_name(page: &MenuPage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_queueing_action_counts_as_queueing_songs() {
+        // A queue drop (InsertBefore) plays a playlist like Play does: its hidden songs stay out.
+        for a in [
+            MenuAction::Play,
+            MenuAction::Shuffle,
+            MenuAction::PlaySmooth,
+            MenuAction::PlayNext,
+            MenuAction::AddToQueue,
+            MenuAction::PlayNextShuffled,
+            MenuAction::AddToQueueShuffled,
+            MenuAction::InsertBefore(1),
+        ] {
+            assert!(a.queues_songs(), "{a:?}");
+        }
+        assert!(!MenuAction::AddToPlaylist(String::new(), String::new()).queues_songs());
+        assert!(!MenuAction::Download.queues_songs());
+    }
 
     #[test]
     fn songs_fetched_without_the_confirmation_are_applied_without_it() {
