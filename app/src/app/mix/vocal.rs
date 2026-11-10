@@ -1,10 +1,11 @@
 //! Synced lyrics as vocal maps for the transition planner (`listen_mix::lyric`): looked up once per
 //! song while it is playing or next (the server's lyrics, then the lyric providers when lyric fetching
 //! is on) and merged into the analysis before planning. Planning never waits for them: a plan made
-//! without is made again when they arrive before the incoming deck is loaded.
+//! without is made again when they arrive at least [`REPLAN_MARGIN_S`] before the plan's first timed
+//! step (`mix_first_step_out`: the preload or the outgoing tempo ramp), never for bridges.
 
 use super::super::{Listen, Message};
-use super::{MixMsg, PRELOAD_LEAD_S, Phase};
+use super::{MixMsg, Phase};
 use iced::Task;
 use listen_core::analysis::{Features, VocalMap};
 use listen_core::model::{Lyrics, Song};
@@ -18,7 +19,7 @@ use std::time::Duration;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Maps kept (song keys); the cache is cleared beyond this.
 const KEEP: usize = 64;
-/// A re-plan for new lyrics needs this much time before the incoming deck is loaded.
+/// A re-plan for new lyrics needs this much time before the plan's first timed step.
 const REPLAN_MARGIN_S: f64 = 2.0;
 
 /// Vocal maps per song key (`None`: no usable synced lyrics) and lookups under way.
@@ -116,8 +117,7 @@ impl Listen {
             .any(|s| Self::server_song_key(s) == key || Self::server_song_key(&self.playable(s)) == key);
         let bridge = out.bridge.is_some() || inn.bridge.is_some();
         let Some(plan) = self.mix.plan() else { return Task::none() };
-        let preload_at = plan.out_mix_start_s - PRELOAD_LEAD_S;
-        let early = self.deck_now(self.mix.out_deck) + REPLAN_MARGIN_S < preload_at;
+        let early = self.deck_now(self.mix.out_deck) + REPLAN_MARGIN_S < self.mix_first_step_out(plan);
         if !concerns || bridge || !early {
             return Task::none();
         }

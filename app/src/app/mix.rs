@@ -354,11 +354,16 @@ impl Listen {
             return false;
         }
         let Some(plan) = &self.mix.plan else { return false };
-        let mut first = self.mix_start_out(plan) - PRELOAD_LEAD_S;
-        if let Some(r) = plan.out_ramp {
-            first = first.min(r.start_out_s);
-        }
-        self.deck_now(self.mix.out_deck) < first - PLANNED_WAKE_S
+        self.deck_now(self.mix.out_deck) < self.mix_first_step_out(plan) - PLANNED_WAKE_S
+    }
+
+    /// Outgoing position of a planned mix's first timed step: the incoming deck's preload or,
+    /// when earlier, the start of the outgoing tempo ramp (8 bars before the blend, which on
+    /// slow songs comes before the preload). Anything that must happen "before the mix starts
+    /// moving" (re-planning, the slow clock) compares against this one value.
+    pub(super) fn mix_first_step_out(&self, plan: &TransitionPlan) -> f64 {
+        let preload = self.mix_start_out(plan) - PRELOAD_LEAD_S;
+        plan.out_ramp.map_or(preload, |r| preload.min(r.start_out_s))
     }
 
     /// A deck's position now (extrapolated a little since its last report).

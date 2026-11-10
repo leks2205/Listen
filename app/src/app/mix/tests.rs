@@ -486,11 +486,7 @@ fn a_far_planned_mix_runs_the_slow_clock_until_its_first_step_comes_close() {
     s.config.settings.playback.levelling = listen_core::settings::Levelling::Off;
     plan(&mut s);
     let out = s.mix.out_deck;
-    let p = plan_of(&s);
-    let mut first = start_out(&s) - PRELOAD_LEAD_S;
-    if let Some(r) = p.out_ramp {
-        first = first.min(r.start_out_s);
-    }
+    let first = s.mix_first_step_out(&plan_of(&s));
     assert!(first - PLANNED_WAKE_S - 1.0 > 4.0, "the rig's mix point lies past the song's fade-in");
     // Past the song's own fade-in, long before the first step: slow clock only.
     pos(&mut s, out, first - PLANNED_WAKE_S - 1.0);
