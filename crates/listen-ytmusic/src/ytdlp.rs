@@ -174,6 +174,25 @@ impl YtDlp {
         if count {
             crate::budget::BUDGET.note();
         }
+        let url = self.stream_url(video_id, format).await?.ok_or("yt-dlp returned no URL")?;
+        let resolved = Resolved { expires_at: expiry(&url), facts: url_facts(&url), url };
+        self.cache.lock().expect("cache").insert(key.to_string(), resolved.clone());
+        Ok(resolved)
+    }
+
+    /// A video-only stream URL (at most 720p, plain https) of `video_id`.
+    pub async fn resolve_video(&self, video_id: &str) -> Result<String, String> {
+        crate::budget::BUDGET.note();
+        self.stream_url(video_id, VIDEO_FORMAT)
+            .await?
+            .ok_or_else(|| "yt-dlp returned no video URL".to_string())
+    }
+
+    /// Runs `yt-dlp -g -f <format>` for `video_id` (45 s timeout) and returns the first URL it
+    /// prints, `None` if it printed none. A failure is logged with the last lines of yt-dlp's
+    /// output and returned as its `ERROR` line. Every stream lookup goes through here; the caller
+    /// notes the [`BUDGET`](crate::budget::BUDGET) use and caches.
+    async fn stream_url(&self, video_id: &str, format: &str) -> Result<Option<String>, String> {
         let mut cmd = Command::new(&self.binary);
         listen_core::platform::no_window(cmd.as_std_mut());
         cmd.args(["-q", "--no-warnings", "--no-playlist", "-f", format, "-g"]);
@@ -197,41 +216,7 @@ impl YtDlp {
             let line = err.lines().rev().find(|l| l.contains("ERROR")).unwrap_or(err.trim());
             return Err(format!("yt-dlp failed: {}", line.trim()));
         }
-        let url = String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .find(|l| l.starts_with("http"))
-            .ok_or("yt-dlp returned no URL")?
-            .to_string();
-        let resolved = Resolved { expires_at: expiry(&url), facts: url_facts(&url), url };
-        self.cache.lock().expect("cache").insert(key.to_string(), resolved.clone());
-        Ok(resolved)
-    }
-
-    /// A video-only stream URL (at most 720p, plain https) of `video_id`.
-    pub async fn resolve_video(&self, video_id: &str) -> Result<String, String> {
-        crate::budget::BUDGET.note();
-        let mut cmd = Command::new(&self.binary);
-        listen_core::platform::no_window(cmd.as_std_mut());
-        cmd.args(["-q", "--no-warnings", "--no-playlist", "-f", VIDEO_FORMAT, "-g"]);
-        if let Some(rt) = &self.js_runtime {
-            cmd.args(["--js-runtimes", rt]);
-        }
-        cmd.arg(format!("https://music.youtube.com/watch?v={video_id}"));
-        cmd.kill_on_drop(true);
-        let out = tokio::time::timeout(Duration::from_secs(45), cmd.output())
-            .await
-            .map_err(|_| "yt-dlp timed out".to_string())?
-            .map_err(|e| format!("could not run yt-dlp: {e}"))?;
-        if !out.status.success() {
-            let err = String::from_utf8_lossy(&out.stderr);
-            let line = err.lines().rev().find(|l| l.contains("ERROR")).unwrap_or(err.trim());
-            return Err(format!("yt-dlp failed: {}", line.trim()));
-        }
-        String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .find(|l| l.starts_with("http"))
-            .map(str::to_string)
-            .ok_or_else(|| "yt-dlp returned no video URL".to_string())
+        Ok(String::from_utf8_lossy(&out.stdout).lines().find(|l| l.starts_with("http")).map(str::to_string))
     }
 
     /// Forgets a stream URL that failed to play.
