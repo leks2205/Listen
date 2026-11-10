@@ -101,7 +101,7 @@ pub enum ArtistMsg {
     AppearsOn(u64, Result<Vec<Album>, String>),
     Videos(u64, Result<Vec<Song>, String>),
     Favorites(u64, Result<Vec<Song>, String>),
-    Rated(u64, Result<Vec<Song>, String>),
+    /// Every song of the artist; also fills the rated songs (`ArtistPage::rated`).
     AllSongs(u64, Result<Vec<Song>, String>),
     /// Header: every song of the artist, with the Play-button behaviour.
     Play(PlayBehavior),
@@ -147,6 +147,7 @@ pub struct ArtistPage {
     pub videos: Vec<Song>,
     /// `None` while loading.
     pub favorites: Option<Vec<Song>>,
+    /// The artist's rated songs, taken from the `AllSongs` answer (`None` until it came).
     pub rated: Option<Vec<Song>>,
     pub all_songs: Option<Vec<Song>>,
     /// Your most played songs by the artist, and how often you played each.
@@ -841,9 +842,6 @@ impl Listen {
                 self.artist_page.favorites = Some(songs);
                 return self.request_images(refs.iter().map(Some));
             }
-            ArtistMsg::Rated(rev, r) if current(&self.artist_page, rev) => {
-                self.artist_page.rated = Some(r.unwrap_or_default());
-            }
             ArtistMsg::AllSongs(rev, r) if current(&self.artist_page, rev) => match r {
                 Ok(songs) => {
                     let rated: Vec<Song> = songs.iter().filter(|s| s.rating.is_some()).cloned().collect();
@@ -862,7 +860,6 @@ impl Listen {
             | ArtistMsg::AppearsOn(..)
             | ArtistMsg::Videos(..)
             | ArtistMsg::Favorites(..)
-            | ArtistMsg::Rated(..)
             | ArtistMsg::AllSongs(..) => {}
             ArtistMsg::Play(b) => return self.artist_play_all(action_for(b)),
             ArtistMsg::Shuffle => return self.artist_play_all(MenuAction::Shuffle),
