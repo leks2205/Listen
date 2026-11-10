@@ -6,13 +6,6 @@ use crate::app::album_page::{TrackSort, filter_songs, sort_items};
 use listen_core::model::{Album, ArtistRef, Song};
 use std::time::Duration;
 
-/// Which artist list of a song a filter looks at.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Who {
-    Artists,
-    AlbumArtists,
-}
-
 /// Feishin's client-side song filters for a playlist.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct SongFilters {
