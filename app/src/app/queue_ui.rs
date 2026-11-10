@@ -486,12 +486,14 @@ impl Listen {
     }
 
     /// The queue as the server stores it: the songs of that server in play
-    /// order, the playing one and how far it got.
+    /// order, the playing one and how far it got. When the playing song is another server's,
+    /// there is no current song and the position is zero (it belongs to that song).
     pub fn queue_for_server(&self, server: &ServerId) -> PlayQueue {
         let songs: Vec<Song> =
             self.queue.iter().filter(|i| &i.song.server_id == server).map(|i| i.song.clone()).collect();
         let current = self.queue.current().filter(|i| &i.song.server_id == server).map(|i| i.song.id.clone());
-        PlayQueue { songs, current, position: self.playback.position, changed_by: None }
+        let position = if current.is_some() { self.playback.position } else { Duration::ZERO };
+        PlayQueue { songs, current, position, changed_by: None }
     }
 
     /// `savePlayQueue` for the browsed server; `loud`: report the result.
@@ -899,6 +901,18 @@ mod tests {
     fn state() -> Listen {
         let (s, _) = Listen::boot(&Args { demo: true, ..Args::default() });
         s
+    }
+
+    #[test]
+    fn the_server_queue_position_belongs_to_its_current_song() {
+        let mut s = state();
+        s.queue.set(crate::demo::album_songs(0), 0);
+        s.playback.position = Duration::from_secs(30);
+        let own = s.queue_for_server(&ServerId("demo".into()));
+        assert!(own.current.is_some());
+        assert_eq!(own.position, Duration::from_secs(30));
+        let other = s.queue_for_server(&ServerId("elsewhere".into()));
+        assert_eq!((other.current, other.position), (None, Duration::ZERO));
     }
 
     /// The AI DJ's "break" marker still shows before the song it airs ahead of.
