@@ -36,7 +36,7 @@ pub struct Config {
 }
 
 impl Config {
-    fn auth_required(&self) -> bool {
+    pub(crate) fn auth_required(&self) -> bool {
         !self.username.is_empty() || !self.password.is_empty()
     }
 
@@ -414,6 +414,32 @@ impl Head {
     }
 }
 
+/// The host part of an authority (`host:port`, `[v6]:port`): `localhost`, `127.0.0.1`, `[::1]`.
+pub(crate) fn host_name(authority: &str) -> &str {
+    match authority.find(']') {
+        Some(end) if authority.starts_with('[') => &authority[..=end],
+        _ => authority.split(':').next().unwrap_or(""),
+    }
+}
+
+/// Whether a host name (see [`host_name`]) means this computer.
+pub(crate) fn is_loopback_name(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host == "[::1]"
+        || host.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
+}
+
+/// Browser protection for a local HTTP/WebSocket server. Browsers do not apply the same-origin rule to
+/// WebSockets, so any website could open `ws://127.0.0.1:<port>`: a request that carries an `Origin`
+/// (it comes from a web page) is only served when that page was loaded from this server itself (same
+/// authority as `Host`). Requests without `Origin` come from native clients or plain navigations.
+pub(crate) fn same_origin(head: &Head) -> bool {
+    let Some(origin) = head.header("origin") else { return true };
+    let Some(host) = head.header("host") else { return false };
+    let authority = origin.split_once("://").map_or("", |(_, a)| a.trim_end_matches('/'));
+    authority.eq_ignore_ascii_case(host)
+}
+
 /// Reads the request head; a client that sends none within [`HEAD_TIMEOUT`] is dropped, so idle
 /// connections can't hold the server's client slots. Shared by the remote and the MCP server.
 pub(crate) async fn read_head(stream: &mut TcpStream) -> Result<(Head, Vec<u8>), String> {
@@ -489,6 +515,15 @@ fn image_type(bytes: &[u8]) -> &'static str {
 
 async fn connection(mut stream: TcpStream, ctx: Arc<Ctx>) -> Result<(), String> {
     let (head, rest) = read_head(&mut stream).await?;
+    // Without a login the server only listens on loopback, which a web page reaches too: refuse pages from
+    // other sites, and (DNS rebinding) any `Host` that is not this computer's name.
+    let foreign_host =
+        !ctx.cfg.auth_required() && head.header("host").is_some_and(|h| !is_loopback_name(host_name(h)));
+    if !same_origin(&head) || foreign_host {
+        return respond(&mut stream, "403 Forbidden", "text/plain", &[], b"Forbidden", false)
+            .await
+            .map_err(|e| e.to_string());
+    }
     let authorization = head.header("authorization").map(str::to_string);
     let authed = ctx.cfg.authorized(authorization.as_deref());
     let is_ws = head.header("upgrade").is_some_and(|v| v.eq_ignore_ascii_case("websocket"));
@@ -789,6 +824,28 @@ async fn socket(
 #[cfg(test)]
 mod head_tests {
     use super::*;
+
+    fn head(headers: &[(&str, &str)]) -> Head {
+        Head {
+            method: "GET".into(),
+            path: "/".into(),
+            headers: headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+        }
+    }
+
+    #[test]
+    fn pages_from_other_sites_are_refused() {
+        assert!(same_origin(&head(&[("Host", "127.0.0.1:4333")])));
+        assert!(same_origin(&head(&[("Host", "127.0.0.1:4333"), ("Origin", "http://127.0.0.1:4333")])));
+        assert!(same_origin(&head(&[("Host", "192.168.1.5:4333"), ("Origin", "http://192.168.1.5:4333/")])));
+        assert!(!same_origin(&head(&[("Host", "127.0.0.1:4333"), ("Origin", "https://evil.example")])));
+        assert!(!same_origin(&head(&[("Host", "127.0.0.1:4333"), ("Origin", "null")])));
+        assert!(!same_origin(&head(&[("Origin", "http://127.0.0.1:4333")])));
+        assert_eq!(host_name("[::1]:4333"), "[::1]");
+        assert_eq!(host_name("localhost:4333"), "localhost");
+        assert!(is_loopback_name("127.0.0.1") && is_loopback_name("[::1]") && is_loopback_name("LOCALHOST"));
+        assert!(!is_loopback_name("rebind.evil.example") && !is_loopback_name("192.168.1.5"));
+    }
 
     #[test]
     fn client_numbers_must_be_finite() {

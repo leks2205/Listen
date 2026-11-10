@@ -35,7 +35,7 @@ fn basic(user: &str, pass: &str) -> String {
 /// One HTTP request; returns (status line, headers + body text).
 async fn http(addr: std::net::SocketAddr, path: &str, auth: Option<&str>) -> (String, String) {
     let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
-    let mut req = format!("GET {path} HTTP/1.1\r\nHost: x\r\n");
+    let mut req = format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n");
     if let Some(a) = auth {
         req.push_str(&format!("Authorization: {a}\r\n"));
     }
@@ -273,7 +273,7 @@ async fn cover_is_served_from_the_published_file_only() {
     std::fs::write(&file, png).unwrap();
     s.shared.song(json!({ "id": "s1", "imageUrl": "/cover" }), Some(file.clone()));
     let mut conn = tokio::net::TcpStream::connect(s.addr).await.unwrap();
-    conn.write_all(b"GET /cover HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+    conn.write_all(b"GET /cover HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").await.unwrap();
     let mut out = Vec::new();
     conn.read_to_end(&mut out).await.unwrap();
     assert!(out.starts_with(b"HTTP/1.1 200"));
@@ -281,6 +281,14 @@ async fn cover_is_served_from_the_published_file_only() {
     assert!(out.ends_with(&png));
     // Path tricks do not reach other files.
     assert!(http(s.addr, "/cover/../../etc/passwd", None).await.1.contains("Listen Remote"));
+    // Without a login, other websites (an Origin that is not this server, or a DNS-rebinding Host) get nothing.
+    for head in ["Host: 127.0.0.1\r\nOrigin: https://evil.example", "Host: rebind.evil.example"] {
+        let mut conn = tokio::net::TcpStream::connect(s.addr).await.unwrap();
+        conn.write_all(format!("GET /cover HTTP/1.1\r\n{head}\r\n\r\n").as_bytes()).await.unwrap();
+        let mut out = Vec::new();
+        conn.read_to_end(&mut out).await.unwrap();
+        assert!(out.starts_with(b"HTTP/1.1 403"), "{head}");
+    }
     // The phone can also ask for the cover over the socket (Feishin's `proxy`).
     let mut c = connect(s.addr, None).await;
     initial(&mut c).await;
