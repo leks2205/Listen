@@ -919,13 +919,16 @@ impl Listen {
                 if name.is_empty() {
                     return Err("the name is empty".into());
                 }
-                let (_, source) = self.source_for(arg_str(args, "server"))?;
+                let (server, source) = self.source_for(arg_str(args, "server"))?;
                 if !source.capabilities().contains(Capabilities::PLAYLIST_CREATE) {
                     return Err("This server can't create playlists.".into());
                 }
                 let mut ids = Vec::new();
                 for r in arg_refs(args, "refs") {
                     match self.item(&r)? {
+                        Item::Song(s) if s.server_id != server => {
+                            return Err("songs from another server can't go into this playlist".into());
+                        }
                         Item::Song(s) => ids.push(s.id),
                         _ => {
                             return Err(
@@ -962,15 +965,18 @@ impl Listen {
                 }
                 let refs = arg_refs(args, "refs");
                 let targets = self.targets(&refs)?;
+                // A playlist holds songs of its own server only (the menu offers no others).
+                let foreign = |t: &MenuTarget| match t {
+                    MenuTarget::Songs { songs, .. } => songs.iter().any(|s| s.server_id != p.server_id),
+                    t => t.server().is_some_and(|s| *s != p.server_id),
+                };
+                if targets.iter().any(foreign) {
+                    return Err("items from another server can't go into this playlist".into());
+                }
                 let (mut ids, mut others) = (Vec::new(), Vec::new());
                 for t in targets {
                     match t {
-                        MenuTarget::Songs { songs, .. } => {
-                            if songs.iter().any(|s| s.server_id != p.server_id) {
-                                return Err("songs from another server can't go into this playlist".into());
-                            }
-                            ids.extend(songs.into_iter().map(|s| s.id));
-                        }
+                        MenuTarget::Songs { songs, .. } => ids.extend(songs.into_iter().map(|s| s.id)),
                         t => others.push(t),
                     }
                 }
