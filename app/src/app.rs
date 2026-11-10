@@ -385,12 +385,28 @@ pub struct SearchState {
     pub results: SearchResults,
     pub loading: bool,
     pub error: Option<String>,
+    /// Stale guard: a `SearchLoaded` result counts only with the current value. Search results are not
+    /// scoped to a server, so it must only ever grow (`reset` keeps it): a value counted from 0 again
+    /// lets a late answer of the previous server through. Bump it with `next_generation`.
     generation: u64,
     /// The tab of the search page.
     pub tab: list::SearchTab,
     pub debounce: search::Debounce,
     /// "Describe it": the query goes to listen-server's natural-language search.
     pub describe: bool,
+}
+
+impl SearchState {
+    /// Clears the page (another server): everything goes but the generation, which keeps counting.
+    pub fn reset(&mut self) {
+        *self = Self { generation: self.generation, ..Self::default() };
+    }
+
+    /// A new search starts: earlier answers no longer count. Returns the generation to tag it with.
+    pub fn next_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
 }
 
 /// Loaded library data for the pages.
@@ -2089,7 +2105,7 @@ impl Listen {
         self.analysis_crawl();
         self.adding_server = false;
         self.connecting = false;
-        self.search = SearchState::default();
+        self.search.reset();
         self.back.clear();
         self.forward.clear();
         if let Some((library, route, loaded)) = self.library_cache.remove(&id) {
@@ -4786,5 +4802,24 @@ mod seek_tests {
         let _ = s.update(Message::Seek(1e30));
         let _ = s.update(Message::Seek(12.0));
         assert_eq!(s.playback.position, Duration::from_secs(12));
+    }
+}
+
+#[cfg(test)]
+mod search_generation_tests {
+    use super::*;
+
+    #[test]
+    fn a_server_switch_keeps_the_search_generation_growing() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        let before = s.search.next_generation();
+        s.search.query = "old".into();
+        s.search.reset();
+        assert!(s.search.query.is_empty());
+        let late = Message::SearchLoaded(before, Ok(Default::default()));
+        assert!(s.search.next_generation() > before);
+        s.search.loading = true;
+        let _ = s.update(late);
+        assert!(s.search.loading, "a result of the previous server's search is dropped");
     }
 }

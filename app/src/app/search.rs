@@ -54,7 +54,7 @@ impl Listen {
         let token = self.search.debounce.bump();
         if self.search.query.trim().is_empty() {
             // Nothing to wait for: an emptied box clears the results.
-            self.search.generation += 1;
+            self.search.next_generation();
             self.search.loading = false;
             self.search.error = None;
             self.search.results = Default::default();
@@ -72,7 +72,7 @@ impl Listen {
         let query = self.search.query.trim().to_string();
         if self.search.describe && !query.is_empty() {
             self.search.debounce.bump();
-            self.search.generation += 1;
+            self.search.next_generation();
             self.search.loading = true;
             self.search.error = None;
             self.search.tab = SearchTab::Songs;
@@ -82,7 +82,7 @@ impl Listen {
         let Some(source) = self.source.clone().filter(|_| !query.is_empty()) else { return Task::none() };
         // A pending timer of an earlier keystroke has nothing left to do.
         self.search.debounce.bump();
-        self.search.generation += 1;
+        self.search.next_generation();
         self.search.loading = true;
         self.search.error = None;
         let generation = self.search.generation;

@@ -97,7 +97,7 @@ impl Listen {
             return iced::Task::none();
         }
         self.search.describe = on;
-        self.search.generation += 1;
+        self.search.next_generation();
         self.search.loading = false;
         self.search.error = None;
         self.search.results = Default::default();
