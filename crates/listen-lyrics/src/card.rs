@@ -10,6 +10,7 @@
 //! - Cards are cached per song and language ([`CardCache`]), and refetched after [`MAX_AGE_SECS`].
 
 use crate::gemini::{AiError, fnv, post_reply};
+use listen_core::text::fold;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -239,20 +240,16 @@ pub fn search_url(song: &SongInfo) -> String {
     u.into()
 }
 
-fn norm(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
-}
-
 /// The matching search hits, best first: score ≥ 90 and the same title (letters and digits, any
 /// case). MusicBrainz often has several copies of a recording, only some of them with credits.
 pub fn pick_recordings(search: &Value, song: &SongInfo) -> Vec<String> {
-    let want = norm(&song.title);
+    let want = fold(&song.title);
     search["recordings"]
         .as_array()
         .into_iter()
         .flatten()
         .filter(|r| r["score"].as_u64().unwrap_or(0) >= 90)
-        .filter(|r| r["title"].as_str().is_some_and(|t| norm(t) == want))
+        .filter(|r| r["title"].as_str().is_some_and(|t| fold(t) == want))
         .filter_map(|r| r["id"].as_str().map(str::to_string))
         .collect()
 }

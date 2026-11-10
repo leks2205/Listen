@@ -129,10 +129,8 @@ pub fn release_key(title: &str) -> String {
     if folded.is_empty() { fold(&lower) } else { folded }
 }
 
-/// Letters and digits only (any script).
-pub fn fold(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
-}
+/// Kept for callers of the old path; the helper lives in [`crate::text::fold`].
+pub use crate::text::fold;
 
 /// The artists to watch: everyone subscribed (channel id, name) plus the [`TOP_HISTORY`] most played
 /// in the history since `now - HISTORY_DAYS`. A history artist takes the channel id from a YouTube

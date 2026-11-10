@@ -4,6 +4,7 @@
 
 use crate::analysis::Features;
 use crate::model::{Song, SourceKind};
+use crate::text::fold;
 use std::collections::BTreeSet;
 use unicode_normalization::UnicodeNormalization;
 
@@ -115,11 +116,6 @@ fn plain(s: &str) -> String {
         }
     }
     out
-}
-
-/// Letters and digits only (any script), so punctuation and spacing don't matter.
-fn fold(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
 fn words(s: &str) -> Vec<&str> {

@@ -15,6 +15,7 @@ pub mod releases;
 pub mod scene;
 pub mod settings;
 pub mod substitute;
+pub mod text;
 pub mod theme;
 pub mod versions;
 pub mod weekly;

@@ -3,6 +3,7 @@
 //! the music video, a VEVO upload); the DJs treat them as one song.
 
 use crate::model::Song;
+use crate::text::fold;
 use std::collections::HashMap;
 
 /// The same key for every version of a song: its title without bracketed
@@ -45,11 +46,6 @@ fn artist_key(artist: &str) -> String {
         }
     }
     fold(a.trim_end_matches(" - topic").trim().trim_end_matches("vevo"))
-}
-
-/// Letters and digits only (any script), so punctuation and spacing don't matter.
-fn fold(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
 /// A radio edit (or single/radio version) of a song.
