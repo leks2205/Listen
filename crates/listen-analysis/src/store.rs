@@ -58,8 +58,20 @@ fn chunk_number(path: &Path) -> Option<u32> {
 }
 
 impl ShardStore {
-    /// Opens (creating) `<dir>/v1/<machine>` and reads every machine's records.
+    /// Opens (creating) `<dir>/v1/<machine>` and reads every machine's records. `dir` is the folder that
+    /// holds `v1/` (e.g. `…/Listen/analysis`), never `v1/` itself: that is refused, since it would create
+    /// `v1/v1/<machine>` and read an empty store.
     pub fn open(dir: &Path, machine: &str) -> io::Result<Self> {
+        if dir.file_name().is_some_and(|n| n == LAYOUT) && !dir.join(LAYOUT).is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{} is the store's {LAYOUT}/ folder; pass the folder that contains it ({})",
+                    dir.display(),
+                    dir.parent().map_or_else(|| "its parent".into(), |p| p.display().to_string())
+                ),
+            ));
+        }
         let root = dir.join(LAYOUT);
         let own = root.join(machine);
         fs::create_dir_all(&own)?;
@@ -359,6 +371,18 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn open_refuses_the_layout_folder_itself() {
+        let dir = TempDir::new("layout");
+        let v1 = dir.0.join("v1");
+        fs::create_dir_all(v1.join("desk-aaaaaa")).unwrap();
+        let err = ShardStore::open(&v1, "m-1").err().expect("v1/ itself is refused");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("pass the folder that contains it"), "{err}");
+        assert!(!v1.join("v1").exists(), "nothing is created under the wrong folder");
+        assert!(ShardStore::open(&dir.0, "m-1").is_ok());
     }
 
     fn rec(song: &str, machine: &str, at: u64, ok: bool) -> TrackAnalysis {
