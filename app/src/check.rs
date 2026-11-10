@@ -1402,15 +1402,21 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
     );
     let host = server.url.split('/').nth(2).unwrap_or("").to_string();
     let started = std::time::Instant::now();
+    // Only songs with a stream URL become jobs, so `done` (incl. failures) reaches `todo` at the end.
+    let before = songs.len();
+    let songs: Vec<_> =
+        songs.into_iter().filter_map(|s| client.analysis_url(&s).map(|url| (s, url))).collect();
+    if songs.len() < before {
+        println!("{} songs have no stream URL and are skipped", before - songs.len());
+    }
     let todo = songs.len();
     let mut queue = songs.into_iter();
     let mut running = tokio::task::JoinSet::new();
     let (mut done, mut failed) = (0usize, 0usize);
     loop {
         while running.len() < jobs
-            && let Some(song) = queue.next()
+            && let Some((song, url)) = queue.next()
         {
-            let Some(url) = client.analysis_url(&song) else { continue };
             let opts = Opts { beats: beats.clone(), bpm_hint: song.bpm.map(|b| b as f32), voice: None };
             running.spawn(async move {
                 let result = listen_analysis::analyze_url(&url, &opts, &Cancel::default()).await;
@@ -1418,8 +1424,12 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
             });
         }
         let Some(joined) = running.join_next().await else { break };
-        let Ok((song, result)) = joined else { continue };
         done += 1;
+        let Ok((song, result)) = joined else {
+            failed += 1;
+            println!("[{done}/{todo}] ✗ an analysis task panicked");
+            continue;
+        };
         let line = match &result {
             Ok(f) => FlowFeatures::of(f).describe(),
             Err(e) => {
