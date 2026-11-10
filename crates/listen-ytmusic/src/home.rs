@@ -39,11 +39,7 @@ impl PostQuery for HomeQuery {
     fn params(&self) -> Vec<(&str, Cow<'_, str>)> {
         match &self.continuation {
             None => vec![],
-            Some(c) => vec![
-                ("ctoken", Cow::Borrowed(c.as_str())),
-                ("continuation", Cow::Borrowed(c.as_str())),
-                ("type", Cow::Borrowed("next")),
-            ],
+            Some(c) => params_for(c),
         }
     }
     fn path(&self) -> &str {
@@ -313,6 +309,37 @@ impl Continuation {
             Continuation::Body(t) | Continuation::Params(t) => t,
         }
     }
+
+    /// The continuation an item list ends with: an item holding a `continuationItemRenderer`.
+    pub(crate) fn ending(item: &Value) -> Option<Self> {
+        item.pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token")
+            .and_then(Value::as_str)
+            .map(|t| Continuation::Body(t.to_string()))
+    }
+
+    /// The URL parameters of the request for this continuation (none for a [`Continuation::Body`]
+    /// token, which goes in the body instead).
+    pub(crate) fn params(&self) -> Vec<(&str, Cow<'_, str>)> {
+        match self {
+            Continuation::Params(t) => params_for(t),
+            Continuation::Body(_) => Vec::new(),
+        }
+    }
+}
+
+/// The `nextContinuationData` token of a shelf, grid or section (the [`Continuation::Params`]
+/// style). Every page parser reads the next page's token through this and [`Continuation::ending`].
+pub(crate) fn next_token(list: &Value) -> Option<&str> {
+    list.pointer("/continuations/0/nextContinuationData/continuation").and_then(Value::as_str)
+}
+
+/// The URL parameters that ask InnerTube for the page after a `nextContinuationData` token.
+fn params_for(token: &str) -> Vec<(&str, Cow<'_, str>)> {
+    vec![
+        ("ctoken", Cow::Borrowed(token)),
+        ("continuation", Cow::Borrowed(token)),
+        ("type", Cow::Borrowed("next")),
+    ]
 }
 
 impl ParseFrom<BrowseQuery> for Unparsed {
@@ -336,14 +363,7 @@ impl PostQuery for BrowseQuery {
         }
     }
     fn params(&self) -> Vec<(&str, Cow<'_, str>)> {
-        match &self.continuation {
-            Some(Continuation::Params(c)) => vec![
-                ("ctoken", Cow::Borrowed(c.as_str())),
-                ("continuation", Cow::Borrowed(c.as_str())),
-                ("type", Cow::Borrowed("next")),
-            ],
-            _ => vec![],
-        }
+        self.continuation.as_ref().map_or_else(Vec::new, Continuation::params)
     }
     fn path(&self) -> &str {
         "browse"
@@ -387,16 +407,11 @@ pub fn song_page(json: &Value) -> (Vec<Item>, Option<Continuation>) {
         for item in items.and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[]) {
             if let Some(r) = item.get("musicResponsiveListItemRenderer") {
                 songs.extend(list_item(r));
-            } else if let Some(t) = item
-                .pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token")
-                .and_then(Value::as_str)
-            {
-                next = Some(Continuation::Body(t.to_string()));
+            } else if let Some(c) = Continuation::ending(item) {
+                next = Some(c);
             }
         }
-        if let Some(t) =
-            shelf.pointer("/continuations/0/nextContinuationData/continuation").and_then(Value::as_str)
-        {
+        if let Some(t) = next_token(shelf) {
             next = Some(Continuation::Params(t.to_string()));
         }
     }
@@ -444,16 +459,11 @@ pub fn grid_page(json: &Value) -> (Vec<Item>, Option<Continuation>) {
                 out.extend(two_row(r));
             } else if let Some(r) = item.get("musicResponsiveListItemRenderer") {
                 out.extend(list_tile(r));
-            } else if let Some(t) = item
-                .pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token")
-                .and_then(Value::as_str)
-            {
-                next = Some(Continuation::Body(t.to_string()));
+            } else if let Some(c) = Continuation::ending(item) {
+                next = Some(c);
             }
         }
-        if let Some(t) =
-            grid.pointer("/continuations/0/nextContinuationData/continuation").and_then(Value::as_str)
-        {
+        if let Some(t) = next_token(grid) {
             next = Some(Continuation::Params(t.to_string()));
         }
     }
@@ -483,10 +493,7 @@ pub fn parse(json: &Value) -> (Vec<Shelf>, Option<String>) {
         .or_else(|| json.pointer("/continuationContents/sectionListContinuation"));
     let Some(section) = section else { return (vec![], None) };
     let shelves = runs(section, "/contents").iter().filter_map(shelf).collect();
-    let next = section
-        .pointer("/continuations/0/nextContinuationData/continuation")
-        .and_then(Value::as_str)
-        .map(String::from);
+    let next = next_token(section).map(String::from);
     (shelves, next)
 }
 

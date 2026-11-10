@@ -3,7 +3,7 @@
 //! adding to / creating playlists with the result checked. Request shapes
 //! follow ytmusicapi and YouTube.js.
 
-use crate::home::{Continuation, Unparsed, page_type, shelves_in, text, thumbs};
+use crate::home::{Continuation, Unparsed, next_token, page_type, shelves_in, text, thumbs};
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;
 use ytmapi_rs::auth::AuthToken;
@@ -48,14 +48,7 @@ impl PostQuery for RawPost {
         }
     }
     fn params(&self) -> Vec<(&str, Cow<'_, str>)> {
-        match &self.continuation {
-            Some(Continuation::Params(c)) => vec![
-                ("ctoken", Cow::Borrowed(c.as_str())),
-                ("continuation", Cow::Borrowed(c.as_str())),
-                ("type", Cow::Borrowed("next")),
-            ],
-            _ => vec![],
-        }
+        self.continuation.as_ref().map_or_else(Vec::new, Continuation::params)
     }
     fn path(&self) -> &str {
         self.path
@@ -97,16 +90,11 @@ pub fn artist_page(json: &Value) -> (Vec<LibArtist>, Option<Continuation>) {
                     thumbs: thumbs(r, "/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails"),
                     artist: page_type(r) == "MUSIC_PAGE_TYPE_ARTIST",
                 });
-            } else if let Some(t) = item
-                .pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token")
-                .and_then(Value::as_str)
-            {
-                next = Some(Continuation::Body(t.to_string()));
+            } else if let Some(c) = Continuation::ending(item) {
+                next = Some(c);
             }
         }
-        if let Some(t) =
-            shelf.pointer("/continuations/0/nextContinuationData/continuation").and_then(Value::as_str)
-        {
+        if let Some(t) = next_token(shelf) {
             next = Some(Continuation::Params(t.to_string()));
         }
     }
