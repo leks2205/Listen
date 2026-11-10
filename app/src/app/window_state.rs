@@ -7,7 +7,6 @@ use listen_core::settings::{Rect, Restored, WindowState};
 /// Messages of the window-state tracking.
 #[derive(Debug, Clone)]
 pub enum WindowStateMsg {
-    Moved(iced::Point),
     /// Asked after a resize or move: the window's mode right now.
     Probe {
         maximized: bool,
@@ -156,7 +155,6 @@ impl Listen {
 
     pub(super) fn on_window_state(&mut self, msg: WindowStateMsg) -> Task<Message> {
         match msg {
-            WindowStateMsg::Moved(p) => self.win.last_pos = Some(p),
             WindowStateMsg::Probe { maximized, fullscreen } => {
                 self.win.maximized = maximized;
                 self.win.fullscreen = fullscreen;
