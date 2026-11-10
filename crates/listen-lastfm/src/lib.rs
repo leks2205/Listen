@@ -87,7 +87,7 @@ impl Client {
     pub fn new(creds: Creds) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(15))
-            .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+            .user_agent(listen_core::USER_AGENT)
             .build()
             .unwrap_or_default();
         Client { http, creds }

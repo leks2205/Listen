@@ -19,3 +19,7 @@ pub mod text;
 pub mod theme;
 pub mod versions;
 pub mod weekly;
+
+/// The `User-Agent` every HTTP client of Listen sends (`Listen/<version>`; all crates share the
+/// workspace version). Use this instead of spelling it out per client.
+pub const USER_AGENT: &str = concat!("Listen/", env!("CARGO_PKG_VERSION"));

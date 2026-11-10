@@ -41,7 +41,7 @@ impl BeatModel {
         let err = |reason: String| AnalysisError::Model(reason);
         std::fs::create_dir_all(dir).map_err(|e| err(format!("{}: {e}", dir.display())))?;
         let http = reqwest::Client::builder()
-            .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+            .user_agent(listen_core::USER_AGENT)
             .connect_timeout(std::time::Duration::from_secs(15))
             .timeout(std::time::Duration::from_secs(300))
             .build()

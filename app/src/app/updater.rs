@@ -445,7 +445,7 @@ pub fn binary_reports(binary: &Path, version: &Version) -> Result<(), String> {
 
 fn client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+        .user_agent(listen_core::USER_AGENT)
         .connect_timeout(Duration::from_secs(15))
         .read_timeout(Duration::from_secs(60))
         .build()

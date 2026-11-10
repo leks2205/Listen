@@ -71,7 +71,7 @@ pub struct Options {
 /// The HTTP client builder of a server; `ignore_ssl` accepts invalid certificates.
 pub fn client_builder(ignore_ssl: bool) -> reqwest::ClientBuilder {
     reqwest::Client::builder()
-        .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+        .user_agent(listen_core::USER_AGENT)
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30))
         .danger_accept_invalid_certs(ignore_ssl)

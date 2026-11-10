@@ -250,7 +250,7 @@ impl Listen {
             async move |mut out: iced::futures::channel::mpsc::Sender<Message>| {
                 use iced::futures::SinkExt;
                 let http = reqwest::Client::builder()
-                    .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+                    .user_agent(listen_core::USER_AGENT)
                     .connect_timeout(Duration::from_secs(10))
                     .read_timeout(Duration::from_secs(60))
                     .build()

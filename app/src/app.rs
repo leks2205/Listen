@@ -1038,12 +1038,12 @@ impl Listen {
         let list_queries = list_query::ListQueries::from_settings(&config.settings.lists);
 
         let http = reqwest::Client::builder()
-            .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+            .user_agent(listen_core::USER_AGENT)
             .connect_timeout(Duration::from_secs(10))
             .build()
             .expect("http client");
         let insecure_http = reqwest::Client::builder()
-            .user_agent(concat!("Listen/", env!("CARGO_PKG_VERSION")))
+            .user_agent(listen_core::USER_AGENT)
             .connect_timeout(Duration::from_secs(10))
             .danger_accept_invalid_certs(true)
             .build()
