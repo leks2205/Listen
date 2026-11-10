@@ -9,7 +9,8 @@ pub struct DemoAlbum {
     pub year: i32,
     /// Placeholder artwork colour.
     pub color: (u8, u8, u8),
-    pub tracks: &'static [(&'static str, u64)],
+    /// Song titles. Every demo song is `TRACK_SECS` long, the length of the generated audio clip.
+    pub tracks: &'static [&'static str],
 }
 
 pub const ALBUMS: &[DemoAlbum] = &[
@@ -19,12 +20,12 @@ pub const ALBUMS: &[DemoAlbum] = &[
         year: 2024,
         color: (88, 60, 170),
         tracks: &[
-            ("Midnight Signal", 214),
-            ("Coastline", 187),
-            ("Afterglow Avenue", 243),
-            ("Static Hearts", 199),
-            ("Rearview", 231),
-            ("Last Exit", 276),
+            "Midnight Signal",
+            "Coastline",
+            "Afterglow Avenue",
+            "Static Hearts",
+            "Rearview",
+            "Last Exit",
         ],
     },
     DemoAlbum {
@@ -32,49 +33,49 @@ pub const ALBUMS: &[DemoAlbum] = &[
         artist: "Ivy Lane",
         year: 2021,
         color: (200, 120, 60),
-        tracks: &[("Paper Moons", 201), ("Lanterns", 176), ("Soft Rain", 222)],
+        tracks: &["Paper Moons", "Lanterns", "Soft Rain"],
     },
     DemoAlbum {
         name: "Low Tide",
         artist: "The Harbours",
         year: 2019,
         color: (40, 130, 150),
-        tracks: &[("Low Tide", 245), ("Gulls", 162), ("Undertow", 298)],
+        tracks: &["Low Tide", "Gulls", "Undertow"],
     },
     DemoAlbum {
         name: "Glass Garden",
         artist: "Mira Sol",
         year: 2023,
         color: (60, 150, 90),
-        tracks: &[("Glass Garden", 188), ("Fern", 205)],
+        tracks: &["Glass Garden", "Fern"],
     },
     DemoAlbum {
         name: "Overdrive",
         artist: "Volt Theory",
         year: 2022,
         color: (190, 50, 70),
-        tracks: &[("Overdrive", 233), ("Circuit", 219), ("Ignition", 187)],
+        tracks: &["Overdrive", "Circuit", "Ignition"],
     },
     DemoAlbum {
         name: "Quiet Hours",
         artist: "Ana Brandt",
         year: 2020,
         color: (120, 120, 140),
-        tracks: &[("Quiet Hours", 264), ("Dust", 190)],
+        tracks: &["Quiet Hours", "Dust"],
     },
     DemoAlbum {
         name: "Solar Drift",
         artist: "Kepler Kids",
         year: 2025,
         color: (220, 170, 40),
-        tracks: &[("Solar Drift", 240), ("Orbit", 201)],
+        tracks: &["Solar Drift", "Orbit"],
     },
     DemoAlbum {
         name: "Velvet Room",
         artist: "Jules & The Tape",
         year: 2018,
         color: (130, 40, 110),
-        tracks: &[("Velvet Room", 222), ("Slow Dance", 248)],
+        tracks: &["Velvet Room", "Slow Dance"],
     },
 ];
 
@@ -84,7 +85,7 @@ pub fn album_songs(index: usize) -> Vec<Song> {
         .tracks
         .iter()
         .enumerate()
-        .map(|(i, (title, _))| Song {
+        .map(|(i, title)| Song {
             artists: vec![ArtistRef { id: None, name: album.artist.into() }],
             album_artists: vec![ArtistRef { id: None, name: album.artist.into() }],
             album: Some(album.name.into()),
