@@ -1700,6 +1700,26 @@ impl Listen {
         Ok(SourceHandle(source))
     }
 
+    /// Forgets a server entry: its config entry and per-server options, its secret, its connection, its
+    /// cached library and (local folders) its scan cache. The one teardown for removing a server and for
+    /// a sign-in that replaces an entry of the same account; offline copies, the queue and the active
+    /// server are the caller's business (removing deletes downloads, replacing keeps them).
+    fn forget_server(&mut self, id: &ServerId) {
+        if let Some(secrets) = self.secrets.as_ref().filter(|_| !self.ephemeral) {
+            secrets.delete(id);
+        }
+        if let Some(server) = self.config.servers.iter().find(|s| s.id == *id)
+            && server.kind == SourceKind::Local
+        {
+            listen_local::forget_cache(id, std::path::Path::new(&server.url));
+        }
+        self.config.servers.retain(|s| s.id != *id);
+        self.config.server_options.remove(&id.0);
+        self.config.music_dirs.remove(&id.0);
+        self.sources.remove(id);
+        self.library_cache.remove(id);
+    }
+
     /// Reconnects on start-up: the active server first, the others in the
     /// background (so switching is instant and queued songs can play). A config with servers but no
     /// active one (its active server was removed while the next one could not connect) starts with the
@@ -3716,15 +3736,9 @@ impl Listen {
                     .filter(|s| s.kind == server.kind && s.url == server.url && s.username == server.username)
                     .map(|s| (s.id.clone(), s.url.clone()))
                     .collect();
-                let replaced_ids: Vec<ServerId> = replaced.iter().map(|(id, _)| id.clone()).collect();
-                self.config.servers.retain(|s| !replaced_ids.contains(&s.id));
-                for (id, url) in &replaced {
-                    self.sources.remove(id);
-                    self.config.server_options.remove(&id.0);
-                    self.config.music_dirs.remove(&id.0);
-                    if server.kind == SourceKind::Local {
-                        listen_local::forget_cache(id, std::path::Path::new(url));
-                    }
+                // Its downloads stay (they are still the user's songs); everything else goes.
+                for (id, _) in replaced.into_iter().filter(|(id, _)| *id != server.id) {
+                    self.forget_server(&id);
                 }
                 let id = server.id.clone();
                 self.commit_pending_options(&id);
@@ -3842,17 +3856,7 @@ impl Listen {
                     store.remove_server(&id);
                     self.offline_refresh();
                 }
-                if let Some(secrets) = &self.secrets {
-                    secrets.delete(&id);
-                }
-                if let Some(server) = self.config.servers.iter().find(|s| s.id == id)
-                    && server.kind == SourceKind::Local
-                {
-                    listen_local::forget_cache(&id, std::path::Path::new(&server.url));
-                }
-                self.config.servers.retain(|s| s.id != id);
-                self.sources.remove(&id);
-                self.library_cache.remove(&id);
+                self.forget_server(&id);
                 // Songs from that server can't play any more.
                 let doomed: Vec<u64> =
                     self.queue.iter().filter(|i| i.song.server_id == id).map(|i| i.uid).collect();
@@ -4870,5 +4874,29 @@ mod autodj_generation_tests {
         let _ = s.update(Message::AutoDjFilled(stale, Ok(fill)));
         assert_eq!(s.queue.len(), before, "the stale fill queues nothing");
         assert!(s.autodj_busy, "and does not clear the running fetch's flag");
+    }
+}
+
+#[cfg(test)]
+mod forget_server_tests {
+    use super::*;
+
+    #[test]
+    fn forgetting_a_server_drops_every_per_server_entry() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        let id = ServerId("nd-old".into());
+        s.config.servers.push(listen_core::config::ServerConfig {
+            id: id.clone(),
+            name: "old".into(),
+            kind: SourceKind::Subsonic,
+            url: "https://music.example".into(),
+            username: "u".into(),
+        });
+        s.config.server_options.insert(id.0.clone(), Default::default());
+        s.library_cache.insert(id.clone(), (Library::default(), Route::Home, std::time::Instant::now()));
+        s.forget_server(&id);
+        assert!(!s.config.servers.iter().any(|x| x.id == id));
+        assert!(!s.config.server_options.contains_key(&id.0));
+        assert!(!s.library_cache.contains_key(&id));
     }
 }
