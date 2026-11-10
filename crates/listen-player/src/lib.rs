@@ -303,7 +303,8 @@ impl Player {
         self.mpv.set_property("speed", json!(speed)).await
     }
 
-    /// Replaces the whole `af` chain.
+    /// Replaces the whole `af` chain. mpv rebuilds the graph from it, so every value set live with
+    /// [`Self::af_command`] since is gone (the chain's own values apply again).
     pub async fn set_af(&self, chain: &str) -> Result<(), MpvError> {
         self.mpv.set_property("af", json!(chain)).await
     }
@@ -311,6 +312,12 @@ impl Player {
     /// mpv `af-command`: `command arg` to the filter labelled `label`; in a `lavfi` graph
     /// `target` is the inner name (`bass@lo`), or a class name for all such filters.
     /// ffmpeg's biquads take `f`, `g`, `w` and `mix` live.
+    ///
+    /// A live value only lasts as long as the graph: mpv builds the graph from the `af` string when
+    /// audio starts and rebuilds it after every seek, new file and [`Self::set_af`], which drops the
+    /// value; before the first build the command fails. A caller that keeps a value set must treat
+    /// it as sent only once this returns `Ok`, and send it again after each
+    /// [`PlayerEvent::Restarted`] (the app's `levelling.rs` and `mix.rs` do).
     pub async fn af_command(
         &self,
         label: &str,
