@@ -37,7 +37,7 @@ The status shows the song as the first line, the artists as the second, the albu
 Discord can only load images from public web addresses, so Listen picks a cover in this order:
 
 1. A YouTube Music song uses its public https thumbnail.
-2. With **Show server cover image** on, a song from a server that is reachable from the internet over https (a public host name, not a local name or private address) uses the server's cover. The link includes your server's access token, so Discord and the people who see your status can in principle read it. Only switch this on for a server you are comfortable exposing that way.
+2. With **Show server cover image** on, a song from a server that is reachable from the internet over https (a public host name, not a local name or private address) uses the server's cover. The link includes your user name and a login token that works for your whole server account, so Discord and the people who see your status can in principle read and reuse it. Only switch this on for a server you are comfortable exposing that way. A server that signs in the legacy way (the password itself in the link) never gets its cover sent.
 3. With a **Last.fm API key**, the album cover is looked up on Last.fm (a free key from Last.fm's API pages). Results are cached for the session.
 4. Otherwise Listen's logo is shown.
 

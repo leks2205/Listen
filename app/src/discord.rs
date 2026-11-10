@@ -176,6 +176,13 @@ pub fn build(opts: &DiscordSettings, input: &Input) -> Option<Presence> {
     Some(p)
 }
 
+/// Whether a cover link would hand out the server password itself: Subsonic's legacy sign-in puts it
+/// (hex-encoded) in `p=`. Such a link is never sent; a token link (`u`, `t`, `s`) still works for the
+/// whole account, which the setting's text warns about.
+pub fn carries_password(url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|u| u.query_pairs().any(|(k, _)| k == "p"))
+}
+
 /// Whether a server address is reachable from the internet, so Discord can
 /// fetch its cover: https, and not a LAN name or address.
 pub fn is_public_url(url: &str) -> bool {
@@ -315,6 +322,12 @@ mod tests {
         assert_eq!(p.large_image, "icon");
         assert_eq!(p.large_text, "Album");
         assert!(p.details_url.is_none() && p.state_url.is_none());
+    }
+
+    #[test]
+    fn a_cover_link_with_the_password_in_it_is_never_public() {
+        assert!(carries_password("https://music.example/rest/getCoverArt?u=a&p=enc:6162&id=1"));
+        assert!(!carries_password("https://music.example/rest/getCoverArt?u=a&t=ff&s=x&id=1"));
     }
 
     #[test]

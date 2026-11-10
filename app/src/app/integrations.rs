@@ -416,7 +416,7 @@ impl Listen {
                         .sources
                         .get(&song.server_id)
                         .and_then(|s| s.image_url(image, ART_SIZE))
-                        .filter(|u| u.starts_with("https://"))
+                        .filter(|u| u.starts_with("https://") && !discord::carries_password(u))
                 {
                     return (Some(url), Task::none());
                 }
