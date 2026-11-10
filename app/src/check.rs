@@ -1,10 +1,23 @@
-//! `listen --check-youtube-music`: signs in the way the app does (the
-//! browser's YouTube session) and prints what Listen sees of the library.
-//! Only counts and page titles are printed — never cookies.
+//! The `listen --check-*` and other diagnostic modes (dispatched from `main.rs`, run instead of the
+//! window). Each function's doc names its flags and exit code. What they touch beyond printing:
+//!
+//! | mode | reads | writes |
+//! |---|---|---|
+//! | `--check-youtube-music` | the YouTube Music account (read-only) | nothing |
+//! | `--check-ai-dj` | Gemini (costs requests) | WAVs in the temp dir |
+//! | `--check-cd` | drives, MusicBrainz, Navidrome | nothing |
+//! | `--check-analysis` | Navidrome / YouTube Music streams | the shared analysis store (own shard) |
+//! | `--analyze-library` | every Navidrome song | the shared analysis store (own shard) |
+//! | `--song-card` | Gemini, MusicBrainz | nothing |
+//! | `--weekly-stats`, `--memory`, `--flow-weights`, `--focus`, `--known-words` | history, store, vocab hub | nothing |
+//!
+//! Secrets come from the user's chosen store (`Secrets::for_user`) and are never printed.
 
 use listen_core::model::ServerId;
 use listen_source::{AlbumQuery, AlbumSort, ListQuery, MusicSource, SongQuery};
 
+/// `listen --check-youtube-music`: signs in the way the app does (the browser's YouTube session) and
+/// prints what Listen sees of the library: counts, page titles and ids, never cookies.
 pub fn youtube_music() -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
