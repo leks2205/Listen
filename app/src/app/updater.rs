@@ -117,7 +117,8 @@ impl PartialOrd for Version {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Asset {
     pub name: String,
-    /// API URL (`Accept: application/octet-stream` downloads it, also from a private repo).
+    /// API URL (`Accept: application/octet-stream` downloads it). No credentials are sent,
+    /// so only public repos work.
     pub url: String,
     pub size: u64,
 }
