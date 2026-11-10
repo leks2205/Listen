@@ -116,14 +116,17 @@ fn check(store_dir: &Path, emb_dir: &Path, history: &Path, at: &[String]) -> Res
             rediscover.into_iter().filter(|s| usable(s)).collect(),
             HISTORY_SLOTS,
         );
+        // Drawn from the usable songs only, without repeats, so a store with fewer than RANDOM of them
+        // ends the loop (rejection sampling over the whole store never did).
+        let mut pickable: Vec<&Song> = store_songs.iter().filter(|s| usable(s)).collect();
         let mut random: Vec<Song> = Vec::new();
         let mut x = now as u64 | 1;
-        while random.len() < RANDOM && !store_songs.is_empty() {
+        while random.len() < RANDOM && !pickable.is_empty() {
             x ^= x << 13;
             x ^= x >> 7;
             x ^= x << 17;
-            let s = &store_songs[(x % store_songs.len() as u64) as usize];
-            if usable(s) && !random.iter().any(|r| r.id == s.id) {
+            let s = pickable.swap_remove((x % pickable.len() as u64) as usize);
+            if !random.iter().any(|r| r.id == s.id) {
                 random.push(s.clone());
             }
         }
