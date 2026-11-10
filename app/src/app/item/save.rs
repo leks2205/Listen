@@ -75,17 +75,20 @@ pub fn file_name(song: &Song) -> String {
     sanitize(&format!("{} - {}.{ext}", song.artist_line(), song.title))
 }
 
-/// `dir/name`, or `dir/name (2)` and so on when that exists.
-pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
+/// `dir/name`, or `dir/name (2)` and so on when that exists on disk or is in `taken` (paths
+/// already promised to other files of the same batch). The finished download is renamed onto
+/// this path, which replaces a file there: every free-name choice must go through here.
+pub fn unique_path(dir: &Path, name: &str, taken: &[PathBuf]) -> PathBuf {
+    let free = |p: &PathBuf| !p.exists() && !taken.contains(p);
     let first = dir.join(name);
-    if !first.exists() {
+    if free(&first) {
         return first;
     }
     let (stem, ext) = match name.rsplit_once('.') {
         Some((s, e)) => (s.to_string(), format!(".{e}")),
         None => (name.to_string(), String::new()),
     };
-    (2..).map(|n| dir.join(format!("{stem} ({n}){ext}"))).find(|p| !p.exists()).expect("a free name")
+    (2..).map(|n| dir.join(format!("{stem} ({n}){ext}"))).find(free).expect("a free name")
 }
 
 /// The Downloads folder.
@@ -109,15 +112,7 @@ pub fn plan(songs: &[(Song, String)], base: &Path) -> Vec<Job> {
     songs
         .iter()
         .map(|(song, url)| {
-            let mut dest = unique_path(&dir, &file_name(song));
-            // Two songs of the batch with the same name.
-            let mut n = 2;
-            while taken.contains(&dest) {
-                let name = file_name(song);
-                let (stem, ext) = name.rsplit_once('.').map_or((name.as_str(), ""), |(s, e)| (s, e));
-                dest = dir.join(format!("{stem} ({n}).{ext}"));
-                n += 1;
-            }
+            let dest = unique_path(&dir, &file_name(song), &taken);
             taken.push(dest.clone());
             Job { url: url.clone(), dest }
         })
@@ -382,9 +377,25 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.flac"), b"x").unwrap();
         std::fs::write(dir.join("a (2).flac"), b"x").unwrap();
-        assert_eq!(unique_path(&dir, "a.flac"), dir.join("a (3).flac"));
-        assert_eq!(unique_path(&dir, "b.flac"), dir.join("b.flac"));
+        assert_eq!(unique_path(&dir, "a.flac", &[]), dir.join("a (3).flac"));
+        assert_eq!(unique_path(&dir, "b.flac", &[]), dir.join("b.flac"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_batch_never_picks_a_name_already_on_disk() {
+        let base = std::env::temp_dir().join(format!("listen-save-batch-test-{}", std::process::id()));
+        let dir = base.join("Alb_um");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&dir).unwrap();
+        // "Same (2).flac" is the user's own file: the second song of the batch must not take it.
+        std::fs::write(dir.join("Same (2).flac"), b"mine").unwrap();
+        let a = song("One", Some("x/Same.flac"));
+        let b = song("Two", Some("y/Same.flac"));
+        let jobs = plan(&[(a, "http://h/1".into()), (b, "http://h/2".into())], &base);
+        assert_eq!(jobs[0].dest, dir.join("Same.flac"));
+        assert_eq!(jobs[1].dest, dir.join("Same (3).flac"));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
