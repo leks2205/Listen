@@ -602,7 +602,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
             set_min: settings.set_min as usize,
             set_max: settings.set_max as usize,
             first: round == 1,
-            mode: listen_dj::BreakMode::ALL[round % 4],
+            mode: listen_dj::BreakMode::ALL[round % listen_dj::BreakMode::ALL.len()],
             // Two-host shows: the co-host joins every other round.
             duo: round % 2 == 0,
             show: listen_dj::Show { language, location: &settings.location, notes: &settings.notes },
