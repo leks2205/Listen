@@ -161,38 +161,12 @@ impl Entry {
     /// A playable song rebuilt from the stored fields.
     pub fn to_song(&self) -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: self.song_id.clone(),
-            server_id: self.server_id.clone(),
-            source: self.source,
-            title: self.title.clone(),
             artists: self.artists.clone(),
-            album_artists: Vec::new(),
             album: self.album.clone(),
             album_id: self.album_id.clone(),
             image: self.image.clone(),
             duration: Duration::from_secs(u64::from(self.duration_secs)),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: Vec::new(),
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: Default::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new(self.song_id.clone(), self.server_id.clone(), self.source, self.title.clone())
         }
     }
 }
@@ -611,40 +585,7 @@ mod tests {
     }
 
     fn dummy() -> Song {
-        Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: String::new(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            title: String::new(),
-            artists: vec![],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
-            duration: Duration::ZERO,
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: Default::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
-        }
+        Song::new(String::new(), ServerId("s".into()), SourceKind::Subsonic, String::new())
     }
 
     fn utc() -> FixedOffset {

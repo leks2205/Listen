@@ -300,38 +300,8 @@ mod tests {
 
     fn dummy() -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: "1".into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            title: "T".into(),
-            artists: vec![],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
             duration: std::time::Duration::from_secs(200),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: Default::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new("1", ServerId("s".into()), SourceKind::Subsonic, "T")
         }
     }
 

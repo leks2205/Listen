@@ -33,23 +33,12 @@ pub fn shelf(server: &ServerId, releases: Vec<Release>) -> Option<HomeShelf> {
     let albums = releases
         .into_iter()
         .map(|r| Album {
-            id: r.id,
-            server_id: server.clone(),
-            source: SourceKind::YouTubeMusic,
-            name: r.title,
             album_artists: vec![ArtistRef { id: Some(r.artist_id), name: r.artist }],
             image: r.image.map(ImageRef::Url),
             year: r.year,
             release_type: Some(r.kind.clone()),
             release_types: vec![r.kind],
-            genres: vec![],
-            song_count: None,
-            duration: Duration::ZERO,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            songs: vec![],
-            info: Default::default(),
+            ..Album::new(r.id, server.clone(), SourceKind::YouTubeMusic, r.title)
         })
         .collect();
     Some(HomeShelf { title: SHELF_TITLE.into(), albums, playlists: vec![], songs: vec![] })

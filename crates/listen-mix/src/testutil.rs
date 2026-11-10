@@ -3,43 +3,17 @@
 use listen_core::analysis::{
     BarCurves, BeatGrid, Camelot, Features, FlowFeatures, Mood, Section, SectionKind,
 };
-use listen_core::model::{ArtistRef, GainInfo, ServerId, Song, SourceKind};
+use listen_core::model::{ArtistRef, ServerId, Song, SourceKind};
 use std::time::Duration;
 
 pub fn song(title: &str, artist: &str, album: Option<&str>, track: Option<u32>) -> Song {
     Song {
-        mbz: Default::default(),
-        extra: Default::default(),
-        id: title.into(),
-        server_id: ServerId("s".into()),
-        source: SourceKind::Subsonic,
-        title: title.into(),
         artists: vec![ArtistRef { id: None, name: artist.into() }],
-        album_artists: vec![],
         album: album.map(Into::into),
         album_id: album.map(Into::into),
-        image: None,
         duration: Duration::from_secs(200),
         track_number: track,
-        disc_number: None,
-        year: None,
-        genres: vec![],
-        codec: None,
-        bit_rate: None,
-        sample_rate: None,
-        bit_depth: None,
-        bpm: None,
-        favorite: false,
-        rating: None,
-        play_count: None,
-        gain: GainInfo::default(),
-        explicit: false,
-        path: None,
-        size: None,
-        suffix: None,
-        channels: None,
-        created: None,
-        comment: None,
+        ..Song::new(title, ServerId("s".into()), SourceKind::Subsonic, title)
     }
 }
 

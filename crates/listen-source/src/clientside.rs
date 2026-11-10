@@ -232,28 +232,18 @@ pub fn page<T: Clone>(items: &[T], start: usize, limit: usize) -> Page<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use listen_core::model::{GainInfo, ServerId, SourceKind};
+    use listen_core::model::{ServerId, SourceKind};
     use std::time::Duration;
 
     fn album(id: &str, name: &str, artist: &str, year: i32, fav: bool) -> Album {
         Album {
-            release_types: Vec::new(),
-            info: Default::default(),
-            id: id.into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Local,
-            name: name.into(),
             album_artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
-            image: None,
             year: Some(year),
-            release_type: None,
             genres: vec!["Rock".into()],
             song_count: Some(10),
             duration: Duration::from_secs(60),
             favorite: fav,
-            rating: None,
-            play_count: None,
-            songs: vec![],
+            ..Album::new(id, ServerId("s".into()), SourceKind::Local, name)
         }
     }
 
@@ -305,38 +295,16 @@ mod tests {
 
     fn song(id: &str, title: &str, artist: &str, album: &str) -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: id.into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Local,
-            title: title.into(),
             artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
             album_artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
             album: Some(album.into()),
             album_id: Some(album.into()),
-            image: None,
             duration: Duration::from_secs(100),
             track_number: Some(1),
             disc_number: Some(1),
             year: Some(2000),
             genres: vec!["Rock".into()],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new(id, ServerId("s".into()), SourceKind::Local, title)
         }
     }
 

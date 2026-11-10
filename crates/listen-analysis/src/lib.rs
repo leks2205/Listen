@@ -596,40 +596,7 @@ mod tests {
     #[test]
     fn records_of_youtube_music_are_namespaced() {
         use listen_core::model::ServerId;
-        let mut song = Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: "lYBUbBu4W08".into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            title: "t".into(),
-            artists: vec![],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
-            duration: Duration::ZERO,
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: Default::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
-        };
+        let mut song = Song::new("lYBUbBu4W08", ServerId("s".into()), SourceKind::Subsonic, "t");
         assert_eq!(record_key(&song), "lYBUbBu4W08");
         song.source = SourceKind::YouTubeMusic;
         assert_eq!(record_key(&song), "ytm:lYBUbBu4W08");

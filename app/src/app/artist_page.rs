@@ -1110,23 +1110,12 @@ mod tests {
 
     fn album(name: &str, year: i32, kind: Option<&str>, artist: &str) -> Album {
         Album {
-            release_types: Vec::new(),
-            info: Default::default(),
-            id: name.into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            name: name.into(),
             album_artists: vec![ArtistRef { id: Some(artist.into()), name: artist.into() }],
-            image: None,
             year: Some(year),
             release_type: kind.map(str::to_string),
-            genres: vec![],
             song_count: Some(10),
             duration: Duration::from_secs(600),
-            favorite: false,
-            rating: None,
-            play_count: None,
-            songs: vec![],
+            ..Album::new(name, ServerId("s".into()), SourceKind::Subsonic, name)
         }
     }
 

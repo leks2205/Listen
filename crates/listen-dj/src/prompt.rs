@@ -629,43 +629,16 @@ fn clean_line(line: &str) -> String {
 mod tests {
     use super::*;
     use crate::persona::PERSONAS;
-    use listen_core::model::{ArtistRef, GainInfo, ServerId, SourceKind};
+    use listen_core::model::{ArtistRef, ServerId, SourceKind};
     use std::time::Duration;
 
     fn song(title: &str, artist: &str, year: i32, genre: &str) -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: title.to_lowercase(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            title: title.into(),
             artists: vec![ArtistRef { id: None, name: artist.into() }],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
             duration: Duration::from_secs(200),
-            track_number: None,
-            disc_number: None,
             year: Some(year),
             genres: vec![genre.into()],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new(title.to_lowercase(), ServerId("s".into()), SourceKind::Subsonic, title)
         }
     }
 

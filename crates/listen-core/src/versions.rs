@@ -171,43 +171,14 @@ fn strip_extras(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ArtistRef, GainInfo, ServerId, SourceKind};
+    use crate::model::{ArtistRef, ServerId, SourceKind};
     use std::time::Duration;
 
     fn song(title: &str, artist: &str) -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: format!("{title}/{artist}"),
-            server_id: ServerId("s".into()),
-            source: SourceKind::YouTubeMusic,
-            title: title.into(),
             artists: vec![ArtistRef { id: None, name: artist.into() }],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
             duration: Duration::from_secs(200),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new(format!("{title}/{artist}"), ServerId("s".into()), SourceKind::YouTubeMusic, title)
         }
     }
 

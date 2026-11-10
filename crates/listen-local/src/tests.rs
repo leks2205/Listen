@@ -96,23 +96,13 @@ mod reference {
             }
             album_cover.insert(id.clone(), cover.clone());
             let album = Album {
-                release_types: Vec::new(),
-                id,
-                server_id: server.clone(),
-                source: SourceKind::Local,
-                name: album_name,
                 album_artists: refs(&[album_artist]),
                 image: cover.map(ImageRef::Url),
                 year: idx.iter().find_map(|&i| files[i].year),
-                release_type: None,
                 genres,
                 song_count: Some(idx.len() as u32),
                 duration: idx.iter().map(|&i| files[i].duration).sum(),
-                favorite: false,
-                rating: None,
-                play_count: None,
-                songs: Vec::new(),
-                info: Default::default(),
+                ..Album::new(id, server.clone(), SourceKind::Local, album_name)
             };
             entries.push((album, idx));
         }
@@ -136,12 +126,6 @@ mod reference {
                 })
                 .map(ImageRef::Url);
             let song = Song {
-                mbz: Default::default(),
-                extra: Default::default(),
-                id: format!("{:016x}", fnv1a(&f.rel)),
-                server_id: server.clone(),
-                source: SourceKind::Local,
-                title: f.title.clone(),
                 artists: refs(&artist_names),
                 album_artists,
                 album: f.album.clone(),
@@ -157,17 +141,13 @@ mod reference {
                 sample_rate: f.sample_rate,
                 bit_depth: f.bit_depth,
                 bpm: f.bpm,
-                favorite: false,
-                rating: None,
-                play_count: None,
                 gain: f.gain.clone(),
-                explicit: false,
-                path: None,
-                size: None,
-                suffix: None,
-                channels: None,
-                created: None,
-                comment: None,
+                ..Song::new(
+                    format!("{:016x}", fnv1a(&f.rel)),
+                    server.clone(),
+                    SourceKind::Local,
+                    f.title.clone(),
+                )
             };
             let haystack =
                 format!("{} {} {}", song.title, artist_names.join(" "), f.album.clone().unwrap_or_default())

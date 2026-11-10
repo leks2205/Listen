@@ -134,11 +134,6 @@ pub fn albums_of(songs: &[Song]) -> Vec<Album> {
             continue;
         }
         out.push(Album {
-            release_types: Vec::new(),
-            id,
-            server_id: s.server_id.clone(),
-            source: s.source,
-            name: s.album.clone().unwrap_or_default(),
             album_artists: if s.album_artists.is_empty() {
                 s.artists.clone()
             } else {
@@ -146,15 +141,10 @@ pub fn albums_of(songs: &[Song]) -> Vec<Album> {
             },
             image: s.image.clone(),
             year: s.year,
-            release_type: None,
             genres: s.genres.clone(),
             song_count: Some(1),
             duration: s.duration,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            songs: Vec::new(),
-            info: Default::default(),
+            ..Album::new(id, s.server_id.clone(), s.source, s.album.clone().unwrap_or_default())
         });
     }
     out

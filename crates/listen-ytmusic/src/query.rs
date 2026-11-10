@@ -67,60 +67,18 @@ mod tests {
 
     fn album(id: &str, name: &str, artist: &str, year: i32) -> Album {
         Album {
-            release_types: Vec::new(),
-            info: Default::default(),
-            id: id.into(),
-            server_id: ServerId("yt".into()),
-            source: SourceKind::YouTubeMusic,
-            name: name.into(),
             album_artists: vec![ArtistRef { id: None, name: artist.into() }],
-            image: None,
             year: Some(year),
-            release_type: None,
-            genres: vec![],
-            song_count: None,
-            duration: Duration::ZERO,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            songs: vec![],
+            ..Album::new(id, ServerId("yt".into()), SourceKind::YouTubeMusic, name)
         }
     }
 
     fn song(id: &str, title: &str, album: &str, secs: u64) -> Song {
         Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: id.into(),
-            server_id: ServerId("yt".into()),
-            source: SourceKind::YouTubeMusic,
-            title: title.into(),
             artists: vec![ArtistRef { id: None, name: "Artist".into() }],
-            album_artists: vec![],
             album: Some(album.into()),
-            album_id: None,
-            image: None,
             duration: Duration::from_secs(secs),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: Default::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            ..Song::new(id, ServerId("yt".into()), SourceKind::YouTubeMusic, title)
         }
     }
 

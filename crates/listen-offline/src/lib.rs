@@ -250,43 +250,9 @@ pub fn global() -> Option<&'static Store> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use listen_core::model::GainInfo;
 
     fn song(server: &str, id: &str, kind: SourceKind) -> Song {
-        Song {
-            mbz: Default::default(),
-            extra: Default::default(),
-            id: id.into(),
-            server_id: ServerId(server.into()),
-            source: kind,
-            title: "T".into(),
-            artists: vec![],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
-            duration: Duration::from_secs(10),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
-        }
+        Song { duration: Duration::from_secs(10), ..Song::new(id, ServerId(server.into()), kind, "T") }
     }
 
     fn tmp(name: &str) -> PathBuf {

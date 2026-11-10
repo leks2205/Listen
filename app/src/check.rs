@@ -402,40 +402,13 @@ pub fn ai_dj(check: AiDjCheck) -> i32 {
 }
 
 fn check_song(n: usize, title: &str, artist: &str, year: i32, genre: &str) -> listen_core::model::Song {
-    use listen_core::model::{ArtistRef, GainInfo, Song, SourceKind};
+    use listen_core::model::{ArtistRef, Song, SourceKind};
     Song {
-        mbz: Default::default(),
-        extra: Default::default(),
-        id: format!("check-{n}"),
-        server_id: ServerId("check".into()),
-        source: SourceKind::Subsonic,
-        title: title.into(),
         artists: vec![ArtistRef { id: None, name: artist.into() }],
-        album_artists: vec![],
-        album: None,
-        album_id: None,
-        image: None,
         duration: std::time::Duration::from_secs(240),
-        track_number: None,
-        disc_number: None,
         year: Some(year),
         genres: vec![genre.into()],
-        codec: None,
-        bit_rate: None,
-        sample_rate: None,
-        bit_depth: None,
-        bpm: None,
-        favorite: false,
-        rating: None,
-        play_count: None,
-        gain: GainInfo::default(),
-        explicit: false,
-        path: None,
-        size: None,
-        suffix: None,
-        channels: None,
-        created: None,
-        comment: None,
+        ..Song::new(format!("check-{n}"), ServerId("check".into()), SourceKind::Subsonic, title)
     }
 }
 

@@ -1,42 +1,13 @@
 use super::*;
 use crate::analysis::{BarCurves, BeatGrid, Mood};
-use crate::model::{ArtistRef, GainInfo, ServerId};
+use crate::model::{ArtistRef, ServerId};
 use std::time::Duration;
 
 fn make(source: SourceKind, title: &str, artist: &str, secs: u64) -> Song {
     Song {
-        mbz: Default::default(),
-        extra: Default::default(),
-        id: format!("{title}/{artist}/{secs}"),
-        server_id: ServerId("s".into()),
-        source,
-        title: title.into(),
         artists: vec![ArtistRef { id: None, name: artist.into() }],
-        album_artists: vec![],
-        album: None,
-        album_id: None,
-        image: None,
         duration: Duration::from_secs(secs),
-        track_number: None,
-        disc_number: None,
-        year: None,
-        genres: vec![],
-        codec: None,
-        bit_rate: None,
-        sample_rate: None,
-        bit_depth: None,
-        bpm: None,
-        favorite: false,
-        rating: None,
-        play_count: None,
-        gain: GainInfo::default(),
-        explicit: false,
-        path: None,
-        size: None,
-        suffix: None,
-        channels: None,
-        created: None,
-        comment: None,
+        ..Song::new(format!("{title}/{artist}/{secs}"), ServerId("s".into()), source, title)
     }
 }
 

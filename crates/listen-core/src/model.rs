@@ -130,6 +130,54 @@ pub struct MbzIds {
 }
 
 impl Song {
+    /// A song with only its identity and title set; everything else empty, zero or `false`.
+    ///
+    /// Use it with struct update syntax for test songs and songs synthesised from a partial record
+    /// (history entries, analysis records, demo data): `Song { artists, ..Song::new(id, server, kind, title) }`.
+    /// Source mappers (Subsonic, Jellyfin, local files, YouTube Music) spell out every field instead,
+    /// so a new field is a compile error there and each source decides what it fills.
+    pub fn new(
+        id: impl Into<String>,
+        server_id: ServerId,
+        source: SourceKind,
+        title: impl Into<String>,
+    ) -> Self {
+        Song {
+            id: id.into(),
+            server_id,
+            source,
+            title: title.into(),
+            artists: Vec::new(),
+            album_artists: Vec::new(),
+            album: None,
+            album_id: None,
+            image: None,
+            duration: Duration::ZERO,
+            track_number: None,
+            disc_number: None,
+            year: None,
+            genres: Vec::new(),
+            codec: None,
+            bit_rate: None,
+            sample_rate: None,
+            bit_depth: None,
+            bpm: None,
+            favorite: false,
+            rating: None,
+            play_count: None,
+            gain: GainInfo::default(),
+            explicit: false,
+            path: None,
+            size: None,
+            suffix: None,
+            channels: None,
+            created: None,
+            comment: None,
+            mbz: MbzIds::default(),
+            extra: SongExtra::default(),
+        }
+    }
+
     /// "Artist A, Artist B" as shown in lists and the player bar.
     pub fn artist_line(&self) -> String {
         join_names(&self.artists)
@@ -191,6 +239,35 @@ pub struct AlbumInfo {
 }
 
 impl Album {
+    /// An album with only its identity and name set; everything else empty, zero or `false`.
+    /// Same rule as [`Song::new`]: for tests and synthesised albums, not for source mappers.
+    pub fn new(
+        id: impl Into<String>,
+        server_id: ServerId,
+        source: SourceKind,
+        name: impl Into<String>,
+    ) -> Self {
+        Album {
+            id: id.into(),
+            server_id,
+            source,
+            name: name.into(),
+            album_artists: Vec::new(),
+            image: None,
+            year: None,
+            release_type: None,
+            release_types: Vec::new(),
+            genres: Vec::new(),
+            song_count: None,
+            duration: Duration::ZERO,
+            favorite: false,
+            rating: None,
+            play_count: None,
+            songs: Vec::new(),
+            info: AlbumInfo::default(),
+        }
+    }
+
     pub fn artist_line(&self) -> String {
         join_names(&self.album_artists)
     }
@@ -365,38 +442,9 @@ mod tests {
         // A queue or history entry written by an older version has no `extra`, no
         // `release_types` and no `last_played`.
         let song = Song {
-            mbz: Default::default(),
-            id: "1".into(),
-            server_id: ServerId("s".into()),
-            source: SourceKind::Subsonic,
-            title: "T".into(),
-            artists: vec![],
-            album_artists: vec![],
-            album: None,
-            album_id: None,
-            image: None,
             duration: Duration::from_secs(1),
-            track_number: None,
-            disc_number: None,
-            year: None,
-            genres: vec![],
-            codec: None,
-            bit_rate: None,
-            sample_rate: None,
-            bit_depth: None,
-            bpm: None,
-            favorite: false,
-            rating: None,
-            play_count: None,
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
             extra: SongExtra { composers: vec!["C".into()], ..Default::default() },
+            ..Song::new("1", ServerId("s".into()), SourceKind::Subsonic, "T")
         };
         let mut json: serde_json::Value = serde_json::to_value(&song).unwrap();
         json.as_object_mut().unwrap().remove("extra");

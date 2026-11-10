@@ -1,6 +1,6 @@
 //! Built-in demo library for `--demo`: UI work and headless screenshots without a server.
 
-use listen_core::model::{ArtistRef, GainInfo, ServerId, Song, SourceKind};
+use listen_core::model::{ArtistRef, ServerId, Song, SourceKind};
 use std::time::Duration;
 
 pub struct DemoAlbum {
@@ -85,22 +85,10 @@ pub fn album_songs(index: usize) -> Vec<Song> {
         .iter()
         .enumerate()
         .map(|(i, (title, _))| Song {
-            mbz: Default::default(),
-            extra: listen_core::model::SongExtra {
-                composers: vec![["Lena Voss", "Marc Ostrow"][(i + index) % 2].into()],
-                date: Some(format!("{}-0{}-1{}", 2015 + index % 9, 1 + i % 9, i % 9)),
-                release_date: Some(format!("{}-0{}-0{}", 2015 + index % 9, 1 + i % 9, 1 + i % 9)),
-                last_played: (i % 2 == 0).then(|| format!("2026-10-{:02}T20:00:00Z", 1 + (i + index) % 14)),
-            },
-            id: format!("demo-{index}-{i}"),
-            server_id: ServerId("demo".into()),
-            source: SourceKind::Subsonic,
-            title: (*title).into(),
             artists: vec![ArtistRef { id: None, name: album.artist.into() }],
             album_artists: vec![ArtistRef { id: None, name: album.artist.into() }],
             album: Some(album.name.into()),
             album_id: Some(format!("demo-{index}")),
-            image: None,
             duration: Duration::from_secs(TRACK_SECS as u64),
             track_number: Some(i as u32 + 1),
             disc_number: Some(1),
@@ -112,16 +100,14 @@ pub fn album_songs(index: usize) -> Vec<Song> {
             bit_depth: Some(16),
             bpm: Some(bpm_for(&format!("demo-{index}-{i}")) as u32),
             favorite: i == 0,
-            rating: None,
             play_count: Some(3),
-            gain: GainInfo::default(),
-            explicit: false,
-            path: None,
-            size: None,
-            suffix: None,
-            channels: None,
-            created: None,
-            comment: None,
+            extra: listen_core::model::SongExtra {
+                composers: vec![["Lena Voss", "Marc Ostrow"][(i + index) % 2].into()],
+                date: Some(format!("{}-0{}-1{}", 2015 + index % 9, 1 + i % 9, i % 9)),
+                release_date: Some(format!("{}-0{}-0{}", 2015 + index % 9, 1 + i % 9, 1 + i % 9)),
+                last_played: (i % 2 == 0).then(|| format!("2026-10-{:02}T20:00:00Z", 1 + (i + index) % 14)),
+            },
+            ..Song::new(format!("demo-{index}-{i}"), ServerId("demo".into()), SourceKind::Subsonic, *title)
         })
         .collect()
 }
@@ -196,25 +182,18 @@ fn fixture_song(
 pub fn navidrome_album() -> listen_core::model::Album {
     use listen_core::model::{Album, AlbumInfo};
     let mut album = Album {
-        release_types: vec!["album".into(), "live".into()],
-        id: "nd-album-neon".into(),
-        server_id: ServerId("nd".into()),
-        source: SourceKind::Subsonic,
-        name: "Neon Horizons".into(),
         album_artists: vec![
             ArtistRef { id: Some("nd-artist-1".into()), name: "Night Drive".into() },
             ArtistRef { id: Some("nd-artist-2".into()), name: "Violet Skies".into() },
         ],
-        image: None,
         year: Some(2021),
         release_type: Some("Album".into()),
+        release_types: vec!["album".into(), "live".into()],
         genres: vec!["Synthwave".into(), "Electronic".into()],
         song_count: Some(8),
-        duration: Duration::ZERO,
         favorite: true,
         rating: Some(4),
         play_count: Some(37),
-        songs: vec![],
         info: AlbumInfo {
             version: Some("Deluxe Edition".into()),
             original_date: Some("2019-11-08".into()),
@@ -234,6 +213,7 @@ pub fn navidrome_album() -> listen_core::model::Album {
             musicbrainz_id: Some("9f3d5b2a-1c4e-4b7a-8d21-0a5e6c7f8b90".into()),
             disc_titles: vec![(1, "Originals".into()), (2, "Reworks".into())],
         },
+        ..Album::new("nd-album-neon", ServerId("nd".into()), SourceKind::Subsonic, "Neon Horizons")
     };
     let titles = [
         ["Coastal Lights", "Afterglow Drive", "Static Hearts", "Midnight Mile"],
@@ -260,23 +240,12 @@ pub fn navidrome_album() -> listen_core::model::Album {
 pub fn ytm_album() -> listen_core::model::Album {
     use listen_core::model::{Album, AlbumInfo};
     let mut album = Album {
-        release_types: Vec::new(),
-        id: "MPREb_demoAlbum01".into(),
-        server_id: ServerId("yt".into()),
-        source: SourceKind::YouTubeMusic,
-        name: "Glass Cities".into(),
         album_artists: vec![ArtistRef { id: Some("UCdemoArtist01".into()), name: "Paper Satellites".into() }],
-        image: None,
         year: Some(2023),
         release_type: Some("Single".into()),
-        genres: vec![],
         song_count: Some(5),
-        duration: Duration::ZERO,
-        favorite: false,
-        rating: None,
-        play_count: None,
-        songs: vec![],
         info: AlbumInfo { release_date: Some("2023".into()), ..AlbumInfo::default() },
+        ..Album::new("MPREb_demoAlbum01", ServerId("yt".into()), SourceKind::YouTubeMusic, "Glass Cities")
     };
     for (t, title) in
         ["Glass Cities", "Low Orbit", "Signal Fires", "Harbour Lights", "Glass Cities (Instrumental)"]
