@@ -1557,13 +1557,9 @@ pub fn memory(args: &[String]) -> i32 {
     0
 }
 
-/// `listen --focus [--history PATH] [--store DIR] [--fills N] [--per-fill N] [--pool N] [--seed N]`: focus mode
-/// on the user's own data. The history's analysed songs are shuffled (fixed seed) into Auto-DJ-sized
-/// candidate pools; each fill takes `per-fill` songs as an ordinary fill would (in pool order) and as
-/// focus mode does ([`listen_mix::pick::focus_pool`]). Prints the mean sung-bar share of both and the
-/// ratio as JSON (the acceptance: focus ≤ 50 % of normal).
-/// `listen --flow-weights [--history FILE] [--store DIR] [--simulate N [--seed S]]`: the flow weights item 16 learns from this
-/// history (labelled handovers, skips, cross-validated AUC against the default weights' AUC, the weights).
+/// `listen --flow-weights [--history FILE] [--store DIR] [--simulate N [--seed S]]`: the flow weights the
+/// app learns from this history (`listen_mix::learn`: labelled handovers, skips, cross-validated AUC
+/// against the default weights' AUC, the weights).
 pub fn flow_weights(args: &[String]) -> i32 {
     use listen_core::analysis::FlowFeatures;
     use listen_core::history;
@@ -1688,6 +1684,11 @@ fn simulated_handovers(
     out
 }
 
+/// `listen --focus [--history PATH] [--store DIR] [--fills N] [--per-fill N] [--pool N] [--seed N]`: focus mode
+/// on the user's own data. The history's analysed songs are shuffled (fixed seed) into Auto-DJ-sized
+/// candidate pools; each fill takes `per-fill` songs as an ordinary fill would (in pool order) and as
+/// focus mode does ([`listen_mix::pick::focus_pool`]). Prints the mean sung-bar share of both and the
+/// ratio as JSON for a person to judge (focus should be at most 50 % of normal); always exits 0.
 pub fn focus(args: &[String]) -> i32 {
     use listen_core::analysis::FlowFeatures;
     use listen_core::history;
