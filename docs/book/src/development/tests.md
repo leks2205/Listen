@@ -23,7 +23,7 @@ CI (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`, `cargo clippy --
 cargo test -p listen --test snapshots -- --nocapture
 ```
 
-Open the PNG files after a UI change to see what the pages look like. `app/tests/live_pages.rs` does the same with data from a real server (see below).
+Open the PNG files after a UI change to see what the pages look like. Only snapshot content that is the same on every run: a page that shows songs picked at random (the Recommended strip) differs each time and fails the comparison, so look at such a render once by hand and test its behaviour instead. `app/tests/live_pages.rs` does the same with data from a real server (see below).
 
 ## Tests that need mpv
 
