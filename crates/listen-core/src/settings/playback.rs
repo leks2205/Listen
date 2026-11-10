@@ -165,6 +165,8 @@ pub struct Playback {
     pub track_fade_secs: f32,
     pub replay_gain: ReplayGain,
     pub replay_gain_preamp_db: f32,
+    /// `true` = PREVENT clipping (Feishin's meaning). mpv's own `replaygain-clip=yes` means the
+    /// opposite (allow clipping), so `listen_player::AudioSettings` sends it inverted.
     pub replay_gain_clip: bool,
     pub audio_device: String,
     pub mpv_extra_args: Vec<String>,

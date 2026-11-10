@@ -88,6 +88,7 @@ pub struct AudioSettings {
     /// `no`, `track` or `album`.
     pub replay_gain: String,
     pub replay_gain_preamp_db: f32,
+    /// `true` = prevent clipping (the setting's meaning); sent to mpv inverted as `replaygain-clip`.
     pub replay_gain_clip: bool,
     /// mpv `audio-device` (`auto` for the default).
     pub audio_device: String,
