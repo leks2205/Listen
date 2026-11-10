@@ -264,15 +264,32 @@ pub fn session(write: bool) -> i32 {
     })
 }
 
+/// The YouTube Music account the check runs against: the active server when it is one, else the first.
+/// `examples/ytm_state.rs` inspects the same account.
+pub fn ytm_server(config: &listen_core::config::Config) -> Option<&listen_core::config::ServerConfig> {
+    let is_ytm = |s: &&listen_core::config::ServerConfig| s.kind == SourceKind::YouTubeMusic;
+    config.active().filter(is_ytm).or_else(|| config.servers.iter().find(is_ytm))
+}
+
+const PLAYLIST_PREFIX: &str = "Listen check ";
+const PLAYLIST_STAMP: &str = "%Y-%m-%d %H:%M:%S";
+
+/// The name of the playlist a check run creates (and deletes again).
+pub fn playlist_name(now: chrono::DateTime<chrono::Local>) -> String {
+    format!("{PLAYLIST_PREFIX}{}", now.format(PLAYLIST_STAMP))
+}
+
+/// Whether a playlist is one a check run left behind: exactly [`playlist_name`]'s shape, so a user's own
+/// "Listen checklist" is never matched.
+pub fn is_check_playlist(name: &str) -> bool {
+    name.strip_prefix(PLAYLIST_PREFIX)
+        .is_some_and(|stamp| chrono::NaiveDateTime::parse_from_str(stamp, PLAYLIST_STAMP).is_ok())
+}
+
 async fn session_async(write: bool) -> Result<i32, String> {
     let paths = listen_core::config::Paths::discover().map_err(|e| e.to_string())?;
     let config = listen_core::config::Config::load(&paths.config_file()).map_err(|e| e.to_string())?;
-    let is_ytm = |s: &&listen_core::config::ServerConfig| s.kind == SourceKind::YouTubeMusic;
-    let server = config
-        .active()
-        .filter(is_ytm)
-        .or_else(|| config.servers.iter().find(is_ytm))
-        .ok_or("no YouTube Music account configured (sign in once in Listen)")?;
+    let server = ytm_server(&config).ok_or("no YouTube Music account configured (sign in once in Listen)")?;
     println!("account: {}", server.name);
     if !write {
         println!("dry run (add --write to run it against this account):");
@@ -296,8 +313,7 @@ async fn session_async(write: bool) -> Result<i32, String> {
     }
     yt.ping().await.map_err(|e| format!("signed-in request: {e}"))?;
     println!("✓ signed in");
-    let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-    let name = format!("Listen check {stamp}");
+    let name = playlist_name(chrono::Local::now());
     let steps = run(&yt, &name, Settle::LIVE, |s| println!("{}", s.line())).await;
     let failed = steps.iter().filter(|s| matches!(s.outcome, Outcome::Fail(_))).count();
     if failed == 0 {
@@ -306,6 +322,17 @@ async fn session_async(write: bool) -> Result<i32, String> {
     } else {
         println!("{failed} step(s) failed");
         Ok(1)
+    }
+}
+
+#[cfg(test)]
+mod playlist_name_tests {
+    #[test]
+    fn check_playlists_are_recognised_by_their_full_name() {
+        let name = super::playlist_name(chrono::Local::now());
+        assert!(super::is_check_playlist(&name), "{name}");
+        assert!(!super::is_check_playlist("Listen checklist"));
+        assert!(!super::is_check_playlist("Listen check favourites"));
     }
 }
 
