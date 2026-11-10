@@ -389,7 +389,19 @@ impl Head {
     }
 }
 
+/// Reads the request head; a client that sends none within [`HEAD_TIMEOUT`] is dropped, so idle
+/// connections can't hold the server's client slots. Shared by the remote and the MCP server.
 pub(crate) async fn read_head(stream: &mut TcpStream) -> Result<(Head, Vec<u8>), String> {
+    read_head_within(stream, HEAD_TIMEOUT).await
+}
+
+async fn read_head_within(stream: &mut TcpStream, limit: Duration) -> Result<(Head, Vec<u8>), String> {
+    tokio::time::timeout(limit, read_head_untimed(stream))
+        .await
+        .map_err(|_| "request timed out".to_string())?
+}
+
+async fn read_head_untimed(stream: &mut TcpStream) -> Result<(Head, Vec<u8>), String> {
     let mut buf = Vec::new();
     loop {
         if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
@@ -451,9 +463,7 @@ fn image_type(bytes: &[u8]) -> &'static str {
 }
 
 async fn connection(mut stream: TcpStream, ctx: Arc<Ctx>) -> Result<(), String> {
-    let (head, rest) = tokio::time::timeout(HEAD_TIMEOUT, read_head(&mut stream))
-        .await
-        .map_err(|_| "request timed out".to_string())??;
+    let (head, rest) = read_head(&mut stream).await?;
     let authorization = head.header("authorization").map(str::to_string);
     let authed = ctx.cfg.authorized(authorization.as_deref());
     let is_ws = head.header("upgrade").is_some_and(|v| v.eq_ignore_ascii_case("websocket"));
@@ -744,5 +754,20 @@ async fn socket(
                 buf.extend_from_slice(&chunk[..n]);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod head_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_client_that_sends_no_head_is_dropped() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let _silent = TcpStream::connect(addr).await.unwrap();
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let r = read_head_within(&mut stream, Duration::from_millis(50)).await;
+        assert_eq!(r.err().as_deref(), Some("request timed out"));
     }
 }
