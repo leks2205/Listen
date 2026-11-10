@@ -61,7 +61,9 @@ pub fn english_name(code: &str) -> &'static str {
 struct Table {
     code: &'static str,
     map: HashMap<&'static str, &'static str>,
-    /// Entries with `{}` holes ("Added {} songs"), matched against built texts.
+    /// Entries with `{}` holes ("Added {} songs"), matched against built texts in this order: the most
+    /// fixed text first, so "Could not delete the playlist: {}" wins over "Could not {} the playlist: {}"
+    /// for the same text (the catalog's own order is a HashMap's, different on every start).
     templates: Vec<Template>,
 }
 
@@ -211,6 +213,9 @@ fn build_table(code: &'static str, json: Option<&str>) -> Table {
             map.insert(k, v);
         }
     }
+    templates.sort_by_cached_key(|t: &Template| {
+        (std::cmp::Reverse(t.english.iter().map(|s| s.len()).sum::<usize>()), t.english.concat())
+    });
     Table { code, map, templates }
 }
 
@@ -301,6 +306,15 @@ pub(crate) fn translate_in(code: &str, s: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_most_specific_template_wins() {
+        let json =
+            r#"{"Could not {} the playlist: {}": "A {} B {}", "Could not delete the playlist: {}": "C {}"}"#;
+        let table = build_table("xx", Some(json));
+        let hit = table.templates.iter().find_map(|t| t.apply("Could not delete the playlist: gone"));
+        assert_eq!(hit.as_deref(), Some("C gone"));
+    }
 
     #[test]
     fn locale_names_map_to_codes() {
