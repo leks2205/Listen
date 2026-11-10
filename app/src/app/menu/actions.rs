@@ -7,7 +7,8 @@ use iced::Task;
 use listen_core::model::SourceKind;
 use listen_source::ItemKind;
 
-/// Songs fetched for an album radio or an artist radio (Feishin: the artist radio count).
+/// Songs fetched for an album radio (and for both radios in demo mode). The artist radio's
+/// length is the setting `artist.radio_count`.
 const ALBUM_RADIO_COUNT: usize = 20;
 
 impl PlayHow {
