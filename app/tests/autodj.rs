@@ -138,7 +138,7 @@ fn autodj_picks_carry_a_reason() {
     let songs = demo::album_songs(2);
     let similar = songs.iter().take(2).map(|s| s.id.clone()).collect();
     let fill = AutoDjFill { songs: songs.clone(), similar, seed: "Seed Song".into() };
-    let _ = state.update(Message::AutoDjFilled(Ok(fill)));
+    let _ = state.update(Message::AutoDjFilled(state.autodj_generation(), Ok(fill)));
     assert!(state.queue.iter().take(before).all(|i| i.why.is_none()), "user songs have no reason");
     let added: Vec<_> = state.queue.iter().skip(before).collect();
     assert!(!added.is_empty());

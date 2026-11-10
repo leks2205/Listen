@@ -620,6 +620,9 @@ pub struct Listen {
     autodj_since: Option<std::time::Instant>,
     /// The running Auto-DJ fetch was started as the AI DJ's fallback.
     autodj_for_ai: bool,
+    /// Stale guard of `AutoDjFilled`: bumped by every fetch and by the timeout, so an answer that comes
+    /// after a newer fetch (or after giving up on it) neither queues songs nor clears `autodj_busy`.
+    autodj_gen: u64,
     /// Keyboard modifiers currently held (the player-bar buttons don't report them).
     pub modifiers: iced::keyboard::Modifiers,
     /// Time the seek slider is being dragged to; the seek happens on release.
@@ -925,9 +928,11 @@ pub enum Message {
     Lyrics(lyrics_state::LyricsMsg),
     Spectrum(listen_visualizer::Frame),
     VisualizerFailed(String),
+    /// A plain list of fill songs; counts as an answer to the running fetch (`autodj_gen`).
     AutoDjLoaded(Result<Vec<Song>, String>),
     /// An Auto-DJ fill that knows which songs came from the similar list (reasons for the queue).
-    AutoDjFilled(Result<AutoDjFill, String>),
+    /// An Auto-DJ fetch answered; the number is `autodj_gen` when it started.
+    AutoDjFilled(u64, Result<AutoDjFill, String>),
     /// A planned AI DJ set (generation, result).
     DjPlanned(u64, Result<dj::Planned, listen_dj::DjError>),
     /// Periodic AI DJ refill check.
@@ -1200,6 +1205,7 @@ impl Listen {
             autodj_busy: false,
             autodj_since: None,
             autodj_for_ai: false,
+            autodj_gen: 0,
             modifiers: iced::keyboard::Modifiers::default(),
             seek_preview: None,
             session_played: Default::default(),
@@ -2308,6 +2314,8 @@ impl Listen {
         self.autodj_busy = true;
         self.autodj_since = Some(std::time::Instant::now());
         self.autodj_for_ai = self.ai_dj_on();
+        self.autodj_gen += 1;
+        let generation = self.autodj_gen;
         // More candidates when they get ordered by flow (only the best are queued).
         let spread = if self.config.settings.mixing.flow_select { 6 } else { 3 };
         let count = s.item_count.max(1) as usize * spread / 3;
@@ -2328,13 +2336,22 @@ impl Listen {
                 }
                 Ok(AutoDjFill { songs, similar, seed: seed.title })
             },
-            Message::AutoDjFilled,
+            move |r| Message::AutoDjFilled(generation, r),
         )
+    }
+
+    /// The generation the next `AutoDjFilled` must carry to count (tests deliver fills by hand).
+    pub fn autodj_generation(&self) -> u64 {
+        self.autodj_gen
     }
 
     /// Queues an Auto-DJ fill: one version per song, nothing played this session, best flow first, each
     /// with its reason.
-    fn autodj_loaded(&mut self, result: Result<AutoDjFill, String>) -> Task<Message> {
+    fn autodj_loaded(&mut self, generation: u64, result: Result<AutoDjFill, String>) -> Task<Message> {
+        if generation != self.autodj_gen {
+            tracing::info!("Auto-DJ: dropped a fill that came back after a newer one was asked for");
+            return Task::none();
+        }
         self.autodj_busy = false;
         self.autodj_since = None;
         match result {
@@ -2448,7 +2465,8 @@ impl Listen {
         Task::none()
     }
 
-    /// A fill that never came back is dropped instead of blocking every later one.
+    /// A fill that never came back stops blocking later ones; if it still comes back, its generation is
+    /// stale and `autodj_loaded` drops it.
     fn autodj_timeout(&mut self) {
         const LIMIT: Duration = Duration::from_secs(120);
         if let Some(at) = self.autodj_since
@@ -2457,6 +2475,7 @@ impl Listen {
             tracing::warn!("Auto-DJ: a fill did not come back in time; asking again");
             self.autodj_busy = false;
             self.autodj_since = None;
+            self.autodj_gen += 1;
         }
     }
 
@@ -4376,9 +4395,10 @@ impl Listen {
             }
             Message::VisualizerFailed(e) => self.visualizer_error = Some(e),
             Message::AutoDjLoaded(result) => {
-                return self.autodj_loaded(result.map(|songs| AutoDjFill { songs, ..AutoDjFill::default() }));
+                let fill = result.map(|songs| AutoDjFill { songs, ..AutoDjFill::default() });
+                return self.autodj_loaded(self.autodj_gen, fill);
             }
-            Message::AutoDjFilled(result) => return self.autodj_loaded(result),
+            Message::AutoDjFilled(generation, result) => return self.autodj_loaded(generation, result),
             Message::DjPlanned(generation, result) => return self.dj_planned(generation, result),
             Message::DjCheck => {
                 self.autodj_timeout();
@@ -4821,5 +4841,24 @@ mod search_generation_tests {
         s.search.loading = true;
         let _ = s.update(late);
         assert!(s.search.loading, "a result of the previous server's search is dropped");
+    }
+}
+
+#[cfg(test)]
+mod autodj_generation_tests {
+    use super::*;
+
+    #[test]
+    fn an_auto_dj_fill_after_a_newer_request_is_dropped() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        let stale = s.autodj_generation();
+        s.autodj_gen += 1;
+        s.autodj_busy = true;
+        let before = s.queue.len();
+        let fill =
+            AutoDjFill { songs: crate::demo::album_songs(2), similar: Default::default(), seed: "x".into() };
+        let _ = s.update(Message::AutoDjFilled(stale, Ok(fill)));
+        assert_eq!(s.queue.len(), before, "the stale fill queues nothing");
+        assert!(s.autodj_busy, "and does not clear the running fetch's flag");
     }
 }
