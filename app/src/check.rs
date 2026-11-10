@@ -18,6 +18,15 @@ use listen_source::{AlbumQuery, AlbumSort, ListQuery, MusicSource, SongQuery};
 
 /// `listen --check-youtube-music`: signs in the way the app does (the browser's YouTube session) and
 /// prints what Listen sees of the library: counts, page titles and ids, never cookies.
+/// An on/off environment switch: only `1`, `true` or `yes` turn it on (`=0` is off, not "set").
+fn env_flag(name: &str) -> bool {
+    flag_value(std::env::var(name).ok().as_deref())
+}
+
+fn flag_value(v: Option<&str>) -> bool {
+    matches!(v.map(str::trim), Some("1" | "true" | "yes"))
+}
+
 pub fn youtube_music() -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -200,7 +209,7 @@ async fn run() -> Result<(), String> {
     }
     // Opens a random handful of playlists and albums with human pauses: this is a real account and must not
     // look like a bot. LISTEN_CHECK_ALL=1 opens all of them (still with short pauses).
-    let all = std::env::var("LISTEN_CHECK_ALL").is_ok();
+    let all = env_flag("LISTEN_CHECK_ALL");
     let pause = || async move {
         let ms = if all { rand::random_range(300..=900) } else { rand::random_range(2000..=5000) };
         tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
@@ -248,7 +257,7 @@ async fn run() -> Result<(), String> {
             .and_then(|f| f.rsplit_once(" ["))
             .and_then(|(_, r)| r.split_once(']'))
             .map(|(id, _)| id.to_string())
-            && std::env::var("LISTEN_CHECK_SHAPE").is_ok()
+            && env_flag("LISTEN_CHECK_SHAPE")
             && let Ok(v) = yt.raw_browse(&id).await
         {
             let mut lines = Vec::new();
@@ -1954,5 +1963,19 @@ mod tests {
         assert_eq!(t(&["20"]), None);
         assert_eq!(t(&["/music/a.flac"]), None);
         assert_eq!(t(&["https://nd.example/rest/stream?id=x"]), None);
+    }
+}
+
+#[cfg(test)]
+mod env_flag_tests {
+    #[test]
+    fn only_explicit_on_values_turn_a_switch_on() {
+        for on in ["1", "true", "yes", " 1 "] {
+            assert!(super::flag_value(Some(on)), "{on}");
+        }
+        for off in ["0", "false", "no", ""] {
+            assert!(!super::flag_value(Some(off)), "{off}");
+        }
+        assert!(!super::flag_value(None));
     }
 }
