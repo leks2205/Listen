@@ -972,8 +972,10 @@ impl Listen {
         self.mix.handed_over = true;
         let in_deck = self.mix.in_deck;
         tracing::info!("mix handover to deck {in_deck}");
-        // The AI DJ notes the finished song (no "between songs" clip here).
-        let _ = self.dj_on_advanced();
+        // The AI DJ notes the finished song. A "between songs" clip can't air here: `mix_tick`
+        // cancels a mix into a song with a break before it and `mix_plan_next` never plans one.
+        let aired = self.dj_on_advanced();
+        debug_assert!(aired.is_none(), "a between-songs DJ clip went on air at a mix handover");
         self.queue.advance();
         let sleep = self.sleep_advanced();
         if self.queue.current().map(|i| i.uid) != Some(self.mix.in_uid) {
