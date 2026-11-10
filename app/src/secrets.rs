@@ -143,6 +143,9 @@ impl Secrets {
                 }
             }
             other => {
+                // An older keyring copy would win over the file in `get` (it reads the keyring first), so the
+                // new secret only counts once that copy is gone, e.g. a token grown past Credential Manager's cap.
+                self.delete_keyring(server);
                 match other {
                     Some(Err(e)) => tracing::warn!(
                         "keyring unavailable ({e}); storing credentials in {}",
