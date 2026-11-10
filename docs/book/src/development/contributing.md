@@ -1,0 +1,44 @@
+# Rules for contributors
+
+Short rules for anyone (person or AI agent) changing this repository. Read them before your first
+change; the rest of this guide (architecture, building, tests, translations, DJ transitions) has the
+details.
+
+## Before you commit
+
+- `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo test --workspace`. The iced simulator tests in `app/tests/` need a desktop (GPU) session.
+- App unit tests live in the lib target: `cargo test -p listen --lib <name>` (`--bin listen` has none
+  and passes vacuously).
+- A user-visible change updates `docs/book/src/` in the same commit; new UI strings get their German
+  text in `app/i18n/de.json` and `app/i18n/listen/de.json` (see [Translations](translations.md)).
+
+## Rules that break things far away
+
+- **Never remove or rename a settings field.** Old `config.toml` files must load and round-trip
+  (`v0_23_config_round_trips_unchanged`); keep an unused field and document it as unused.
+- **The shared crates are also built by another app pinned to a commit** (`listen-core`, `listen-mix`,
+  `listen-dj`, `listen-player`, `listen-ytmusic`, `listen-analysis`): don't rename or remove their
+  public items; add the new one and keep the old one working.
+- **Tracked files and commit messages carry no personal names, e-mail addresses or private host
+  names**, and no attribution trailers. Notes about who reported what go in `docs/PROGRESS.md`
+  (git-ignored).
+- **No snapshot test of content chosen at random** (e.g. the Recommended strip): it differs every
+  run and fails the suite. Look at such a render once by hand; test the behaviour instead.
+
+## Traps that already cost a bug
+
+- `mix::Phase`: with DJ transitions on, `Planned` holds for most of every song. `phase != Idle`
+  means "a plan exists"; use `Phase::blending()` / `Phase::decks_busy()` for "two decks in use".
+- `Playback::playing` is mpv's "not paused" and is true while mpv idles with nothing loaded; use
+  `playing_here()` for "a song plays here".
+- `Player::af_command` values are lost whenever mpv rebuilds the filter graph (seek, new file,
+  `set_af`); re-send them on `PlayerEvent::Restarted`.
+- Analysis store keys: build them with `listen_core::analysis::record_key` / `YTM_PREFIX`; YouTube
+  Music records are `ytm:<videoId>`. `ShardStore::open` takes the folder that contains `v1/`.
+- Two keys for a song: `listen_core::versions::song_key` folds every version of a song into one
+  (DJ dedupe, exclusions); `Listen::server_song_key` is one exact song on one server (caches).
+- Every song a DJ adds from outside its own pool (fills, bridges, tempo picks) must pass the scene
+  gate (`listen_mix::pool::gate_pool`, `listen_analysis::bridge_scene_gate`).
+- "The music stopped with songs queued" is handled in one place, `keep_going` (`app/src/app/transport.rs`);
+  extend it instead of adding another special case.

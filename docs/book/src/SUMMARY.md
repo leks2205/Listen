@@ -73,6 +73,7 @@
 
 # Development
 
+- [Rules for contributors](development/contributing.md)
 - [Building from source](development/building.md)
 - [Architecture](development/architecture.md)
 - [Translations](development/translations.md)
