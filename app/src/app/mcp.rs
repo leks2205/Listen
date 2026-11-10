@@ -19,7 +19,8 @@ use std::time::Duration;
 /// The keyring entry of the access token.
 const TOKEN_SECRET: &str = "mcp-token";
 
-/// Something a tool returned, kept so later calls can use its ref.
+/// Something a tool returned, kept so later calls can use its ref. A snapshot: state that changes
+/// later (likes, ratings, names) may be stale, so tools must not decide from it.
 #[derive(Debug, Clone)]
 pub enum Item {
     Song(Song),
@@ -1045,7 +1046,14 @@ impl Listen {
                 if tool == "set_favorite" {
                     let fav = args.get("favorite").and_then(Value::as_bool).ok_or("favorite is missing")?;
                     for t in targets {
-                        tasks.push(self.menu_extra(MenuAction::Favorite(fav), t));
+                        tasks.push(match t {
+                            // The cached song's heart may be stale: always send the change (the
+                            // menu's "already liked" filter would skip an unlike after a like).
+                            MenuTarget::Songs { songs, .. } => Task::batch(
+                                songs.iter().map(|s| self.set_song_favorite(s, fav)).collect::<Vec<_>>(),
+                            ),
+                            t => self.menu_extra(MenuAction::Favorite(fav), t),
+                        });
                     }
                 } else {
                     let stars =
