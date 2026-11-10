@@ -1,5 +1,7 @@
 //! Item details ("Get info"), share links, the tag editor, saving the original file and showing it in the
-//! file manager. Menu entries are in `app/menu`, handlers in `Listen::item_action`, UI in `ui::item`.
+//! file manager. Menu entries are in [`menu`] (which entry shows for which source:
+//! `Entry::requires(Capabilities::..)` / `.when(..)`), handlers in `Listen::item_action` (Save file:
+//! `app/menu`'s song actions call [`save`]), UI in `ui::item`.
 //!
 //! * [`details`]: rows of the "Get info" modal (pure) and its loading.
 //! * [`share`]: the "Share" modal (Navidrome `createShare`) and the default
@@ -18,7 +20,6 @@ use super::menu::{MenuAction, MenuTarget};
 use super::{Listen, Message};
 use iced::Task;
 use listen_core::model::SourceKind;
-use listen_source::Capabilities;
 
 /// Messages of the item modals (one `Message` variant carries them all).
 #[derive(Debug, Clone)]
@@ -58,11 +59,6 @@ impl Listen {
             _ => Task::none(),
         }
     }
-}
-
-/// Whether the source of the menu's items can create share links.
-pub fn can_share(caps: Capabilities) -> bool {
-    caps.contains(Capabilities::SHARES)
 }
 
 /// Whether the tag editor applies: every song comes from a local folder.
