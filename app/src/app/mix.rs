@@ -24,6 +24,10 @@ use std::time::{Duration, Instant};
 const PRELOAD_LEAD_S: f64 = 20.0;
 /// A fetch running inside the preload window may finish until this long before the incoming start.
 const FETCH_GRACE_S: f64 = 5.0;
+/// A planned mix wakes the fast fade clock this long (outgoing seconds) before its first timed step
+/// (the outgoing tempo ramp or the preload); until then [`fade::PLANNED_TICK`](super::fade::PLANNED_TICK)
+/// is enough for `mix_tick`.
+const PLANNED_WAKE_S: f64 = 3.0;
 /// Not ready this close to the mix point: give up and play gapless.
 const READY_DEADLINE_S: f64 = 4.0;
 /// The start task is spawned this long (wall seconds) before the start.
@@ -335,6 +339,29 @@ impl Listen {
     }
 
     /// A deck's position now (extrapolated a little since its last report).
+    /// Outgoing position at which the incoming deck must start so its mix-in point meets `plan`'s
+    /// outgoing mix point at the outgoing deck's current speed.
+    pub(super) fn mix_start_out(&self, plan: &TransitionPlan) -> f64 {
+        let out_speed = self.mix.speed[self.mix.out_deck];
+        let preroll_out = (plan.in_mix_start_s - plan.in_load_at_s) / plan.in_speed * out_speed;
+        plan.out_mix_start_s - preroll_out
+    }
+
+    /// A transition is planned and its first timed step (tempo ramp or preload) is more than
+    /// [`PLANNED_WAKE_S`] away, so `mix_tick` has nothing to time precisely yet and the fade clock
+    /// may run at [`fade::PLANNED_TICK`](super::fade::PLANNED_TICK) instead of every 30 ms.
+    pub(super) fn mix_planned_far(&self) -> bool {
+        if self.mix.phase != Phase::Planned {
+            return false;
+        }
+        let Some(plan) = &self.mix.plan else { return false };
+        let mut first = self.mix_start_out(plan) - PRELOAD_LEAD_S;
+        if let Some(r) = plan.out_ramp {
+            first = first.min(r.start_out_s);
+        }
+        self.deck_now(self.mix.out_deck) < first - PLANNED_WAKE_S
+    }
+
     fn deck_now(&self, deck: usize) -> f64 {
         let (p, at) = self.mix.pos[deck];
         let ahead = at.map_or(0.0, |t| t.elapsed().as_secs_f64().min(0.25));
@@ -600,8 +627,7 @@ impl Listen {
         }
 
         // Where the incoming deck starts so its mix-in point meets the outgoing mix point.
-        let preroll_out = (plan.in_mix_start_s - plan.in_load_at_s) / plan.in_speed * out_speed;
-        let start_out = plan.out_mix_start_s - preroll_out;
+        let start_out = self.mix_start_out(&plan);
         match self.mix.phase {
             Phase::Planned if out_t >= start_out - PRELOAD_LEAD_S => {
                 // Never blend from a half-fetched file. A running fetch is waited for until

@@ -4424,6 +4424,8 @@ impl Listen {
             }
             if self.fade_active() {
                 subs.push(iced::time::every(fade::TICK).map(|_| Message::FadeTick));
+            } else if self.fade_slow() {
+                subs.push(iced::time::every(fade::PLANNED_TICK).map(|_| Message::FadeTick));
             }
             if self.video.on {
                 subs.push(iced::time::every(Duration::from_millis(20)).map(|_| Message::VideoTick));

@@ -10,6 +10,10 @@ use std::time::{Duration, Instant};
 pub const DUCK_DB: f32 = -12.0;
 const PAUSE_SECS: f32 = 0.3;
 pub const TICK: Duration = Duration::from_millis(30);
+/// The fade clock while a planned mix is still far from its first timed step
+/// ([`Listen::mix_planned_far`]) and nothing else moves: it only has to notice that the step comes
+/// close, a pause, or a changed next song.
+pub const PLANNED_TICK: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub struct Fader {
@@ -128,12 +132,13 @@ impl Listen {
         f32::from(self.playback.volume) * gain.clamp(0.0, max).cbrt()
     }
 
-    /// Whether the volume is moving (the fade clock needs to tick).
+    /// Whether the volume is moving or a transition needs precise timing (the fade clock ticks every
+    /// [`TICK`]). A planned transition that is still far away only needs [`fade_slow`](Self::fade_slow).
     pub fn fade_active(&self) -> bool {
         if !self.decks.has_active() || self.mock_playback() {
             return false;
         }
-        if self.mix.phase != super::mix::Phase::Idle || self.levelling_active() {
+        if (self.mix.phase != super::mix::Phase::Idle && !self.mix_planned_far()) || self.levelling_active() {
             return true;
         }
         let f = &self.fader;
@@ -152,6 +157,12 @@ impl Listen {
             }
         }
         f.last_sent.is_some_and(|v| (v - self.effective_volume()).abs() > 0.15)
+    }
+
+    /// The fade clock ticks every [`PLANNED_TICK`] (and [`fade_active`](Self::fade_active) is off):
+    /// a planned transition is waiting for its first timed step.
+    pub fn fade_slow(&self) -> bool {
+        self.decks.has_active() && !self.mock_playback() && self.mix_planned_far() && !self.fade_active()
     }
 
     /// One step of the fade clock.

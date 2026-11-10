@@ -260,8 +260,7 @@ fn plan_of(s: &Listen) -> TransitionPlan {
 
 /// Outgoing position at which the incoming deck starts.
 fn start_out(s: &Listen) -> f64 {
-    let p = plan_of(s);
-    p.out_mix_start_s - (p.in_mix_start_s - p.in_load_at_s) / p.in_speed * s.mix.speed[s.mix.out_deck]
+    s.mix_start_out(&plan_of(s))
 }
 
 /// Plans the mix, asserts it is a real one, and delivers the incoming deck's input.
@@ -480,6 +479,34 @@ fn user_actions_cancel_and_the_pair_is_planned_again() {
 }
 
 /// An incoming deck not ready in time: the pair plays gapless and isn't tried again.
+#[test]
+fn a_far_planned_mix_runs_the_slow_clock_until_its_first_step_comes_close() {
+    let mut s = auto_rig();
+    // The inert test players never confirm the levelling stage, which would keep the fast clock on.
+    s.config.settings.playback.levelling = listen_core::settings::Levelling::Off;
+    plan(&mut s);
+    let out = s.mix.out_deck;
+    let p = plan_of(&s);
+    let mut first = start_out(&s) - PRELOAD_LEAD_S;
+    if let Some(r) = p.out_ramp {
+        first = first.min(r.start_out_s);
+    }
+    assert!(first - PLANNED_WAKE_S - 1.0 > 4.0, "the rig's mix point lies past the song's fade-in");
+    // Past the song's own fade-in, long before the first step: slow clock only.
+    pos(&mut s, out, first - PLANNED_WAKE_S - 1.0);
+    tick(&mut s);
+    assert!(s.mix_planned_far());
+    assert!(!s.fade_active() && s.fade_slow(), "a far plan needs no 30 ms clock");
+    // Close to the first step: the precise clock is back.
+    pos(&mut s, out, first - PLANNED_WAKE_S + 0.5);
+    tick(&mut s);
+    assert!(!s.mix_planned_far());
+    assert!(s.fade_active() && !s.fade_slow());
+    // The preload still happens on time.
+    to_preload(&mut s);
+    assert_eq!(s.mix.phase, Phase::Preloading);
+}
+
 #[test]
 fn a_late_incoming_deck_falls_back_to_gapless() {
     let mut s = auto_rig();
