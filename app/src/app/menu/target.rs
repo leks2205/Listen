@@ -155,7 +155,8 @@ impl MenuTarget {
         self.len() == 0
     }
 
-    /// More than one item: entries that need exactly one (go to, rename) are left out.
+    /// More than one item. Entries that need exactly one are greyed out (`enabled_if(cx.single())`:
+    /// go to, radios) or, for playlist editing, hidden (`when`).
     pub fn is_multi(&self) -> bool {
         self.len() > 1
     }
