@@ -305,6 +305,8 @@ impl Listen {
                 match std::fs::read_to_string(&path) {
                     Ok(json) => match listen_core::settings::import_feishin(&self.config.settings, &json) {
                         Ok(imported) => {
+                            // Runtime copies of settings follow (see `reset_settings`).
+                            self.substitutes.set_enabled(imported.playback.prefer_own_servers);
                             self.config.settings = imported;
                             self.toast_success("Feishin settings imported.".into());
                             player_changed = true;

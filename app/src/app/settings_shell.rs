@@ -125,10 +125,13 @@ impl Listen {
         Task::none()
     }
 
-    /// Everything but the servers (and their sign-ins, which live outside `Settings`).
+    /// Everything but the servers (and their sign-ins, which live outside `Settings`). Runtime
+    /// copies of settings are set again here (`substitutes`, the desktop theme); a new one must be
+    /// added here and in `Setting::ImportFeishin`.
     fn reset_settings(&mut self) -> Task<Message> {
         let tab = self.config.settings.settings_tab;
         self.config.settings = Settings { settings_tab: tab, ..Settings::default() };
+        self.substitutes.set_enabled(self.config.settings.playback.prefer_own_servers);
         self.accent_input.clear();
         self.settings_search.clear();
         self.discord_id_input = None;
@@ -179,6 +182,20 @@ impl Listen {
                 Task::none()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::*;
+
+    #[test]
+    fn a_settings_reset_switches_own_server_copies_back_on() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        let _ = s.update(Message::Setting(super::super::Setting::PreferOwnServers(false)));
+        assert!(!s.substitutes.enabled());
+        let _ = s.reset_settings();
+        assert!(s.config.settings.playback.prefer_own_servers && s.substitutes.enabled());
     }
 }
 
