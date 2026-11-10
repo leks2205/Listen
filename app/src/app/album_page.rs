@@ -150,6 +150,12 @@ pub fn sort_items<T>(
     seed: u64,
 ) -> Vec<T> {
     let lower = |s: Option<&str>| s.map(str::to_lowercase);
+    let by_key = !matches!(sort, TrackSort::Id | TrackSort::Random);
+    if desc && by_key {
+        // Reversed before and after a stable ascending sort: the keys come out descending and
+        // ties keep the album's order (one reverse alone would flip the ties too).
+        items.reverse();
+    }
     match sort {
         TrackSort::Id => {
             if desc {
@@ -179,7 +185,6 @@ pub fn sort_items<T>(
         TrackSort::Year => items.sort_by_key(|t| song(t).year),
     }
     if desc {
-        // Reversing a stable ascending sort would flip the ties too.
         items.reverse();
     }
     items
@@ -689,6 +694,13 @@ mod tests {
         // Descending duration: 300, 200, then the two 100 s songs.
         let by_duration = sort_songs(sample(), TrackSort::Duration, true, 0);
         assert_eq!(ids(&by_duration)[..2], ["b", "d"]);
+    }
+
+    #[test]
+    fn descending_sorts_keep_ties_in_album_order() {
+        // a and c (100 s) tie; descending duration: b (300), d (200), then a before c.
+        assert_eq!(ids(&sort_songs(sample(), TrackSort::Duration, true, 0)), ["b", "d", "a", "c"]);
+        assert_eq!(ids(&sort_songs(sample(), TrackSort::Duration, false, 0)), ["a", "c", "d", "b"]);
     }
 
     #[test]
