@@ -55,7 +55,7 @@ pub(crate) fn replay_inputs(
 pub fn run(args: &[String]) -> i32 {
     let (Some(store_dir), Some(emb_dir), Some(history)) = (args.first(), args.get(1), args.get(2)) else {
         eprintln!(
-            "usage: listen --check-bridges <analysis dir (a copy)> <embeddings/v1/clamp3> <history.jsonl> [--pairs N] [--all]"
+            "usage: listen --check-bridges <analysis dir (a copy)> <embeddings/v1/clamp3> <history.jsonl> [--pairs N] [--all] [--gain X]"
         );
         return 2;
     };

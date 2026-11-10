@@ -1,5 +1,6 @@
-//! Listen, a Feishin-style music player. `main.rs` only parses arguments and starts iced;
-//! everything else lives here so tests can render views headlessly.
+//! Listen, a Feishin-style music player. `main.rs` parses arguments, runs a `--check-*` tool instead of
+//! the window when one is the first argument (each must be listed in [`USAGE`]), takes the
+//! single-instance lock and starts iced; everything else lives here so tests can render views headlessly.
 
 pub mod app;
 pub mod appearance;
@@ -102,7 +103,27 @@ Options:
                          offset, the disc's TOC and MusicBrainz match, the music
                          folder and Navidrome, then exit
   -h, --help             Show this help
-  -V, --version          Show the version";
+  -V, --version          Show the version
+
+Developer checks (each must be the first argument, then exits; see the command-line
+reference in the docs):
+  --check-ytm-session [--write]   Like, playlist and library round trips on the
+                         YouTube Music account (dry run without --write)
+  --check-analysis [N | FILE | URL | ytm:<id> | ytm [N]]
+                         Analyse songs into the shared store and compare tempo
+  --analyze-library [--jobs N]    Analyse every not yet analysed Navidrome song
+  --check-mix <A> <B> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc] [--levels out.jsonl]
+                         Plan (and render) the DJ transition from A into B
+  --check-bridges <analysis dir> <embeddings dir> <history.jsonl> [--pairs N] [--all] [--gain X]
+  --check-ai-dj-pool <analysis dir> <embeddings dir> <history.jsonl> [--at TITLE]…
+  --check-tempo <analysis dir> <embeddings dir> <history.jsonl> [--bpm N] [--want N]
+                         [--current HINT] [--before HINT]… [--probe HINT]…
+                         Replay bridges, the AI DJ pool or heart-rate tempo fills
+                         over a copy of the analysis folder (the one holding v1/)
+  --flow-weights [--history FILE] [--store DIR] [--simulate N [--seed S]]
+                         Print the flow weights learnt from the history
+  --focus [--history PATH] [--store DIR] [--fills N] [--per-fill N] [--pool N] [--seed N]
+                         Compare focus-mode fills with ordinary ones as JSON";
 
 /// The first window's size without `--size` or a saved window state (also in the `--help` text).
 pub const DEFAULT_WINDOW_SIZE: (f32, f32) = (1600.0, 950.0);
@@ -199,5 +220,23 @@ impl Args {
 impl Default for Args {
     fn default() -> Self {
         Self::parse(std::iter::empty()).expect("no arguments parse")
+    }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    /// Every mode `main.rs` dispatches is in `--help` (the internal `--analysis-worker` aside).
+    #[test]
+    fn usage_lists_every_dispatched_mode() {
+        let main = include_str!("main.rs");
+        for part in main.split("Some(\"--").skip(1) {
+            let mode = format!("--{}", part.split('"').next().unwrap_or(""));
+            if mode != "--analysis-worker" {
+                assert!(
+                    super::USAGE.contains(&mode),
+                    "{mode} is dispatched in main.rs but missing from USAGE"
+                );
+            }
+        }
     }
 }
