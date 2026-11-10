@@ -131,8 +131,9 @@ pub fn gate_pool(
     let mut extra: Vec<(Song, FlowFeatures, f32, bool)> = Vec::new();
     for (song, f) in store() {
         let key = song_key(&song);
-        let ytm_id = format!("ytm:{}", song.id);
-        if skip.contains(&key) || skip.contains(&ytm_id) || skip.contains(&song.id) || seen.contains(&key) {
+        // The store key of the same id, whatever the source (the skip set may hold either form).
+        let record = format!("{}{}", listen_core::analysis::YTM_PREFIX, song.id);
+        if skip.contains(&key) || skip.contains(&record) || skip.contains(&song.id) || seen.contains(&key) {
             continue;
         }
         out.store_rejected.candidates += 1;

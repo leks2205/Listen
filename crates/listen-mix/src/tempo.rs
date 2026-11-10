@@ -325,8 +325,9 @@ pub fn tempo_fill(
             continue;
         };
         let key = song_key(&song);
-        let ytm_id = format!("ytm:{}", song.id);
-        if skip.contains(&key) || skip.contains(&ytm_id) || skip.contains(&song.id) || !seen.insert(key) {
+        // The store key of the same id, whatever the source (the skip set may hold either form).
+        let record = format!("{}{}", listen_core::analysis::YTM_PREFIX, song.id);
+        if skip.contains(&key) || skip.contains(&record) || skip.contains(&song.id) || !seen.insert(key) {
             continue;
         }
         let (score, heard) = match scene {

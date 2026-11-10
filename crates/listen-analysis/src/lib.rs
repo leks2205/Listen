@@ -255,17 +255,7 @@ pub async fn analyze_url(url: &str, opts: &Opts, cancel: &Cancel) -> Result<Feat
     analyze_in_background(pcm, opts.clone(), cancel).await.ok_or(AnalysisError::Cancelled)
 }
 
-/// Prefix of YouTube Music records in the store.
-pub const YTM_PREFIX: &str = "ytm:";
-
-/// Store key of a song's records: Navidrome's id as is, YouTube Music's videoId with `ytm:`
-/// (both are 22-char base62 in one store). Other sources keep their bare id.
-pub fn record_key(song: &Song) -> String {
-    match song.source {
-        SourceKind::YouTubeMusic => format!("{YTM_PREFIX}{}", song.id),
-        _ => song.id.clone(),
-    }
-}
+pub use listen_core::analysis::{YTM_PREFIX, record_key};
 
 /// A song to queue for a YouTube Music record that no list offered (a DJ bridge from the whole store):
 /// the videoId is all the source needs to play it; the title and artist come from the record's

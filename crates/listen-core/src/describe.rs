@@ -312,7 +312,7 @@ fn host(url: &str) -> &str {
 /// The server of `servers` a hit plays on: `ytm:` songs on the first YouTube Music server, others on the
 /// Navidrome server whose host is the hit's `server_hint`.
 pub fn server_for<'a>(hit: &Hit, servers: &'a [ServerConfig]) -> Option<&'a ServerConfig> {
-    if hit.song_id.starts_with("ytm:") {
+    if hit.song_id.starts_with(crate::analysis::YTM_PREFIX) {
         servers.iter().find(|c| c.kind == SourceKind::YouTubeMusic)
     } else {
         servers.iter().find(|c| {
@@ -332,7 +332,7 @@ pub fn hit_songs(hits: &[Hit], servers: &[ServerConfig], history: &[Play]) -> Ve
     hits.iter()
         .filter_map(|h| {
             let server = server_for(h, servers)?;
-            let id = h.song_id.strip_prefix("ytm:").unwrap_or(&h.song_id);
+            let id = h.song_id.strip_prefix(crate::analysis::YTM_PREFIX).unwrap_or(&h.song_id);
             if let Some(e) = last.get(&(&server.id, id)) {
                 return Some(e.to_song());
             }
