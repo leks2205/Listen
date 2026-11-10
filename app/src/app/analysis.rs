@@ -643,7 +643,6 @@ fn with_store<T>(handle: &AnalysisHandle, f: impl FnOnce(&ShardStore) -> T) -> O
     handle.store.read().ok()?.as_ref().map(f)
 }
 
-/// Writes due records and picks up other machines' new ones (every 5 min).
 /// The describe-it index next to the analysis store: `Listen/analysis` → `Listen/embeddings/v1/clamp3`.
 pub fn embeddings_dir(shared_dir: &std::path::Path) -> PathBuf {
     shared_dir.parent().unwrap_or(shared_dir).join("embeddings/v1").join(listen_core::describe::MODEL)
@@ -699,6 +698,7 @@ async fn keep_scenes(scenes: std::sync::Weak<RwLock<Arc<SceneIndex>>>, dir: Path
     }
 }
 
+/// Writes due records and picks up other machines' new ones (every 5 min).
 fn housekeeping(handle: &AnalysisHandle, last_refresh: &mut Instant, status: &mut AnalysisStatus) {
     let Ok(mut guard) = handle.store.write() else { return };
     let Some(store) = guard.as_mut() else { return };

@@ -17,9 +17,9 @@ use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
-/// Keyring entry of the Gemini API key.
 /// Focus mode: at least this many candidates stay in the AI DJ's pool.
 const FOCUS_POOL: usize = 12;
+/// Keyring entry of the Gemini API key.
 const KEY_ENTRY: &str = "gemini-api-key";
 /// Songs offered to the model per set.
 const POOL: usize = 40;
