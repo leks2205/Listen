@@ -25,7 +25,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let id = detail.playlist.id.clone();
     let list = state.playlist_list_id(&id);
     let lead_h = header::lead_height(state, detail);
-    match (&list, state.config.settings.lists.playlist_target) {
+    match (&list, state.playlist_target_shown()) {
         (ListId::PlaylistAlbums(_), PlaylistTarget::Albums) => {
             let albums = &state.playlist_page.albums;
             column![

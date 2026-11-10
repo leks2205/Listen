@@ -282,9 +282,18 @@ impl Listen {
         }
     }
 
+    /// Tracks or Albums as the playlist page shows it: the saved setting, but always Tracks while
+    /// editing (edit mode works on tracks; the setting is left alone).
+    pub fn playlist_target_shown(&self) -> PlaylistTarget {
+        match self.playlist_page.edit {
+            Some(_) => PlaylistTarget::Tracks,
+            None => self.config.settings.lists.playlist_target,
+        }
+    }
+
     /// The list the playlist page shows: its songs, or their albums.
     pub fn playlist_list_id(&self, id: &str) -> ListId {
-        match self.config.settings.lists.playlist_target {
+        match self.playlist_target_shown() {
             PlaylistTarget::Tracks => ListId::Playlist(id.to_string()),
             PlaylistTarget::Albums => ListId::PlaylistAlbums(id.to_string()),
         }

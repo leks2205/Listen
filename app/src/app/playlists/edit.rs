@@ -133,8 +133,7 @@ impl Listen {
                 self.playlist_drag = None;
                 self.playlist_rows_sync();
                 if let Some(id) = self.playlist_page.id.clone() {
-                    // Edit mode works on tracks.
-                    self.config.settings.lists.playlist_target = PlaylistTarget::Tracks;
+                    // Edit mode shows tracks (`playlist_target_shown`).
                     self.lists.reset(&ListId::Playlist(id));
                 }
                 return self.playlist_list_visible();

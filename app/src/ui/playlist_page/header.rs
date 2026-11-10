@@ -331,7 +331,7 @@ fn toolbar<'a>(state: &'a Listen, detail: &'a PlaylistDetail) -> Element<'a, Mes
     let t = state.tokens;
     let page = &state.playlist_page;
     let editing = page.edit.is_some();
-    let target = state.config.settings.lists.playlist_target;
+    let target = state.playlist_target_shown();
     let on = |m: Message| (!editing).then_some(m);
     let tool = |glyph: Icon, active: bool, m: Option<Message>| {
         let b = button(icon(
