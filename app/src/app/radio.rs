@@ -358,6 +358,13 @@ impl Listen {
                 let id = self.radio.related.song_id.clone().unwrap_or_default();
                 match result {
                     Ok(songs) => {
+                        // Like every radio: one version per song, no snoozed / "Not interested"
+                        // / worn-out songs (`radio_target` does the same for album radio).
+                        let blocked = self.auto_blocked();
+                        let songs: Vec<Song> = listen_core::versions::dedupe_versions(songs)
+                            .into_iter()
+                            .filter(|s| !blocked.contains(&listen_core::versions::song_key(s)))
+                            .collect();
                         self.radio.related.songs = songs.clone();
                         self.radio.related.error = None;
                         return self.related_push(&id, songs);
