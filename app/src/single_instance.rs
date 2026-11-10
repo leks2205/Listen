@@ -78,7 +78,10 @@ pub fn socket_path(runtime_dir: &Path) -> PathBuf {
     ))
 }
 
-/// `$XDG_RUNTIME_DIR`, else a private per-user directory in the temp dir.
+/// `$XDG_RUNTIME_DIR`, else a private per-user directory in the temp dir. On unix that directory is only
+/// used when it belongs to this user and nobody else can write into it: anyone can create
+/// `/tmp/listen-<name>` first and then replace the socket inside, so a foreign one falls back to
+/// `~/.cache/listen-runtime`.
 pub fn runtime_dir() -> PathBuf {
     #[cfg(unix)]
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_dir()) {
@@ -90,8 +93,30 @@ pub fn runtime_dir() -> PathBuf {
     {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        if !private_to_us(&dir) {
+            let home = listen_core::platform::home_dir().unwrap_or_else(std::env::temp_dir);
+            let own = home.join(".cache").join("listen-runtime");
+            tracing::warn!("{} is not private to this user; using {}", dir.display(), own.display());
+            let _ = std::fs::create_dir_all(&own);
+            let _ = std::fs::set_permissions(&own, std::fs::Permissions::from_mode(0o700));
+            return own;
+        }
     }
     dir
+}
+
+/// Whether `dir` is a real directory owned by this process's user that no one else can write into. The
+/// user id is read from a probe file created inside (std has no getuid).
+#[cfg(unix)]
+fn private_to_us(dir: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let probe = dir.join(format!(".owner-probe-{}", std::process::id()));
+    let ours = std::fs::write(&probe, b"").and_then(|()| std::fs::metadata(&probe)).map(|m| m.uid());
+    let _ = std::fs::remove_file(&probe);
+    match (ours, std::fs::symlink_metadata(dir)) {
+        (Ok(uid), Ok(meta)) => meta.is_dir() && meta.uid() == uid && meta.mode() & 0o077 == 0,
+        _ => false,
+    }
 }
 
 fn users_id() -> String {
@@ -272,6 +297,19 @@ fn worker() -> impl Stream<Item = Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_runtime_dir_others_can_write_into_is_not_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = std::env::temp_dir().join(format!("listen-private-test-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(private_to_us(&d));
+        std::fs::set_permissions(&d, std::fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(!private_to_us(&d));
+        std::fs::remove_dir_all(d).ok();
+    }
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("listen-si-{name}-{}", std::process::id()));
