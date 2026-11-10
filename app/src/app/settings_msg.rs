@@ -225,6 +225,7 @@ impl Listen {
                 return Task::none();
             }
             Setting::AnalysisDirSave => {
+                self.pending_ytm_analysis = false;
                 if let Some(dir) = self.analysis_dir_input.take() {
                     s.analysis.shared_dir = dir.trim().to_string();
                     if s.analysis.shared_dir.is_empty() {
@@ -257,7 +258,11 @@ impl Listen {
                 self.voice_done(result);
                 return Task::none();
             }
-            Setting::AnalysisDirPicked(None) => return Task::none(),
+            Setting::AnalysisDirPicked(None) => {
+                // Cancelled: the YouTube Music switch that opened the picker stays off.
+                self.pending_ytm_analysis = false;
+                return Task::none();
+            }
             Setting::AnalysisDirPicked(Some(dir)) => {
                 s.analysis.shared_dir = dir.display().to_string();
                 self.analysis_dir_input = None;
