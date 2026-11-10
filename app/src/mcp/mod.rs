@@ -125,12 +125,13 @@ async fn read_body(stream: &mut TcpStream, mut buf: Vec<u8>, len: usize) -> Resu
     Ok(buf)
 }
 
-/// Browsers may only reach the server from pages on this computer (DNS rebinding).
+/// Browsers may only reach the server from pages on this computer (DNS rebinding). Host parsing is the
+/// remote's (`remote::host_name`): splitting on ':' by hand cuts `[::1]` to `[`.
 fn origin_allowed(origin: Option<&str>) -> bool {
     let Some(origin) = origin else { return true };
-    let host = origin.split("://").nth(1).unwrap_or(origin);
-    let host = host.split(['/', ':']).next().unwrap_or("");
-    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+    let Some((_, rest)) = origin.split_once("://") else { return false };
+    let authority = rest.split('/').next().unwrap_or("");
+    crate::remote::is_loopback_name(crate::remote::host_name(authority))
 }
 
 async fn connection(mut stream: TcpStream, ctx: Arc<Ctx>) -> Result<(), String> {
@@ -328,6 +329,9 @@ mod tests {
         assert!(origin_allowed(Some("http://localhost:3000")));
         assert!(origin_allowed(Some("http://127.0.0.1")));
         assert!(!origin_allowed(Some("https://evil.example")));
+        assert!(origin_allowed(Some("http://[::1]:3000")));
+        assert!(!origin_allowed(Some("http://localhost.evil.example")));
+        assert!(!origin_allowed(Some("null")));
     }
 
     #[tokio::test]
