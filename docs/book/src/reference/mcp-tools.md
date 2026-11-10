@@ -67,7 +67,7 @@ Album, artist and playlist objects have `ref`, `name`, `favorite` or `owner`/`ed
 | `shuffle_queue` | Shuffle the queue; the playing song stays where it is. | none |
 | `clear_queue` | Destructive: empties the whole queue and stops playback. | none |
 
-With `play_songs`, when the refs mix kinds (for example an album and a playlist), the first kind follows `how` and the rest are added to the queue.
+With `play_songs` and `add_to_queue`, the songs of all refs are collected in the order of the refs and applied as one batch (`shuffle` shuffles the whole batch). Neither asks to replace the queue.
 
 ## Library
 

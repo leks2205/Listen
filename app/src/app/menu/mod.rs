@@ -164,6 +164,36 @@ pub enum QueueMove {
     Bottom,
 }
 
+/// The songs of a menu target: known now, or a fetch to run.
+pub enum TargetSongs {
+    Ready(Vec<Song>),
+    Fetch(std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Song>, String>> + Send>>),
+}
+
+impl TargetSongs {
+    /// All parts in order, fetched one after the other when any must be fetched.
+    pub fn concat(parts: Vec<TargetSongs>) -> TargetSongs {
+        if parts.iter().all(|p| matches!(p, TargetSongs::Ready(_))) {
+            return TargetSongs::Ready(
+                parts
+                    .into_iter()
+                    .flat_map(|p| if let TargetSongs::Ready(v) = p { v } else { Vec::new() })
+                    .collect(),
+            );
+        }
+        TargetSongs::Fetch(Box::pin(async move {
+            let mut songs = Vec::new();
+            for part in parts {
+                match part {
+                    TargetSongs::Ready(v) => songs.extend(v),
+                    TargetSongs::Fetch(f) => songs.extend(f.await?),
+                }
+            }
+            Ok(songs)
+        }))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MenuAction {
     Play,
@@ -618,14 +648,27 @@ impl Listen {
 
     /// Runs `action` on every song of the target, fetching the songs of albums etc. first.
     pub(super) fn apply_to_target(&mut self, action: MenuAction, target: MenuTarget) -> Task<Message> {
+        let songs = self.target_songs(&action, target);
+        self.apply_to_target_songs(action, songs)
+    }
+
+    /// Runs `action` on songs that are known or still to be fetched.
+    pub(super) fn apply_to_target_songs(&mut self, action: MenuAction, songs: TargetSongs) -> Task<Message> {
+        match songs {
+            TargetSongs::Ready(songs) => self.apply_to_songs(action, songs),
+            TargetSongs::Fetch(fetch) => Task::perform(fetch, self.menu_songs_msg(action)),
+        }
+    }
+
+    /// The songs `action` applies to for `target` (a playlist played leaves out its hidden songs).
+    pub(super) fn target_songs(&self, action: &MenuAction, target: MenuTarget) -> TargetSongs {
         if let MenuTarget::Songs { songs, .. } = target {
-            return self.apply_to_songs(action, songs);
+            return TargetSongs::Ready(songs);
         }
         if let MenuTarget::Albums(albums) = &target
             && (self.demo || albums.iter().all(|a| !a.songs.is_empty()))
         {
-            let songs = albums.iter().flat_map(|a| a.songs.clone()).collect();
-            return self.apply_to_songs(action, songs);
+            return TargetSongs::Ready(albums.iter().flat_map(|a| a.songs.clone()).collect());
         }
         let browsed = self.config.active_server.as_ref().and_then(|s| self.sources.get(s)).cloned();
         let browsed = self.source.clone().or(browsed);
@@ -675,35 +718,30 @@ impl Listen {
             }
         }
         if work.is_empty() {
-            return Task::none();
+            return TargetSongs::Ready(Vec::new());
         }
-        Task::perform(
-            async move {
-                let mut songs = Vec::new();
-                for (source, fetch) in work {
-                    match fetch {
-                        Fetch::Album(id) => songs.extend(source.album(&id).await.map_err(err)?.songs),
-                        Fetch::Playlist(id, hidden) => songs.extend(
-                            source
-                                .playlist_songs(&id)
-                                .await
-                                .map_err(err)?
-                                .into_iter()
-                                .filter(|s| !hidden.contains(&listen_core::versions::song_key(s))),
-                        ),
-                        Fetch::Artist(a) => songs.extend(source.artist_songs(&a).await.map_err(err)?),
-                        Fetch::Genre(g) => {
-                            songs.extend(super::library_extra::genre_songs(&*source, &g).await?)
-                        }
-                        Fetch::Folder(id) => {
-                            songs.extend(super::library_extra::folder_songs_recursive(&*source, &id).await?)
-                        }
+        TargetSongs::Fetch(Box::pin(async move {
+            let mut songs = Vec::new();
+            for (source, fetch) in work {
+                match fetch {
+                    Fetch::Album(id) => songs.extend(source.album(&id).await.map_err(err)?.songs),
+                    Fetch::Playlist(id, hidden) => songs.extend(
+                        source
+                            .playlist_songs(&id)
+                            .await
+                            .map_err(err)?
+                            .into_iter()
+                            .filter(|s| !hidden.contains(&listen_core::versions::song_key(s))),
+                    ),
+                    Fetch::Artist(a) => songs.extend(source.artist_songs(&a).await.map_err(err)?),
+                    Fetch::Genre(g) => songs.extend(super::library_extra::genre_songs(&*source, &g).await?),
+                    Fetch::Folder(id) => {
+                        songs.extend(super::library_extra::folder_songs_recursive(&*source, &id).await?)
                     }
                 }
-                Ok(songs)
-            },
-            self.menu_songs_msg(action),
-        )
+            }
+            Ok(songs)
+        }))
     }
 
     /// The message that applies `action` to songs fetched later. Captures whether the caller

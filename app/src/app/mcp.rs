@@ -406,7 +406,13 @@ impl Listen {
         })
     }
 
-    /// The refs as menu targets, one per kind, in the order the kinds first appear.
+    /// One ref as a menu target.
+    fn target(&self, r: &str) -> Result<MenuTarget, String> {
+        Ok(self.targets(&[r.to_string()])?.remove(0))
+    }
+
+    /// The refs as menu targets, one per kind, in the order the kinds first appear (the order
+    /// of the refs themselves is lost; use [`Self::target`] per ref where it matters).
     fn targets(&self, refs: &[String]) -> Result<Vec<MenuTarget>, String> {
         let mut songs = Vec::new();
         let (mut albums, mut artists, mut playlists) = (Vec::new(), Vec::new(), Vec::new());
@@ -671,26 +677,27 @@ impl Listen {
                 if refs.is_empty() {
                     return Err("refs is empty".into());
                 }
-                let targets = self.targets(&refs)?;
+                let targets = refs.iter().map(|r| self.target(r)).collect::<Result<Vec<_>, _>>()?;
                 let shuffle = args.get("shuffle").and_then(Value::as_bool).unwrap_or(false);
                 let how = if tool == "add_to_queue" {
                     if args.get("next").and_then(Value::as_bool).unwrap_or(false) { "next" } else { "last" }
                 } else {
                     arg_str(args, "how").unwrap_or("now")
                 };
-                let mut tasks = Vec::new();
-                for (i, target) in targets.into_iter().enumerate() {
-                    let action = match (how, shuffle, i) {
-                        ("now", false, 0) => MenuAction::Play,
-                        ("now", true, 0) => MenuAction::Shuffle,
-                        ("next", false, _) => MenuAction::PlayNext,
-                        ("next", true, _) => MenuAction::PlayNextShuffled,
-                        (_, true, _) => MenuAction::AddToQueueShuffled,
-                        _ => MenuAction::AddToQueue,
-                    };
-                    tasks.push(self.without_queue_confirm(|s| s.apply_to_target(action, target)));
-                }
-                done(&reply, Task::batch(tasks), json!({ "ok": true, "how": how, "items": refs.len() }))
+                let action = match (how, shuffle) {
+                    ("now", false) => MenuAction::Play,
+                    ("now", true) => MenuAction::Shuffle,
+                    ("next", false) => MenuAction::PlayNext,
+                    ("next", true) => MenuAction::PlayNextShuffled,
+                    (_, true) => MenuAction::AddToQueueShuffled,
+                    _ => MenuAction::AddToQueue,
+                };
+                // Every ref's songs in ref order, applied as one batch: applying the refs one by one
+                // let a fetched album replace the songs queued before it and reordered the rest.
+                let parts = targets.into_iter().map(|t| self.target_songs(&action, t)).collect();
+                let songs = super::menu::TargetSongs::concat(parts);
+                let task = self.without_queue_confirm(|s| s.apply_to_target_songs(action, songs));
+                done(&reply, task, json!({ "ok": true, "how": how, "items": refs.len() }))
             }
             "play_queue_entry" => {
                 let uid = args.get("uid").and_then(Value::as_u64).ok_or("uid is missing")?;
