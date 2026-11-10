@@ -463,14 +463,15 @@ pub fn replace_binary(new: &Path, target: &Path) -> std::io::Result<()> {
     result
 }
 
-/// Whether running `binary --version` prints `version` (a broken download is not installed).
+/// Whether running `binary --version` prints exactly `version` as one of its words
+/// (`listen 0.29.0`; a broken or mislabelled download is not installed).
 pub fn binary_reports(binary: &Path, version: &Version) -> Result<(), String> {
     let out = std::process::Command::new(binary)
         .arg("--version")
         .output()
         .map_err(|e| format!("the new program does not start: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
-    if out.status.success() && text.contains(&version.to_string()) {
+    if out.status.success() && text.split_whitespace().any(|w| Version::parse(w).as_ref() == Some(version)) {
         Ok(())
     } else {
         Err(format!("the new program reports \"{}\", not {version}", text.trim()))
@@ -1066,6 +1067,10 @@ mod tests {
         std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(binary_reports(&bin, &v("0.29.0")).is_ok());
         assert!(binary_reports(&bin, &v("0.30.0")).is_err());
+        assert!(binary_reports(&bin, &v("0.2")).is_err(), "a prefix of the version is not the version");
+        std::fs::write(&bin, "#!/bin/sh\necho 'listen 0.29.0-beta.1'\n").unwrap();
+        assert!(binary_reports(&bin, &v("0.29.0")).is_err(), "a beta is not the final release");
+        std::fs::write(&bin, "#!/bin/sh\necho 'listen 0.29.0'\n").unwrap();
         assert!(binary_reports(&d.join("missing"), &v("0.29.0")).is_err());
         let sub = d.join("listen-0.29.0-x86_64");
         std::fs::create_dir_all(&sub).unwrap();
