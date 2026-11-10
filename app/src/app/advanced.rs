@@ -88,8 +88,9 @@ pub fn dir_size(dir: &Path) -> u64 {
         .sum()
 }
 
-/// Deletes the files under `dir` (folders are emptied, the top folder stays). Unfinished
-/// downloads (`*.part`) are left alone. Returns (files removed, bytes freed).
+/// Deletes the files under `dir`: subfolders are emptied and removed once empty, `dir` itself
+/// stays. Unfinished downloads (`*.part`) are left alone (their folder then stays too). Returns
+/// (files removed, bytes freed).
 pub fn clear_dir(dir: &Path) -> std::io::Result<(usize, u64)> {
     let mut files = 0;
     let mut bytes = 0;
