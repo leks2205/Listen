@@ -752,7 +752,8 @@ impl Listen {
         }
     }
 
-    /// The rows of `id` are replaced: forget what was loaded and load again.
+    /// The rows of `id` are replaced: forget what was loaded and load again. Only for the lists
+    /// whose header has the query controls ([`has_controls`]); any other list is left alone.
     pub fn reload_list(&mut self, id: &ListId) -> Task<Message> {
         let scroll = iced::widget::operation::scroll_to(
             id.scroll_id(),
@@ -792,7 +793,7 @@ impl Listen {
                 }
                 Task::batch([scroll, self.load_songs()])
             }
-            _ => {
+            ListId::Albums => {
                 self.list_queries.albums_gen += 1;
                 self.library.albums.clear();
                 self.library.albums_done = false;
@@ -802,6 +803,11 @@ impl Listen {
                     return scroll;
                 }
                 Task::batch([scroll, self.load_albums()])
+            }
+            other => {
+                debug_assert!(has_controls(other), "reload_list: {other:?} has no query controls");
+                tracing::warn!("reload_list: {other:?} has no query controls; nothing reloaded");
+                scroll
             }
         }
     }
@@ -1227,6 +1233,18 @@ async fn fetch_all_album_songs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_list_with_query_controls_reloads() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        for id in
+            [ListId::Albums, ListId::Songs, ListId::Genre("Rock".into()), ListId::GenreSongs("Rock".into())]
+        {
+            assert!(has_controls(&id));
+            let _ = s.reload_list(&id);
+        }
+        assert!(!s.library.albums.is_empty() && !s.library.songs.is_empty(), "demo rows came back");
+    }
 
     #[test]
     fn filters_are_masked_per_server() {
