@@ -214,7 +214,7 @@ impl Listen {
             OfflineMsg::ClearFailed => self.offline.failed.clear(),
             OfflineMsg::Play(index) => {
                 let songs = self.offline.songs.clone();
-                return self.play_songs(songs, index);
+                return self.play_picked(songs, index);
             }
         }
         Task::none()

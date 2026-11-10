@@ -688,7 +688,7 @@ impl Listen {
             P::RecommendPlay(index) => {
                 let songs = self.playlist_page.recommended.songs.clone();
                 if index < songs.len() {
-                    return self.play_songs(songs, index);
+                    return self.play_picked(songs, index);
                 }
             }
             P::RecommendAdd(index) => return self.recommend_add(index),

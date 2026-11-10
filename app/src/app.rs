@@ -2455,6 +2455,8 @@ impl Listen {
         self.play_songs(songs, start)
     }
 
+    /// Replaces the queue with `songs` from `start`, without asking. A song clicked in a list
+    /// goes through [`Self::play_picked`] instead (the replace-queue question, the AI DJ seed).
     fn play_songs(&mut self, songs: Vec<Song>, start: usize) -> Task<Message> {
         if songs.is_empty() {
             return Task::none();

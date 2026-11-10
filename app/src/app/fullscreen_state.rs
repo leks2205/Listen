@@ -188,7 +188,7 @@ impl Listen {
             FullscreenMsg::PlayRelated(i) => {
                 let songs = self.fs.related.clone();
                 if i < songs.len() {
-                    return self.play_songs(songs, i);
+                    return self.play_picked(songs, i);
                 }
             }
             FullscreenMsg::Marquee => {
