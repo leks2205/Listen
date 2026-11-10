@@ -529,10 +529,15 @@ impl Listen {
                 if drag.from == drag.over {
                     return self.navigate(Route::Playlist(drag.from));
                 }
-                // The whole list's order is saved, not only the visible part.
-                let ids: Vec<String> = self.sidebar_playlists(scope).iter().map(|p| p.id.clone()).collect();
-                let order = move_id(&ids, &drag.from, &drag.over);
+                // The whole list's order is saved: also playlists the name filter hides (they keep
+                // their place) and saved ids not loaded now (kept at the end).
                 let key = self.order_key(scope);
+                let sb = &self.config.settings.sidebar;
+                let saved: &[String] = sb.playlist_order.get(&key).map_or(&[], Vec::as_slice);
+                let all = visible(&self.library.playlists, scope, self.server_username(), None, Some(saved));
+                let mut ids: Vec<String> = all.iter().map(|p| p.id.clone()).collect();
+                ids.extend(saved.iter().filter(|id| !ids.contains(*id)).cloned().collect::<Vec<_>>());
+                let order = move_id(&ids, &drag.from, &drag.over);
                 self.config.settings.sidebar.playlist_order.insert(key, order);
                 self.save_config();
             }
