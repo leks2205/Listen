@@ -22,8 +22,9 @@ const REMIND_SECS: i64 = 24 * 3600;
 
 // ---------------------------------------------------------------- versions
 
-/// A release version such as `0.28.0` or `0.29.0-beta.1`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A release version such as `0.28.0` or `0.29.0-beta.1`. Equality follows the
+/// semver order ([`Ord`]), so `1.0.0-beta.01 == 1.0.0-beta.1`.
+#[derive(Debug, Clone)]
 pub struct Version {
     pub major: u64,
     pub minor: u64,
@@ -105,6 +106,14 @@ impl Ord for Version {
         })
     }
 }
+
+impl PartialEq for Version {
+    fn eq(&self, o: &Self) -> bool {
+        self.cmp(o) == Ordering::Equal
+    }
+}
+
+impl Eq for Version {}
 
 impl PartialOrd for Version {
     fn partial_cmp(&self, o: &Self) -> Option<Ordering> {
@@ -881,6 +890,14 @@ mod tests {
         assert!(r[0].prerelease && !r[1].prerelease);
         assert_eq!(r[1].assets.len(), 4);
         assert!(parse_releases("{}").is_err());
+    }
+
+    #[test]
+    fn versions_are_equal_exactly_when_they_compare_equal() {
+        for (a, b) in [("1.0.0-beta.01", "1.0.0-beta.1"), ("v1.2", "1.2.0"), ("1.0.0-rc", "1.0.0-beta")] {
+            let (a, b) = (v(a), v(b));
+            assert_eq!(a == b, a.cmp(&b) == Ordering::Equal, "{a} vs {b}");
+        }
     }
 
     #[test]
