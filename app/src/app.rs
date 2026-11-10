@@ -189,6 +189,9 @@ impl Route {
 /// What the player is doing (driven by mpv; simulated in demo mode).
 #[derive(Debug, Clone)]
 pub struct Playback {
+    /// mpv is not paused. That is also true while mpv sits idle with nothing loaded (a fresh deck,
+    /// an empty or finished queue): to ask "is a song playing here", use `playing_here()`
+    /// (handoff.rs); for "stopped with songs still queued", see `idle`.
     pub playing: bool,
     pub position: Duration,
     /// Duration reported by mpv, if any (more precise than the tag).
