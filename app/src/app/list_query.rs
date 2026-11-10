@@ -322,7 +322,10 @@ impl Default for ListQueries {
     }
 }
 
-/// The saved sort name of a sort (its variant name).
+/// The saved sort name of a sort: its variant name, as `{:?}` prints it. The name is stored in
+/// `config.toml` (the lists' saved queries and the collections), so renaming an `AlbumSort` /
+/// `SongSort` variant silently resets every saved sort that used it; `saved_sort_names_stay_stable`
+/// pins the names.
 pub fn sort_key<S: std::fmt::Debug>(s: S) -> String {
     format!("{s:?}")
 }
@@ -1398,6 +1401,73 @@ mod tests {
         other.apply_collection(&c2, sorting::SUBSONIC_ALBUMS, sorting::SUBSONIC_SONGS);
         assert_eq!(other.albums.sort, AlbumSort::Name);
     }
+
+    #[test]
+    fn saved_sort_names_stay_stable() {
+        let mut names: Vec<String> = [
+            sorting::NAVIDROME_ALBUMS,
+            sorting::JELLYFIN_ALBUMS,
+            sorting::SUBSONIC_ALBUMS,
+            sorting::LIBRARY_ALBUMS,
+            sorting::LOCAL_ALBUMS,
+        ]
+        .iter()
+        .flat_map(|l| l.iter().map(|o| format!("album {}", sort_key(o.sort))))
+        .chain(
+            [
+                sorting::NAVIDROME_SONGS,
+                sorting::JELLYFIN_SONGS,
+                sorting::SUBSONIC_SONGS,
+                sorting::LIBRARY_SONGS,
+                sorting::LOCAL_SONGS,
+            ]
+            .iter()
+            .flat_map(|l| l.iter().map(|o| format!("song {}", sort_key(o.sort)))),
+        )
+        .collect();
+        names.sort();
+        names.dedup();
+        // A changed name here means saved queries and collections in users' config files lose
+        // their sort: make `sort_key` keep writing the old name instead of editing this list.
+        assert_eq!(names, GOLDEN_SORT_NAMES, "{names:?}");
+    }
+
+    const GOLDEN_SORT_NAMES: &[&str] = &[
+        "album AlbumArtist",
+        "album Artist",
+        "album CommunityRating",
+        "album CriticRating",
+        "album Duration",
+        "album Favorited",
+        "album Id",
+        "album MostPlayed",
+        "album Name",
+        "album Random",
+        "album Rating",
+        "album RecentlyAdded",
+        "album RecentlyPlayed",
+        "album ReleaseDate",
+        "album SongCount",
+        "album Year",
+        "song Album",
+        "song AlbumArtist",
+        "song Artist",
+        "song Bpm",
+        "song Channels",
+        "song Comment",
+        "song Duration",
+        "song Favorited",
+        "song Genre",
+        "song MostPlayed",
+        "song Name",
+        "song Random",
+        "song Rating",
+        "song RecentlyAdded",
+        "song RecentlyPlayed",
+        "song ReleaseDate",
+        "song ReleaseYear",
+        "song Year",
+    ];
 
     #[test]
     fn sort_keys_are_variant_names() {
