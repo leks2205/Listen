@@ -208,8 +208,8 @@ pub fn definitions() -> Vec<Value> {
         ),
         tool(
             "start_radio",
-            "Play a radio of similar songs, seeded with a song or artist.",
-            json!({ "ref": s("Song or artist ref") }),
+            "Play a radio of similar songs, seeded with a song, album or artist.",
+            json!({ "ref": s("Song, album or artist ref") }),
             &["ref"],
         ),
         tool("get_lyrics", "The lyrics of the playing song, if any were found.", json!({}), &[]),

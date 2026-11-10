@@ -80,7 +80,7 @@ With `play_songs` and `add_to_queue`, the songs of all refs are collected in the
 | `get_artist` | An artist with biography, albums and top songs (up to 10). | `ref` (string, required): artist ref |
 | `list_playlists` | The playlists on a server. | `server` (string): default the active server |
 | `get_playlist` | A playlist with its songs; each song has a 0-based `position`. | `ref` (string, required): playlist ref |
-| `start_radio` | Play a radio of similar songs, seeded with a song or artist. | `ref` (string, required): song or artist ref |
+| `start_radio` | Play a radio of similar songs, seeded with a song, album or artist. | `ref` (string, required): song, album or artist ref (a playlist ref is an error) |
 | `get_lyrics` | The lyrics of the playing song: `provider`, `synced`, and `lines` with `at` (seconds), `text` and `translation`. `{"lyrics": null}` if none were found. | none |
 
 ## Playlists

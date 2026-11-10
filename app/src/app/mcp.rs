@@ -403,7 +403,7 @@ impl Listen {
 
     fn item(&self, r: &str) -> Result<Item, String> {
         self.mcp.items.get(r).cloned().ok_or_else(|| {
-            format!("Unknown ref “{r}”. Use a ref returned by search, get_album, get_playlist or get_queue.")
+            format!("Unknown ref “{r}”. Use a ref a tool returned (search, get_album, get_artist, get_playlist, list_playlists, get_queue, get_now_playing).")
         })
     }
 
@@ -891,12 +891,14 @@ impl Listen {
             }
             "start_radio" => {
                 let r = arg_str(args, "ref").ok_or("ref is missing")?.to_string();
-                let target = self.targets(std::slice::from_ref(&r))?.remove(0);
-                let task = match target {
+                let task = match self.target(&r)? {
                     t @ MenuTarget::Songs { .. } => {
                         self.without_queue_confirm(|s| s.apply_to_target(MenuAction::StartRadio, t))
                     }
-                    t => self.menu_extra(MenuAction::Radio(super::menu::PlayHow::Now), t),
+                    t @ (MenuTarget::Albums(_) | MenuTarget::Artists(_)) => self.without_queue_confirm(|s| {
+                        s.menu_extra(MenuAction::Radio(super::menu::PlayHow::Now), t)
+                    }),
+                    _ => return Err("only songs, albums and artists have a radio".into()),
                 };
                 done(&reply, task, json!({ "ok": true }))
             }
