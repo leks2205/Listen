@@ -1,6 +1,7 @@
 //! The sleep timer (Feishin's `sleep-timer.store.ts` + `sleep-timer-button.tsx`):
 //! pause after N minutes of playing, at the end of the song, or at the end of
-//! the album. The countdown only ticks while a song plays.
+//! the album. The countdown only ticks while a song plays (`sleep_counts`: not while mpv idles
+//! with nothing loaded, although `playback.playing` is true then).
 
 use super::{Listen, Message};
 use iced::Task;
@@ -174,7 +175,7 @@ impl Listen {
                 let now = std::time::Instant::now();
                 let by = self.fs.sleep_tick.map_or(Duration::from_secs(1), |t| now.duration_since(t));
                 self.fs.sleep_tick = Some(now);
-                let playing = self.playback.playing;
+                let playing = self.sleep_counts();
                 // After a pause the first tick would count the whole pause.
                 let by = by.min(Duration::from_secs(2));
                 if self.sleep_timer.as_mut().is_some_and(|t| t.tick(by, playing)) {
@@ -196,7 +197,14 @@ impl Listen {
         self.sleep_timer = None;
         self.fs.sleep_tick = None;
         self.toast_info("Sleep timer: playback paused.".into());
-        if self.playback.playing { self.handle(Message::TogglePlay) } else { Task::none() }
+        if self.sleep_counts() { self.handle(Message::TogglePlay) } else { Task::none() }
+    }
+
+    /// Something audible plays here: a queued song (not mpv idling) or a radio station.
+    fn sleep_counts(&self) -> bool {
+        self.playback.playing
+            && !self.playback.idle
+            && (self.radio.active.is_some() || self.queue.current().is_some())
     }
 
     /// The previous song ended on its own and the next one has started.
@@ -218,13 +226,24 @@ impl Listen {
 
     /// Whether the once-a-second tick is needed.
     pub fn sleep_ticking(&self) -> bool {
-        self.sleep_timer.as_ref().is_some_and(|t| t.mode == SleepMode::Timed) && self.playback.playing
+        self.sleep_timer.as_ref().is_some_and(|t| t.mode == SleepMode::Timed) && self.sleep_counts()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_sleep_timer_does_not_count_while_nothing_is_loaded() {
+        let (mut s, _) = crate::app::Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.sleep_timer = Some(SleepTimer::timed(60));
+        s.queue.clear();
+        s.playback.playing = true; // mpv "not paused", but the queue is empty
+        assert!(!s.sleep_ticking());
+        s.queue.set(crate::demo::album_songs(0), 0);
+        assert!(s.sleep_ticking());
+    }
 
     fn song(album: Option<&str>) -> Song {
         let mut s = crate::demo::album_songs(0).remove(0);
