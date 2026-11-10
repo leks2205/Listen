@@ -594,6 +594,9 @@ pub struct Listen {
     restored: Option<Duration>,
     /// What was last written to queue.json (to skip identical saves).
     queue_saved: Option<(usize, u64, Option<u64>, u64, bool, listen_core::queue::Repeat)>,
+    /// Held by every queue write: background writes and the blocking one at quit share
+    /// `SavedQueue::save`'s temp file, so they must never overlap.
+    queue_write: std::sync::Arc<std::sync::Mutex<()>>,
     /// Stop mpv before resolving the next stream (after a failure, so nothing
     /// keeps playing from mpv's own playlist).
     stop_first: bool,
@@ -1187,6 +1190,7 @@ impl Listen {
             resume_at: None,
             restored: None,
             queue_saved: None,
+            queue_write: Default::default(),
             stop_first: false,
             overlay: overlay::OverlayState::default(),
             fullscreen: false,
@@ -1582,7 +1586,8 @@ impl Listen {
         self.write_queue(false);
     }
 
-    /// Like `save_queue`, but blocks until the file is written (for quit/close).
+    /// Like `save_queue`, but blocks until the file is written (for quit/close): it waits for a background
+    /// write still running and always writes, even when nothing changed since that one started.
     fn save_queue_now(&mut self) {
         self.write_queue(true);
     }
@@ -1607,14 +1612,16 @@ impl Listen {
             self.queue.shuffle(),
             self.queue.repeat,
         );
-        if self.queue_saved == Some(key) {
+        if !blocking && self.queue_saved == Some(key) {
             return;
         }
         self.queue_saved = Some(key);
+        let one_at_a_time = self.queue_write.clone();
         let saved =
             SavedQueue { queue: self.queue.clone(), position_secs: self.playback.position.as_secs_f64() };
         let path = paths.queue_file();
         let write = move || {
+            let _held = one_at_a_time.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Err(e) = saved.save(&path) {
                 tracing::error!("saving queue: {e}");
             }

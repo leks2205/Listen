@@ -170,7 +170,8 @@ impl SavedQueue {
         saved.queue.is_consistent().then_some(saved)
     }
 
-    /// Writes atomically (temp file + rename).
+    /// Writes atomically (temp file + rename). One writer at a time per `path`: concurrent calls share the
+    /// temp file and can rename each other's half-written data (the app serialises its writes).
     pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
