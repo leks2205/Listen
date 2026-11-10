@@ -88,9 +88,9 @@ pub fn pick_next<'a>(
     match list.len() {
         0 => None,
         1 => list.first(),
-        n if randomize => {
+        _ if randomize => {
             let others: Vec<&String> = list.iter().filter(|p| Some(p.as_str()) != current).collect();
-            others.get(random(others.len()).min(n - 1)).copied()
+            others.get(random(others.len()).min(others.len() - 1)).copied()
         }
         _ => {
             let next =
