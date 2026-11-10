@@ -1092,7 +1092,10 @@ impl Listen {
             theme: Theme::Dark,
             system_mode: Mode::Dark,
             resizing: None,
-            window_size: iced::Size::new(args.size.0, args.size.1),
+            window_size: {
+                let (w, h) = args.size.unwrap_or(crate::DEFAULT_WINDOW_SIZE);
+                iced::Size::new(w, h)
+            },
             library_cache: std::collections::HashMap::new(),
             library_loaded_at: std::time::Instant::now(),
             scale_factor: 1.0,

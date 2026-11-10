@@ -104,6 +104,9 @@ Options:
   -h, --help             Show this help
   -V, --version          Show the version";
 
+/// The first window's size without `--size` or a saved window state (also in the `--help` text).
+pub const DEFAULT_WINDOW_SIZE: (f32, f32) = (1600.0, 950.0);
+
 #[derive(Debug, Clone)]
 pub struct Args {
     pub demo: bool,
@@ -115,7 +118,8 @@ pub struct Args {
     /// Open the full-screen player on start (for headless demo screenshots).
     pub fullscreen: bool,
     pub theme: Option<String>,
-    pub size: (f32, f32),
+    /// `--size`; `None` = not given (the saved window state, else [`DEFAULT_WINDOW_SIZE`]).
+    pub size: Option<(f32, f32)>,
     pub screenshot: Option<PathBuf>,
     pub screenshot_delay_ms: u64,
     /// Ephemeral sign-in: (url, user); password from `LISTEN_PASSWORD`.
@@ -137,7 +141,7 @@ impl Args {
             video: false,
             fullscreen: false,
             theme: None,
-            size: (1600.0, 950.0),
+            size: None,
             screenshot: None,
             screenshot_delay_ms: 2500,
             login: None,
@@ -160,7 +164,7 @@ impl Args {
                 "--size" => {
                     let v = value("--size")?;
                     let (w, h) = v.split_once('x').ok_or("--size expects WxH")?;
-                    args.size = (w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?);
+                    args.size = Some((w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?));
                 }
                 "--screenshot" => args.screenshot = Some(value("--screenshot")?.into()),
                 "--screenshot-delay" => {

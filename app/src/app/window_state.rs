@@ -98,8 +98,7 @@ impl Listen {
     /// Reads the saved window state at start (not for demos, tests and
     /// explicit `--size`) and applies it to the first window.
     pub(super) fn win_restore(&mut self, args: &Args) {
-        let explicit_size = args.size != (1600.0, 950.0);
-        if self.demo || self.ephemeral || args.screenshot.is_some() || explicit_size {
+        if self.demo || self.ephemeral || args.screenshot.is_some() || args.size.is_some() {
             return;
         }
         let Some(saved) = self.config.settings.window.state else { return };
