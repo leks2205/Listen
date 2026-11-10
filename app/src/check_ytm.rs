@@ -172,7 +172,7 @@ pub async fn run(
             if eventually(settle, || async { Ok(!liked_in_library(source, &song.id).await?) }).await? {
                 Ok(())
             } else {
-                Err("still in Liked Music after unliking it".into())
+                Err("still liked in the library listing after unliking it".into())
             }
         }
         .await;
