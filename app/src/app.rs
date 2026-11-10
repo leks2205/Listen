@@ -463,6 +463,8 @@ struct MprisKey {
     art: bool,
     /// Changes whenever the shown lyrics do (they go to MPRIS as `xesam:asText`).
     lyrics_rev: u64,
+    /// The decks' speed in hundredths (MPRIS `Rate`).
+    speed: u32,
 }
 
 pub struct Listen {
@@ -3099,6 +3101,7 @@ impl Listen {
             has_next: self.queue.peek_next().is_some(),
             art: art.is_some(),
             lyrics_rev: self.lyrics_ui.rev,
+            speed: (self.effective_speed() * 100.0).round() as u32,
         };
         if self.published.mpris == Some(key) {
             return Task::none();
@@ -3184,6 +3187,7 @@ impl Listen {
             },
             track,
             position_secs: self.playback.position.as_secs_f64(),
+            rate: f64::from(self.effective_speed()),
             volume: if self.playback.muted { 0.0 } else { f64::from(self.playback.volume) / 100.0 },
             shuffle: self.play_mode() == play_mode::PlayMode::Shuffle,
             repeat: match self.queue.repeat {

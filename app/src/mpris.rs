@@ -32,6 +32,10 @@ fn track_id(uid: u64) -> TrackId {
     TrackId::try_from(format!("/io/github/leks2205/Listen/track/{uid}")).unwrap_or(TrackId::NO_TRACK)
 }
 
+fn rate(state: &MprisState) -> PlaybackRate {
+    if state.rate > 0.0 { state.rate } else { 1.0 }
+}
+
 fn metadata(state: &MprisState) -> Metadata {
     let Some(t) = &state.track else { return Metadata::new() };
     let mut builder = Metadata::builder()
@@ -170,8 +174,10 @@ impl PlayerInterface for Imp {
         Ok(())
     }
     async fn rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(1.0)
+        Ok(self.with(rate))
     }
+    /// The speed is changed in Listen only: minimum and maximum rate equal the current one, which tells
+    /// clients it is read-only.
     async fn set_rate(&self, _: PlaybackRate) -> ZResult<()> {
         Ok(())
     }
@@ -196,10 +202,10 @@ impl PlayerInterface for Imp {
         Ok(self.with(|s| Time::from_micros((s.position_secs * 1e6) as i64)))
     }
     async fn minimum_rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(1.0)
+        Ok(self.with(rate))
     }
     async fn maximum_rate(&self) -> fdo::Result<PlaybackRate> {
-        Ok(1.0)
+        Ok(self.with(rate))
     }
     async fn can_go_next(&self) -> fdo::Result<bool> {
         Ok(self.with(|s| s.has_next))
@@ -255,6 +261,11 @@ impl MprisHandle {
         if (old.volume - new.volume).abs() > f64::EPSILON {
             changed.push(Property::Volume(new.volume));
         }
+        if (rate(&old) - rate(&new)).abs() > f64::EPSILON {
+            changed.push(Property::Rate(rate(&new)));
+            changed.push(Property::MinimumRate(rate(&new)));
+            changed.push(Property::MaximumRate(rate(&new)));
+        }
         if old.has_next != new.has_next {
             changed.push(Property::CanGoNext(new.has_next));
         }
@@ -275,7 +286,8 @@ impl MprisHandle {
         let _ = self.server.emit(mpris_server::Signal::Seeked { position }).await;
     }
 
-    /// Updates the position without a signal (clients poll it).
+    /// Updates the position without a signal: clients extrapolate it from `Rate` and only re-read the
+    /// property now and then, so a jump must go through [`Self::seeked`].
     pub fn set_position(&self, position_secs: f64) {
         self.state.lock().expect("mpris state").position_secs = position_secs;
     }
@@ -316,6 +328,12 @@ fn worker() -> impl Stream<Item = Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_rate_is_the_deck_speed_and_never_zero() {
+        assert_eq!(rate(&MprisState::default()), 1.0);
+        assert_eq!(rate(&MprisState { rate: 1.25, ..Default::default() }), 1.25);
+    }
 
     fn track(extra: Extra) -> MprisState {
         MprisState {

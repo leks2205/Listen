@@ -24,6 +24,9 @@ pub struct MprisState {
     pub status: Status,
     pub track: Option<Track>,
     pub position_secs: f64,
+    /// Playback speed (1.0 = normal; 0 in `Default` reads as 1.0). Desktop clients extrapolate the position
+    /// from it between seeks, so it must follow the speed the decks really run at.
+    pub rate: f64,
     pub volume: f64,
     pub shuffle: bool,
     pub repeat: RepeatMode,
