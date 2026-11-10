@@ -137,6 +137,9 @@ pub struct Jukebox {
     pub available: Option<bool>,
     /// Index in the jukebox queue of the song the app believes is playing.
     pub index: i64,
+    /// Queue uids of the songs sent to the server, in jukebox order (only that server's songs,
+    /// so jukebox index k is `batch[k]`, not the k-th queue entry after the start).
+    pub batch: Vec<u64>,
 }
 
 #[derive(Debug, Default)]
@@ -715,14 +718,15 @@ impl Listen {
             return Task::none();
         };
         let at = self.queue.current_position().unwrap_or(0);
-        let ids: Vec<String> = self
+        let (batch, ids): (Vec<u64>, Vec<String>) = self
             .queue
             .iter()
             .skip(at)
             .filter(|i| i.song.server_id == current)
             .take(JUKEBOX_BATCH)
-            .map(|i| i.song.id.clone())
-            .collect();
+            .map(|i| (i.uid, i.song.id.clone()))
+            .unzip();
+        self.radio.jukebox.batch = batch;
         self.radio.jukebox.index = 0;
         self.playback.playing = true;
         self.playback.position = Duration::ZERO;
@@ -756,11 +760,13 @@ impl Listen {
         self.playback.playing = status.playing;
         self.playback.position = Duration::from_secs(u64::from(status.position_secs));
         if status.current_index > self.radio.jukebox.index {
-            // The server went on to the next song of the batch.
-            let steps = (status.current_index - self.radio.jukebox.index) as usize;
+            // The server went on in the batch: follow it by uid (other servers' songs were left
+            // out of the batch, and repeat-one would keep `advance` in place).
             self.radio.jukebox.index = status.current_index;
-            for _ in 0..steps {
-                self.queue.advance();
+            let uid =
+                usize::try_from(status.current_index).ok().and_then(|i| self.radio.jukebox.batch.get(i));
+            if let Some(&uid) = uid {
+                self.queue.jump_to(uid);
             }
             self.bump_token();
             self.playback.reset_scrobble();
