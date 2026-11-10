@@ -1,5 +1,7 @@
 //! Player-bar transport extras: seek-on-release, Alt+click album jumps and
-//! the shuffle-all button.
+//! the shuffle-all button; and `keep_going`, the safety net that
+//! starts the next queued song when mpv went idle with songs still queued
+//! (extend it rather than adding another "music stopped" special case).
 
 use super::menu::{MenuAction, MenuMsg};
 use super::{Listen, Message};
