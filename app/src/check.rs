@@ -379,11 +379,22 @@ impl AiDjCheck {
 /// Gemini on a fixed song pool with listening-history tags and measured tempo/key/energy; prints picks,
 /// lines, timings and tokens, grades every break with a judge call, saves the first two spoken breaks as
 /// WAVs in the temp dir. Key: `$LISTEN_GEMINI_API_KEY` or the app's keyring entry. Costs one text request
-/// per round, one more per round with the judge, and up to 2 speech requests. Fails when a break fails
-/// the judge. `--request` (a chip id such as `calmer`, `more_energy`, `no_ballads`, or free text) is told to
+/// per round, one more per round with the judge, and up to 2 speech requests. Fails (see [`PASS_SHARE`])
+/// when fewer than 80 % of the breaks pass the judge, fewer than 80 % of the sets with a new-to-you song
+/// introduce one, fewer than 80 % of the picks carry a "Why this song?" note (with Gemini), or a Calmer /
+/// More energy request is not followed. `--request` (a chip id such as `calmer`, `more_energy`, `no_ballads`, or free text) is told to
 /// the DJ before round 2: the pool is filtered as in the app, and for Calmer / More energy the next 5 songs
 /// must have a lower / higher mean energy than round 1's set (the songs the request replaced).
 /// `--offline` needs no key: a stand-in planner that picks against the request (see [`AiDjCheck::offline`]).
+/// Share of breaks, introductions and notes `--check-ai-dj` wants (4 of 5): single answers vary from
+/// run to run, so one weak break must not fail the check.
+const PASS_SHARE: (usize, usize) = (4, 5);
+
+/// Whether `ok` of `of` falls short of [`PASS_SHARE`].
+fn short_of_pass_share(ok: usize, of: usize) -> bool {
+    ok * PASS_SHARE.1 < of * PASS_SHARE.0
+}
+
 pub fn ai_dj(check: AiDjCheck) -> i32 {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(rt) => rt,
@@ -716,7 +727,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         }
     }
     println!("songs with a note (\"Why this song?\"): {noted}/{picked}");
-    if gemini.is_some() && noted * 5 < picked * 4 {
+    if gemini.is_some() && short_of_pass_share(noted, picked) {
         return Err(format!("only {noted} of {picked} picked songs got a note"));
     }
     println!(
@@ -732,9 +743,9 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
             check.rounds - failed,
             check.rounds
         );
-        // Single breaks vary from run to run: the check wants 80 % of breaks and of introductions.
-        let short = |ok: usize, of: usize| ok * 5 < of * 4;
-        if short(check.rounds - failed, check.rounds) || short(introduced, new_sets) {
+        if short_of_pass_share(check.rounds - failed, check.rounds)
+            || short_of_pass_share(introduced, new_sets)
+        {
             return Err(format!(
                 "below 80 %: {failed} of {} breaks failed the judge, {introduced}/{new_sets} introductions",
                 check.rounds
