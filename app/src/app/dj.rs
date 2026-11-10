@@ -262,7 +262,8 @@ impl Listen {
     }
 
     /// Tell the DJ: the requests changed. The not-yet-started DJ songs make way and the DJ plans a new
-    /// set at once (the song playing now plays on; a mix already running into the next song keeps it).
+    /// set at once (the song playing now plays on; the next song stays when a transition into it is
+    /// planned or running, i.e. `mix.phase != Idle`, which with DJ transitions on is most of a song).
     pub(super) fn dj_replan(&mut self) -> Task<Message> {
         self.dj.requests_fresh = true;
         if !self.ai_dj_on() {
@@ -293,7 +294,7 @@ impl Listen {
             self.drop_break();
         }
         self.queue.remove_many(&uids);
-        // The DJ song a running mix keeps doesn't hold the new set back: it is planned behind it now.
+        // The DJ song a planned or running mix keeps doesn't hold the new set back: it is planned behind it now.
         let kept = self.queue.iter().skip(start).take_while(|i| i.auto).count().min(usize::from(keep_next));
         // A plan already under way was made without the change: drop it when it lands.
         self.dj.generation += 1;
