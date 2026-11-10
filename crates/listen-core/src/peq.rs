@@ -11,6 +11,8 @@ use std::f64::consts::PI;
 use std::io::Read;
 use std::sync::OnceLock;
 
+use crate::text::fold;
+
 /// Kind of one parametric band.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -254,14 +256,9 @@ pub fn index() -> &'static [Entry] {
     })
 }
 
-/// Lower-case letters and digits only ("WH-1000XM5" → "wh1000xm5").
-fn compact(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
-}
-
 fn words(s: &str) -> Vec<String> {
     s.split(|c: char| c.is_whitespace() || c == '(' || c == ')' || c == ',' || c == '/')
-        .map(compact)
+        .map(fold)
         .filter(|w| !w.is_empty())
         .collect()
 }
@@ -273,11 +270,11 @@ pub fn search(query: &str, limit: usize) -> Vec<&'static Entry> {
     if q.is_empty() {
         return Vec::new();
     }
-    let whole = compact(query);
+    let whole = fold(query);
     let mut hits: Vec<(u8, usize, &Entry)> = index()
         .iter()
         .filter_map(|e| {
-            let name = compact(&e.name);
+            let name = fold(&e.name);
             if !q.iter().all(|w| name.contains(w.as_str())) {
                 return None;
             }
@@ -301,7 +298,7 @@ pub fn search(query: &str, limit: usize) -> Vec<&'static Entry> {
 /// parentheses ignored) all appear in the device name, the longest such model. `None` when no
 /// model of at least 4 characters matches.
 pub fn suggest(device_name: &str) -> Option<&'static Entry> {
-    let label = compact(device_name);
+    let label = fold(device_name);
     if label.len() < 3 {
         return None;
     }

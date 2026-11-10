@@ -11,6 +11,7 @@
 pub mod names;
 
 use listen_core::model::Song;
+use listen_core::text::fold;
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -289,9 +290,7 @@ fn same_artist(a: &ArtistInfo, b: &ArtistInfo) -> bool {
 }
 
 fn same_title(a: &str, b: &str) -> bool {
-    let norm =
-        |s: &str| s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>();
-    norm(a) == norm(b)
+    fold(a) == fold(b)
 }
 
 fn num(v: &Value) -> u64 {
