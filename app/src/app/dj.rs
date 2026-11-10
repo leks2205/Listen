@@ -155,16 +155,37 @@ pub async fn resolve_slot(
 /// themselves time out well before).
 const BUSY_LIMIT: Duration = Duration::from_secs(240);
 
+/// Why the AI DJ plans no set now (see [`plan_blocker`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Blocker {
+    Off,
+    AlreadyPlanning,
+    SongsQueued,
+    /// After a failed plan; the Auto-DJ fills in meanwhile.
+    BackingOff,
+}
+
+impl std::fmt::Display for Blocker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Blocker::Off => "off",
+            Blocker::AlreadyPlanning => "already planning",
+            Blocker::SongsQueued => "songs still queued",
+            Blocker::BackingOff => "backing off",
+        })
+    }
+}
+
 /// Why a set is not planned now; `None` when it should be.
-fn plan_blocker(on: bool, busy: bool, upcoming: usize, backing_off: bool) -> Option<&'static str> {
+fn plan_blocker(on: bool, busy: bool, upcoming: usize, backing_off: bool) -> Option<Blocker> {
     if !on {
-        Some("off")
+        Some(Blocker::Off)
     } else if busy {
-        Some("already planning")
+        Some(Blocker::AlreadyPlanning)
     } else if upcoming > 0 {
-        Some("songs still queued")
+        Some(Blocker::SongsQueued)
     } else if backing_off {
-        Some("backing off")
+        Some(Blocker::BackingOff)
     } else {
         None
     }
@@ -717,7 +738,7 @@ impl Listen {
     }
 
     /// Why no set is planned now, not counting the first `kept` upcoming songs (see [`Self::dj_plan_past`]).
-    pub(super) fn dj_plan_blocker(&self, kept: usize) -> Option<&'static str> {
+    pub(super) fn dj_plan_blocker(&self, kept: usize) -> Option<Blocker> {
         plan_blocker(
             self.ai_dj_on(),
             self.dj.busy,
@@ -730,7 +751,7 @@ impl Listen {
     /// queued" (Tell the DJ: the next DJ song a mix keeps, the new set goes behind it).
     pub(super) fn dj_plan_past(&mut self, kept: usize) -> Task<Message> {
         if let Some(why) = self.dj_plan_blocker(kept) {
-            if why == "backing off" {
+            if why == Blocker::BackingOff {
                 tracing::debug!("AI DJ: backing off after an error; Auto-DJ fills in");
                 return self.fetch_autodj();
             }
@@ -1501,10 +1522,10 @@ mod tests {
     #[test]
     fn plans_only_on_the_last_song_when_idle() {
         assert_eq!(plan_blocker(true, false, 0, false), None);
-        assert_eq!(plan_blocker(false, false, 0, false), Some("off"));
-        assert_eq!(plan_blocker(true, true, 0, false), Some("already planning"));
-        assert_eq!(plan_blocker(true, false, 2, false), Some("songs still queued"));
-        assert_eq!(plan_blocker(true, false, 0, true), Some("backing off"));
+        assert_eq!(plan_blocker(false, false, 0, false), Some(Blocker::Off));
+        assert_eq!(plan_blocker(true, true, 0, false), Some(Blocker::AlreadyPlanning));
+        assert_eq!(plan_blocker(true, false, 2, false), Some(Blocker::SongsQueued));
+        assert_eq!(plan_blocker(true, false, 0, true), Some(Blocker::BackingOff));
     }
 
     #[test]

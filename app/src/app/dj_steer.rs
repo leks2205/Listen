@@ -70,6 +70,7 @@ impl Listen {
 mod tests {
     use super::*;
     use crate::app::Args;
+    use crate::app::dj::Blocker;
     use crate::demo;
 
     fn rig() -> Listen {
@@ -121,7 +122,7 @@ mod tests {
         s.sources.insert(songs[0].server_id.clone(), std::sync::Arc::new(fake));
         // The handover into the next DJ song is planned: that song stays.
         s.mix.phase = crate::app::mix::Phase::Planned;
-        assert_eq!(s.dj_plan_blocker(0), Some("songs still queued"));
+        assert_eq!(s.dj_plan_blocker(0), Some(Blocker::SongsQueued));
         let _ = s.on_steer(SteerMsg::Chip(Chip::Calmer));
         let left: Vec<String> = s.queue.iter().map(|i| i.song.id.clone()).collect();
         assert_eq!(
@@ -129,7 +130,11 @@ mod tests {
             vec![songs[0].id.clone(), songs[1].id.clone()],
             "current and the mixed-into song stay"
         );
-        assert_eq!(s.dj_plan_blocker(1), Some("already planning"), "the new set is being planned at once");
+        assert_eq!(
+            s.dj_plan_blocker(1),
+            Some(Blocker::AlreadyPlanning),
+            "the new set is being planned at once"
+        );
         // Own songs still queued behind it hold the new set back until they have played.
         let mut t = rig();
         t.queue.set(vec![songs[0].clone()], 0);
@@ -140,7 +145,7 @@ mod tests {
         t.dj.key = Some("test-key".into());
         t.mix.phase = crate::app::mix::Phase::Planned;
         let _ = t.on_steer(SteerMsg::Chip(Chip::MoreEnergy));
-        assert_eq!(t.dj_plan_blocker(1), Some("songs still queued"));
+        assert_eq!(t.dj_plan_blocker(1), Some(Blocker::SongsQueued));
     }
 
     #[test]
