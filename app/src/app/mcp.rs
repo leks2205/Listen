@@ -1021,6 +1021,9 @@ impl Listen {
                             return Err("This server can't rename playlists.".into());
                         }
                         let name = arg_str(args, "name").ok_or("name is missing")?.trim().to_string();
+                        if name.is_empty() {
+                            return Err("the name is empty".into());
+                        }
                         Task::future(async move {
                             source.rename_playlist(&id, &name).await.map_err(|e| e.to_string())?;
                             Ok(json!({ "name": name }))
