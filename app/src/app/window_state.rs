@@ -8,10 +8,7 @@ use listen_core::settings::{Rect, Restored, WindowState};
 #[derive(Debug, Clone)]
 pub enum WindowStateMsg {
     /// Asked after a resize or move: the window's mode right now.
-    Probe {
-        maximized: bool,
-        fullscreen: bool,
-    },
+    Probe { maximized: bool, fullscreen: bool },
     /// The debounce timer of that generation ran out.
     Flush(u64),
 }

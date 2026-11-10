@@ -769,7 +769,11 @@ impl Listen {
     /// (`Phase::Ready` only): both decks' filters are unknown again, the incoming one gets its
     /// starting EQ back.
     pub(super) fn mix_restore_deck_filters(&mut self) -> Task<Message> {
-        debug_assert_eq!(self.mix.phase, Phase::Ready, "deck filters are restored only while the incoming deck waits");
+        debug_assert_eq!(
+            self.mix.phase,
+            Phase::Ready,
+            "deck filters are restored only while the incoming deck waits"
+        );
         self.mix.eq = [[f32::NAN; 3]; 2];
         self.mix.echo = [None, None];
         self.mix.eq_done.iter_mut().for_each(|d| *d = false);

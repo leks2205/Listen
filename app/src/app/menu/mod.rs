@@ -137,6 +137,9 @@ pub enum MenuMsg {
     NewName(String),
     /// The songs of an album/playlist target, fetched for an action.
     Songs(MenuAction, Result<Vec<Song>, String>),
+    /// Like `Songs`, for a fetch started inside [`Listen::without_queue_confirm`]: applied
+    /// without the replace-queue confirmation, as the synchronous part was.
+    SongsUnconfirmed(MenuAction, Result<Vec<Song>, String>),
     /// A server-side change finished: the notice to show.
     Done(Result<String, String>),
     /// A playlist was renamed (id, new name).
@@ -287,7 +290,12 @@ impl Listen {
             }
             MenuMsg::Do(action) => return self.menu_action(action),
             MenuMsg::Songs(action, Ok(songs)) => return self.apply_to_songs(action, songs),
-            MenuMsg::Songs(_, Err(e)) => self.toast_error(format!("Could not load the songs: {e}")),
+            MenuMsg::SongsUnconfirmed(action, Ok(songs)) => {
+                return self.without_queue_confirm(|s| s.apply_to_songs(action, songs));
+            }
+            MenuMsg::Songs(_, Err(e)) | MenuMsg::SongsUnconfirmed(_, Err(e)) => {
+                self.toast_error(format!("Could not load the songs: {e}"))
+            }
             MenuMsg::Done(Ok(text)) => self.toast_success(text),
             MenuMsg::Done(Err(e)) => self.toast_error(e),
             MenuMsg::Renamed(Err(e)) | MenuMsg::Deleted(Err(e)) => self.toast_error(e),
@@ -694,8 +702,21 @@ impl Listen {
                 }
                 Ok(songs)
             },
-            move |r| Message::Menu(MenuMsg::Songs(action.clone(), r)),
+            self.menu_songs_msg(action),
         )
+    }
+
+    /// The message that applies `action` to songs fetched later. Captures whether the caller
+    /// runs inside [`Listen::without_queue_confirm`], whose scope ends before the fetch does.
+    pub(super) fn menu_songs_msg(
+        &self,
+        action: MenuAction,
+    ) -> impl Fn(Result<Vec<Song>, String>) -> Message + Clone + Send + use<> {
+        let unconfirmed = self.queue_confirm_bypassed();
+        move |r| match unconfirmed {
+            true => Message::Menu(MenuMsg::SongsUnconfirmed(action.clone(), r)),
+            false => Message::Menu(MenuMsg::Songs(action.clone(), r)),
+        }
     }
 
     pub(super) fn apply_to_songs(&mut self, action: MenuAction, mut songs: Vec<Song>) -> Task<Message> {
@@ -885,6 +906,21 @@ fn new_name(page: &MenuPage) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn songs_fetched_without_the_confirmation_are_applied_without_it() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.config.settings.queue.confirm_queue_changes = true;
+        s.queue.set(crate::demo::album_songs(0), 0);
+        let fetched = crate::demo::album_songs(1);
+        let msg = s.without_queue_confirm(|s| s.menu_songs_msg(MenuAction::Play))(Ok(fetched.clone()));
+        assert!(matches!(msg, Message::Menu(MenuMsg::SongsUnconfirmed(..))));
+        let _ = s.update(msg);
+        assert!(s.overlay.modal.is_none(), "no replace-queue question");
+        assert_eq!(s.queue.current().map(|i| i.song.id.clone()), Some(fetched[0].id.clone()));
+        // Outside the scope the question is asked.
+        assert!(matches!(s.menu_songs_msg(MenuAction::Play)(Ok(fetched)), Message::Menu(MenuMsg::Songs(..))));
+    }
 
     #[test]
     fn keys_map() {

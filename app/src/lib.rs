@@ -164,7 +164,8 @@ impl Args {
                 "--size" => {
                     let v = value("--size")?;
                     let (w, h) = v.split_once('x').ok_or("--size expects WxH")?;
-                    args.size = Some((w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?));
+                    args.size =
+                        Some((w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?));
                 }
                 "--screenshot" => args.screenshot = Some(value("--screenshot")?.into()),
                 "--screenshot-delay" => {

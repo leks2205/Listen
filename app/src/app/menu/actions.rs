@@ -1,7 +1,7 @@
 //! What the Favorite, radio and queue-order entries do (the kind files only
 //! declare them): one function per `MenuAction`, applied to every targeted item.
 
-use super::{MenuAction, MenuMsg, MenuTarget, PlayHow, QueueMove};
+use super::{MenuAction, MenuTarget, PlayHow, QueueMove};
 use crate::app::{Listen, Message, err};
 use iced::Task;
 use listen_core::model::SourceKind;
@@ -73,11 +73,11 @@ impl Listen {
         let play = how.action();
         // Radio is an automatic pick: snoozed and "Not interested" songs stay out.
         let blocked = self.auto_blocked();
+        let apply = self.menu_songs_msg(play);
         let done = move |r: Result<Vec<listen_core::model::Song>, String>| {
-            let r = r.map(|v| {
+            apply(r.map(|v| {
                 v.into_iter().filter(|s| !blocked.contains(&listen_core::versions::song_key(s))).collect()
-            });
-            Message::Menu(MenuMsg::Songs(play.clone(), r))
+            }))
         };
         match target {
             MenuTarget::Albums(albums) if albums.len() == 1 => {

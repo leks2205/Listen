@@ -432,12 +432,18 @@ impl Listen {
     // ---- replacing the queue, with a confirmation --------------------------------
 
     /// Runs `f` without the replace-queue confirmation (for callers outside the window,
-    /// e.g. the MCP server).
+    /// e.g. the MCP server). Songs `f` starts fetching are applied without it too
+    /// (`menu_songs_msg` carries the bypass into `MenuMsg::SongsUnconfirmed`).
     pub(super) fn without_queue_confirm<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         let was = std::mem::replace(&mut self.queue_ui.bypass_confirm, true);
         let out = f(self);
         self.queue_ui.bypass_confirm = was;
         out
+    }
+
+    /// Inside [`Self::without_queue_confirm`].
+    pub(super) fn queue_confirm_bypassed(&self) -> bool {
+        self.queue_ui.bypass_confirm
     }
 
     /// The setting asks before a queue with songs is replaced.

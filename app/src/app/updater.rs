@@ -752,33 +752,33 @@ impl Listen {
                     // Only releases that carry this system's package are offered (a
                     // release may ship without the Windows installer); a copy that
                     // cannot update itself still hears about every release.
-                    Ok(releases) => match pick_update_for(
-                        &releases,
-                        &Version::current(),
-                        a.update_channel,
-                        |r| package_for(&detect_install()).is_none_or(|p| has_package(r, p)),
-                    ) {
-                        None => {
-                            self.adv.update.available = None;
-                            self.adv.update.status =
-                                Some(format!("Listen {} is up to date.", Version::current()));
-                            if manual {
-                                self.toast_success("Listen is up to date.".into());
+                    Ok(releases) => {
+                        match pick_update_for(&releases, &Version::current(), a.update_channel, |r| {
+                            package_for(&detect_install()).is_none_or(|p| has_package(r, p))
+                        }) {
+                            None => {
+                                self.adv.update.available = None;
+                                self.adv.update.status =
+                                    Some(format!("Listen {} is up to date.", Version::current()));
+                                if manual {
+                                    self.toast_success("Listen is up to date.".into());
+                                }
+                            }
+                            Some(rel) => {
+                                let hidden = a.skipped_version == rel.tag
+                                    || listen_core::history::now_secs() < a.update_remind_after;
+                                self.adv.update.status =
+                                    Some(format!("Version {} is available.", rel.version));
+                                if self.adv.update.available.as_ref().map(|r| &r.tag) != Some(&rel.tag) {
+                                    self.adv.update.phase = Phase::Idle;
+                                }
+                                self.adv.update.available = Some(rel);
+                                if manual || !hidden {
+                                    self.open_modal(MODAL);
+                                }
                             }
                         }
-                        Some(rel) => {
-                            let hidden = a.skipped_version == rel.tag
-                                || listen_core::history::now_secs() < a.update_remind_after;
-                            self.adv.update.status = Some(format!("Version {} is available.", rel.version));
-                            if self.adv.update.available.as_ref().map(|r| &r.tag) != Some(&rel.tag) {
-                                self.adv.update.phase = Phase::Idle;
-                            }
-                            self.adv.update.available = Some(rel);
-                            if manual || !hidden {
-                                self.open_modal(MODAL);
-                            }
-                        }
-                    },
+                    }
                 }
             }
             UpdateMsg::Open => {
