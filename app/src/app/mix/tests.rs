@@ -1,5 +1,7 @@
 //! The transition engine's control flow without mpv: inert decks, deck events and task results fed in as
-//! messages, positions set by hand. Timing against real audio is `--check-decks`.
+//! messages, positions set by hand. Timing against real audio is not covered here: `--check-mix` checks
+//! plans on real songs and `crates/listen-player/tests/deck.rs` runs the deck primitives against a real
+//! mpv; a `--check-decks` harness for live deck timing is planned, not built (docs/dj-transitions.md).
 
 use super::*;
 use crate::app::SourceHandle;

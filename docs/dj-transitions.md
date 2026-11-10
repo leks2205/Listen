@@ -487,7 +487,7 @@ after playback on a deck (`start=10`):
 - **Not tested on real hardware** (ALSA period, Bluetooth). The extra latency is
   the same on both decks, but a desktop session's quantum and RT scheduling
   differ from the private daemon. Repeat this run there; once the real sink is
-  in the graph, the `--check-decks` harness in J does exactly that.
+  in the graph, a `--check-decks` harness (planned, not built yet) would do that.
 - **Rubberband CPU on the laptop** isn't measured; 3.2 s of CPU per minute here.
   The `rubberband=engine=faster` engine smears transients and drops out on speed
   changes, so it is not a good fallback; scaletempo2 is.
