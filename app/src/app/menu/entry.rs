@@ -8,7 +8,7 @@
 //! );
 //! out.push(Entry::submenu(Icon::LuPlay, "Play", children));          // a side panel
 //! out.push(Entry::action(..).when(cx.single()));                      // conditional
-//! out.push(Entry::action(..).disabled());                             // greyed out
+//! out.push(Entry::action(..).enabled_if(cx.single()));                // greyed out unless
 //! ```
 //!
 //! Kind files only declare entries; [`resolve`] drops those the source can't do or whose

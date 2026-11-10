@@ -16,26 +16,6 @@ pub enum TargetKind {
     Folder,
 }
 
-impl TargetKind {
-    /// "song" / "songs" for a count of `n`.
-    pub fn noun(self, n: usize) -> &'static str {
-        match (self, n == 1) {
-            (TargetKind::Song, true) => "song",
-            (TargetKind::Song, false) => "songs",
-            (TargetKind::Album, true) => "album",
-            (TargetKind::Album, false) => "albums",
-            (TargetKind::Artist, true) => "artist",
-            (TargetKind::Artist, false) => "artists",
-            (TargetKind::Playlist, true) => "playlist",
-            (TargetKind::Playlist, false) => "playlists",
-            (TargetKind::Genre, true) => "genre",
-            (TargetKind::Genre, false) => "genres",
-            (TargetKind::Folder, true) => "folder",
-            (TargetKind::Folder, false) => "folders",
-        }
-    }
-}
-
 /// What was right-clicked. Never empty when a menu is open.
 #[derive(Debug, Clone)]
 pub enum MenuTarget {
@@ -209,6 +189,5 @@ mod tests {
         let picks: Vec<Picked> = songs[..2].iter().cloned().map(Picked::Song).collect();
         assert_eq!(MenuTarget::from_picks(&picks).unwrap().len(), 2);
         assert!(MenuTarget::from_picks(&[]).is_none());
-        assert_eq!(TargetKind::Album.noun(2), "albums");
     }
 }
