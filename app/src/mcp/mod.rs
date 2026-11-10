@@ -5,13 +5,13 @@
 
 pub mod tools;
 
-use crate::remote::{constant_eq, read_head, respond};
+use crate::remote::{bind, constant_eq, read_head, respond, serve};
 use serde_json::{Value, json};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot, watch};
 
 /// The protocol revision this server speaks (older clients get theirs echoed).
@@ -100,31 +100,11 @@ struct Ctx {
 
 /// Starts listening. Errors are the message to show (port in use, bad address).
 pub async fn start(cfg: Config, calls: mpsc::UnboundedSender<Call>) -> Result<Running, String> {
-    let ip: std::net::IpAddr =
-        cfg.bind.trim().parse().map_err(|_| format!("“{}” is not an IP address", cfg.bind))?;
-    let listener = TcpListener::bind(SocketAddr::new(ip, cfg.port)).await.map_err(|e| e.to_string())?;
+    let listener = bind(&cfg.bind, cfg.port).await?;
     let addr = listener.local_addr().map_err(|e| e.to_string())?;
-    let (stop_tx, mut stop_rx) = watch::channel(false);
+    let (stop_tx, stop_rx) = watch::channel(false);
     let ctx = Arc::new(Ctx { cfg, calls });
-    let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CLIENTS));
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = stop_rx.changed() => break,
-                accepted = listener.accept() => {
-                    let Ok((stream, _)) = accepted else { continue };
-                    let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
-                    let ctx = ctx.clone();
-                    tokio::spawn(async move {
-                        let _permit = permit;
-                        if let Err(e) = connection(stream, ctx).await {
-                            tracing::debug!("mcp: {e}");
-                        }
-                    });
-                }
-            }
-        }
-    });
+    serve(listener, MAX_CLIENTS, stop_rx, ctx, "mcp", connection);
     tracing::info!("MCP server listening on {addr}");
     Ok(Running { addr, stop: stop_tx })
 }

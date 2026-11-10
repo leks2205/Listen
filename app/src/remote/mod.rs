@@ -348,33 +348,58 @@ pub async fn start(
     shared: Arc<Shared>,
     cmds: mpsc::UnboundedSender<Command>,
 ) -> Result<Running, String> {
-    let ip: std::net::IpAddr =
-        cfg.bind.trim().parse().map_err(|_| format!("“{}” is not an IP address", cfg.bind))?;
-    let listener = TcpListener::bind(SocketAddr::new(ip, cfg.port)).await.map_err(|e| e.to_string())?;
+    let listener = bind(&cfg.bind, cfg.port).await?;
     let addr = listener.local_addr().map_err(|e| e.to_string())?;
-    let (stop_tx, mut stop_rx) = watch::channel(None);
+    let (stop_tx, stop_rx) = watch::channel(None);
     let ctx = Arc::new(Ctx { cfg, shared, cmds, stop: stop_rx.clone() });
-    let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CLIENTS));
+    serve(listener, MAX_CLIENTS, stop_rx, ctx, "remote", connection);
+    tracing::info!("remote control listening on {addr}");
+    Ok(Running { addr, stop: stop_tx })
+}
+
+/// Binds the listening socket of a server on `bind` (an IP address) and `port`. Errors are the
+/// message to show (bad address, port in use). Shared by the remote and the MCP server.
+pub(crate) async fn bind(bind: &str, port: u16) -> Result<TcpListener, String> {
+    let ip: std::net::IpAddr = bind.trim().parse().map_err(|_| format!("“{bind}” is not an IP address"))?;
+    TcpListener::bind(SocketAddr::new(ip, port)).await.map_err(|e| e.to_string())
+}
+
+/// Serves `listener` in the background until `stop` changes: each client gets its own task running
+/// `connection`, at most `max_clients` at once (more are dropped at once, so a flood can't pile up
+/// tasks). Errors of a connection are logged at debug under `name`. Shared by the remote and the
+/// MCP server; a new HTTP-ish server should use it too.
+pub(crate) fn serve<S, C, F, Fut>(
+    listener: TcpListener,
+    max_clients: usize,
+    mut stop: watch::Receiver<S>,
+    ctx: Arc<C>,
+    name: &'static str,
+    connection: F,
+) where
+    S: Send + Sync + 'static,
+    C: Send + Sync + 'static,
+    F: Fn(TcpStream, Arc<C>) -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<(), String>> + Send + 'static,
+{
+    let slots = Arc::new(tokio::sync::Semaphore::new(max_clients));
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = stop_rx.changed() => break,
+                _ = stop.changed() => break,
                 accepted = listener.accept() => {
                     let Ok((stream, _)) = accepted else { continue };
                     let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
-                    let ctx = ctx.clone();
+                    let task = connection(stream, ctx.clone());
                     tokio::spawn(async move {
                         let _permit = permit;
-                        if let Err(e) = connection(stream, ctx).await {
-                            tracing::debug!("remote: {e}");
+                        if let Err(e) = task.await {
+                            tracing::debug!("{name}: {e}");
                         }
                     });
                 }
             }
         }
     });
-    tracing::info!("remote control listening on {addr}");
-    Ok(Running { addr, stop: stop_tx })
 }
 
 pub(crate) struct Head {
