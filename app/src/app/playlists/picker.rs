@@ -174,7 +174,8 @@ impl Listen {
             },
         );
         if reopen {
-            Task::batch([add, self.open_playlist(reopen_id), self.load_playlists()])
+            // `chain`, not `batch`: a reload running beside the add can read the old rows.
+            add.chain(Task::batch([self.open_playlist(reopen_id), self.load_playlists()]))
         } else if browsing {
             add.chain(self.load_playlists())
         } else {
