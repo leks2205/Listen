@@ -741,11 +741,10 @@ impl Listen {
         Task::batch(tasks)
     }
 
-    /// The incoming deck loaded its file: sets its starting EQ (e.g. bass cut) and every other filter to
-    /// neutral.
+    /// Sets the incoming deck's starting EQ (e.g. bass cut) and every other filter to neutral. Does not
+    /// touch the phase.
     fn mix_deck_ready(&mut self) -> Task<Message> {
         tracing::debug!("mix deck {} ready", self.mix.in_deck);
-        self.mix.phase = Phase::Ready;
         let Some(plan) = self.mix.plan.clone() else { return Task::none() };
         let in_deck = self.mix.in_deck;
         let mut start = [Filter::Bass.neutral(), Filter::Highpass.neutral(), Filter::Lowpass.neutral()];
@@ -766,9 +765,11 @@ impl Listen {
         Task::batch(tasks)
     }
 
-    /// After the decks' chains were rebuilt (headphone switch) while the incoming deck waits:
-    /// both decks' filters are unknown again, the incoming one gets its starting EQ back.
+    /// After the decks' chains were rebuilt (headphone switch) while the incoming deck waits loaded
+    /// (`Phase::Ready` only): both decks' filters are unknown again, the incoming one gets its
+    /// starting EQ back.
     pub(super) fn mix_restore_deck_filters(&mut self) -> Task<Message> {
+        debug_assert_eq!(self.mix.phase, Phase::Ready, "deck filters are restored only while the incoming deck waits");
         self.mix.eq = [[f32::NAN; 3]; 2];
         self.mix.echo = [None, None];
         self.mix.eq_done.iter_mut().for_each(|d| *d = false);
@@ -1290,6 +1291,8 @@ impl Listen {
             PlayerEvent::Restarted
                 if self.mix.phase == Phase::Preloading && self.mix.loaded && deck == self.mix.in_deck =>
             {
+                // The incoming deck loaded its file.
+                self.mix.phase = Phase::Ready;
                 return self.mix_deck_ready();
             }
             PlayerEvent::Error(e) if self.mix.phase != Phase::Idle && deck == self.mix.in_deck => {
