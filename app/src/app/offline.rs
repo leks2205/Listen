@@ -224,8 +224,13 @@ impl Listen {
         let mut added = 0;
         let mut refused: Option<Refused> = None;
         let mut unsupported = false;
+        let mut already_queued = false;
         for song in songs {
-            if store.contains(&song.server_id, &song.id) || self.offline.queued(&song) {
+            if store.contains(&song.server_id, &song.id) {
+                continue;
+            }
+            if self.offline.queued(&song) {
+                already_queued = true;
                 continue;
             }
             if !self.can_download(&song) {
@@ -256,8 +261,10 @@ impl Listen {
             added += 1;
         }
         self.toast_info(match (added, refused, unsupported) {
-            (_, Some(r), _) => format!("{r}. Remove some downloads first."),
+            (0, Some(r), _) => format!("{r}. Remove some downloads first."),
+            (n, Some(r), _) => format!("Downloading {n} songs; {r}. Remove some downloads first."),
             (0, None, true) => "This server does not support downloads (or is not connected).".into(),
+            (0, None, false) if already_queued => "Already downloading.".into(),
             (0, None, false) => "Already downloaded.".into(),
             (1, None, _) => "Downloading 1 song…".into(),
             (n, None, _) => format!("Downloading {n} songs…"),

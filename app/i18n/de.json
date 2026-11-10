@@ -2745,5 +2745,7 @@
 "The first heart-rate sensor found is remembered and tried first next time.": "Der erste gefundene Herzfrequenzsensor wird gemerkt und beim nächsten Mal zuerst versucht.",
 "Forget sensor": "Sensor vergessen",
 "None yet": "Noch keiner",
-"Toggle heart-rate tempo": "Herzfrequenz-Tempo umschalten"
+"Toggle heart-rate tempo": "Herzfrequenz-Tempo umschalten",
+"Already downloading.": "Wird bereits heruntergeladen.",
+"Downloading {} songs; {}. Remove some downloads first.": "{} Titel werden heruntergeladen; {}. Entferne zuerst einige Downloads."
 }

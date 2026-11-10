@@ -16,7 +16,7 @@ Right-click a song, an album, a playlist or a selection (or use the three dots) 
 - the **Downloads** page shows "Downloading “Title” (3 of 12)..." in blue,
 - when the batch is finished you get "Downloaded 12 for offline play." Songs that failed are counted too, and listed on the Downloads page with the reason.
 
-Songs you already have are skipped ("Already downloaded."). If the server is not connected or has no download support, Listen says so.
+Songs you already have are skipped ("Already downloaded."), and so are songs already waiting in the download queue ("Already downloading."). If the server is not connected or has no download support, Listen says so.
 
 Listen downloads the file as the server stores it, not a transcoded version.
 
