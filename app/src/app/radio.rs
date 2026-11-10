@@ -633,6 +633,12 @@ impl Listen {
             return Task::none();
         };
         let key = Listen::server_song_key(&song);
+        if !self.demo && !self.sources.contains_key(&song.server_id) {
+            // Not connected yet (e.g. at start): nothing for this song, and no "loaded" mark, so
+            // the next call asks again.
+            self.radio.related = Related::default();
+            return self.related_push(&song.id, Vec::new());
+        }
         let r = &mut self.radio.related;
         if !force && r.for_song.as_deref() == Some(key.as_str()) && (r.loading || r.error.is_none()) {
             return Task::none();
