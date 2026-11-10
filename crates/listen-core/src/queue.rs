@@ -496,6 +496,8 @@ impl Queue {
         self.current()
     }
 
+    /// Removes an item. Removing the current one makes the next item in play order current, or the
+    /// previous one when it was the last; an empty queue has no current item.
     pub fn remove(&mut self, uid: u64) {
         let Some(idx) = self.items.iter().position(|it| it.uid == uid) else {
             return;

@@ -4796,8 +4796,9 @@ fn shellexpand_home(p: &str) -> std::path::PathBuf {
 }
 
 /// A restored queue whose current item is a DJ bridge: the bridge goes (it only ever plays mixed in, never
-/// as a song from its start) and the song after it starts from the beginning. Returns the position to
-/// resume at. A bridge further on keeps its stretch (`QueueItem::bridge` is saved with the queue).
+/// as a song from its start) and the song after it starts from the beginning; a bridge that was last in
+/// the queue leaves the song before it current, from its start (`Queue::remove`), like a queue that ended.
+/// Returns the position to resume at. A bridge further on keeps its stretch (`QueueItem::bridge` is saved with the queue).
 pub(crate) fn drop_restored_bridge(queue: &mut Queue, at: Duration) -> Duration {
     let Some(item) = queue.current().filter(|i| i.bridge.is_some()) else { return at };
     tracing::info!("restored queue: the bridge “{}” was playing; starting after it", item.song.title);
