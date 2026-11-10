@@ -16,6 +16,8 @@ use std::path::PathBuf;
 const REMOTE_SECRET: &str = "remote-control";
 /// Songs sent to the phone's queue tab at most.
 const REMOTE_QUEUE_MAX: usize = 2000;
+/// Browsed songs kept so a phone can play one by id; past this the map starts over.
+const REMOTE_TRACKS_MAX: usize = 2000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -104,7 +106,8 @@ struct RemoteRuntime {
     queue_key: Option<(u64, Option<u64>)>,
     /// The cover file of the playing entry, looked up once per entry.
     cover: Option<(u64, Option<PathBuf>)>,
-    /// Songs of the phone's last track list.
+    /// Songs the phones browsed (by id), so `play-track` can find one; cleared past
+    /// `REMOTE_TRACKS_MAX`, after which a phone must list the track again.
     tracks: HashMap<String, Song>,
 }
 
@@ -309,7 +312,7 @@ impl Listen {
             }
             IntegrationsMsg::RemoteTracks(songs) => {
                 let map = &mut self.integ.remote.tracks;
-                if map.len() > 2000 {
+                if map.len() > REMOTE_TRACKS_MAX {
                     map.clear();
                 }
                 map.extend(songs.into_iter().map(|s| (s.id.clone(), s)));
