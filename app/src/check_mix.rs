@@ -1,6 +1,6 @@
 //! `listen --check-mix <a> <b> [--render out.wav] [--lyrics-a a.lrc] [--lyrics-b b.lrc] [--levels out.jsonl]`: plans the DJ
 //! transition from `a` into `b` as the player would and optionally renders an offline preview
-//! (`listen_mix::render`). A song is a Navidrome song id (first Navidrome server), `ytm:<videoId>` (via
+//! (`listen_mix::render`). A song is a Navidrome song id (the active Navidrome server, else the first), `ytm:<videoId>` (via
 //! yt-dlp) or a local file / URL; both are analysed afresh. Synced lyrics given as LRC files are merged
 //! into the analysis like the player does with fetched ones (`listen_mix::lyric`). `--levels` writes each song's
 //! modelled local loudness (`listen_mix::loudness::LocalLevel`) next to its measured 3 s loudness, every 0.5 s.
@@ -215,10 +215,9 @@ async fn input_for(
     };
     let client = listen_subsonic::Subsonic::new(server.id.clone(), &server.url, &server.username, &password)
         .map_err(|e| e.to_string())?;
-    // The raw-file URL only needs the id; any song value carries it.
-    let mut song = crate::demo::album_songs(0)[0].clone();
-    song.id = arg.to_string();
-    song.server_id = server.id.clone();
+    // The raw-file URL needs only the id; a bare song carries nothing else that could be taken for real.
+    let song =
+        listen_core::model::Song::new(arg, server.id.clone(), listen_core::model::SourceKind::Subsonic, "");
     client.analysis_url(&song).ok_or_else(|| "no analysis URL".to_string())
 }
 
