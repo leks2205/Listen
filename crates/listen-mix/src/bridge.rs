@@ -1,12 +1,15 @@
 //! Bridge songs: when the next song is too far from the current one to blend well (a tempo gap, clashing
 //! keys, a very different sound), a DJ plays a few bars of a third record that sits between the two and
-//! mixes out of it again. That record is the "bridge"; here it is an already analysed song, and only a
-//! short instrumental stretch of it plays ([`BRIDGE_BARS`] bars: blend in, the groove alone for a few bars,
-//! blend out).
+//! mixes out of it again. That record is the "bridge"; here it is an already analysed song of the pair's
+//! scene (usually a sung song: the app's scene gate decides which songs may bridge), and only a short
+//! stretch of it plays ([`BRIDGE_BARS`] or [`SHORT_BRIDGE_BARS`] bars, at most [`MAX_BRIDGE_S`]): blend in,
+//! the bridge alone for a few bars, blend out. The stretch has no lead vocal where it blends
+//! (`EDGE_VOCAL`); in between it may be sung.
 //!
 //! - [`gap`] says whether a pair is far enough apart to want a bridge.
 //! - [`choose`] picks the bridge song and the stretch ([`BridgeCut`]) so that both legs, current → bridge
-//!   and bridge → next, are beat-matched blends that cost less than the direct join.
+//!   and bridge → next, are beat-matched blends that each cost clearly less than the direct join
+//!   (`MIN_GAIN` / [`MIN_GAIN_UNMATCHED`]).
 //! - [`clip`] turns a song's analysis into the view of its stretch the planner works on; [`plan_into`] and
 //!   [`plan_out_of`] plan the two legs.
 
@@ -122,10 +125,10 @@ pub fn always_try(direct: &TransitionPlan) -> bool {
 }
 
 /// Picks the bridge for `out` → `inn` from analysed `candidates`: the one whose legs both flow better than
-/// the direct join and both plan as beat-matched blends, with the best instrumental stretch. `None` if
+/// the direct join and both plan as beat-matched blends, with the best stretch ([`find_cut`]). `None` if
 /// nothing fits. `ctx.out_position_s` is where `out` plays now. `direct` is the plan for the direct join:
-/// when it isn't beat-matched, legs that flow no worse than the direct pair are enough (a bridge beats an
-/// echo-out or a cut); otherwise each leg must be [`MIN_GAIN`] better.
+/// each leg must flow `MIN_GAIN` better than it, or [`MIN_GAIN_UNMATCHED`] better when the direct join
+/// can't be beat-matched (an echo-out or a cut otherwise).
 pub fn choose(
     out: &Features,
     inn: &Features,

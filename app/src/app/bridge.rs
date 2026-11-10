@@ -1,5 +1,6 @@
 //! DJ bridges in the queue (`listen_mix::bridge`): when the DJ's next song is far from the current one, a
-//! short instrumental stretch of an already analysed song goes between them and is mixed in and out.
+//! short stretch (at most a minute) of an already analysed song of the same scene goes between them and is
+//! mixed in and out. Every candidate passes `listen_analysis::bridge_scene_gate` first.
 //!
 //! The bridge only exists while a mix into it is planned or running: a mix that is given up before its
 //! handover removes the bridge again, and a bridge that becomes current any other way is skipped. If its
