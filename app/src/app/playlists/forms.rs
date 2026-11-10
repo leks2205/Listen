@@ -356,10 +356,12 @@ impl Listen {
                 if let Some(f) = self.playlist_page.form.as_mut() {
                     f.busy = false;
                 }
-                self.toast_error(format!(
-                    "Could not {} the playlist: {e}",
-                    if creating { "create" } else { "change" }
-                ));
+                // Whole sentences, not an English verb in a hole: translations need the full sentence.
+                self.toast_error(if creating {
+                    format!("Could not create the playlist: {e}")
+                } else {
+                    format!("Could not change the playlist: {e}")
+                });
                 Task::none()
             }
             Ok(FormDone::Created(p)) => {

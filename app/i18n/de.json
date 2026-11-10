@@ -445,6 +445,8 @@
 "Could not connect to {}: {}": "Konnte keine Verbindung zu {} herstellen: {}",
 "Could not create the share link: {}": "Konnte den Freigabelink nicht erstellen: {}",
 "Could not delete the history: {}": "Konnte den Verlauf nicht löschen: {}",
+"Could not create the playlist: {}": "Konnte die Wiedergabeliste nicht erstellen: {}",
+"Could not change the playlist: {}": "Konnte die Wiedergabeliste nicht ändern: {}",
 "Could not delete the playlist: {}": "Konnte die Wiedergabeliste nicht löschen: {}",
 "Could not delete the station: {}": "Konnte den Sender nicht löschen: {}",
 "Could not download {} files (“{}”: {}).": "{} Dateien konnten nicht heruntergeladen werden („{}“: {}).",
