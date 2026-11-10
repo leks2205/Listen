@@ -56,18 +56,16 @@ impl Secrets {
         if self.file_only.load(Ordering::Relaxed) { SecretStore::File } else { SecretStore::Auto }
     }
 
-    /// Switches the store and moves the secrets of `servers` to it.
+    /// Switches the store and moves the secrets of `servers` to it: each one is written to the new store
+    /// first and only then removed from the keyring, so a failed write never loses a secret.
     pub fn switch_store(&self, store: SecretStore, servers: &[ServerId]) {
         let secrets: Vec<(&ServerId, String)> =
             servers.iter().filter_map(|id| self.get(id).map(|s| (id, s))).collect();
-        if store == SecretStore::File {
-            for (id, _) in &secrets {
-                self.delete_keyring(id);
-            }
-        }
         self.file_only.store(store == SecretStore::File, Ordering::Relaxed);
         for (id, secret) in &secrets {
-            self.set(id, secret);
+            if self.set(id, secret) && store == SecretStore::File {
+                self.delete_keyring(id);
+            }
         }
     }
 
@@ -105,30 +103,41 @@ impl Secrets {
 
     pub fn get(&self, server: &ServerId) -> Option<String> {
         if self.file_only.load(Ordering::Relaxed) {
-            return self.read_fallback().remove(&server.0);
+            return self.fallback_secret(server);
         }
         let id = server.0.clone();
         let read = off_runtime(move || Entry::new(SERVICE, &id).and_then(|e| e.get_password()));
         match read {
             Some(Ok(secret)) => Some(secret),
-            Some(Err(keyring::Error::NoEntry)) => self.read_fallback().remove(&server.0),
+            Some(Err(keyring::Error::NoEntry)) => self.fallback_secret(server),
             Some(Err(e)) => {
                 tracing::warn!("keyring unavailable ({e}); using fallback file");
-                self.read_fallback().remove(&server.0)
+                self.fallback_secret(server)
             }
             None => {
                 tracing::warn!("the keyring call panicked; using fallback file");
-                self.read_fallback().remove(&server.0)
+                self.fallback_secret(server)
             }
         }
     }
 
-    pub fn set(&self, server: &ServerId, secret: &str) {
+    fn fallback_secret(&self, server: &ServerId) -> Option<String> {
+        match self.read_fallback() {
+            Ok(mut all) => all.remove(&server.0),
+            Err(e) => {
+                tracing::error!("could not read {}: {e}", self.fallback.display());
+                None
+            }
+        }
+    }
+
+    /// Stores `secret`; false when it could not be stored anywhere (the error is logged).
+    pub fn set(&self, server: &ServerId, secret: &str) -> bool {
         if self.file_only.load(Ordering::Relaxed) {
-            let mut all = self.read_fallback();
-            all.insert(server.0.clone(), secret.to_string());
-            self.write_fallback(&all);
-            return;
+            return self.update_fallback(|all| {
+                all.insert(server.0.clone(), secret.to_string());
+                true
+            });
         }
         let id = server.0.clone();
         let value = secret.to_string();
@@ -137,10 +146,8 @@ impl Secrets {
         match written {
             Some(Ok(())) => {
                 // Don't leave an older copy in the fallback file.
-                let mut all = self.read_fallback();
-                if all.remove(&server.0).is_some() {
-                    self.write_fallback(&all);
-                }
+                self.update_fallback(|all| all.remove(&server.0).is_some());
+                true
             }
             other => {
                 // An older keyring copy would win over the file in `get` (it reads the keyring first), so the
@@ -156,9 +163,10 @@ impl Secrets {
                         self.fallback.display()
                     ),
                 }
-                let mut all = self.read_fallback();
-                all.insert(server.0.clone(), keep.clone());
-                self.write_fallback(&all);
+                self.update_fallback(|all| {
+                    all.insert(server.0.clone(), keep.clone());
+                    true
+                })
             }
         }
     }
@@ -167,34 +175,58 @@ impl Secrets {
         if !self.file_only.load(Ordering::Relaxed) {
             self.delete_keyring(server);
         }
-        let mut all = self.read_fallback();
-        if all.remove(&server.0).is_some() {
-            self.write_fallback(&all);
+        self.update_fallback(|all| all.remove(&server.0).is_some());
+    }
+
+    /// The fallback file's secrets: empty when there is no file. A file that exists but cannot be read or
+    /// parsed is an error, never "empty": every write rewrites the whole file, so reading it as empty would
+    /// erase the secrets of every other server.
+    fn read_fallback(&self) -> std::io::Result<BTreeMap<String, String>> {
+        match std::fs::read_to_string(&self.fallback) {
+            Ok(text) => toml::from_str(&text).map_err(std::io::Error::other),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
+            Err(e) => Err(e),
         }
     }
 
-    fn read_fallback(&self) -> BTreeMap<String, String> {
-        std::fs::read_to_string(&self.fallback).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default()
+    /// Reads the file, applies `change` (true = something changed) and writes it back. False when the
+    /// file could not be read or written; the file is then left as it was.
+    fn update_fallback(&self, change: impl FnOnce(&mut BTreeMap<String, String>) -> bool) -> bool {
+        let result = self
+            .read_fallback()
+            .and_then(|mut all| if change(&mut all) { self.write_fallback(&all) } else { Ok(()) });
+        if let Err(e) = &result {
+            tracing::error!("could not update {} (left unchanged): {e}", self.fallback.display());
+        }
+        result.is_ok()
     }
 
-    fn write_fallback(&self, all: &BTreeMap<String, String>) {
-        let write = || -> std::io::Result<()> {
-            if let Some(dir) = self.fallback.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
-            let text = toml::to_string(all).map_err(std::io::Error::other)?;
-            let mut opts = std::fs::OpenOptions::new();
-            opts.write(true).create(true).truncate(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                opts.mode(0o600);
-            }
-            std::io::Write::write_all(&mut opts.open(&self.fallback)?, text.as_bytes())
-        };
-        if let Err(e) = write() {
-            tracing::error!("could not write {}: {e}", self.fallback.display());
+    /// Writes a private temp file next to it and renames it over the old one: a crash mid-write leaves
+    /// the old file, and the new one is always created 0600 (`mode` only applies when a file is created).
+    fn write_fallback(&self, all: &BTreeMap<String, String>) -> std::io::Result<()> {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        if let Some(dir) = self.fallback.parent() {
+            std::fs::create_dir_all(dir)?;
         }
+        let text = toml::to_string(all).map_err(std::io::Error::other)?;
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let tmp = self.fallback.with_extension(format!("toml.tmp-{}-{n}", std::process::id()));
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let written = opts.open(&tmp).and_then(|mut f| {
+            std::io::Write::write_all(&mut f, text.as_bytes())?;
+            f.sync_all()
+        });
+        let renamed = written.and_then(|()| std::fs::rename(&tmp, &self.fallback));
+        if renamed.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        renamed
     }
 }
 
@@ -223,6 +255,36 @@ mod tests {
         }
         secrets.delete(&id);
         assert_eq!(secrets.get(&id), None);
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    #[test]
+    fn an_unreadable_credentials_file_is_never_overwritten() {
+        let d = dir("corrupt");
+        let file = d.join("credentials.toml");
+        std::fs::write(&file, "not = [toml").unwrap();
+        let secrets = Secrets::with_store(&d, SecretStore::File);
+        let id = ServerId("nd-1".into());
+        assert!(!secrets.set(&id, "pw"), "a write over a file that does not parse fails");
+        secrets.delete(&id);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "not = [toml");
+        assert_eq!(secrets.get(&id), None);
+        std::fs::remove_dir_all(d).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_existing_credentials_file_becomes_private_on_the_next_write() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = dir("mode");
+        let file = d.join("credentials.toml");
+        std::fs::write(&file, "other = \"kept\"\n").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let secrets = Secrets::with_store(&d, SecretStore::File);
+        assert!(secrets.set(&ServerId("nd-1".into()), "pw"));
+        assert_eq!(std::fs::metadata(&file).unwrap().permissions().mode() & 0o077, 0);
+        assert_eq!(secrets.get(&ServerId("other".into())).as_deref(), Some("kept"));
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1, "no temp file left behind");
         std::fs::remove_dir_all(d).ok();
     }
 
