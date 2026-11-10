@@ -1694,9 +1694,12 @@ impl Listen {
     }
 
     /// Reconnects on start-up: the active server first, the others in the
-    /// background (so switching is instant and queued songs can play).
+    /// background (so switching is instant and queued songs can play). A config with servers but no
+    /// active one (its active server was removed while the next one could not connect) starts with the
+    /// first server; the `Connected` handler browses whichever answers first when none is active.
     fn restore_session(&mut self) -> Task<Message> {
-        let Some(active) = self.config.active_server.clone() else {
+        let first = self.config.servers.first().map(|s| s.id.clone());
+        let Some(active) = self.config.active_server.clone().or(first) else {
             self.connecting = false;
             return Task::none();
         };
