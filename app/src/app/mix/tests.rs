@@ -1182,8 +1182,8 @@ fn lyrics_arriving_before_the_preload_replan_the_mix() {
     let before = plan_of(&s);
     let item = |s: &Listen, uid: u64| s.queue.iter().find(|i| i.uid == uid).unwrap().song.clone();
     let inn = item(&s, s.mix.in_uid);
-    let key = Listen::song_key(&s.playable(&inn));
-    let out_key = Listen::song_key(&item(&s, s.mix.out_uid));
+    let key = Listen::server_song_key(&s.playable(&inn));
+    let out_key = Listen::server_song_key(&item(&s, s.mix.out_uid));
     // Both songs are sung from start to end: no instrumental intro or outro to blend over.
     let sung = VocalMap { sung: vec![(1.0, 236.0)], line_ends: vec![236.0], chorus: vec![] };
     for k in [&key, &out_key] {

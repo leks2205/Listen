@@ -373,7 +373,10 @@ pub fn write_export(dir: &Path, name: &str, text: &str) -> std::io::Result<PathB
 }
 
 impl Listen {
-    pub fn song_key(song: &Song) -> String {
+    /// `server:id`: one exact song on one server (lyrics, vocal maps, word lists and other per-song
+    /// caches). Not to be confused with `listen_core::versions::song_key`, which folds every version
+    /// of a song (radio edit, MV, live) into one key for the DJs' dedupe and exclusions.
+    pub fn server_song_key(song: &Song) -> String {
         format!("{}:{}", song.server_id.0, song.id)
     }
 
@@ -395,7 +398,7 @@ impl Listen {
     fn lookup_lyrics(&mut self, song: Song) -> Task<Message> {
         self.lyrics = None;
         self.lyric_active = None;
-        let key = Self::song_key(&song);
+        let key = Self::server_song_key(&song);
         let ui = &mut self.lyrics_ui;
         if ui.key != key {
             ui.key = key.clone();
@@ -717,7 +720,7 @@ impl Listen {
             LyricsMsg::Viewport(size) => self.lyrics_ui.viewport = Some(size),
             LyricsMsg::Clear => {
                 let Some(song) = self.lyrics_song_now() else { return Task::none() };
-                let key = Self::song_key(&song);
+                let key = Self::server_song_key(&song);
                 self.lyrics_ui.set_override(&key, None);
                 self.lyrics_ui.suppressed.insert(key);
                 self.lyrics_song = Some(song.id.clone());
@@ -725,7 +728,7 @@ impl Listen {
             }
             LyricsMsg::Refresh => {
                 let Some(song) = self.lyrics_song_now() else { return Task::none() };
-                self.lyrics_ui.suppressed.remove(&Self::song_key(&song));
+                self.lyrics_ui.suppressed.remove(&Self::server_song_key(&song));
                 self.lyrics_song = Some(song.id.clone());
                 return self.lookup_lyrics(song);
             }
@@ -894,7 +897,7 @@ impl Listen {
                 else {
                     return Task::none();
                 };
-                let key = Self::song_key(&song);
+                let key = Self::server_song_key(&song);
                 self.lyrics_ui.suppressed.remove(&key);
                 self.lyrics_ui.set_override(
                     &key,

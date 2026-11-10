@@ -67,7 +67,7 @@ impl Listen {
             return Task::none();
         };
         let (lang, language) = language();
-        let song_key = format!("{}:{}", song.server_id.0, song.id);
+        let song_key = Listen::server_song_key(&song);
         let key = format!("{song_key}|{lang}");
         if !force && self.about.key == key && (self.about.card.is_some() || self.about.loading) {
             return Task::none();

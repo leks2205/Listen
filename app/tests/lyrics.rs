@@ -141,7 +141,7 @@ fn search_pick_apply_remembers_the_override_and_clear_forgets_it() {
     let _ = s.update(Message::Lyrics(LyricsMsg::Preview(token, Some(picked))));
     click(&mut s, "Apply");
 
-    let key = Listen::song_key(&s.queue.current().unwrap().song);
+    let key = Listen::server_song_key(&s.queue.current().unwrap().song);
     let o = s.lyrics_ui.override_for(&key).expect("override remembered");
     assert_eq!((o.source.as_str(), o.id.as_str()), ("NetEase", "42"));
     assert_eq!(s.lyrics.as_ref().unwrap().lines[0].text, "Picked line");

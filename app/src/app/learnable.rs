@@ -120,7 +120,7 @@ impl Listen {
             return Task::none();
         }
         let lemmas = known::gloss_lemmas(&self.lyrics_ui.glosses);
-        let key = Self::song_key(&song);
+        let key = Self::server_song_key(&song);
         if self.learn_store().record(&key, &lines, &lemmas, listen_core::history::now_secs()) {
             self.learn_recount();
             self.learn_save();
@@ -236,7 +236,7 @@ impl Listen {
             self.learn_save();
         }
         let liked = std::mem::take(&mut self.learn.liked);
-        let keys: Vec<String> = liked.iter().map(Self::song_key).collect();
+        let keys: Vec<String> = liked.iter().map(Self::server_song_key).collect();
         let picks = self.learn_store().learnable(keys.iter().map(String::as_str));
         let by_key: HashMap<&str, &Song> = keys.iter().map(String::as_str).zip(liked.iter()).collect();
         let blocked = self.auto_blocked();
@@ -278,7 +278,7 @@ impl Listen {
         let liked = self.learn.liked.clone();
         let store = self.learn_store();
         let batch: Vec<Song> =
-            liked.into_iter().filter(|s| store.needs(&Self::song_key(s), now)).take(BATCH).collect();
+            liked.into_iter().filter(|s| store.needs(&Self::server_song_key(s), now)).take(BATCH).collect();
         if batch.is_empty() {
             self.learn.loading = false;
             self.learn_recount();
@@ -300,7 +300,7 @@ impl Listen {
                     let (http, opts, ai_dir) = (http.clone(), opts.clone(), ai_dir.clone());
                     let source = sources.get(&song.server_id).cloned();
                     async move {
-                        let key = Listen::song_key(&song);
+                        let key = Listen::server_song_key(&song);
                         let server = match source {
                             Some(s) => s.lyrics(&song).await.ok().flatten().filter(|l| !l.lines.is_empty()),
                             None => None,
@@ -336,7 +336,7 @@ impl Listen {
             LearnMsg::Liked(Ok(songs)) => {
                 let now = listen_core::history::now_secs();
                 self.learn.liked = songs;
-                let keys: Vec<String> = self.learn.liked.iter().map(Self::song_key).collect();
+                let keys: Vec<String> = self.learn.liked.iter().map(Self::server_song_key).collect();
                 let store = self.learn_store();
                 let to_check = keys.iter().filter(|k| store.needs(k, now)).count();
                 self.learn.to_check = to_check;
@@ -425,9 +425,9 @@ mod tests {
         let a_id = a.id.clone();
         let mut lines: Vec<String> = vec!["사랑".into(); 19];
         lines.push("별".into());
-        let ka = Listen::song_key(&a);
+        let ka = Listen::server_song_key(&a);
         app.learn_store().record(&ka, &lines, &HashMap::new(), 0);
-        app.learn_store().record(&Listen::song_key(&b), &["hello".to_string()], &HashMap::new(), 0);
+        app.learn_store().record(&Listen::server_song_key(&b), &["hello".to_string()], &HashMap::new(), 0);
         app.learn.liked = vec![a, b];
         app.lyrics_ui.vocab = Some(Words { version: "1".into(), terms: [("사랑".to_string(), 99)].into() });
         app.learn_recount();

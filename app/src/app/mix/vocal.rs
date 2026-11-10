@@ -53,7 +53,7 @@ impl Listen {
     /// lyrics yet, plan with the analysis as is).
     pub(super) fn mix_with_lyrics(&self, songs: [&Song; 2], feats: [&Features; 2]) -> [Option<Features>; 2] {
         let merged = |song: &Song, f: &Features| {
-            let map = self.mix.fetch.vocal.maps.get(&Self::song_key(song))?.as_deref()?;
+            let map = self.mix.fetch.vocal.maps.get(&Self::server_song_key(song))?.as_deref()?;
             let m = listen_mix::lyric::with_lyrics(f, map);
             if m.is_none() {
                 tracing::debug!("mix: the lyrics of “{}” don't fit its audio; not used", song.title);
@@ -77,7 +77,7 @@ impl Listen {
             if !listen_mix::mixable_source(song.source) {
                 continue;
             }
-            let key = Self::song_key(&song);
+            let key = Self::server_song_key(&song);
             let vocal = &self.mix.fetch.vocal;
             if vocal.maps.contains_key(&key) || vocal.busy.contains(&key) {
                 continue;
@@ -113,7 +113,7 @@ impl Listen {
         };
         let concerns = [&out.song, &inn.song]
             .iter()
-            .any(|s| Self::song_key(s) == key || Self::song_key(&self.playable(s)) == key);
+            .any(|s| Self::server_song_key(s) == key || Self::server_song_key(&self.playable(s)) == key);
         let bridge = out.bridge.is_some() || inn.bridge.is_some();
         let Some(plan) = self.mix.plan() else { return Task::none() };
         let preload_at = plan.out_mix_start_s - PRELOAD_LEAD_S;

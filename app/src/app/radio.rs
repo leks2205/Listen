@@ -207,11 +207,6 @@ pub fn demo_stations() -> Vec<InternetRadio> {
     .collect()
 }
 
-/// A song's key for the Related list.
-fn song_key(song: &Song) -> String {
-    format!("{}:{}", song.server_id.0, song.id)
-}
-
 impl Listen {
     // ---- queries used by the views ------------------------------------------------
 
@@ -627,7 +622,7 @@ impl Listen {
             self.radio.related = Related::default();
             return Task::none();
         };
-        let key = song_key(&song);
+        let key = Listen::server_song_key(&song);
         let r = &mut self.radio.related;
         if !force && r.for_song.as_deref() == Some(key.as_str()) && (r.loading || r.error.is_none()) {
             return Task::none();
