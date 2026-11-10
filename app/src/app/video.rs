@@ -26,7 +26,8 @@ const MARK_BYTES: usize = (WIDTH * MARK_ROWS * 4) as usize;
 const SEEK_DEBOUNCE: Duration = Duration::from_millis(300);
 /// Decoded frames waiting in the pipe's queue (mpv blocks when it is full).
 const QUEUE: usize = 6;
-/// Seconds the picture may run ahead of the audio before mpv is restarted.
+/// Seconds the picture may run ahead of the audio before it is sought back to the audio
+/// (mpv is restarted only when the seek cannot be sent).
 const MAX_AHEAD: f64 = 0.7;
 /// Seconds the picture may trail the audio before mpv seeks; shorter stalls are left to catch up.
 const MAX_BEHIND: f64 = 4.0;
