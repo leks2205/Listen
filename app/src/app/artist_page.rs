@@ -608,22 +608,6 @@ pub fn site_links(
     out
 }
 
-fn open_url(url: &str) {
-    let program = if cfg!(target_os = "windows") {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    if !(url.starts_with("https://") || url.starts_with("http://") || url.starts_with("spotify:")) {
-        return;
-    }
-    if let Err(e) = std::process::Command::new(program).arg(url).spawn() {
-        tracing::warn!("opening {url}: {e}");
-    }
-}
-
 fn action_for(b: PlayBehavior) -> MenuAction {
     match b {
         PlayBehavior::Now => MenuAction::Play,
@@ -957,7 +941,7 @@ impl Listen {
                 let p = &mut self.artist_page.similar_page;
                 *p = p.saturating_add_signed(d);
             }
-            ArtistMsg::Link(url) => open_url(&url),
+            ArtistMsg::Link(url) => super::album_page::open_url(&url),
         }
         Task::none()
     }

@@ -634,7 +634,8 @@ impl Listen {
     }
 }
 
-/// Opens an address in the default browser.
+/// Opens an address in the default browser: the one link opener of the app (About, Advanced,
+/// the album and artist pages use it); only `http(s)://` and `spotify:` addresses are opened.
 pub fn open_url(url: &str) {
     if !(url.starts_with("https://") || url.starts_with("http://") || url.starts_with("spotify:")) {
         return;
