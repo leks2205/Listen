@@ -56,7 +56,7 @@ impl ksni::Tray for ListenTray {
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let item = |label: &str, cmd: TrayCmd| -> MenuItem<Self> {
             StandardItem {
-                label: label.into(),
+                label: crate::i18n::tr(label).into(),
                 activate: Box::new(move |t: &mut Self| {
                     let _ = t.tx.unbounded_send(cmd);
                 }),

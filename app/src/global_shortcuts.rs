@@ -36,12 +36,13 @@ pub fn wanted(settings: &listen_core::settings::Settings, desktop_has_media_keys
             continue;
         }
         if let Some(b) = settings.hotkeys.get(a.id).and_then(|h| crate::hotkeys::parse(h)) {
-            out.push((a.id.to_string(), a.label.to_string(), b.portal_trigger()));
+            // The portal shows the label in the desktop's own dialog: translate it here.
+            out.push((a.id.to_string(), crate::i18n::tr(a.label).to_string(), b.portal_trigger()));
         }
     }
     if settings.global_media_keys && !desktop_has_media_keys {
         out.extend(MEDIA_KEYS.iter().map(|(id, label, trigger, _)| {
-            ((*id).to_string(), (*label).to_string(), (*trigger).to_string())
+            ((*id).to_string(), crate::i18n::tr(label).to_string(), (*trigger).to_string())
         }));
     }
     out

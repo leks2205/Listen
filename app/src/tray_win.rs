@@ -63,7 +63,7 @@ fn run_thread(
     let items: Vec<(Option<MenuItem>, Option<TrayCmd>)> = tray_menu(false)
         .into_iter()
         .map(|entry| match entry {
-            Some((label, cmd)) => (Some(MenuItem::new(label, true, None)), Some(cmd)),
+            Some((label, cmd)) => (Some(MenuItem::new(crate::i18n::tr(label), true, None)), Some(cmd)),
             None => (None, None),
         })
         .collect();
@@ -121,7 +121,9 @@ fn run_thread(
             if msg.hwnd.is_null() && msg.message == wm::WM_APP {
                 while let Ok((playing, title)) = updates.try_recv() {
                     if let Some(Some(play)) = items.first().map(|(i, _)| i.as_ref()) {
-                        play.set_text(tray_menu(playing)[0].map_or("Play", |(label, _)| label));
+                        play.set_text(crate::i18n::tr(
+                            tray_menu(playing)[0].map_or("Play", |(label, _)| label),
+                        ));
                     }
                     let tip =
                         if title.is_empty() { "Listen".to_string() } else { format!("Listen\n{title}") };

@@ -1,5 +1,7 @@
 //! The tray menu both platform trays show (`tray` on Linux, `tray_win` on Windows): Feishin's
-//! entries and what each one does. Change the menu here, not in a platform module.
+//! entries and what each one does. Change the menu here, not in a platform module. Labels are English
+//! keys: the platform modules show them through `i18n::tr` (text handed to the OS never passes the
+//! iced text helpers that translate everything else).
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayCmd {
