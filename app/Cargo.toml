@@ -57,7 +57,8 @@ libloading = "0.8"
 [dev-dependencies]
 iced_test = "0.14"
 iced_runtime = "0.14"
-listen-lyrics = { path = "../crates/listen-lyrics" }
+# No listen-lyrics here: a dev-dependency with default features would switch `furigana` back on in every
+# test build, so the build without it (cargo test --no-default-features) could never be tested.
 listen-visualizer = { path = "../crates/listen-visualizer" }
 listen-player = { path = "../crates/listen-player" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
