@@ -294,7 +294,11 @@ mod tests {
         let written = toml::to_string_pretty(&loaded).unwrap();
         let lines: std::collections::HashSet<&str> = written.lines().collect();
         for line in golden.lines() {
-            assert!(lines.contains(line), "lost or changed on round trip: {line}");
+            assert!(
+                lines.contains(line),
+                "lost or changed on round trip: {line} (a settings field is never removed or renamed: keep it and \
+                 document it as unused, so older config files still load)"
+            );
         }
     }
 }
