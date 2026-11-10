@@ -549,12 +549,11 @@ impl Listen {
                 if self.queue.current().is_none() {
                     return Err("The queue is empty.".into());
                 }
-                let task = if want.is_none_or(|w| w != self.playback.playing) {
-                    msg(self, Message::TogglePlay)
-                } else {
-                    Task::none()
-                };
-                done(&reply, task, json!({ "playing": want.unwrap_or(!self.playback.playing) }))
+                // Read before the toggle: `TogglePlay` flips `playback.playing` at once.
+                let was = self.playback.playing;
+                let task =
+                    if want.is_none_or(|w| w != was) { msg(self, Message::TogglePlay) } else { Task::none() };
+                done(&reply, task, json!({ "playing": want.unwrap_or(!was) }))
             }
             "next" => {
                 let t = msg(self, Message::Next);
@@ -565,8 +564,8 @@ impl Listen {
                 done(&reply, t, json!({ "ok": true }))
             }
             "seek" => {
-                let s = args.get("seconds").and_then(Value::as_f64).ok_or("seconds is missing")?;
-                let t = msg(self, Message::Seek(s.max(0.0) as f32));
+                let s = args.get("seconds").and_then(Value::as_f64).ok_or("seconds is missing")?.max(0.0);
+                let t = msg(self, Message::Seek(s as f32));
                 done(&reply, t, json!({ "position": s }))
             }
             "set_volume" => {
