@@ -12,7 +12,8 @@ use std::time::{Duration, Instant};
 
 /// Toasts closing themselves after this long (Feishin: 5 s).
 pub const AUTO_CLOSE: Duration = Duration::from_secs(5);
-/// At most this many toasts are on screen; the oldest goes first.
+/// At most this many toasts are on screen; the oldest one that closes by itself goes first
+/// (a persistent toast stays until it is dismissed).
 pub const MAX_VISIBLE: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,7 +141,8 @@ pub struct OverlayState {
 }
 
 impl OverlayState {
-    /// Shows `toast`; an identical visible one only restarts its timer.
+    /// Shows `toast`; an identical visible one only restarts its timer (and stays persistent if
+    /// either is).
     pub fn push(&mut self, mut toast: Toast) -> u64 {
         if let Some(same) = self
             .toasts
@@ -148,14 +150,15 @@ impl OverlayState {
             .find(|t| t.kind == toast.kind && t.title == toast.title && t.message == toast.message)
         {
             same.created = toast.created;
-            same.persistent = toast.persistent;
+            same.persistent |= toast.persistent;
             return same.id;
         }
         self.next_id += 1;
         toast.id = self.next_id;
         self.toasts.push(toast);
         while self.toasts.len() > MAX_VISIBLE {
-            self.toasts.remove(0);
+            let oldest = self.toasts.iter().position(|t| !t.persistent).unwrap_or(0);
+            self.toasts.remove(oldest);
         }
         self.next_id
     }
@@ -250,6 +253,19 @@ mod tests {
 
     fn rig() -> Listen {
         Listen::boot(&Args { demo: true, ephemeral: true, ..Args::default() }).0
+    }
+
+    #[test]
+    fn a_persistent_toast_survives_an_identical_plain_one_and_newer_toasts() {
+        let mut o = OverlayState::default();
+        let id = o.push(Toast::error("mpv stopped").persistent());
+        assert_eq!(o.push(Toast::error("mpv stopped")), id, "an identical toast is the same toast");
+        assert!(o.toasts[0].persistent, "still persistent");
+        for i in 0..MAX_VISIBLE + 2 {
+            o.push(Toast::info(format!("n{i}")));
+        }
+        assert_eq!(o.toasts.len(), MAX_VISIBLE);
+        assert!(o.toasts.iter().any(|t| t.id == id), "newer toasts push out plain ones first");
     }
 
     #[test]
