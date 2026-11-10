@@ -1,7 +1,7 @@
 //! Toasts, the generic modal and the confirm dialog (state + messages); drawn by `ui::overlay`.
 //!
-//! - `self.toast_info(text)`, `toast_success`, `toast_error`, `toast_warning`
-//!   (any `Into<String>`), `self.toast(Toast::error("Title", "text").persistent())`.
+//! - `self.toast_info(text)`, `toast_success`, `toast_error`, `toast_warning` (a `String`:
+//!   write `"…".into()` or `format!(…)`), `self.toast(Toast::error(text).persistent())`.
 //! - `self.confirm(Confirm::new("Delete playlist", "This cannot be undone.", Message::..))`.
 //! - `self.open_modal(key)` / `self.close_modal()` for a custom modal whose body
 //!   `ui::overlay::custom_modal` renders by `key` (add an arm there).
