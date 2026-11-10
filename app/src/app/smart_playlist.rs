@@ -229,12 +229,12 @@ impl Listen {
                     }
                     Ok(None) => {
                         self.smart.editor = None;
-                        self.close_modal();
+                        self.close_modal_if(MODAL_KEY);
                         self.toast_info("That playlist has no rules, it is not a smart playlist.".into());
                     }
                     Err(e) => {
                         self.smart.editor = None;
-                        self.close_modal();
+                        self.close_modal_if(MODAL_KEY);
                         self.toast_error(format!("Could not load the rules: {e}"));
                     }
                 }
@@ -280,7 +280,8 @@ impl Listen {
             SmartMsg::Save => return self.smart_save(),
             SmartMsg::Saved(Ok(id)) => {
                 let editing = self.smart.editor.take().is_some_and(|e| e.id.is_some());
-                self.close_modal();
+                // The save is done on the server either way; only its own dialog closes.
+                self.close_modal_if(MODAL_KEY);
                 self.smart.ids.insert(id.clone());
                 self.toast_success(
                     if editing { "Smart playlist saved." } else { "Smart playlist created." }.into(),

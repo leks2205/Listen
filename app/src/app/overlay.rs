@@ -216,6 +216,17 @@ impl Listen {
     pub fn close_modal(&mut self) {
         self.overlay.modal = None;
     }
+    /// The custom modal `key` is open. Async results of a dialog check this: the dialog may have
+    /// been closed (Cancel) or replaced by another while they ran.
+    pub fn modal_open(&self, key: &str) -> bool {
+        matches!(self.overlay.modal, Some(Modal::Custom(k)) if k == key)
+    }
+    /// Closes the custom modal `key` if it is the one open (never another dialog).
+    pub fn close_modal_if(&mut self, key: &str) {
+        if self.modal_open(key) {
+            self.close_modal();
+        }
+    }
 
     pub(super) fn on_overlay(&mut self, msg: OverlayMsg) -> Task<Message> {
         match msg {

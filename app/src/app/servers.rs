@@ -312,6 +312,12 @@ impl Listen {
             M::EditSave => return self.edit_save(),
             M::EditSaved(Ok((server, secret, handle))) => {
                 let id = server.id.clone();
+                // Only this server's dialog, still open, takes the result: one closed meanwhile
+                // (Cancel during the connection check) or another server's form must not be written.
+                if !self.modal_open(EDIT_MODAL) || self.servers.edit.as_ref().is_none_or(|f| f.id != id) {
+                    tracing::info!("server {}: save finished after its dialog closed; not applied", id.0);
+                    return Task::none();
+                }
                 let old_root =
                     self.config.servers.iter().find(|s| s.id == id).map(|s| (s.kind, s.url.clone()));
                 let new_root = server.url.clone();
@@ -335,7 +341,7 @@ impl Listen {
                 }
                 self.save_config();
                 self.servers.edit = None;
-                self.close_modal();
+                self.close_modal_if(EDIT_MODAL);
                 self.toast_success("Server saved.".into());
                 self.sources.remove(&id);
                 self.library_cache.remove(&id);
