@@ -1,7 +1,8 @@
 //! The play mode cycle (Off -> Shuffle -> Auto-DJ -> AI DJ) for the shuffle button,
 //! queue header, hotkey, MPRIS and remote, on top of the queue shuffle, the Auto-DJ
-//! setting and `dj_switch`. Modes are exclusive; when several are on, AI DJ > Shuffle >
-//! Auto-DJ. AI DJ is skipped without a Gemini key.
+//! setting and `dj_switch`. `set_play_mode` keeps the three flags exclusive; the Settings
+//! switches for Auto-DJ and AI DJ change only their own flag, so several can be on, and then
+//! `play_mode` reports AI DJ > Shuffle > Auto-DJ. AI DJ is skipped without a Gemini key.
 
 use super::{Listen, Message};
 use crate::app::settings_msg::Setting;

@@ -913,8 +913,6 @@ pub enum Message {
     /// Periodic AI DJ refill check.
     DjCheck,
     DjPreviewDone(Result<(), listen_dj::DjError>),
-    /// The AI DJ button in the queue panel.
-    ToggleAiDj,
     Fullscreen(fullscreen_state::FullscreenMsg),
     About(about::AboutMsg),
     Learn(learnable::LearnMsg),
@@ -4363,10 +4361,6 @@ impl Listen {
             Message::DjPreviewDone(result) => self.dj_preview_done(result),
             Message::Rip(m) => return self.on_rip(m),
             Message::Offline(m) => return self.on_offline(m),
-            Message::ToggleAiDj => {
-                let switch = self.dj_switch(!self.config.settings.ai_dj.enabled);
-                return Task::batch([switch, self.apply_audio()]);
-            }
             Message::Overlay(m) => return self.on_overlay(m),
             Message::Shell(m) => return self.on_shell(m),
             #[cfg(any(target_os = "linux", windows))]
