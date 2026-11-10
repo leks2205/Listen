@@ -40,7 +40,7 @@ pub struct MilkdropSettings {
     pub selected: Vec<String>,
     /// Presets that are never picked.
     pub ignored: Vec<String>,
-    /// Frames a second; 0 = 30.
+    /// Frames a second; 0 = 30, else [`MilkdropSettings::FPS_RANGE`].
     pub max_fps: u32,
     /// 0-1.
     pub opacity: f32,
@@ -66,8 +66,12 @@ impl Default for MilkdropSettings {
 }
 
 impl MilkdropSettings {
+    /// The frame rates the renderer can run at (`max_fps` other than 0 is clamped to it).
+    pub const FPS_RANGE: (u32, u32) = (5, 60);
+
     /// The frame rate to render at.
     pub fn fps(&self) -> u32 {
-        if self.max_fps == 0 { 30 } else { self.max_fps.clamp(5, 60) }
+        let (lo, hi) = Self::FPS_RANGE;
+        if self.max_fps == 0 { 30 } else { self.max_fps.clamp(lo, hi) }
     }
 }

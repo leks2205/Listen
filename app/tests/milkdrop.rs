@@ -199,7 +199,11 @@ fn settings_changes_are_clamped_and_saved_to_the_state() {
     set(&mut s, MilkdropSetting::Randomize(false));
     set(&mut s, MilkdropSetting::IncludeAll(false));
     let m = &s.config.settings.milkdrop;
-    assert_eq!((m.cycle_time, m.blend_time, m.max_fps, m.opacity), (300, 2.5, 144, 1.0));
+    assert_eq!(
+        (m.cycle_time, m.blend_time, m.max_fps, m.opacity),
+        (300, 2.5, 60, 1.0),
+        "FPS_RANGE caps max_fps"
+    );
     assert!(!m.randomize && !m.include_all);
     assert_eq!(m.fps(), 60, "capped like the spectrum");
     // The preset on screen can be selected and ignored.

@@ -221,7 +221,10 @@ impl Listen {
             MilkdropSetting::BlendTime(v) => m.blend_time = (v * 10.0).round() / 10.0,
             MilkdropSetting::Randomize(v) => m.randomize = v,
             MilkdropSetting::IncludeAll(v) => m.include_all = v,
-            MilkdropSetting::MaxFps(v) => m.max_fps = v.min(144),
+            MilkdropSetting::MaxFps(v) => {
+                let (lo, hi) = listen_core::settings::MilkdropSettings::FPS_RANGE;
+                m.max_fps = if v == 0 { 0 } else { v.clamp(lo, hi) };
+            }
             MilkdropSetting::Opacity(v) => m.opacity = v.clamp(0.0, 1.0),
             MilkdropSetting::IgnoreCurrent => {
                 if let Some(c) = current

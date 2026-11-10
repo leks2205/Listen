@@ -192,9 +192,13 @@ pub(super) fn milkdrop(state: &Listen) -> Element<'_, Message> {
             state,
             "Max FPS",
             "Frames a second (0 = 30).",
-            stepper(state, 0.0..=144.0, m.max_fps as f32, m.max_fps.to_string(), |v| {
-                Setting::Milkdrop(MilkdropSetting::MaxFps(v as u32))
-            }),
+            stepper(
+                state,
+                0.0..=listen_core::settings::MilkdropSettings::FPS_RANGE.1 as f32,
+                m.max_fps as f32,
+                m.max_fps.to_string(),
+                |v| Setting::Milkdrop(MilkdropSetting::MaxFps(v as u32)),
+            ),
         ));
         rows.push(line(
             state,

@@ -344,7 +344,7 @@ Some defaults in `[settings.visualizer]`: `mode = 10` (line graph), `gradient = 
 | Selected presets | Presets to cycle through when the previous row is off. | none | `settings.milkdrop.selected` |
 | Ignored presets | Presets that are never picked. | none | `settings.milkdrop.ignored` |
 
-Frame rate and opacity are `settings.milkdrop.max_fps` (0 means 30) and `settings.milkdrop.opacity` (0 to 1, default 1).
+Frame rate and opacity are `settings.milkdrop.max_fps` (0 means 30, otherwise 5 to 60) and `settings.milkdrop.opacity` (0 to 1, default 1).
 
 ### Auto-DJ
 
