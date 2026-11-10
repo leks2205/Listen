@@ -21,6 +21,8 @@ pub struct OfflineState {
     pub active: Option<Song>,
     /// Songs finished or failed since the queue was last empty.
     done: usize,
+    /// Songs of the batch: added minus removed or cancelled. Change it only through
+    /// `offline_drop` / `offline_batch_end`, so "N of M" stays true.
     total: usize,
     batch_failed: usize,
     /// Songs that could not be downloaded: (title, reason).
@@ -115,13 +117,35 @@ impl Listen {
 
     /// Drops queued downloads (of one server, or all) and marks a matching active one for deletion.
     pub(super) fn offline_cancel(&mut self, server: Option<&ServerId>) {
-        let matches = |s: &Song| server.is_none_or(|id| &s.server_id == id);
+        self.offline_drop(|s| server.is_none_or(|id| &s.server_id == id));
+    }
+
+    /// Drops the queued downloads `matches` accepts and marks a matching active one for deletion;
+    /// the batch's total shrinks by each (the cancelled active one when it lands).
+    fn offline_drop(&mut self, matches: impl Fn(&Song) -> bool) {
         let before = self.offline.queue.len();
         self.offline.queue.retain(|s| !matches(s));
         self.offline.total = self.offline.total.saturating_sub(before - self.offline.queue.len());
-        if self.offline.active.as_ref().is_some_and(matches) {
+        if self.offline.active.as_ref().is_some_and(&matches) {
             self.offline.cancel_active = true;
         }
+    }
+
+    /// The batch is over (nothing active or queued): says how it went when anything finished or
+    /// failed, and resets the counters. Every way a batch can end goes through here.
+    fn offline_batch_end(&mut self) {
+        let failed = self.offline.batch_failed;
+        let ok = self.offline.done.saturating_sub(failed);
+        if ok + failed > 0 {
+            self.toast_info(match (ok, failed) {
+                (n, 0) => format!("Downloaded {n} for offline play."),
+                (0, f) => format!("{f} downloads failed (see Downloads)."),
+                (n, f) => format!("Downloaded {n} for offline play, {f} failed (see Downloads)."),
+            });
+        }
+        self.offline.done = 0;
+        self.offline.total = 0;
+        self.offline.batch_failed = 0;
     }
 
     /// Re-reads the downloads list after the store changed.
@@ -158,10 +182,9 @@ impl Listen {
                 self.offline.active = None;
                 if std::mem::take(&mut self.offline.cancel_active) {
                     store.remove(&song.server_id, &song.id);
+                    self.offline.total = self.offline.total.saturating_sub(1);
                     if !self.offline.busy() {
-                        self.offline.done = 0;
-                        self.offline.total = 0;
-                        self.offline.batch_failed = 0;
+                        self.offline_batch_end();
                     }
                     return self.offline_pump(store);
                 }
@@ -176,24 +199,12 @@ impl Listen {
                     }
                 }
                 if !self.offline.busy() {
-                    let failed = self.offline.batch_failed;
-                    let ok = self.offline.done.saturating_sub(failed);
-                    self.toast_info(match (ok, failed) {
-                        (n, 0) => format!("Downloaded {n} for offline play."),
-                        (0, f) => format!("{f} downloads failed (see Downloads)."),
-                        (n, f) => format!("Downloaded {n} for offline play, {f} failed (see Downloads)."),
-                    });
-                    self.offline.done = 0;
-                    self.offline.total = 0;
-                    self.offline.batch_failed = 0;
+                    self.offline_batch_end();
                 }
                 return self.offline_pump(store);
             }
             OfflineMsg::Remove(server, id) => {
-                self.offline.queue.retain(|s| !(s.server_id == server && s.id == id));
-                if self.offline.active.as_ref().is_some_and(|s| s.server_id == server && s.id == id) {
-                    self.offline.cancel_active = true;
-                }
+                self.offline_drop(|s| s.server_id == server && s.id == id);
                 store.remove(&server, &id);
             }
             OfflineMsg::RemoveAll => {
@@ -280,9 +291,7 @@ impl Listen {
             );
         }
         if self.offline.total > 0 {
-            self.offline.done = 0;
-            self.offline.total = 0;
-            self.offline.batch_failed = 0;
+            self.offline_batch_end();
         }
         Task::none()
     }
