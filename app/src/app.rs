@@ -2792,7 +2792,15 @@ impl Listen {
                 let next = if self.mix.owns_next() { None } else { self.next_slot() };
                 let rotate = Task::perform(
                     async move {
-                        let track = dj::resolve_slot(&sources, &subs, next).await.ok().flatten();
+                        // A failed prepare leaves mpv's next slot empty; `keep_going`
+                        // starts that song when the current one ends.
+                        let track = match dj::resolve_slot(&sources, &subs, next).await {
+                            Ok(track) => track,
+                            Err(e) => {
+                                tracing::warn!("could not prepare the next song: {e}");
+                                None
+                            }
+                        };
                         player.advanced(track.as_ref()).await.map_err(err)
                     },
                     Message::PlayerDone,

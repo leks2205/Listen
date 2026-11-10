@@ -49,10 +49,12 @@ impl Listen {
     }
 
     /// Keeps the music going when mpv went idle while songs are still queued: after a
-    /// between-songs DJ clip that had nothing loaded behind it, or a song that failed to
-    /// load. Nothing else would start them — the AI DJ plans only when the queue is
-    /// empty and the Auto-DJ fills only on a track change — so playback would stand
-    /// still until someone presses play.
+    /// between-songs DJ clip that had nothing loaded behind it, or a next song whose
+    /// stream could not be prepared in time (mpv's next slot stayed empty). Nothing else
+    /// would start them — the AI DJ plans only when the queue is empty and the Auto-DJ
+    /// fills only on a track change — so playback would stand still until someone
+    /// presses play. This holds with every play mode: a finished queue stays finished
+    /// because nothing is left to peek at, not because of the mode.
     pub(super) fn keep_going(&mut self) -> Option<Task<Message>> {
         if !self.playback.idle
             || self.playback.playing
@@ -62,11 +64,8 @@ impl Listen {
         {
             return None;
         }
-        // Without a refill mode a finished queue is meant to stay finished.
-        if !self.ai_dj_on() && !self.config.settings.auto_dj.enabled {
-            return None;
-        }
-        // Nothing queued: the AI DJ plans the next set, the Auto-DJ fills in.
+        // Nothing queued: the queue is finished (the AI DJ plans the next set, the
+        // Auto-DJ fills in, or playback simply ends).
         let next = self.queue.peek_next().map(|i| i.song.title.clone())?;
         tracing::info!("the player went idle with songs queued; playing “{next}”");
         self.playback.idle = false;
@@ -140,9 +139,20 @@ mod tests {
     }
 
     #[test]
-    fn nothing_starts_without_a_refill_mode() {
+    fn queued_songs_play_on_without_a_refill_mode() {
         let mut s = boot();
         s.config.settings.auto_dj.enabled = false;
+        ended(&mut s);
+        assert!(s.keep_going().is_some(), "songs are still queued");
+        assert_eq!(s.queue.current_position(), Some(1));
+    }
+
+    #[test]
+    fn a_finished_queue_stays_finished_without_a_refill_mode() {
+        let mut s = boot();
+        s.config.settings.auto_dj.enabled = false;
+        let songs = demo::album_songs(0);
+        s.queue.set(songs.clone(), songs.len() - 1);
         ended(&mut s);
         assert!(s.keep_going().is_none());
     }
