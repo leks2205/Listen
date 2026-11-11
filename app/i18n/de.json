@@ -1,4 +1,5 @@
 {
+"The application ID for Discord rich presence (defaults to {}). Press Enter to apply.": "Die Anwendungs-ID für Discord Rich Presence (Standard: {}). Mit Enter übernehmen.",
 "Running at http://{}:{} (this computer only).": "Läuft unter http://{}:{} (nur auf diesem Computer).",
 "Looking for fonts…": "Suche nach Schriften …",
 "Working…": "Wird ausgeführt …",

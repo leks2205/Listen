@@ -14,6 +14,10 @@ fn set(i: I) -> Message {
     Message::Setting(Setting::Integrations(i))
 }
 
+/// The default ports, shown as placeholders (pinned to the settings' defaults by a test).
+const REMOTE_PORT_HINT: &str = "4333";
+const MCP_PORT_HINT: &str = "4334";
+
 fn input(
     state: &Listen,
     placeholder: &str,
@@ -260,7 +264,15 @@ pub(super) fn remote(state: &Listen) -> Element<'_, Message> {
             state,
             "Remote server port",
             "The port of the server. Press Enter to apply.",
-            input(state, "4333", &r.port.to_string(), inputs.port.as_ref(), Field::RemotePort, false, 100),
+            input(
+                state,
+                REMOTE_PORT_HINT,
+                &r.port.to_string(),
+                inputs.port.as_ref(),
+                Field::RemotePort,
+                false,
+                100,
+            ),
         ),
         line(
             state,
@@ -356,7 +368,7 @@ pub(super) fn mcp(state: &Listen) -> Element<'_, Message> {
             state,
             "MCP server port",
             "Press Enter to apply.",
-            text_input("4334", &port)
+            text_input(MCP_PORT_HINT, &port)
                 .on_input(|v| Message::Mcp(McpMsg::PortInput(v)))
                 .on_submit(Message::Mcp(McpMsg::PortSave))
                 .style(style::input(t))
@@ -399,4 +411,15 @@ pub(super) fn mcp(state: &Listen) -> Element<'_, Message> {
         );
     }
     section(state, "MCP server", rows)
+}
+
+#[cfg(test)]
+mod port_hint_tests {
+    use super::*;
+
+    #[test]
+    fn port_placeholders_are_the_default_ports() {
+        assert_eq!(REMOTE_PORT_HINT, listen_core::settings::RemoteSettings::default().port.to_string());
+        assert_eq!(MCP_PORT_HINT, listen_core::settings::McpSettings::default().port.to_string());
+    }
 }

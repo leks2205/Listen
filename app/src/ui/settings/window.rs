@@ -94,13 +94,19 @@ pub(super) fn integrations(state: &Listen) -> Element<'_, Message> {
     rows.push(line(
         state,
         "Discord application ID",
-        "The application ID for Discord rich presence (defaults to 1560790551337640127). Press Enter to apply.",
-        text_input(crate::i18n::tr("1560790551337640127"), state.discord_id_input.as_deref().unwrap_or(&w.discord_client_id))
-            .on_input(|v| Message::Shell(ShellMsg::DiscordIdInput(v)))
-            .on_submit(Message::Shell(ShellMsg::DiscordIdSave))
-            .style(style::input(state.tokens))
-            .width(220)
-            .into(),
+        crate::i18n::trf(
+            "The application ID for Discord rich presence (defaults to {}). Press Enter to apply.",
+            &[&listen_core::settings::DEFAULT_DISCORD_CLIENT_ID],
+        ),
+        text_input(
+            listen_core::settings::DEFAULT_DISCORD_CLIENT_ID,
+            state.discord_id_input.as_deref().unwrap_or(&w.discord_client_id),
+        )
+        .on_input(|v| Message::Shell(ShellMsg::DiscordIdInput(v)))
+        .on_submit(Message::Shell(ShellMsg::DiscordIdSave))
+        .style(style::input(state.tokens))
+        .width(220)
+        .into(),
     ));
     rows.extend(super::integrations::discord_rows(state));
     section(state, "Window & integrations", rows)
