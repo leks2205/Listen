@@ -5,32 +5,34 @@ use crate::app::milkdrop::MilkdropMsg;
 use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
-use crate::ui::{icon, label};
+use crate::ui::icon;
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, container, image, row, space, stack};
 use iced::{Alignment, ContentFit, Element, Length, Padding};
 
-/// Why there is no picture (yet), as one or two lines.
+/// Why there is no picture (yet), as one or two lines, ready to show (translated; errors as they came).
 pub fn status(state: &Listen) -> String {
     let m = &state.milk;
     if let Some(e) = &m.error {
         return e.clone();
     }
-    let folder = state.milkdrop_folder().map(|p| p.display().to_string()).unwrap_or_default();
-    if m.scanned.is_some() && m.presets.is_empty() {
-        return format!("No Milkdrop presets (.milk) in {folder}");
+    // Scanned and nothing found, or the renderer reported the folder empty.
+    if (m.scanned.is_some() && m.presets.is_empty()) || m.empty {
+        return match state.milkdrop_folder() {
+            Some(folder) => crate::i18n::trf("No Milkdrop presets (.milk) in {}", &[&folder.display()]),
+            None => crate::i18n::tr("No Milkdrop preset folder set").to_string(),
+        };
     }
-    if m.empty {
-        return format!("No Milkdrop presets (.milk) in {folder}");
-    }
-    "Starting Milkdrop…".into()
+    crate::i18n::tr("Starting Milkdrop…").to_string()
 }
 
 /// The picture filling its space; `controls` adds the name and the next button.
 pub fn surface(state: &Listen, controls: bool) -> Element<'_, Message> {
     let t = state.tokens;
     let Some(frame) = &state.milk.frame else {
-        return container(label(status(state), metrics::font_md(), t.muted)).center(Length::Fill).into();
+        return container(crate::ui::data_label(status(state), metrics::font_md(), t.muted))
+            .center(Length::Fill)
+            .into();
     };
     let picture = image(frame.clone())
         .content_fit(ContentFit::Cover)
