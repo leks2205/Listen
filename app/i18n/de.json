@@ -1,4 +1,10 @@
 {
+"{} (synced)": "{} (synchronisiert)",
+"{} (plain)": "{} (ohne Zeiten)",
+"synchronized": "synchronisiert",
+"unsynchronized": "nicht synchronisiert",
+"unknown": "unbekannt",
+"EXPORT": "EXPORT",
 "Released {}": "Veröffentlicht {}",
 "measuring…": "wird gemessen …",
 " (listing…)": " (wird aufgelistet …)",

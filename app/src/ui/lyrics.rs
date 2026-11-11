@@ -427,7 +427,12 @@ fn controls(state: &Listen) -> Element<'_, Message> {
             .enumerate()
             .map(|(i, l)| VersionChoice {
                 index: i,
-                label: format!("{} ({})", l.provider, if l.synced { "synced" } else { "plain" }),
+                // Shown by a pick_list, which draws the label as it is.
+                label: if l.synced {
+                    crate::i18n::trf("{} (synced)", &[&l.provider])
+                } else {
+                    crate::i18n::trf("{} (plain)", &[&l.provider])
+                },
             })
             .collect();
         let selected = names.get(ui.selected).cloned();
@@ -639,11 +644,11 @@ fn search_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
         list = list.push(label(text, metrics::font_md(), t.muted));
     }
     for (i, hit) in s.hits.iter().enumerate() {
-        let sync = match hit.synced {
+        let sync = crate::i18n::tr(match hit.synced {
             Some(true) => "synchronized",
             Some(false) => "unsynchronized",
             None => "unknown",
-        };
+        });
         let id = if hit.source == listen_lyrics::providers::Source::Genius {
             hit.id.trim_start_matches("https://").trim_start_matches("genius.com").to_string()
         } else {
@@ -660,7 +665,7 @@ fn search_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
                     Weight::Semibold
                 ),
                 ui::data_label(ui::ellipsize(&hit.artist, 56), metrics::font_sm(), t.muted),
-                label(
+                ui::data_label(
                     ui::ellipsize(&format!("{} — {} — {}", hit.source.name(), id, sync), 70),
                     metrics::font_xs(),
                     t.muted

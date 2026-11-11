@@ -209,6 +209,17 @@ fn providers<'a>(t: Tokens, s: &listen_core::settings::LyricsSettings) -> Elemen
 }
 
 /// Every lyrics setting of the Playback tab, in Feishin's order.
+/// A translation provider in the picker: its name, or empty for none (shown as the translated "None";
+/// the empty value is what the setting stores, so no display text is ever compared).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Provider(String);
+
+impl std::fmt::Display for Provider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(if self.0.is_empty() { crate::i18n::tr("None") } else { &self.0 })
+    }
+}
+
 pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) -> Vec<Element<'a, Message>> {
     let t = state.tokens;
     let s = &state.config.settings.lyrics;
@@ -271,21 +282,15 @@ pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) 
         })
         .into(),
     ));
-    let mut providers_list: Vec<String> = vec!["None".into()];
-    providers_list.extend(PROVIDERS.iter().map(|p| p.to_string()));
-    providers_list.push(listen_lyrics::gemini::PROVIDER.to_string());
+    let mut providers_list = vec![Provider(String::new())];
+    providers_list.extend(PROVIDERS.iter().map(|p| Provider(p.to_string())));
+    providers_list.push(Provider(listen_lyrics::gemini::PROVIDER.to_string()));
     let gemini = s.translation_api_provider == listen_lyrics::gemini::PROVIDER;
-    let current = if s.translation_api_provider.is_empty() {
-        "None".to_string()
-    } else {
-        s.translation_api_provider.clone()
-    };
+    let current = Provider(s.translation_api_provider.clone());
     v.push(mk(
         "Translation provider",
         "The online service for the Translation button (needs your own API key; Gemini uses the AI DJ's key and leaves English lines as they are).",
-        pick_list(providers_list, Some(current), |p| {
-            set(LyricsSetting::TranslationProvider(if p == "None" { String::new() } else { p }))
-        })
+        pick_list(providers_list, Some(current), |p| set(LyricsSetting::TranslationProvider(p.0)))
         .into(),
     ));
     if !gemini {
