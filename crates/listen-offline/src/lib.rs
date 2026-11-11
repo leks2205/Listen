@@ -1,11 +1,14 @@
 //! Songs downloaded for offline playback, in a private directory (0700 on Unix) with a JSON index.
 //! Files count only once committed, never as `*.part`. YouTube Music downloads are capped and
 //! deleted when the account is removed or unverified for [`YTM_MAX_OFFLINE`].
+//! An index that cannot be read is never overwritten and files it no longer names are never deleted
+//! on the spot: see [`Store::open`].
 
 use listen_core::model::{ServerId, Song, SourceKind};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -27,6 +30,7 @@ pub struct Entry {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 struct Index {
     entries: Vec<Entry>,
     /// Last time each YouTube Music server was reached online (epoch seconds).
@@ -45,6 +49,10 @@ pub struct Store {
     dir: PathBuf,
     index: Mutex<Index>,
 }
+
+const INDEX: &str = "index.json";
+/// Prefix of the folders (`unindexed-<epoch secs>`) that hold files no index entry names.
+const UNINDEXED: &str = "unindexed-";
 
 fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
@@ -70,6 +78,12 @@ pub fn file_name(song: &Song, ext: &str) -> String {
 
 impl Store {
     /// Opens (or creates) the store in `dir`; leftover `.part` files are removed.
+    ///
+    /// An `index.json` that does not parse is renamed to `index.json.bad-<epoch secs>`, never overwritten,
+    /// and every entry in it that still parses is kept (fields this version needs but the file lacks get
+    /// their [`Song::new`] defaults). One that cannot be read or set aside fails `open`. Files that no entry
+    /// names are moved to `unindexed-<epoch secs>/`: [`Self::remove_all`] deletes them, and `open` does so
+    /// after [`YTM_MAX_OFFLINE`] (their source is unknown, so the YouTube Music limit applies).
     pub fn open(dir: impl Into<PathBuf>) -> std::io::Result<Self> {
         let dir = dir.into();
         let files = dir.join("files");
@@ -86,11 +100,16 @@ impl Store {
                 let _ = std::fs::remove_file(e.path());
             }
         }
-        let mut index: Index = std::fs::read(dir.join("index.json"))
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default();
+        let mut index = load_index(&dir)?;
         index.entries.retain(|e| files.join(&e.file).is_file());
+        set_aside_unindexed(&dir, &index);
+        let cutoff = now().saturating_sub(YTM_MAX_OFFLINE.as_secs());
+        for (aside, _) in unindexed_dirs(&dir).into_iter().filter(|(_, secs)| *secs < cutoff) {
+            match std::fs::remove_dir_all(&aside) {
+                Ok(()) => tracing::info!("deleted expired unindexed offline files in {}", aside.display()),
+                Err(e) => tracing::warn!("could not delete {}: {e}", aside.display()),
+            }
+        }
         let store = Self { dir, index: Mutex::new(index) };
         store.save();
         Ok(store)
@@ -102,11 +121,11 @@ impl Store {
 
     fn save(&self) {
         let idx = self.index.lock().expect("index");
-        let tmp = self.dir.join("index.json.tmp");
+        let tmp = self.dir.join(format!("{INDEX}.tmp"));
         let result = serde_json::to_vec(&*idx)
             .map_err(std::io::Error::other)
             .and_then(|b| std::fs::write(&tmp, b))
-            .and_then(|()| std::fs::rename(&tmp, self.dir.join("index.json")));
+            .and_then(|()| std::fs::rename(&tmp, self.dir.join(INDEX)));
         if let Err(e) = result {
             tracing::warn!("could not save the offline index: {e}");
         }
@@ -184,8 +203,14 @@ impl Store {
         self.save();
     }
 
+    /// Deletes every download, including files set aside as unindexed by [`Self::open`].
     pub fn remove_all(&self) {
         self.remove_where(|_| true);
+        for (aside, _) in unindexed_dirs(&self.dir) {
+            if let Err(e) = std::fs::remove_dir_all(&aside) {
+                tracing::warn!("could not delete {}: {e}", aside.display());
+            }
+        }
     }
 
     fn remove_where(&self, doomed: impl Fn(&Entry) -> bool) {
@@ -234,6 +259,106 @@ impl Store {
         }
         before - self.entries().len()
     }
+}
+
+/// The index in `dir`: empty when there is none; an unparsable one is set aside and salvaged (see
+/// [`Store::open`]).
+fn load_index(dir: &Path) -> std::io::Result<Index> {
+    let path = dir.join(INDEX);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Index::default()),
+        Err(e) => return Err(e),
+    };
+    match serde_json::from_slice::<Index>(&bytes) {
+        Ok(index) => Ok(index),
+        Err(e) => {
+            let index = salvage(&bytes);
+            let aside = dir.join(format!("{INDEX}.bad-{}", now()));
+            std::fs::rename(&path, &aside)?;
+            tracing::warn!(
+                "offline index unreadable ({e}); kept {} entries, the original is at {}",
+                index.entries.len(),
+                aside.display()
+            );
+            Ok(index)
+        }
+    }
+}
+
+/// The entries of an index that does not parse as a whole, each parsed on its own.
+fn salvage(bytes: &[u8]) -> Index {
+    let Ok(Value::Object(raw)) = serde_json::from_slice::<Value>(bytes) else {
+        return Index::default();
+    };
+    let entries =
+        raw.get("entries").and_then(Value::as_array).map(|a| a.iter().filter_map(salvage_entry).collect());
+    let verified = raw.get("verified").and_then(|v| serde_json::from_value(v.clone()).ok());
+    Index { entries: entries.unwrap_or_default(), verified: verified.unwrap_or_default() }
+}
+
+/// One entry as written, or with the song fields it lacks filled from [`Song::new`] (an index written
+/// before a field existed); `None` without a readable id, server, source and title.
+fn salvage_entry(raw: &Value) -> Option<Entry> {
+    if let Ok(entry) = Entry::deserialize(raw) {
+        return Some(entry);
+    }
+    let mut raw = raw.clone();
+    let song = raw.get_mut("song")?.as_object_mut()?;
+    let base = Song::new(
+        serde_json::from_value::<String>(song.get("id")?.clone()).ok()?,
+        serde_json::from_value(song.get("server_id")?.clone()).ok()?,
+        serde_json::from_value(song.get("source")?.clone()).ok()?,
+        serde_json::from_value::<String>(song.get("title")?.clone()).ok()?,
+    );
+    let Value::Object(mut full) = serde_json::to_value(base).ok()? else {
+        return None;
+    };
+    full.extend(std::mem::take(song));
+    *song = full;
+    serde_json::from_value(raw).ok()
+}
+
+/// Moves the files in `files/` that no entry names into a new `unindexed-<now>/` folder. They may be
+/// downloads whose entry could not be read, so they are not deleted on the spot.
+fn set_aside_unindexed(dir: &Path, index: &Index) {
+    let named: HashSet<&str> = index.entries.iter().map(|e| e.file.as_str()).collect();
+    let Ok(listing) = std::fs::read_dir(dir.join("files")) else {
+        return;
+    };
+    let strays: Vec<PathBuf> = listing
+        .flatten()
+        .filter(|e| e.path().is_file() && !e.file_name().to_str().is_some_and(|n| named.contains(n)))
+        .map(|e| e.path())
+        .collect();
+    if strays.is_empty() {
+        return;
+    }
+    let aside = dir.join(format!("{UNINDEXED}{}", now()));
+    if let Err(e) = std::fs::create_dir_all(&aside) {
+        tracing::warn!("could not create {}: {e}", aside.display());
+        return;
+    }
+    // Counted outside the log macro: its arguments are not evaluated when nothing listens.
+    let moved = strays
+        .iter()
+        .filter(|p| p.file_name().is_some_and(|n| std::fs::rename(p, aside.join(n)).is_ok()))
+        .count();
+    tracing::warn!("moved {moved} offline files that no index entry names to {}", aside.display());
+}
+
+/// The `unindexed-<epoch secs>` folders in `dir`, with their time.
+fn unindexed_dirs(dir: &Path) -> Vec<(PathBuf, u64)> {
+    let Ok(listing) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    listing
+        .flatten()
+        .filter_map(|e| {
+            let secs = e.file_name().to_str()?.strip_prefix(UNINDEXED)?.parse().ok()?;
+            e.path().is_dir().then(|| (e.path(), secs))
+        })
+        .collect()
 }
 
 static GLOBAL: OnceLock<Store> = OnceLock::new();
@@ -352,6 +477,88 @@ mod tests {
         assert_eq!(store.expire_unverified(), 1);
         assert!(!store.contains(&a.server_id, "1"));
         assert!(store.contains(&b.server_id, "1") && store.contains(&nd.server_id, "1"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn names_in(dir: &Path, prefix: &str) -> Vec<String> {
+        let mut out: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().map(str::to_string))
+            .filter(|n| n.starts_with(prefix))
+            .collect();
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn unreadable_index_is_set_aside_and_its_files_are_not_orphaned() {
+        let dir = tmp("unreadable");
+        std::fs::create_dir_all(dir.join("files")).unwrap();
+        std::fs::write(dir.join(INDEX), br#"{"entries":[{"bogus":1}]}"#).unwrap();
+        std::fs::write(dir.join("files/nd-1.mp3"), b"song").unwrap();
+        let store = Store::open(&dir).unwrap();
+        assert!(store.entries().is_empty());
+        assert_eq!(names_in(&dir, "index.json.bad-").len(), 1, "the unreadable index is kept");
+        assert!(!dir.join("files/nd-1.mp3").exists(), "an unindexed file leaves files/");
+        let aside = names_in(&dir, UNINDEXED);
+        assert_eq!(aside.len(), 1);
+        assert!(dir.join(&aside[0]).join("nd-1.mp3").is_file(), "it is set aside, not deleted");
+        store.remove_all();
+        assert!(names_in(&dir, UNINDEXED).is_empty(), "Remove all deletes the unindexed files too");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn index_without_verified_still_loads() {
+        let dir = tmp("noverified");
+        let s = song("nd", "1", SourceKind::Subsonic);
+        let store = Store::open(&dir).unwrap();
+        put(&store, &s, 3);
+        drop(store);
+        let mut index: Value = serde_json::from_slice(&std::fs::read(dir.join(INDEX)).unwrap()).unwrap();
+        index.as_object_mut().unwrap().remove("verified");
+        std::fs::write(dir.join(INDEX), serde_json::to_vec(&index).unwrap()).unwrap();
+        let store = Store::open(&dir).unwrap();
+        assert!(store.contains(&s.server_id, "1"));
+        assert!(names_in(&dir, "index.json.bad-").is_empty() && names_in(&dir, UNINDEXED).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn entries_of_an_unparsable_index_that_still_parse_are_kept() {
+        let dir = tmp("salvage");
+        let (old, ok) = (song("nd", "old", SourceKind::Subsonic), song("nd", "ok", SourceKind::Subsonic));
+        let store = Store::open(&dir).unwrap();
+        put(&store, &old, 3);
+        put(&store, &ok, 3);
+        drop(store);
+        let mut index: Value = serde_json::from_slice(&std::fs::read(dir.join(INDEX)).unwrap()).unwrap();
+        let entries = index["entries"].as_array_mut().unwrap();
+        // An entry written before the `explicit` field existed, and one this version cannot read at all.
+        entries[0]["song"].as_object_mut().unwrap().remove("explicit");
+        entries.push(
+            serde_json::json!({ "song": { "source": "NoSuchSource" }, "file": "x", "bytes": 1, "added": 0 }),
+        );
+        std::fs::write(dir.join(INDEX), serde_json::to_vec(&index).unwrap()).unwrap();
+        let store = Store::open(&dir).unwrap();
+        assert!(store.contains(&old.server_id, "old") && store.contains(&ok.server_id, "ok"));
+        assert_eq!(store.entries().len(), 2);
+        assert_eq!(names_in(&dir, "index.json.bad-").len(), 1);
+        assert!(names_in(&dir, UNINDEXED).is_empty(), "every file is still named");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn unindexed_files_expire_after_the_offline_limit() {
+        let dir = tmp("unindexed-expiry");
+        let fresh = format!("{UNINDEXED}{}", now());
+        for d in [format!("{UNINDEXED}1"), fresh.clone()] {
+            std::fs::create_dir_all(dir.join(&d)).unwrap();
+            std::fs::write(dir.join(&d).join("nd-1.mp3"), b"song").unwrap();
+        }
+        let _store = Store::open(&dir).unwrap();
+        assert_eq!(names_in(&dir, UNINDEXED), vec![fresh]);
         let _ = std::fs::remove_dir_all(dir);
     }
 

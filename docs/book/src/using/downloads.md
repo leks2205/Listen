@@ -43,7 +43,7 @@ If Listen starts and cannot reach any server, the connection screen offers **Pla
 
 ## Where the files are
 
-Downloads live in a folder named `offline` inside Listen's data folder (see [Files and folders](../reference/files.md)), with the audio in `offline/files` and an index file that remembers the song details. The folder is private: on Linux only your user can read it. A download counts only when it is complete; unfinished files (`.part`) are cleaned up when Listen starts. The file names are made of the server and song ids, so the folder is not meant to be browsed or used by other programs.
+Downloads live in a folder named `offline` inside Listen's data folder (see [Files and folders](../reference/files.md)), with the audio in `offline/files` and an index file that remembers the song details. The folder is private: on Linux only your user can read it. A download counts only when it is complete; unfinished files (`.part`) are cleaned up when Listen starts. The file names are made of the server and song ids, so the folder is not meant to be browsed or used by other programs. If the index cannot be read (for example after going back to an older Listen), Listen keeps every song it can still read, renames the index to `index.json.bad-<time>` instead of overwriting it, and moves audio files no song points to into an `unindexed-<time>` folder. **Remove all** deletes that folder, and Listen deletes it by itself after 30 days.
 
 ## Limits
 
