@@ -1,7 +1,8 @@
 //! Advanced tab: updates, log level and settings export / import. Secrets live in the app's secret store
 //! (keyring or its private fallback file), not in `Settings`; the exceptions are the public Last.fm API keys
 //! and the legacy `lyrics.translation_api_key` (see `settings_hold_no_secret_fields_beyond_the_known_ones`).
-//! Export and import still skip any key that looks like a secret.
+//! Export and import skip every settings field that looks like a secret; names the user chose (presets,
+//! playlist ids) are kept whatever they are called.
 
 use super::*;
 
@@ -96,21 +97,32 @@ pub fn is_secret_key(key: &str) -> bool {
         .any(|s| k.contains(s))
 }
 
-fn strip_secrets(v: &mut Value) {
+/// Drops the secret-named settings fields from `v`. `shape` is the same spot in the default settings: a key it
+/// does not have is a name the user chose (an EQ preset, a playlist id, a device) and stays whatever it is
+/// called; where the shape is unknown (`None`: list items, a map's values) every secret-named key goes.
+fn strip_secrets(v: &mut Value, shape: Option<&Value>) {
     match v {
         Value::Object(map) => {
-            map.retain(|k, _| !is_secret_key(k));
-            map.values_mut().for_each(strip_secrets);
+            let fields = shape.and_then(Value::as_object);
+            map.retain(|k, _| !is_secret_key(k) || fields.is_some_and(|f| !f.contains_key(k)));
+            for (k, child) in map.iter_mut() {
+                strip_secrets(child, fields.and_then(|f| f.get(k)));
+            }
         }
-        Value::Array(a) => a.iter_mut().for_each(strip_secrets),
+        Value::Array(a) => a.iter_mut().for_each(|item| strip_secrets(item, None)),
         _ => {}
     }
+}
+
+/// The default settings as JSON: which keys are fields (see [`strip_secrets`]).
+fn settings_shape() -> Value {
+    serde_json::to_value(Settings::default()).unwrap_or(Value::Null)
 }
 
 /// The settings as a JSON export file (without secrets).
 pub fn export_json(settings: &Settings, app_version: &str) -> String {
     let mut value = serde_json::to_value(settings).unwrap_or(Value::Null);
-    strip_secrets(&mut value);
+    strip_secrets(&mut value, Some(&settings_shape()));
     let file = serde_json::json!({ "format": EXPORT_FORMAT, "version": app_version, "settings": value });
     serde_json::to_string_pretty(&file).unwrap_or_default()
 }
@@ -181,6 +193,7 @@ pub fn import_json(base: &Settings, json: &str) -> Result<ImportReport, String> 
     let Value::Object(incoming) = incoming else { return Err("\"settings\" is not an object".into()) };
     let mut root = serde_json::to_value(base).map_err(|e| e.to_string())?;
     let mut report = (0usize, Vec::new());
+    let shape = settings_shape();
     for (k, v) in incoming {
         if is_secret_key(k) {
             report.1.push(format!("{k}: secrets are not imported"));
@@ -191,7 +204,7 @@ pub fn import_json(base: &Settings, json: &str) -> Result<ImportReport, String> 
             continue;
         }
         let mut v = v.clone();
-        strip_secrets(&mut v);
+        strip_secrets(&mut v, shape.get(k));
         apply(&mut root, &mut vec![k.clone()], &v, &mut report);
     }
     let mut settings: Settings = serde_json::from_value(root).map_err(|e| e.to_string())?;
@@ -330,13 +343,30 @@ mod tests {
         assert!(is_secret_key("lastfm_key") && is_secret_key("translation_api_key"));
         let mut v =
             serde_json::json!({"a": {"api_key": "x", "ok": 1}, "password": "p", "l": [{"token": "t"}]});
-        strip_secrets(&mut v);
+        strip_secrets(&mut v, None);
         assert_eq!(v, serde_json::json!({"a": {"ok": 1}, "l": [{}]}));
         let r = import_json(&Settings::default(), r#"{"token":"abc","history":{"enabled":false}}"#).unwrap();
         assert!(!r.settings.history.enabled);
         assert!(r.issues.iter().any(|i| i.contains("secrets")));
         let text = export_json(&Settings::default(), "1");
         assert!(!text.to_lowercase().contains("password"));
+    }
+
+    #[test]
+    fn user_named_presets_survive_export_even_when_named_like_a_secret() {
+        let mut s = Settings::default();
+        s.playback.save_eq_preset("Secret Sauce");
+        s.playback.save_eq_preset("Tokyo Tokens");
+        s.sidebar.playlist_order.insert("token-mix".into(), vec!["a".into()]);
+        s.lyrics.translation_api_key = "k".into();
+        let text = export_json(&s, "1");
+        assert!(!text.contains("translation_api_key"), "a secret field is still dropped");
+        let r = import_json(&Settings::default(), &text).unwrap();
+        assert!(r.issues.is_empty(), "{:?}", r.issues);
+        let presets = &r.settings.playback.custom_eq_presets;
+        assert!(presets.contains_key("Secret Sauce") && presets.contains_key("Tokyo Tokens"));
+        assert_eq!(r.settings.sidebar.playlist_order, s.sidebar.playlist_order);
+        assert_eq!(r.settings.lyrics.translation_api_key, "");
     }
 
     #[test]
