@@ -26,7 +26,7 @@ Listen looks at both songs and picks the best way to join them. It prefers to st
 | **Short blend** | A beat-matched crossfade of a few bars, placed so the vocals do not overlap. |
 | **Filter-out** | The outgoing song is filtered away (its low end disappears first) while the next one starts on a downbeat. |
 | **Echo-out** | The last beat of a phrase of the outgoing song is repeated four times, each repeat half as loud and thinner, while the next song starts on the downbeat right after. The two songs never play their own sound at the same time, so the tempos need not match and the voices don't clash. Used when both edges are sung, or the tempos are too far apart for a blend, and the outgoing song ends a phrase loudly or with a sung line. A bridge song is tried first (see [Bridge songs](#bridge-songs)), and a song that came in with an echo-out never leaves with one: its way out is a cut, a blend or a fade. |
-| **Cut** | A hard switch on a phrase downbeat (with a few milliseconds of fade so it doesn't click), each song at its own tempo. Used in the same cases as an echo-out when the bar before is quiet. |
+| **Cut** | A hard switch on a phrase downbeat (with a 30 ms fade so it doesn't click), each song at its own tempo. Used in the same cases as an echo-out when the bar before is quiet. |
 | **Fade** | A plain crossfade, used when one song has no steady beat, or while the AI DJ talks over the join. |
 | **Gapless** | No mixing at all. |
 

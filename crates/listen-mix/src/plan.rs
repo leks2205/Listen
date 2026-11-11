@@ -57,7 +57,7 @@ pub enum Kind {
     /// The outgoing's last beat before a phrase end is echoed (`delay_s` apart, see [`EqTarget::Echo`]), its
     /// dry signal stops on the downbeat and the incoming starts there at its own tempo (no beat matching).
     EchoOut { delay_s: f32 },
-    /// Hard handover on a phrase downbeat (a few ms crossfade), each song at its own tempo.
+    /// Hard handover on a phrase downbeat (a 30 ms crossfade, `CUT_FADE_S`), each song at its own tempo.
     Cut,
     /// No mix: play the next song gaplessly.
     Gapless,
@@ -345,7 +345,7 @@ pub fn mix_eligible(
 pub(crate) struct Side<'a> {
     pub(crate) f: &'a Features,
     g: &'a BeatGrid,
-    /// Complete bars that end before the audio does.
+    /// Bars up to the audio end; the last may run on up to a quarter bar past `audio_end`, into the decay.
     pub(crate) bars: usize,
     /// Nominal bar length (file seconds).
     pub(crate) bar_s: f64,
@@ -595,6 +595,7 @@ pub fn alternatives(out: &Features, inn: &Features, ctx: &PlanCtx, max: usize) -
 /// Repeats of an echo-out fall off by this much each.
 const ECHO_FEEDBACK: f32 = 0.5;
 /// Crossfade of a [`Kind::Cut`] (wall s): short enough to sound like a cut, long enough not to click.
+/// Quoted in the docs of [`Kind::Cut`] and the user guide's transitions page: keep them in step.
 const CUT_FADE_S: f64 = 0.03;
 /// Base scores: below every beat-matched blend without a clash, above [`Kind::Fade`] (−2) and a filter-out
 /// over clashing vocals. An echo gets [`ECHO_SUNG`] more when the bar before the stop is sung.
