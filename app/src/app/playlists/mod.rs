@@ -67,9 +67,10 @@ impl PlaylistSort {
     }
 }
 
+/// Translated: iced's `pick_list` draws an option's `Display` as it is.
 impl std::fmt::Display for PlaylistSort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
+        f.write_str(crate::i18n::tr(self.label()))
     }
 }
 
@@ -754,6 +755,18 @@ mod tests {
 
     fn names(l: &[Playlist]) -> Vec<&str> {
         l.iter().map(|p| p.name.as_str()).collect()
+    }
+
+    /// The sort picker shows `Display`, which looks the label up: every label needs a German key.
+    #[test]
+    fn every_playlist_sort_label_has_a_german_translation() {
+        for sort in PlaylistSort::ALL {
+            assert!(
+                crate::i18n::translate_in("de", sort.label()).is_some(),
+                "no de key for {:?}",
+                sort.label()
+            );
+        }
     }
 
     #[test]

@@ -134,18 +134,20 @@ pub fn step_speed(speed: f32, semitones: f32) -> f32 {
     pitch_to_speed(speed_to_pitch(speed) + semitones).clamp(SPEED_MIN, SPEED_MAX)
 }
 
-/// The label of an output device: mpv's description; `auto` is "System default".
+/// The label of an output device: mpv's description; `auto` is "System default" (translated).
 pub fn device_label(devices: &[(String, String)], id: &str) -> String {
     if id == "auto" || id.is_empty() {
-        return "System default".into();
+        return crate::i18n::tr("System default").into();
     }
     devices.iter().find(|(name, _)| name == id).map_or_else(|| id.to_string(), |(_, d)| d.clone())
 }
 
 /// The choices of a device picker: "System default" first, then mpv's list
 /// (without its own `auto` entry); the selected device stays listed when it is unplugged.
+/// Labels are final text (UI words translated here, device names as mpv gives them): `pick_list`
+/// shows them as they are.
 pub fn device_choices(devices: &[(String, String)], selected: &str) -> Vec<DeviceChoice> {
-    let mut out = vec![DeviceChoice { id: "auto".into(), label: "System default".into() }];
+    let mut out = vec![DeviceChoice { id: "auto".into(), label: crate::i18n::tr("System default").into() }];
     out.extend(
         devices
             .iter()
@@ -153,7 +155,10 @@ pub fn device_choices(devices: &[(String, String)], selected: &str) -> Vec<Devic
             .map(|(name, desc)| DeviceChoice { id: name.clone(), label: desc.clone() }),
     );
     if !out.iter().any(|c| c.id == selected) && !selected.is_empty() {
-        out.push(DeviceChoice { id: selected.into(), label: format!("{selected} (not found)") });
+        out.push(DeviceChoice {
+            id: selected.into(),
+            label: crate::i18n::trf("{} (not found)", &[&selected]),
+        });
     }
     out
 }
