@@ -66,13 +66,14 @@ pub enum GainSource {
 }
 
 impl GainSource {
+    /// The source's name in logs and in the phone's gain JSON: the same word serde writes.
     pub fn as_str(self) -> &'static str {
         match self {
             GainSource::Off => "off",
             GainSource::Analysis => "analysis",
             GainSource::YouTube => "youtube",
             GainSource::ReplayGain => "replaygain",
-            GainSource::Unknown => "none",
+            GainSource::Unknown => "unknown",
         }
     }
 }
@@ -495,6 +496,14 @@ pub fn plan_levels(
 mod tests {
     use super::*;
     use crate::testutil::FeatBuilder;
+
+    #[test]
+    fn as_str_matches_serde_name() {
+        use GainSource::*;
+        for v in [Off, Analysis, YouTube, ReplayGain, Unknown] {
+            assert_eq!(serde_json::to_value(v).unwrap(), serde_json::json!(v.as_str()), "{v:?}");
+        }
+    }
 
     fn feat(lufs: f32) -> Features {
         let mut f = FeatBuilder::new(120.0, 32).build();
