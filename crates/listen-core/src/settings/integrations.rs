@@ -149,9 +149,12 @@ impl Default for DiscordSettings {
 pub struct RemoteSettings {
     pub enabled: bool,
     pub port: u16,
-    /// Address the server listens on (`0.0.0.0` = every network, `127.0.0.1` = this computer).
+    /// Address the server listens on (`0.0.0.0` = every network, `127.0.0.1` = this computer). Honoured only
+    /// when a user name AND a password are set; without that login the server binds 127.0.0.1 (the desktop
+    /// app's `remote::has_login`), so the default never opens an unprotected remote to the network.
     pub bind: String,
-    /// Basic-auth user name; with an empty password too, no sign-in is asked.
+    /// Basic-auth user name; without it (or without the password) no sign-in is asked and the server stays on
+    /// this computer.
     pub username: String,
 }
 
