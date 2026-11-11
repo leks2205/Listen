@@ -74,7 +74,8 @@ pub(super) fn integrations(state: &Listen) -> Element<'_, Message> {
         window_switch(w.prevent_display_sleep, WindowSetting::PreventDisplaySleep),
     ));
     let system: Element<'_, Message> = if w.prevent_display_sleep {
-        toggler(w.prevent_system_sleep).size(20).into()
+        // Implied by the display inhibitor (`inhibit::Level`): show the effective state, keep the stored one.
+        toggler(true).size(20).into()
     } else {
         window_switch(w.prevent_system_sleep, WindowSetting::PreventSystemSleep)
     };
