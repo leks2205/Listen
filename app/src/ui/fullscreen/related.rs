@@ -4,7 +4,7 @@ use crate::app::fullscreen_state::FullscreenMsg;
 use crate::app::menu::MenuTarget;
 use crate::app::{Listen, Message};
 use crate::style::{self, metrics};
-use crate::ui::{ellipsize_px, label, label_w, song_cover, with_menu};
+use crate::ui::{data_label, data_label_w, ellipsize_px, label, song_cover, with_menu};
 use iced::font::Weight;
 use iced::widget::{Column, button, column, container, row, scrollable, space};
 use iced::{Alignment, Element, Length, Padding};
@@ -29,13 +29,13 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             row![
                 song_cover(state, song, ROW - 12.0, metrics::radius_sm()),
                 column![
-                    label_w(
+                    data_label_w(
                         ellipsize_px(&song.title, text_w, metrics::font_md()),
                         metrics::font_md(),
                         t.foreground,
                         Weight::Medium
                     ),
-                    label(
+                    data_label(
                         ellipsize_px(&song.artist_line(), text_w, metrics::font_sm()),
                         metrics::font_sm(),
                         t.muted

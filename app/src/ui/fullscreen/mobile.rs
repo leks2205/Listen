@@ -6,7 +6,7 @@ use crate::i18n::tr;
 use crate::icons::Icon;
 use crate::style::{self, metrics};
 use crate::ui::tip::{Position, tip, tip_raw};
-use crate::ui::{label, label_w, song_cover};
+use crate::ui::{data_label, data_label_w, label, label_w, song_cover};
 use iced::font::Weight;
 use iced::widget::{button, column, container, responsive, row, slider, space};
 use iced::{Alignment, Length, Padding};
@@ -94,18 +94,18 @@ pub fn mobile(state: &Listen) -> iced::Element<'_, Message> {
             column![
                 cover,
                 column![
-                    label_w(
+                    data_label_w(
                         crate::ui::ellipsize_px(&song.title, text_px, 22.0),
                         22.0,
                         t.foreground,
                         Weight::Bold
                     ),
-                    label(
+                    data_label(
                         crate::ui::ellipsize_px(&song.artist_line(), text_px, metrics::font_lg()),
                         metrics::font_lg(),
                         t.muted
                     ),
-                    label(
+                    data_label(
                         crate::ui::ellipsize_px(
                             song.album.as_deref().unwrap_or_default(),
                             text_px,

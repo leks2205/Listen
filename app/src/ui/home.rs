@@ -3,7 +3,10 @@
 //! featured genres. The source's own feed (YouTube Music's Quick picks,
 //! mixes, ...) is shown first, its shelves page like the others.
 
-use super::{album_cover, cover_on, ellipsize, ellipsize_px, icon, label, label_w, song_cover};
+use super::{
+    album_cover, cover_on, data_label, data_label_w, ellipsize, ellipsize_px, icon, label, label_w,
+    song_cover,
+};
 use crate::app::home::{HomeMsg, RowId, Section, SectionRow, can_next, section_list, slide_offsets};
 use crate::app::menu::MenuTarget;
 use crate::app::{Listen, Message, Route};
@@ -51,7 +54,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         page = page.push(carousel(
             state,
             RowId::Section(section),
-            section.title(),
+            crate::i18n::tr(section.title()),
             section_cards(row, section),
             row.first,
             row.done,
@@ -267,6 +270,7 @@ fn backdrop<'a>(
     }
 }
 
+/// Up to `genres` genre names and the year, joined: data, shown untranslated.
 fn metadata(album: &Album, genres: usize) -> String {
     album
         .genres
@@ -306,8 +310,8 @@ fn feature_single<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Messag
         ),
         column![
             crate::ui::header_title_fit(&album.name, white, text_w),
-            label_w(ellipsize_px(&album.artist_line(), text_w, 16.0), 16.0, white, Weight::Bold),
-            label_w(metadata(album, 2), metrics::font_sm(), white, Weight::Semibold),
+            data_label_w(ellipsize_px(&album.artist_line(), text_w, 16.0), 16.0, white, Weight::Bold),
+            data_label_w(metadata(album, 2), metrics::font_sm(), white, Weight::Semibold),
             play,
         ]
         .spacing(metrics::space_sm())
@@ -323,7 +327,7 @@ fn feature_card<'a>(state: &'a Listen, album: &'a Album, width: f32) -> Element<
     let white = Color::WHITE;
     let art = (width - 48.0).clamp(80.0, 220.0);
     let content = column![
-        label_w(ellipsize(&album.name, (width / 8.0) as usize), metrics::font_lg(), white, Weight::Bold),
+        data_label_w(ellipsize(&album.name, (width / 8.0) as usize), metrics::font_lg(), white, Weight::Bold),
         super::with_menu(
             button(album_cover(state, album, art, metrics::radius_md()))
                 .padding(0)
@@ -331,13 +335,13 @@ fn feature_card<'a>(state: &'a Listen, album: &'a Album, width: f32) -> Element<
                 .on_press(Message::OpenAlbum(album.id.clone())),
             MenuTarget::album(album),
         ),
-        label_w(
+        data_label_w(
             ellipsize(&album.artist_line(), (width / 7.5) as usize),
             metrics::font_md(),
             white,
             Weight::Medium
         ),
-        label(metadata(album, 2), metrics::font_sm(), white),
+        data_label(metadata(album, 2), metrics::font_sm(), white),
     ]
     .spacing(metrics::space_sm())
     .align_x(Alignment::Center)
@@ -393,6 +397,8 @@ pub fn cards_per_row(width: f32) -> usize {
     }
 }
 
+/// A titled row of cards. `title` is shown as it is: a feed shelf's own name, or a section title the
+/// caller already translated.
 fn carousel<'a>(
     state: &'a Listen,
     id: RowId,
@@ -420,7 +426,7 @@ fn carousel<'a>(
                 crate::ui::tip::Position::Bottom,
             )
         };
-        let mut header = row![label_w(title, 24.0, t.foreground, Weight::Bold), space::horizontal()]
+        let mut header = row![data_label_w(title, 24.0, t.foreground, Weight::Bold), space::horizontal()]
             .spacing(metrics::space_sm())
             .align_y(Alignment::Center);
         if let RowId::Section(section) = id {
@@ -445,14 +451,22 @@ fn carousel<'a>(
                 // must not run under the next card.
                 container(
                     column![
-                        label_w(
+                        data_label_w(
                             ellipsize_px(&title, card_w, metrics::font_md()),
                             metrics::font_md(),
                             t.foreground,
                             Weight::Medium
                         ),
-                        label(ellipsize_px(&sub, card_w, metrics::font_sm()), metrics::font_sm(), t.muted),
-                        label(ellipsize_px(&extra, card_w, metrics::font_sm()), metrics::font_sm(), t.muted),
+                        data_label(
+                            ellipsize_px(&sub, card_w, metrics::font_sm()),
+                            metrics::font_sm(),
+                            t.muted
+                        ),
+                        data_label(
+                            ellipsize_px(&extra, card_w, metrics::font_sm()),
+                            metrics::font_sm(),
+                            t.muted
+                        ),
                     ]
                     .spacing(metrics::space_xs()),
                 )
@@ -561,7 +575,7 @@ fn genre_tile<'a>(genre: &'a Genre, width: f32) -> Element<'a, Message> {
     let chars = (width / 9.0) as usize;
     button(
         row![
-            label_w(
+            data_label_w(
                 ellipsize(&genre.name, chars.saturating_sub(5)),
                 metrics::font_lg(),
                 Color::WHITE,

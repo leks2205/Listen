@@ -2,7 +2,7 @@
 //! are the legacy fixed-column table, still used by other pages.
 
 use super::list::ListView;
-use super::{ellipsize_px, label, label_w, plural, song_cover};
+use super::{data_label, data_label_w, ellipsize_px, label, label_w, plural, song_cover};
 use crate::app::list::ListId;
 use crate::app::{Listen, Message, ScrollState};
 use crate::style::{self, metrics};
@@ -48,13 +48,13 @@ pub fn song_row<'a>(
         song_cover(state, song, 48.0, metrics::radius_md()),
         container(
             column![
-                label_w(
+                data_label_w(
                     ellipsize_px(&song.title, title_px, metrics::font_md()),
                     metrics::font_md(),
                     title_color,
                     Weight::Medium
                 ),
-                label(
+                data_label(
                     ellipsize_px(&song.artist_line(), title_px, metrics::font_xs()),
                     metrics::font_xs(),
                     t.muted
@@ -64,7 +64,7 @@ pub fn song_row<'a>(
         )
         .width(Length::FillPortion(3))
         .clip(true),
-        container(label(
+        container(data_label(
             ellipsize_px(song.album.as_deref().unwrap_or_default(), album_px, metrics::font_md()),
             metrics::font_md(),
             t.muted

@@ -14,7 +14,7 @@ pub mod settings;
 pub use lyrics::{LYRICS_ID, lyric_line_height};
 pub use mobile::mobile;
 
-use super::{icon, label, label_w, song_cover};
+use super::{data_label, data_label_w, icon, label, song_cover};
 use crate::app::fullscreen_state::FullscreenMsg;
 use crate::app::{FullscreenTab, Listen, Message};
 use crate::icons::Icon;
@@ -213,13 +213,13 @@ fn video_stack<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
             None => space().into(),
         };
         let info = row![
-            label_w(
+            data_label_w(
                 super::ellipsize_px(&song.title, w * 0.6, metrics::font_xl()),
                 metrics::font_xl(),
                 t.foreground,
                 Weight::Bold
             ),
-            label(
+            data_label(
                 super::ellipsize_px(&song.artist_line(), w * 0.35, metrics::font_lg()),
                 metrics::font_lg(),
                 t.muted
@@ -296,13 +296,13 @@ pub fn visualizer_overlay(state: &Listen) -> Element<'_, Message> {
     if let Some(item) = state.queue.current() {
         let song = &item.song;
         let info = column![
-            label_w(
+            data_label_w(
                 crate::ui::ellipsize_px(&song.title, 420.0, 22.0),
                 22.0,
                 iced::Color::WHITE,
                 Weight::Bold
             ),
-            label(
+            data_label(
                 crate::ui::ellipsize_px(&song.artist_line(), 420.0, metrics::font_lg()),
                 metrics::font_lg(),
                 style::alpha(iced::Color::WHITE, 0.75)

@@ -2,7 +2,7 @@
 //! from the local listening history.
 
 use super::playlist_detail::song_list;
-use super::{label, label_w};
+use super::{data_label_w, label, label_w};
 use crate::app::history::HistoryMsg;
 use crate::app::{Listen, Message, Route};
 use crate::style::{self, metrics};
@@ -204,7 +204,7 @@ fn top_list<'a>(state: &'a Listen, title: &'static str, items: &'a [Ranked]) -> 
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
             column![
-                label_w(r.name.clone(), metrics::font_md(), t.foreground, Weight::Medium)
+                data_label_w(r.name.clone(), metrics::font_md(), t.foreground, Weight::Medium)
                     .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
                 label(detail, metrics::font_xs(), t.muted)
                     .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
@@ -413,7 +413,7 @@ fn owned_list<'a>(state: &'a Listen, title: &'static str, items: Vec<Ranked>) ->
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
             column![
-                label_w(r.name, metrics::font_md(), t.foreground, Weight::Medium)
+                data_label_w(r.name, metrics::font_md(), t.foreground, Weight::Medium)
                     .wrapping(iced::widget::text::Wrapping::WordOrGlyph),
                 label(crate::i18n::trf("{} • {} plays", &[&r.detail, &r.plays]), metrics::font_xs(), t.muted)
                     .wrapping(iced::widget::text::Wrapping::WordOrGlyph),

@@ -3,7 +3,7 @@
 use crate::app::about::AboutMsg;
 use crate::app::{Listen, Message};
 use crate::style::{self, metrics};
-use crate::ui::{label, label_w};
+use crate::ui::{data_label, label, label_w};
 use iced::font::Weight;
 use iced::widget::{Column, Row, button, column, container, scrollable, text};
 use iced::{Element, Length, Padding};
@@ -17,10 +17,10 @@ fn centred<'a>(state: &'a Listen, msg: String) -> Element<'a, Message> {
         .into()
 }
 
-/// A small link button ("wikipedia.org").
+/// A small link button ("wikipedia.org"); `name` is a page title or a search query, shown as it is.
 fn link<'a>(state: &'a Listen, name: String, url: String) -> Element<'a, Message> {
     let t = state.tokens;
-    button(label(name, metrics::font_xs(), t.primary))
+    button(data_label(name, metrics::font_xs(), t.primary))
         .padding(Padding::from([2.0, 8.0]))
         .style(style::bare_button(t))
         .on_press(Message::About(AboutMsg::Open(url)))

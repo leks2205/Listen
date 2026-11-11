@@ -153,7 +153,7 @@ fn details_body<'a>(state: &'a Listen, d: &'a DetailsState) -> Element<'a, Messa
     for r in &entry.rows {
         let mut line = Row::new().spacing(metrics::space_sm()).align_y(Alignment::Start);
         line = line.push(container(label(&r.label, metrics::font_sm(), t.muted)).width(LABEL_WIDTH));
-        let value = crate::ui::text_in(&r.value, crate::appearance::current_font())
+        let value = crate::ui::verbatim(&r.value, crate::appearance::current_font())
             .size(metrics::font_md())
             .color(t.foreground)
             .width(Length::Fill);
@@ -285,7 +285,11 @@ fn tags_body<'a>(state: &'a Listen, s: &'a TagsState) -> Element<'a, Message> {
                     t.muted,
                 ));
             } else {
-                col = col.push(label(s.paths[0].display().to_string(), metrics::font_sm(), t.muted));
+                col = col.push(crate::ui::data_label(
+                    s.paths[0].display().to_string(),
+                    metrics::font_sm(),
+                    t.muted,
+                ));
             }
             for field in TagField::ALL {
                 let Some(edit) = s.fields.get(&field) else { continue };
@@ -335,15 +339,15 @@ fn tags_body<'a>(state: &'a Listen, s: &'a TagsState) -> Element<'a, Message> {
                 table = table.push(
                     row![
                         container(label(r.field, metrics::font_sm(), t.muted)).width(LABEL_WIDTH),
-                        container(label(
-                            if r.old.is_empty() { "(empty)".into() } else { r.old },
+                        container(crate::ui::data_label(
+                            if r.old.is_empty() { crate::i18n::tr("(empty)").to_string() } else { r.old },
                             metrics::font_md(),
                             t.muted
                         ))
                         .width(Length::FillPortion(1)),
                         label("→", metrics::font_md(), t.muted),
-                        container(label(
-                            if r.new.is_empty() { "(removed)".into() } else { r.new },
+                        container(crate::ui::data_label(
+                            if r.new.is_empty() { crate::i18n::tr("(removed)").to_string() } else { r.new },
                             metrics::font_md(),
                             t.foreground
                         ))

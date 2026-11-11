@@ -3,13 +3,14 @@
 
 use crate::app::{Listen, Message, Route};
 use crate::style::Tokens;
-use crate::ui::{ellipsize_px, label_w, text_px};
+use crate::ui::{data_label_w, ellipsize_px, label_w, text_px};
 use iced::font::Weight;
 use iced::widget::{Row, button};
 use iced::{Alignment, Color, Element};
 use listen_core::model::{ArtistRef, Song};
 
-/// Text that opens `to` when clicked (plain text without a target).
+/// Text that opens `to` when clicked (plain text without a target). `text` is user data (a title, an
+/// artist or album name) and is shown untranslated.
 pub fn link<'a>(
     t: Tokens,
     text: String,
@@ -18,9 +19,9 @@ pub fn link<'a>(
     weight: Weight,
     to: Option<Message>,
 ) -> Element<'a, Message> {
-    let Some(to) = to else { return label_w(text, size, color, weight).into() };
+    let Some(to) = to else { return data_label_w(text, size, color, weight).into() };
     // The button's text colour (muted, foreground on hover) applies to the label.
-    let content = crate::ui::text_in(text, crate::ui::font(weight))
+    let content = crate::ui::verbatim(text, crate::ui::font(weight))
         .size(size)
         .wrapping(iced::widget::text::Wrapping::None);
     button(content)

@@ -51,8 +51,9 @@ pub fn marquee_pos(t: f32, overflow: f32) -> f32 {
     }
 }
 
-/// The badge texts for the badge ids in `ids` (in that order). Ids the song
-/// has no data for are skipped, as is `release_year` next to `year`.
+/// The badge texts for the badge ids in `ids` (in that order), ready to show: the counted ones
+/// ("Disc 2") are translated here, the rest is data (codec, genres, year). Ids the song has no data
+/// for are skipped, as is `release_year` next to `year`.
 pub fn badges(song: &Song, ids: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |s: String| {
@@ -84,8 +85,12 @@ pub fn badges(song: &Song, ids: &[String]) -> Vec<String> {
                 song.year.filter(|y| *y > 0).into_iter().for_each(|y| push(y.to_string()));
             }
             "genres" => song.genres.iter().take(2).for_each(|g| push(g.clone())),
-            "disc_number" => song.disc_number.into_iter().for_each(|d| push(format!("Disc {d}"))),
-            "track_number" => song.track_number.into_iter().for_each(|n| push(format!("Track {n}"))),
+            "disc_number" => {
+                song.disc_number.into_iter().for_each(|d| push(crate::i18n::trf("Disc {}", &[&d])))
+            }
+            "track_number" => {
+                song.track_number.into_iter().for_each(|n| push(crate::i18n::trf("Track {}", &[&n])))
+            }
             _ => {}
         }
     }
@@ -104,7 +109,7 @@ pub fn view<'a>(state: &'a Listen, song: &'a Song, width: f32, align: Horizontal
     // over up to `title_lines` lines.
     let title: Element<'a, Message> = match s.title_display {
         TitleDisplay::Scroll => {
-            let line = crate::ui::label_w(song.title.clone(), TITLE, t.foreground, Weight::Black);
+            let line = crate::ui::data_label_w(song.title.clone(), TITLE, t.foreground, Weight::Black);
             if overflow_px(&song.title, width) > 0.0 {
                 iced::widget::scrollable(line)
                     .id(iced::widget::Id::new(TITLE_ID))
@@ -118,7 +123,7 @@ pub fn view<'a>(state: &'a Listen, song: &'a Song, width: f32, align: Horizontal
             }
         }
         TitleDisplay::MultiLine => container(
-            crate::ui::text_in(song.title.clone(), crate::ui::font(Weight::Black))
+            crate::ui::verbatim(song.title.clone(), crate::ui::font(Weight::Black))
                 .size(TITLE)
                 .line_height(1.2)
                 .color(t.foreground)
@@ -156,7 +161,7 @@ pub fn view<'a>(state: &'a Listen, song: &'a Song, width: f32, align: Horizontal
         let mut row = Row::new().spacing(metrics::space_sm());
         for text in texts {
             row = row.push(
-                container(label(text, metrics::font_sm(), t.foreground))
+                container(crate::ui::data_label(text, metrics::font_sm(), t.foreground))
                     .padding(iced::Padding::from([2.0, 10.0]))
                     .style(move |_| container::Style {
                         background: Some(iced::Background::Color(crate::style::alpha(t.foreground, 0.12))),
