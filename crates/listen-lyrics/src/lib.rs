@@ -21,6 +21,7 @@ pub use lrc::{BREAK, active_line, has_translation, has_word_sync, merge_translat
 pub use vocal::vocal_map;
 
 use listen_core::model::{LyricLine, Lyrics, Song};
+use providers::{Source, get_text};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -56,11 +57,7 @@ async fn lrclib_get(http: &reqwest::Client, song: &Song) -> Option<Lyrics> {
         .append_pair("track_name", &song.title)
         .append_pair("album_name", song.album.as_deref().unwrap_or_default())
         .append_pair("duration", &song.duration.as_secs().to_string());
-    let resp = http.get(url).send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-    let body: LrclibResponse = resp.json().await.ok()?;
+    let body: LrclibResponse = serde_json::from_str(&get_text(http, Source::Lrclib, url).await?).ok()?;
     if body.instrumental == Some(true) {
         return Some(Lyrics {
             provider: "lrclib.net".into(),
@@ -82,7 +79,8 @@ async fn lrclib_search(http: &reqwest::Client, song: &Song) -> Option<Lyrics> {
     let artist = song.artists.first().map(|a| a.name.as_str()).unwrap_or_default();
     let mut url = url::Url::parse("https://lrclib.net/api/search").ok()?;
     url.query_pairs_mut().append_pair("track_name", &song.title).append_pair("artist_name", artist);
-    let hits: Vec<LrclibSearchHit> = http.get(url).send().await.ok()?.json().await.ok()?;
+    let hits: Vec<LrclibSearchHit> =
+        serde_json::from_str(&get_text(http, Source::Lrclib, url).await?).ok()?;
     let target = song.duration.as_secs_f64();
     hits.into_iter()
         .filter(|h| target == 0.0 || h.duration.is_some_and(|d| (d - target).abs() <= 3.0))

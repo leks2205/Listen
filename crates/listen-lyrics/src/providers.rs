@@ -349,7 +349,10 @@ pub mod genius {
 
 // ---- fetching ----------------------------------------------------------------
 
-async fn get_text(http: &reqwest::Client, source: Source, url: url::Url) -> Option<String> {
+/// Every request to a lyrics provider goes through here: it waits for the provider's gate (the
+/// politeness gap shared by the whole process), applies the timeout and checks the status. Calling
+/// `http.get` on a provider URL directly skips the gate.
+pub(crate) async fn get_text(http: &reqwest::Client, source: Source, url: url::Url) -> Option<String> {
     gate::wait(source).await;
     let resp = http.get(url).timeout(TIMEOUT).send().await.ok()?;
     if !resp.status().is_success() {
