@@ -21,7 +21,8 @@ fn empty<'a>(state: &'a Listen, title: &'static str, text: &'static str) -> Elem
     .into()
 }
 
-fn disabled_hint(state: &Listen) -> &'static str {
+/// What an empty history page says: where songs will appear, or that the history is switched off.
+fn empty_hint(state: &Listen) -> &'static str {
     if state.config.settings.history.enabled {
         "Songs you listen to will show up here. The history stays on this computer."
     } else {
@@ -31,7 +32,7 @@ fn disabled_hint(state: &Listen) -> &'static str {
 
 pub fn recent(state: &Listen) -> Element<'_, Message> {
     if state.history_view.recent.is_empty() {
-        return empty(state, "Recently Played", disabled_hint(state));
+        return empty(state, "Recently Played", empty_hint(state));
     }
     song_list(state, "HISTORY", "Recently Played", String::new(), None, &state.history_view.recent, |i| {
         Message::History(HistoryMsg::PlayRecent(i))
@@ -223,7 +224,7 @@ pub fn stats(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let v = &state.history_view;
     if state.history.is_empty() {
-        return empty(state, "Statistics", disabled_hint(state));
+        return empty(state, "Statistics", empty_hint(state));
     }
     let period_button = |text: String, active: bool, msg: HistoryMsg| {
         button(label_w(

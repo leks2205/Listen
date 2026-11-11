@@ -551,8 +551,8 @@ fn carousel<'a>(
 
 // ---- genres ------------------------------------------------------------------------
 
-/// A stable colour per name and whether it is light (Feishin `stringToColor`).
-pub fn genre_color(name: &str) -> (Color, bool) {
+/// A stable colour per name (Feishin `stringToColor`); always dark (lightness 0.38), so white text fits.
+pub fn genre_color(name: &str) -> Color {
     let hash = name.bytes().fold(5381u32, |h, b| h.wrapping_mul(33) ^ u32::from(b));
     let hue = (hash % 360) as f32;
     let (s, l) = (0.5_f32, 0.38_f32);
@@ -567,7 +567,7 @@ pub fn genre_color(name: &str) -> (Color, bool) {
         4 => (x, 0.0, c),
         _ => (c, 0.0, x),
     };
-    (Color::from_rgb(r + m, g + m, b + m), false)
+    Color::from_rgb(r + m, g + m, b + m)
 }
 
 /// Genre tiles shown for a container width, and their columns (Feishin `getGenresToShow`).
@@ -582,7 +582,7 @@ pub fn genre_grid(width: f32) -> (usize, usize) {
 }
 
 fn genre_tile<'a>(genre: &'a Genre, width: f32) -> Element<'a, Message> {
-    let (color, _) = genre_color(&genre.name);
+    let color = genre_color(&genre.name);
     let play = button(icon(Icon::LuPlay, metrics::font_md(), Color::BLACK))
         .padding(8)
         .style(|_, _| button::Style {
