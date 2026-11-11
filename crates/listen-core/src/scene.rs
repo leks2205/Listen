@@ -1176,7 +1176,10 @@ pub struct Session<'a> {
     anchor: Option<Profile>,
     /// Indices of the members in the majority.
     cluster: Vec<usize>,
-    /// The artists of every song given, known scene or not.
+    /// The artists of the songs read, known scene or not: reading stops at the [`SESSION_LEN`]th known
+    /// song, and [`Session::led`] passes on only the current song and the known songs in its scene, so
+    /// the artists of later or other-scene songs are not here. They belong in [`Self::judge`] (within
+    /// the session's era) and skip the vocal rule in [`Self::judge_with`].
     artists: HashSet<String>,
     neighbours: &'a Neighbours,
 }
