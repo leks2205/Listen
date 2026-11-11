@@ -233,7 +233,8 @@ impl YtDlp {
 
 /// The whole yt-dlp command line of a stream lookup. `--ignore-config` comes first: a user's or the
 /// working directory's `yt-dlp.conf` must not change which URL comes back (or turn `-g` into a
-/// download, add browser cookies or a proxy).
+/// download, add browser cookies or a proxy). No cookies are passed either: streams resolve as a
+/// guest, so account-only videos (own uploads, private videos) do not resolve.
 fn stream_args(format: &str, video_id: &str, js_runtime: Option<&str>) -> Vec<String> {
     let mut args: Vec<String> =
         ["--ignore-config", "-q", "--no-warnings", "--no-playlist", "-f", format, "-g"]

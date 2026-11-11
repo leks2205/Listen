@@ -4,8 +4,9 @@
 //!
 //! YouTube rotates the session cookie `__Secure-1PSIDTS` while a session is in use, so a cookie header
 //! read once and kept answers as *signed out* a few hours later: the library, playlists and uploads
-//! look empty while playback (yt-dlp, which reads the cookies fresh every time) keeps working. A
-//! [`Session`] therefore remembers where the cookies came from and reads them again.
+//! look empty while playback keeps working (yt-dlp resolves streams without the account's cookies,
+//! see `ytdlp.rs`). A [`Session`] therefore remembers where the cookies came from and reads them
+//! again.
 
 use crate::browser;
 use serde_json::Value;
