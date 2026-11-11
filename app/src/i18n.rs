@@ -250,8 +250,10 @@ fn lookup(s: &str) -> Option<std::borrow::Cow<'static, str>> {
     hit
 }
 
-/// The translation of the English text `s`; `s` itself when there is none. Texts built
-/// with `format!` only translate through [`tr_cow`] (they need an owned result).
+/// The translation of the English text `s`; `s` itself when there is none (exact key, no templates).
+/// A sentence with holes is built with [`trf`] from its pattern ("Added {} songs"), never by `format!`
+/// first: the template rescue in [`tr_cow`] only fills holes that are numbers unless the pattern has at
+/// least 16 fixed bytes, and it never translates a hole's words.
 pub fn tr(s: &str) -> &str {
     let guard = CURRENT.read().unwrap_or_else(|e| e.into_inner());
     match guard.as_ref() {
@@ -260,7 +262,10 @@ pub fn tr(s: &str) -> &str {
     }
 }
 
-/// [`tr`] for the owned/borrowed strings iced text takes; also fills templates.
+/// [`tr`] for the owned/borrowed strings iced text takes (what `ui::label` uses). A text that is not a
+/// key is matched against the `{}` templates as a rescue for counts ("12 songs"); a template with fewer
+/// than 16 fixed bytes only matches when every hole is a number, so "AI DJ · Nova" stays English. Build
+/// such text with [`trf`].
 pub fn tr_cow(s: std::borrow::Cow<'_, str>) -> std::borrow::Cow<'_, str> {
     match lookup(&s) {
         Some(t) => t,
@@ -405,5 +410,19 @@ mod tests {
         assert_eq!(fill(cast, &[&"Wohnzimmer"]), "Übertragung auf Wohnzimmer");
         // Filled texts still translate through the templates when the holes are numbers.
         assert!(de.templates.iter().any(|t| t.english == ["Playing on ", ": ", ""]));
+    }
+
+    /// A short pattern with a text hole only translates through `trf`: the filled text no longer
+    /// matches a template, so `format!` + `ui::label` shows it in English.
+    #[test]
+    fn sentences_with_text_holes_translate_only_through_trf() {
+        let de = build_table("de", source("de"));
+        let filled = "AI DJ · Nova";
+        assert!(!de.map.contains_key(filled));
+        assert!(de.templates.iter().all(|t| t.apply(filled).is_none()), "the template rescue changed");
+        let pattern = de.map.get("AI DJ · {}").copied().unwrap();
+        assert_eq!(fill(pattern, &[&"Nova"]), "KI-DJ · Nova");
+        // Numbers still go through the template rescue.
+        assert!(de.templates.iter().any(|t| t.apply("12 songs").is_some()));
     }
 }
