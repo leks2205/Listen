@@ -133,8 +133,8 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
             .style(style::scrollbar(t)),
     )
     .height(Length::Fixed(380.0));
-    let reset = button(label(" Reset ", metrics::font_md(), t.foreground))
-        .padding(Padding::from([6.0, 16.0]))
+    let reset = button(label("Reset", metrics::font_md(), t.foreground))
+        .padding(Padding::from([6.0, 20.0]))
         .style(style::default_button(t))
         .on_press_maybe(f.active().then(|| Message::PlaylistPage(P::ResetFilters)));
     let close = button(label("Close", metrics::font_md(), Color::WHITE))

@@ -258,7 +258,8 @@ impl Recommended {
             && self.at.is_some_and(|at| at.elapsed() < Self::TTL)
     }
 
-    /// Whether the strip is part of playlist `id`'s page right now.
+    /// Whether the strip is part of playlist `id`'s page right now: while loading, after an error, or
+    /// with songs. A finished fetch that found nothing hides the strip.
     pub fn shown(&self, id: &str) -> bool {
         self.id.as_deref() == Some(id) && (self.loading || self.error.is_some() || !self.songs.is_empty())
     }

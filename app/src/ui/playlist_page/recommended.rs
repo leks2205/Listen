@@ -19,16 +19,31 @@ const HEADER: f32 = 32.0;
 const ROW: f32 = 44.0;
 /// Air above the strip and under its last row.
 const PAD: f32 = 16.0;
+/// The "Finding songs…" line while the first set loads.
+const STATUS: f32 = 20.0;
 const COVER: f32 = 34.0;
 
-/// Height the strip takes under the playlist's rows.
+/// Height the strip takes under the playlist's rows: every line [`view`] draws (rows, the error
+/// line or the loading line) is counted, since the strip is a fixed-height container.
 pub fn height(state: &Listen, id: &str) -> f32 {
     let strip = &state.playlist_page.recommended;
     if !strip.shown(id) {
         return 8.0;
     }
-    let error = if strip.error.is_some() { 32.0 } else { 0.0 };
-    PAD + HEADER + strip.songs.len() as f32 * ROW + error + PAD
+    strip_height(strip.songs.len(), strip.error.is_some())
+}
+
+/// [`height`] of a shown strip with `songs` rows (`error`: the error line instead).
+fn strip_height(songs: usize, error: bool) -> f32 {
+    let body = if error {
+        32.0
+    } else if songs == 0 {
+        // Shown without songs or error means loading: the "Finding songs…" line.
+        STATUS
+    } else {
+        songs as f32 * ROW
+    };
+    PAD + HEADER + body + PAD
 }
 
 /// The strip of playlist `id`.
@@ -70,13 +85,11 @@ pub fn view<'a>(state: &'a Listen, id: &str) -> Element<'a, Message> {
             .height(32.0),
         );
     } else if strip.songs.is_empty() {
+        // `shown` hides an empty finished strip, so no songs and no error means loading.
         body = body.push(
-            container(label(
-                if strip.loading { "Finding songs…" } else { "Nothing to recommend here." },
-                metrics::font_sm(),
-                t.muted,
-            ))
-            .padding(Padding::from([0.0, metrics::PAGE_PADDING_X])),
+            container(label("Finding songs…", metrics::font_sm(), t.muted))
+                .height(STATUS)
+                .padding(Padding::from([0.0, metrics::PAGE_PADDING_X])),
         );
     } else {
         for (index, song) in strip.songs.iter().enumerate() {
@@ -160,4 +173,16 @@ fn refresh(state: &Listen) -> Element<'_, Message> {
         return container(icon(Icon::LuRefreshCw, metrics::font_sm(), t.muted)).padding(6).into();
     }
     crate::ui::tip::tip(state, again, "Other recommendations", None, crate::ui::tip::Position::Left)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_strip_height_counts_every_line_it_draws() {
+        assert_eq!(strip_height(0, false), PAD + HEADER + STATUS + PAD);
+        assert_eq!(strip_height(3, false), PAD + HEADER + 3.0 * ROW + PAD);
+        assert_eq!(strip_height(0, true), PAD + HEADER + 32.0 + PAD);
+    }
 }
