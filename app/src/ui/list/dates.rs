@@ -1,4 +1,5 @@
-//! Table cell dates in Feishin's day.js formats: partial ISO dates and relative times ("3 days ago").
+//! Table cell dates in Feishin's day.js formats: partial ISO dates and relative times ("3 days ago"),
+//! the relative ones translated as whole sentences ([`RELATIVE`]).
 
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 
@@ -14,7 +15,23 @@ pub fn year_of(iso: &str) -> Option<i32> {
     iso.trim().get(..4)?.parse().ok()
 }
 
-/// `iso` relative to `now` ("3 days ago", day.js' `fromNow`); `None` when it isn't a date.
+/// day.js' `fromNow` buckets as (past, future) sentence patterns. Each is one catalog key, because
+/// languages inflect the amount differently per sentence ("vor 5 Tagen", not "vor" + "5 Tage").
+const RELATIVE: [(&str, &str); 11] = [
+    ("a few seconds ago", "in a few seconds"),
+    ("a minute ago", "in a minute"),
+    ("{} minutes ago", "in {} minutes"),
+    ("an hour ago", "in an hour"),
+    ("{} hours ago", "in {} hours"),
+    ("a day ago", "in a day"),
+    ("{} days ago", "in {} days"),
+    ("a month ago", "in a month"),
+    ("{} months ago", "in {} months"),
+    ("a year ago", "in a year"),
+    ("{} years ago", "in {} years"),
+];
+
+/// `iso` relative to `now` ("3 days ago", day.js' `fromNow`), translated; `None` when it isn't a date.
 pub fn relative(iso: &str, now: DateTime<Utc>) -> Option<String> {
     let iso = iso.trim();
     let then = DateTime::parse_from_rfc3339(iso)
@@ -30,30 +47,32 @@ pub fn relative(iso: &str, now: DateTime<Utc>) -> Option<String> {
     let s = secs.abs();
     let (m, h, d) = (s / 60, s / 3600, s / 86_400);
     let months = ((now.year() - then.year()) * 12 + now.month() as i32 - then.month() as i32).abs();
-    let text = if s < 45 {
-        "a few seconds".to_string()
+    // (bucket in RELATIVE, the amount for its hole)
+    let (bucket, n): (usize, i64) = if s < 45 {
+        (0, 0)
     } else if s < 90 {
-        "a minute".to_string()
+        (1, 0)
     } else if m < 45 {
-        format!("{m} minutes")
+        (2, m)
     } else if m < 90 {
-        "an hour".to_string()
+        (3, 0)
     } else if h < 22 {
-        format!("{h} hours")
+        (4, h)
     } else if h < 36 {
-        "a day".to_string()
+        (5, 0)
     } else if d < 26 {
-        format!("{d} days")
+        (6, d)
     } else if d < 46 {
-        "a month".to_string()
+        (7, 0)
     } else if d < 320 {
-        format!("{} months", months.max(2))
+        (8, i64::from(months.max(2)))
     } else if d < 548 {
-        "a year".to_string()
+        (9, 0)
     } else {
-        format!("{} years", (d as f64 / 365.25).round() as i64)
+        (10, (d as f64 / 365.25).round() as i64)
     };
-    Some(if ago { format!("{text} ago") } else { format!("in {text}") })
+    let (past, future) = RELATIVE[bucket];
+    Some(crate::i18n::trf(if ago { past } else { future }, &[&n]))
 }
 
 #[cfg(test)]
@@ -89,5 +108,19 @@ mod tests {
         assert_eq!(relative("2026-10-16T13:00:00Z", now).unwrap(), "in an hour");
         assert_eq!(relative("2026-10-01", now).unwrap(), "15 days ago");
         assert!(relative("nope", now).is_none());
+    }
+
+    /// Every sentence `relative` can return is a German key of its own with the same holes, so the
+    /// "Last played" column never shows English or a glued "vor 5 Tage".
+    #[test]
+    fn relative_times_are_whole_sentences() {
+        for (past, future) in RELATIVE {
+            for key in [past, future] {
+                let de =
+                    crate::i18n::translate_in("de", key).unwrap_or_else(|| panic!("no German key {key:?}"));
+                assert_eq!(de.matches("{}").count(), key.matches("{}").count(), "{key:?} -> {de:?}");
+            }
+        }
+        assert_eq!(crate::i18n::translate_in("de", "{} days ago").as_deref(), Some("vor {} Tagen"));
     }
 }
