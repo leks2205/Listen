@@ -12,7 +12,8 @@ use iced::{Alignment, Element, Length, Padding};
 use listen_core::model::{Song, format_duration};
 
 pub const ROW: f32 = metrics::ROW_HEIGHT;
-const HEADER: f32 = 40.0;
+/// Height of the column header ([`header`]).
+pub const HEADER: f32 = 40.0;
 
 /// `[first, last)` rows intersecting the viewport, with a little overscan.
 pub fn visible_rows(scroll: ScrollState, total: usize) -> (usize, usize) {

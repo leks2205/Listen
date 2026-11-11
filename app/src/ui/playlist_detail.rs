@@ -11,8 +11,14 @@ use listen_core::model::{Song, format_duration};
 
 /// Id of the song list's scrollable (scrolled to the top when another list opens).
 pub const LIST_ID: &str = "song-list";
-/// Height above the first row: padding, the fixed-height header, padding, column header.
-const HEADER_BLOCK: f32 = 80.0 + 250.0 + 32.0 + 40.0;
+/// The header's padding above and below it, its (cover) height and the page's side padding.
+const TOP_PAD: f32 = 80.0;
+const BOTTOM_PAD: f32 = 32.0;
+const HEADER_H: f32 = 250.0;
+const SIDE: f32 = 32.0;
+/// Height above the first row: padding, the fixed-height header, padding, column header (the rows are
+/// virtualized from it).
+const HEADER_BLOCK: f32 = TOP_PAD + HEADER_H + BOTTOM_PAD + super::songs::HEADER;
 
 /// `[first, last)` rows of a song list that intersect the viewport.
 pub fn visible_rows(scroll: ScrollState, total: usize) -> (usize, usize) {
@@ -48,7 +54,7 @@ pub fn song_list<'a>(
     let meta =
         format!("{subtitle}{}", crate::i18n::trf("{} songs • {}", &[&songs.len(), &format_duration(total)]));
     let header = row![
-        cover(state, image, 250.0, metrics::radius_md(), Icon::LuListMusic),
+        cover(state, image, HEADER_H, metrics::radius_md(), Icon::LuListMusic),
         column![
             label_w(crate::i18n::tr(kind).to_uppercase(), metrics::font_md(), t.foreground, Weight::Semibold),
             super::header_title(crate::i18n::tr(title), t.foreground),
@@ -59,7 +65,7 @@ pub fn song_list<'a>(
     ]
     .spacing(metrics::space_md())
     .align_y(Alignment::End)
-    .height(250);
+    .height(HEADER_H);
 
     let (first, last) = visible_rows(state.list_scroll, songs.len());
     let row_h = super::songs::ROW;
@@ -69,9 +75,9 @@ pub fn song_list<'a>(
     }
     rows = rows.push(space().height(songs.len().saturating_sub(last) as f32 * row_h));
     let page = column![
-        container(header).padding(Padding { top: 80.0, right: 32.0, bottom: 32.0, left: 32.0 }),
-        container(super::songs::header(state)).padding(Padding::from([0.0, 32.0])),
-        container(rows).padding(Padding { top: 0.0, right: 32.0, bottom: 80.0, left: 32.0 }),
+        container(header).padding(Padding { top: TOP_PAD, right: SIDE, bottom: BOTTOM_PAD, left: SIDE }),
+        container(super::songs::header(state)).padding(Padding::from([0.0, SIDE])),
+        container(rows).padding(Padding { top: 0.0, right: SIDE, bottom: 80.0, left: SIDE }),
     ];
     scrollable(container(page).max_width(1800).center_x(Length::Fill))
         .id(iced::widget::Id::new(LIST_ID))
