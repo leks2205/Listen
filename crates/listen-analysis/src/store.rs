@@ -314,17 +314,110 @@ impl Drop for ShardStore {
     }
 }
 
-/// This machine's shard name: sanitised hostname plus a short hash of
-/// `/etc/machine-id` (two machines may share a hostname), e.g. `fedora-3fa2c1`.
+/// This machine's shard name, also its device id for handoff and the history: the sanitised host name plus a
+/// short hash of the system's machine id (two machines may share a host name), e.g. `fedora-3fa2c1`. It must
+/// differ between machines, or two writers share one shard. Sources, first found wins:
+/// - Linux: host `/etc/hostname`, `/proc/sys/kernel/hostname`, `$HOSTNAME`; id `/etc/machine-id`,
+///   `/var/lib/dbus/machine-id`.
+/// - Windows: host `%COMPUTERNAME%`; id the registry's `MachineGuid`.
+/// - macOS: host `gethostname`; id the `IOPlatformUUID`.
+/// - Elsewhere: host `/etc/hostname`, `$HOSTNAME`; id `/etc/machine-id`.
+///
+/// Without a machine id the host name stands in (logged once). Where `/etc/hostname` and `/etc/machine-id`
+/// exist the result is what it always was, so existing shard folders keep their writer. Read once per process.
 pub fn machine_id() -> String {
-    let host = fs::read_to_string("/etc/hostname")
+    static ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ID.get_or_init(|| {
+        let (host, ids) = machine_sources();
+        machine_id_from_sources(host, ids)
+    })
+    .clone()
+}
+
+/// This system's host name and machine-id candidates, in the order of [`machine_id`]'s doc.
+#[cfg(target_os = "linux")]
+fn machine_sources() -> (Option<String>, Vec<Option<String>>) {
+    let host = read_trimmed("/etc/hostname")
+        .or_else(|| read_trimmed("/proc/sys/kernel/hostname"))
+        .or_else(|| std::env::var("HOSTNAME").ok());
+    (host, vec![read_trimmed("/etc/machine-id"), read_trimmed("/var/lib/dbus/machine-id")])
+}
+
+#[cfg(windows)]
+fn machine_sources() -> (Option<String>, Vec<Option<String>>) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+    // Full path: a `reg.exe` earlier on PATH must not decide the id.
+    let guid = std::process::Command::new(PathBuf::from(root).join(r"System32\reg.exe"))
+        .args(["query", r"HKLM\SOFTWARE\Microsoft\Cryptography", "/v", "MachineGuid"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
         .ok()
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty())
-        .or_else(|| std::env::var("HOSTNAME").ok())
-        .unwrap_or_else(|| "host".into());
-    let id = fs::read_to_string("/etc/machine-id").unwrap_or_else(|_| host.clone());
-    machine_id_from(&host, id.trim())
+        .and_then(|o| reg_value(&String::from_utf8_lossy(&o.stdout), "MachineGuid"));
+    (std::env::var("COMPUTERNAME").ok(), vec![guid])
+}
+
+#[cfg(target_os = "macos")]
+fn machine_sources() -> (Option<String>, Vec<Option<String>>) {
+    let mut buf = [0u8; 256];
+    // SAFETY: the buffer is valid for its whole length, which is passed along.
+    let host = (unsafe { libc::gethostname(buf.as_mut_ptr().cast(), buf.len()) } == 0).then(|| {
+        let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        String::from_utf8_lossy(&buf[..end]).into_owned()
+    });
+    let uuid = std::process::Command::new("/usr/sbin/ioreg")
+        .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+        .output()
+        .ok()
+        .and_then(|o| ioreg_platform_uuid(&String::from_utf8_lossy(&o.stdout)));
+    (host, vec![uuid])
+}
+
+#[cfg(not(any(target_os = "linux", windows, target_os = "macos")))]
+fn machine_sources() -> (Option<String>, Vec<Option<String>>) {
+    (
+        read_trimmed("/etc/hostname").or_else(|| std::env::var("HOSTNAME").ok()),
+        vec![read_trimmed("/etc/machine-id")],
+    )
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn read_trimmed(path: &str) -> Option<String> {
+    fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+/// A value from `reg query … /v <name>` output (`    MachineGuid    REG_SZ    <value>`).
+#[cfg(any(windows, test))]
+fn reg_value(out: &str, name: &str) -> Option<String> {
+    out.lines()
+        .map(str::trim)
+        .find(|l| l.split_whitespace().next() == Some(name))
+        .and_then(|l| l.split_whitespace().nth(2))
+        .map(str::to_string)
+}
+
+/// The `"IOPlatformUUID" = "<uuid>"` value from `ioreg -rd1 -c IOPlatformExpertDevice` output.
+#[cfg(any(target_os = "macos", test))]
+fn ioreg_platform_uuid(out: &str) -> Option<String> {
+    out.lines()
+        .find(|l| l.contains("\"IOPlatformUUID\""))
+        .and_then(|l| l.split('"').nth(3))
+        .map(str::to_string)
+}
+
+/// The shard name from a host name and machine-id candidates (the first non-empty id wins; none: the host
+/// name stands in, so machines then differ only by host name).
+fn machine_id_from_sources(host: Option<String>, ids: impl IntoIterator<Item = Option<String>>) -> String {
+    let host = host.map(|h| h.trim().to_string()).filter(|h| !h.is_empty()).unwrap_or_else(|| "host".into());
+    let id = ids.into_iter().flatten().map(|i| i.trim().to_string()).find(|i| !i.is_empty());
+    let id = id.unwrap_or_else(|| {
+        tracing::warn!(
+            "no machine id found: the analysis shard and device id use the host name \"{host}\" alone"
+        );
+        host.clone()
+    });
+    machine_id_from(&host, &id)
 }
 
 fn machine_id_from(host: &str, id: &str) -> String {
@@ -587,6 +680,29 @@ mod tests {
         old.version = 0;
         a.append(old).unwrap();
         assert_eq!(a.lookup("s", &file()).unwrap().machine, "a-1", "incompatible ignored");
+    }
+
+    #[test]
+    fn machine_ids_differ_without_etc_machine_id() {
+        let id = |host: &str, ids: &[Option<&str>]| {
+            machine_id_from_sources(Some(host.into()), ids.iter().map(|i| i.map(str::to_string)))
+        };
+        // Windows: COMPUTERNAME + MachineGuid; macOS: host name + IOPlatformUUID.
+        assert_ne!(id("DESKTOP-A1", &[Some("guid-a")]), id("DESKTOP-B2", &[Some("guid-b")]));
+        assert_ne!(id("pc", &[Some("guid-a")]), id("pc", &[Some("guid-b")]), "same host name, other machine");
+        // No machine id at all: the host name alone still tells machines apart.
+        assert_ne!(id("a", &[None]), id("b", &[None]));
+        // Linux ids don't move: `/etc/machine-id` first, the dbus copy when it is missing.
+        assert_eq!(id("fedora\n", &[Some("abc\n"), Some("zzz")]), machine_id_from("fedora", "abc"));
+        assert_eq!(id("fedora", &[None, Some("abc")]), machine_id_from("fedora", "abc"));
+        assert_eq!(machine_id_from_sources(None, [None]), machine_id_from("host", "host"));
+
+        let reg = "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography\r\n    MachineGuid    REG_SZ    \
+                   1b2c3d4e-0000-4000-8000-000000000001\r\n\r\n";
+        assert_eq!(reg_value(reg, "MachineGuid").as_deref(), Some("1b2c3d4e-0000-4000-8000-000000000001"));
+        assert_eq!(reg_value("ERROR: not found", "MachineGuid"), None);
+        let ioreg = "+-o Mac  <class IOPlatformExpertDevice>\n    {\n      \"IOPlatformUUID\" = \"564D1C2E-1111-2222\"\n    }\n";
+        assert_eq!(ioreg_platform_uuid(ioreg).as_deref(), Some("564D1C2E-1111-2222"));
     }
 
     #[test]
