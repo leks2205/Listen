@@ -689,8 +689,7 @@ fn handovers(o: &Side, i: &Side, ctx: &PlanCtx) -> Vec<Hand> {
             }
         }
     }
-    // Stable: of equal options the first found stays first.
-    all.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.m.cmp(&a.m)));
+    all.sort_by(|a, b| by_rank((a.score, a.m, 0), (b.score, b.m, 0)));
     all
 }
 
@@ -1123,9 +1122,15 @@ fn candidates(o: &Side, i: &Side, k: f64, ctx: &PlanCtx, opts: Opts) -> Vec<Cand
             }
         }
     }
-    // Stable: of equal options the first found stays first.
-    all.sort_by(|a, b| b.score.total_cmp(&a.score).then(b.m.cmp(&a.m)).then(b.n.cmp(&a.n)));
+    all.sort_by(|a, b| by_rank((a.score, a.m, a.n), (b.score, b.m, b.n)));
     all
+}
+
+/// Planner order of two options given as `(score, out bar m, blend bars n)`: best score first; on a tie
+/// the later mix-out, then the longer blend, so equal options keep more of the outgoing song. Only fully
+/// equal keys keep the order they were found in (`sort_by` is stable).
+fn by_rank(a: (f32, usize, usize), b: (f32, usize, usize)) -> std::cmp::Ordering {
+    b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)).then(b.2.cmp(&a.2))
 }
 
 /// What synced lyrics add to a candidate (0 without them): a bonus when the incoming singing (or its
@@ -1688,6 +1693,16 @@ mod tests {
         let p = plan(&out, &inn, &ctx(&s, 60.0));
         let settle = p.in_settle.expect("tempo-matched, so it settles");
         assert!(settle.secs <= SETTLE_MAX_S, "{}", settle.secs);
+    }
+
+    #[test]
+    fn equal_scores_prefer_the_later_mix_out_and_longer_blend() {
+        // (score, m, n, found-at): found in ascending bar order, as `candidates` and `handovers` do.
+        let mut all = [(1.0, 60, 8, 0), (1.0, 64, 4, 1), (1.0, 64, 8, 2), (2.0, 56, 4, 3), (1.0, 64, 8, 4)];
+        all.sort_by(|a, b| by_rank((a.0, a.1, a.2), (b.0, b.1, b.2)));
+        let order: Vec<usize> = all.iter().map(|c| c.3).collect();
+        // Best score, then the later mix-out, then the longer blend; full ties keep the order found.
+        assert_eq!(order, vec![3, 2, 4, 1, 0]);
     }
 
     #[test]
