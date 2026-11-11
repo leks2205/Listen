@@ -232,10 +232,17 @@ pub(super) fn remote(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let inputs = &state.integ.inputs;
     let link = match state.integ.remote_addr() {
+        // Loopback = no login set (the page is only offered on this computer): don't suggest the phone.
+        Some(addr) if addr.ip().is_loopback() => {
+            crate::i18n::trf("Running at http://{}:{} (this computer only).", &[&addr.ip(), &addr.port()])
+        }
         Some(addr) => {
             let host =
                 if addr.ip().is_unspecified() { "localhost".to_string() } else { addr.ip().to_string() };
-            format!("Running: open http://{host}:{} on the phone (use this computer's address).", addr.port())
+            crate::i18n::trf(
+                "Running: open http://{}:{} on the phone (use this computer's address).",
+                &[&host, &addr.port()],
+            )
         }
         None => match state.integ.remote_error() {
             Some(e) => format!("Not running: {e}"),
