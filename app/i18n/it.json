@@ -239,7 +239,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Rilevamento di battiti e primi battiti per le transizioni DJ (modello CPJKU, port in Rust di danigb).",
 "Bengali": "Bengalese",
 "Beta": "Beta",
-"Beyond this the songs fade instead of being beat-matched.": "Oltre questo limite i brani sfumano invece di essere sincronizzati sul ritmo.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Oltre questo limite i brani non vengono sincronizzati sul ritmo: si uniscono con un'eco in uscita, un taglio o una sfumatura.",
 "Biography": "Biografia",
 "Bit Depth": "Profondità di bit",
 "Bit depth": "Profondità di bit",

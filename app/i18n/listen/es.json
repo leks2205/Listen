@@ -191,7 +191,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Detección de tiempos y primeros tiempos para las transiciones de DJ (modelo CPJKU, port a Rust de danigb).",
 "Bengali": "bengalí",
 "Beta": "Beta",
-"Beyond this the songs fade instead of being beat-matched.": "Más allá de esto, las canciones se funden en lugar de sincronizarse al ritmo.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Más allá de esto, las canciones no se sincronizan al ritmo: se unen con un eco final, un corte o un fundido.",
 "Bit rate": "Tasa de bits",
 "Blend time": "Duración de la mezcla",
 "Blurred artwork behind the page header, and how blurred it is (0-6).": "Carátula desenfocada detrás de la cabecera de la página, y cuánto se desenfoca (0-6).",

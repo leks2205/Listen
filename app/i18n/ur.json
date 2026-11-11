@@ -248,7 +248,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "DJ ٹرانزیشنز کے لیے بیٹ اور ڈاؤن بیٹ ٹریکنگ (CPJKU ماڈل، danigb کا Rust پورٹ)۔",
 "Bengali": "بنگالی",
 "Beta": "بیٹا",
-"Beyond this the songs fade instead of being beat-matched.": "اس سے آگے گانے بیٹ میچ کرنے کے بجائے فیڈ ہو جاتے ہیں۔",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "اس سے آگے گانے بیٹ میچ نہیں ہوتے: وہ ایکو آؤٹ، کٹ یا فیڈ سے جڑتے ہیں۔",
 "Biography": "سوانح",
 "Bit Depth": "بٹ ڈیپتھ",
 "Bit depth": "بٹ ڈیپتھ",

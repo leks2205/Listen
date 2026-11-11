@@ -389,7 +389,7 @@ See [Song analysis](../dj/analysis.md) and [DJ transitions](../dj/transitions.md
 | Singing-voice detector | **Download** / **Remove** for the optional DJustify detector (2 MB, CC BY-NC 4.0). Songs analysed without it are analysed again in the background (not YouTube Music). | not downloaded | file `models/djustify-svdnet.pt` in the data folder |
 | DJ transitions | Mixes songs the Auto-DJ or AI DJ picked: beat-matched blends, or fades when songs do not fit. | On | `settings.mixing.enabled` |
 | Order by flow | Picks songs whose tempo, key and energy follow on from the current one. | On | `settings.mixing.flow_select` |
-| Largest tempo change | Beyond this the songs fade instead of being beat-matched, 2 to 8 %. | 6 | `settings.mixing.max_tempo_pct` |
+| Largest tempo change | Beyond this the songs are not beat-matched: they join with an echo-out or a cut (a fade while the AI DJ talks over the change), 2 to 8 %. | 6 | `settings.mixing.max_tempo_pct` |
 | Long blends | Length of a blend over instrumental intros and outros: 8 or 16 bars. | 16 | `settings.mixing.long_blend_bars` |
 | Transition edges | Whether vocals at a song's end or start may be blended over: Always, Instrumental only, or Smart (relaxed for club genres such as garage, house, techno and drum and bass). | Smart | `settings.mixing.transition_edges` (`"smart"`, `"always"`, `"instrumental"`) |
 | Transitions may skip parts of songs | Whether a transition may cut the outgoing song short (after its last sung line, at a breakdown) or skip part of the next song's intro: Free, Short (at most 16 s of either) or Never (mix in the outro, start the next song at its first beat). | Free | `settings.mixing.skip_parts` (`"free"`, `"short"`, `"never"`) |

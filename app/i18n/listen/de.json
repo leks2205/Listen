@@ -318,7 +318,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Beat- und Downbeat-Erkennung für DJ-Übergänge (CPJKU-Modell, Rust-Port von danigb).",
 "Bengali": "Bengalisch",
 "Beta": "Beta",
-"Beyond this the songs fade instead of being beat-matched.": "Darüber hinaus werden die Titel übergeblendet, statt im Takt angeglichen zu werden.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Darüber hinaus werden die Titel nicht im Takt angeglichen, sondern mit einem Echo-Ausklang, einem Schnitt oder einer Überblendung verbunden.",
 "Bit rate": "Bitrate",
 "Bitrate": "Bitrate",
 "Blend time": "Überblendzeit",

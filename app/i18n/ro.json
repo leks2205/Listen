@@ -245,7 +245,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Detectarea bătăilor și a primei bătăi pentru tranzițiile DJ (model CPJKU, port Rust de danigb).",
 "Bengali": "Bengaleză",
 "Beta": "Beta",
-"Beyond this the songs fade instead of being beat-matched.": "Peste această valoare melodiile se estompează în loc să fie potrivite pe ritm.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Peste această valoare melodiile nu sunt potrivite pe ritm: se leagă printr-un ecou final, o tăiere sau o estompare.",
 "Biography": "Biografie",
 "Bit Depth": "Adâncime de biți",
 "Bit depth": "Adâncime de biți",

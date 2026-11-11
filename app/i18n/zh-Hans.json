@@ -240,7 +240,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "用于 DJ 过渡的节拍与强拍跟踪（CPJKU 模型，danigb 的 Rust 移植版）。",
 "Bengali": "孟加拉语",
 "Beta": "测试版",
-"Beyond this the songs fade instead of being beat-matched.": "超过此值时，歌曲将淡入淡出而不是节拍匹配。",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "超过此值时，歌曲不做节拍匹配，而是以回声淡出、直切或淡入淡出衔接。",
 "Biography": "简介",
 "Bit Depth": "位深度",
 "Bit depth": "位深度",

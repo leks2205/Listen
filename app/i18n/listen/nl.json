@@ -186,7 +186,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Beat- en downbeatdetectie voor DJ-overgangen (CPJKU-model, Rust-port door danigb).",
 "Bengali": "Bengaals",
 "Beta": "Bèta",
-"Beyond this the songs fade instead of being beat-matched.": "Daarboven faden de nummers in plaats van op de beat gesynchroniseerd te worden.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Daarboven worden de nummers niet op de beat gesynchroniseerd: ze gaan over met een echo-out, een harde overgang of een fade.",
 "Bit rate": "Bitrate",
 "Bitrate": "Bitrate",
 "Blend time": "Mixtijd",

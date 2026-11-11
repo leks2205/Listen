@@ -1155,7 +1155,7 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
         line(
             state,
             "Largest tempo change",
-            "Beyond this the songs fade instead of being beat-matched.",
+            "Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.",
             stepper(state, 2.0..=8.0, m.max_tempo_pct, format!("{:.0} %", m.max_tempo_pct), |v| {
                 Setting::MixMaxTempo(v.round())
             }),

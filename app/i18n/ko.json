@@ -243,7 +243,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "DJ 전환을 위한 비트 및 다운비트 추적(CPJKU 모델, danigb의 Rust 포팅).",
 "Bengali": "벵골어",
 "Beta": "베타",
-"Beyond this the songs fade instead of being beat-matched.": "이 값을 넘으면 비트 매칭 대신 곡이 페이드됩니다.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "이 값을 넘으면 비트 매칭하지 않고 에코 아웃, 컷 또는 페이드로 이어집니다.",
 "Biography": "바이오그래피",
 "Bit Depth": "비트 심도",
 "Bit depth": "비트 심도",

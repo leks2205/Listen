@@ -52,7 +52,7 @@ pub enum Kind {
     ShortBlend { bars: u8 },
     /// Outgoing is high-passed away while the incoming starts on a downbeat.
     FilterOut { bars: u8 },
-    /// Plain equal-power crossfade (no steady beat on one side).
+    /// Plain equal-power crossfade: no steady beat on one side, or no beat-matched or handover point left.
     Fade { secs: f32 },
     /// The outgoing's last beat before a phrase end is echoed (`delay_s` apart, see [`EqTarget::Echo`]), its
     /// dry signal stops on the downbeat and the incoming starts there at its own tempo (no beat matching).
@@ -492,8 +492,9 @@ impl Opts {
     pub(crate) const NORMAL: Opts = Opts { max_bars: 32, settle_bars: 16.0 };
 }
 
-/// Plans the transition from `out` into `inn`. Falls back to [`Kind::Fade`] without a usable grid or with
-/// too large a tempo gap, and to [`Kind::Gapless`] when it is too late to mix.
+/// Plans the transition from `out` into `inn`. Without a usable grid: [`Kind::Fade`]. Past the tempo limit
+/// (`max_tempo_pct`): an echo-out or cut ([`Kind::EchoOut`], [`Kind::Cut`]), or a fade on bridge legs, under
+/// an AI DJ talk-over or when no handover point exists. Too late to mix: [`Kind::Gapless`].
 pub fn plan(out: &Features, inn: &Features, ctx: &PlanCtx) -> TransitionPlan {
     plan_with(out, inn, ctx, Opts::NORMAL)
 }

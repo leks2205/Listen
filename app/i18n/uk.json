@@ -241,7 +241,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Відстеження бітів і сильних долей для DJ-переходів (модель CPJKU, порт на Rust від danigb).",
 "Bengali": "Бенгальська",
 "Beta": "Бета",
-"Beyond this the songs fade instead of being beat-matched.": "Понад це пісні плавно затихають, а не підганяються за ритмом.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Понад це пісні не підганяються за ритмом: вони з'єднуються луною, різким переходом або плавним затиханням.",
 "Biography": "Біографія",
 "Bit Depth": "Розрядність",
 "Bit depth": "Розрядність",

@@ -247,7 +247,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "تتبّع الإيقاع والإيقاع القوي لانتقالات DJ (نموذج CPJKU، منفذ Rust من danigb).",
 "Bengali": "البنغالية",
 "Beta": "تجريبي",
-"Beyond this the songs fade instead of being beat-matched.": "بعد هذا الحد تتلاشى الأغاني بدل مطابقة الإيقاع.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "بعد هذا الحد لا تُطابَق الأغاني على الإيقاع: تنتقل بصدى ختامي أو قص أو تلاشٍ.",
 "Biography": "السيرة",
 "Bit Depth": "عمق البت",
 "Bit depth": "عمق البت",

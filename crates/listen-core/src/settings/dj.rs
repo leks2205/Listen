@@ -141,7 +141,8 @@ pub struct Mixing {
     pub enabled: bool,
     /// Order the DJs' picks by tempo, key and energy flow.
     pub flow_select: bool,
-    /// Largest tempo difference that is beat-matched (percent); beyond: fade.
+    /// Largest tempo difference that is beat-matched (percent); beyond: an echo-out or cut (a fade under an
+    /// AI DJ talk-over or when no handover point exists).
     pub max_tempo_pct: f32,
     /// Length of long blends in bars.
     pub long_blend_bars: u8,

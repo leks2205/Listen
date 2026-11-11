@@ -248,7 +248,7 @@
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "Wykrywanie uderzeń i pierwszych uderzeń taktu dla przejść DJ-a (model CPJKU, port w Rust autorstwa danigb).",
 "Bengali": "Bengalski",
 "Beta": "Beta",
-"Beyond this the songs fade instead of being beat-matched.": "Powyżej tej wartości utwory przechodzą płynnie, zamiast być dopasowywane beatem.",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "Powyżej tej wartości utwory nie są dopasowywane beatem: łączą się echem, cięciem lub płynnym przejściem.",
 "Biography": "Biografia",
 "Bit Depth": "Głębia bitowa",
 "Bit depth": "Głębia bitowa",

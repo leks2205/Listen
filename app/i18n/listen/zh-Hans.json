@@ -194,7 +194,7 @@
 "Bass swap": "低音交换",
 "Beat and downbeat tracking for DJ transitions (CPJKU model, Rust port by danigb).": "用于 DJ 过渡的节拍与强拍跟踪（CPJKU 模型，danigb 的 Rust 移植版）。",
 "Bengali": "孟加拉语",
-"Beyond this the songs fade instead of being beat-matched.": "超过此值时，歌曲将淡入淡出而不是节拍匹配。",
+"Beyond this the songs are not beat-matched: they join with an echo-out, a cut or a fade.": "超过此值时，歌曲不做节拍匹配，而是以回声淡出、直切或淡入淡出衔接。",
 "Bit rate": "比特率",
 "Blend time": "混音时长",
 "Blurred artwork behind the page header, and how blurred it is (0-6).": "页眉后方的模糊封面图，以及模糊程度（0-6）。",
