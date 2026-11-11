@@ -17,6 +17,8 @@ const PLAY_ALL_MAX: usize = 20_000;
 const ALBUM_FETCHES: usize = 8;
 /// The search box waits this long after the last key (Feishin debounces too).
 pub const SEARCH_DEBOUNCE: Duration = Duration::from_millis(400);
+/// Key of the list filters modal (`Modal::Custom`), drawn by `ui::list::header::filters_modal`.
+pub const FILTERS_MODAL: &str = "list-filters";
 
 /// Genre names and (id, name) of the album artists.
 pub type FilterOptions = (Vec<String>, Vec<(String, String)>);
@@ -1058,7 +1060,7 @@ impl Listen {
                 self.list_queries.filter_list = Some(id.clone());
                 self.list_queries.tag_pick = None;
                 self.list_queries.option_search.clear();
-                self.open_modal("list-filters");
+                self.open_modal(FILTERS_MODAL);
                 return Task::batch([self.load_filter_options(), self.load_tag_filters(&id)]);
             }
             ListQueryMsg::Filter(id, edit) => {

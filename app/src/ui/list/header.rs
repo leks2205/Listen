@@ -1013,7 +1013,7 @@ fn tag_values<'a>(
     .into()
 }
 
-/// The body of the "list-filters" modal (an arm of `ui::overlay::custom_modal`).
+/// The body of the list filters modal (`list_query::FILTERS_MODAL`, an arm of `ui::overlay::custom_modal`).
 pub fn filters_modal<'a>(state: &'a Listen) -> Option<ModalParts<'a>> {
     let t = state.tokens;
     let id = state.list_queries.filter_list.clone()?;

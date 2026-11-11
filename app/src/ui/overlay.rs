@@ -182,10 +182,11 @@ fn confirm_panel<'a>(t: Tokens, c: &'a Confirm) -> Element<'a, Message> {
 /// Title, body and actions of a custom modal.
 pub type ModalParts<'a> = (&'a str, Element<'a, Message>, Vec<Element<'a, Message>>);
 
-/// Body of a `Modal::Custom(key)`: (title, body, actions). Features add an arm.
+/// Body of a `Modal::Custom(key)`: (title, body, actions). Features add an arm, keyed by a `pub const`
+/// next to the code that opens the modal (a key without an arm opens an invisible modal).
 fn custom_modal<'a>(state: &'a Listen, key: &str) -> Option<ModalParts<'a>> {
     match key {
-        "list-filters" => super::list::header::filters_modal(state),
+        crate::app::list_query::FILTERS_MODAL => super::list::header::filters_modal(state),
         crate::app::fullscreen_state::SETTINGS_MODAL => super::fullscreen::settings::modal(state),
         crate::app::playlists::FILTERS_MODAL => super::playlist_page::filters::modal(state),
         crate::app::playlists::FORM_MODAL => super::playlist_page::forms::modal(state),
