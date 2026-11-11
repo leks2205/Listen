@@ -112,7 +112,8 @@ pub fn global_shortcuts(state: &Listen) -> Element<'_, Message> {
                 crate::ui::tip::Position::Left,
             )
         };
-        rows.push(r.push(clear).into());
+        // Found by its action or its keys.
+        rows.push(super::searchable(state, &[a.label, hotkey], r.push(clear).into()));
     }
     let mut out = vec![section(state, "Application hotkeys", rows)];
 

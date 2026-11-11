@@ -1,5 +1,10 @@
 //! Settings page (subset of Feishin's: appearance, playback/EQ, Auto-DJ,
 //! lyrics, window & integrations, Feishin import, server).
+//!
+//! Search contract: rows built with [`line`] or [`searchable`] are counted for the [`section`] that
+//! follows them and hide themselves when the query misses them, so build a section's rows right
+//! before calling `section` for it. Other rows show or hide only with their section's title. A row
+//! that is a 0×0 fixed-size widget counts as [`hidden`] and is dropped.
 
 mod about;
 mod advanced;
@@ -122,6 +127,23 @@ pub(super) fn line<'a>(
     .spacing(metrics::space_lg())
     .align_y(Alignment::Center)
     .into()
+}
+
+/// A row that is not a [`line`] (e.g. a hotkey) taking part in the search: it counts like a line and
+/// is hidden when none of `keys` (English UI texts, matched translated, or data) contains the query.
+pub(super) fn searchable<'a>(
+    state: &Listen,
+    keys: &[&str],
+    row: Element<'a, Message>,
+) -> Element<'a, Message> {
+    let Some(q) = query(state) else { return row };
+    let found = keys.iter().any(|k| crate::i18n::tr(k).to_lowercase().contains(&q));
+    ROWS.with(|r| {
+        let (shown, built) = r.get();
+        r.set((shown + usize::from(found), built + 1));
+    });
+    MATCHES.with(|m| m.set(m.get() + usize::from(found)));
+    if found { row } else { hidden() }
 }
 
 /// A switch whose change maps to any message.
@@ -272,4 +294,20 @@ pub(super) fn stepper<'a>(
     .spacing(metrics::space_sm())
     .align_y(Alignment::Center)
     .into()
+}
+
+#[cfg(test)]
+mod search_tests {
+    use super::*;
+
+    #[test]
+    fn searchable_rows_count_like_lines() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        s.settings_search = "shuff".into();
+        ROWS.with(|r| r.set((0, 0)));
+        let shown = searchable(&s, &["Toggle shuffle"], space().into());
+        let gone = searchable(&s, &["Volume up"], space().into());
+        assert!(!is_hidden(&shown) && is_hidden(&gone));
+        assert_eq!(ROWS.with(|r| r.replace((0, 0))), (1, 2));
+    }
 }
