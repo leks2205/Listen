@@ -317,7 +317,8 @@ pub struct TrackAnalysis {
     /// Decoder used, e.g. "mpv 0.41.0".
     pub decoder: String,
     pub song_id: String,
-    /// Host of the server, informational.
+    /// Host of the song's server, lower case, no port ([`crate::describe::server_hint_of`]); "Describe it"
+    /// maps Navidrome hits back to a configured server by it.
     pub server_hint: String,
     pub file: FileId,
     /// "Artist – Title", for humans reading the files.

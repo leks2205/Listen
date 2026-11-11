@@ -270,6 +270,13 @@ def nd_host():
     return urllib.parse.urlparse(url).hostname or ""
 
 
+def hint_host(hint):
+    """A stored server_hint as listen-core's describe::server_hint_of writes it (lower case, no user/port)."""
+    if not hint:
+        return ""
+    return urllib.parse.urlparse("//" + hint).hostname or ""
+
+
 # ---- CLaMP 3 -----------------------------------------------------------------------------------------
 
 
@@ -381,7 +388,9 @@ def cmd_run(a):
     if not a.navidrome:
         todo = [s for s in todo if s.startswith("ytm:")]
     elif host:
-        todo = [s for s in todo if s.startswith("ytm:") or songs[s]["server_hint"] == host]
+        # An empty hint names no server; describe::server_for maps it to the only Navidrome server, which is
+        # LISTEN_ND_URL here.
+        todo = [s for s in todo if s.startswith("ytm:") or hint_host(songs[s]["server_hint"]) in (host, "")]
     if a.only:
         only = set(json.load(open(a.only)))
         todo = [s for s in todo if s in only]

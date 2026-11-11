@@ -13,7 +13,7 @@ use listen_analysis::{BeatModel, BeatSource, Cancel, Opts};
 use listen_core::analysis::{
     ANALYZER_VERSION, FileId, FlowFeatures, MIN_COMPATIBLE_VERSION, Outcome, TrackAnalysis,
 };
-use listen_core::model::{Song, SourceKind};
+use listen_core::model::{ServerId, Song, SourceKind};
 use listen_core::scene::SceneIndex;
 use listen_source::{AnalysisSource, MusicSource, SongQuery, Urgency};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -248,6 +248,9 @@ pub struct AnalysisConfig {
     pub voice_dir: PathBuf,
     pub library: bool,
     pub on_battery: bool,
+    /// `server_hint` of each configured server ([`listen_core::describe::server_hint_of`]), written into the
+    /// records so "Describe it" can map a Navidrome song back to its server.
+    pub server_hints: Vec<(ServerId, String)>,
 }
 
 impl Listen {
@@ -269,6 +272,12 @@ impl Listen {
             voice_dir: voice_dir(paths),
             library: s.analyze_library,
             on_battery: s.on_battery,
+            server_hints: self
+                .config
+                .servers
+                .iter()
+                .map(|c| (c.id.clone(), listen_core::describe::server_hint_of(&c.url)))
+                .collect(),
         })
     }
 
@@ -458,7 +467,6 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
         let mut voice_seen = voice;
         let mut last_refresh = Instant::now();
         let mut tick = tokio::time::interval(Duration::from_secs(10));
-        let server_hint = String::new();
         // Last status sent; the app only hears about changes.
         let mut sent: Option<AnalysisStatus> = None;
         loop {
@@ -529,6 +537,7 @@ fn worker(config: &AnalysisConfig) -> impl Stream<Item = Message> + use<> {
                 ),
                 Err(e) => tracing::warn!("analysis of “{}” failed: {e}", job.song.title),
             }
+            let server_hint = server_hint(&config, &job.song);
             if let Some(record) =
                 listen_analysis::record(&job.song, input.file, &server_hint, &machine, result)
             {
@@ -767,6 +776,16 @@ async fn apply(
 
 /// Resolves a job's audio through its source. `None`: deferred (budget refusal, retries left) or given up
 /// for this session (`tried`).
+/// The record's `server_hint`: the host of the song's server (empty for YouTube Music, which has no URL).
+fn server_hint(config: &AnalysisConfig, song: &Song) -> String {
+    config
+        .server_hints
+        .iter()
+        .find(|(id, _)| *id == song.server_id)
+        .map(|(_, h)| h.clone())
+        .unwrap_or_default()
+}
+
 async fn resolve(
     mut job: Job,
     queue: &mut JobQueue,

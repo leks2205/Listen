@@ -37,7 +37,7 @@ pub struct EmbedRecord {
     pub title_hint: String,
     #[serde(default)]
     pub duration_ms: u32,
-    /// Host of the server the song is on (Navidrome songs), as in the analysis store.
+    /// Host of the server the song is on (Navidrome songs), as in the analysis store ([`server_hint_of`]).
     #[serde(default)]
     pub server_hint: String,
     /// Comma-separated search tags (genre, decade, country, singer, instruments, mood, scene labels).
@@ -301,6 +301,13 @@ pub fn split_hint(hint: &str) -> (String, String) {
     }
 }
 
+/// The analysis store's `server_hint` for a server URL: its host in lower case, without scheme, user and
+/// port (`https://u@Music.Example.org:4533/` → `music.example.org`). Every writer of a hint uses this, because
+/// [`server_for`] maps Navidrome hits back to a server by it; it also normalises a hint read back.
+pub fn server_hint_of(url: &str) -> String {
+    host(url).to_ascii_lowercase()
+}
+
 /// The host of a server URL ("https://music.example.org:4533/" → "music.example.org").
 fn host(url: &str) -> &str {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
@@ -310,15 +317,20 @@ fn host(url: &str) -> &str {
 }
 
 /// The server of `servers` a hit plays on: `ytm:` songs on the first YouTube Music server, others on the
-/// Navidrome server whose host is the hit's `server_hint`.
+/// Navidrome server whose host is the hit's `server_hint` (compared as [`server_hint_of`], so a stored
+/// "user@host:4533" or upper-case hint still matches). A hit without a hint plays on the Navidrome server
+/// when exactly one is configured, and on none when several could be meant.
 pub fn server_for<'a>(hit: &Hit, servers: &'a [ServerConfig]) -> Option<&'a ServerConfig> {
     if hit.song_id.starts_with(crate::analysis::YTM_PREFIX) {
-        servers.iter().find(|c| c.kind == SourceKind::YouTubeMusic)
-    } else {
-        servers.iter().find(|c| {
-            c.kind == SourceKind::Subsonic && !hit.server_hint.is_empty() && host(&c.url) == hit.server_hint
-        })
+        return servers.iter().find(|c| c.kind == SourceKind::YouTubeMusic);
     }
+    let mut navidrome = servers.iter().filter(|c| c.kind == SourceKind::Subsonic);
+    let hint = server_hint_of(&hit.server_hint);
+    if hint.is_empty() {
+        let only = navidrome.next()?;
+        return navidrome.next().is_none().then_some(only);
+    }
+    navidrome.find(|c| server_hint_of(&c.url) == hint)
 }
 
 /// Playable songs for search hits (in order; hits without a matching server are left out). The newest
@@ -733,6 +745,37 @@ mod tests {
         assert!(songs[1].image.is_none());
         assert_eq!((songs[2].title.as_str(), songs[2].album.as_deref()), ("From history", Some("Album")));
         assert_eq!(host("http://user@h.local:80/x"), "h.local");
+    }
+
+    #[test]
+    fn server_hint_matches_the_host_describe_maps_back() {
+        let nd = |id: &str, url: &str| ServerConfig {
+            id: ServerId(id.into()),
+            name: id.into(),
+            kind: SourceKind::Subsonic,
+            url: url.into(),
+            username: "u".into(),
+        };
+        let hit = |hint: &str| Hit {
+            song_id: "nd-1".into(),
+            title: "Song".into(),
+            artist: "Artist".into(),
+            duration_ms: 0,
+            server_hint: hint.into(),
+            score: 1.0,
+        };
+        let url = "https://u@Music.Example.org:4533/";
+        assert_eq!(server_hint_of(url), "music.example.org");
+        let one = vec![nd("a", url)];
+        // The writers' hint, the older CLI's "user@host:port" form and an empty hint all map back.
+        for hint in [server_hint_of(url).as_str(), "u@Music.Example.org:4533", ""] {
+            assert_eq!(server_for(&hit(hint), &one).map(|c| c.id.0.as_str()), Some("a"), "{hint:?}");
+        }
+        assert!(server_for(&hit("other.example.org"), &one).is_none());
+        // With two Navidrome servers an empty hint is ambiguous; a host still picks its server.
+        let two = vec![nd("a", url), nd("b", "http://second.example.org")];
+        assert!(server_for(&hit(""), &two).is_none());
+        assert_eq!(server_for(&hit("second.example.org"), &two).map(|c| c.id.0.as_str()), Some("b"));
     }
 
     #[test]

@@ -63,7 +63,7 @@ Your listen-server ranks every song it has an embedding for by three things adde
 
 A tempo in the description ("120 bpm") becomes a filter: only songs within 6 bpm of it (or at half or double speed) are shown, using the tempo from the analysis store.
 
-The embeddings come from **listen-embed**, a job that runs on a computer with a graphics card (`tools/listen-embed` in the source, see its README) and writes to `Listen/embeddings` next to the analysis store. Songs it has not reached yet are not found by **Describe it**; the server lists them at `/v1/search/missing` and counts them in `/v1/status`. Results play from the server they belong to: YouTube Music songs on your YouTube Music account, Navidrome songs on the Navidrome server whose address matches; songs of servers you have not added are left out.
+The embeddings come from **listen-embed**, a job that runs on a computer with a graphics card (`tools/listen-embed` in the source, see its README) and writes to `Listen/embeddings` next to the analysis store. Songs it has not reached yet are not found by **Describe it**; the server lists them at `/v1/search/missing` and counts them in `/v1/status`. Results play from the server they belong to: YouTube Music songs on your YouTube Music account, Navidrome songs on the Navidrome server whose host name matches (the port does not matter; a song analysed without a server name plays on your Navidrome server when you have added only one); songs of servers you have not added are left out.
 
 The first search after a while takes a few seconds longer while the server loads its text model; turning **Describe it** on starts that loading.
 

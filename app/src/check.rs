@@ -1270,7 +1270,7 @@ async fn run_analysis(args: Vec<String>) -> Result<(), String> {
             Err(e) => format!("✗ {e}"),
         };
         println!("{:>5.1}s  {} – {}\n        {line}", secs, song.artist_line(), song.title);
-        let host = server.url.split('/').nth(2).unwrap_or("").to_string();
+        let host = listen_core::describe::server_hint_of(&server.url);
         if let Some(record) =
             listen_analysis::record(song, listen_core::analysis::FileId::of(song), &host, &machine, result)
         {
@@ -1400,7 +1400,7 @@ async fn run_analyze_library(jobs: usize) -> Result<(), String> {
         songs.len(),
         dir.display()
     );
-    let host = server.url.split('/').nth(2).unwrap_or("").to_string();
+    let host = listen_core::describe::server_hint_of(&server.url);
     let started = std::time::Instant::now();
     // Only songs with a stream URL become jobs, so `done` (incl. failures) reaches `todo` at the end.
     let before = songs.len();
