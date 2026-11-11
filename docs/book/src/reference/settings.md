@@ -315,7 +315,7 @@ See [Player bar and queue](../playback/queue.md).
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Player filters | **Add rule** adds a rule that keeps matching songs out of the queue when you play or queue them. Each rule has an on/off switch, a field (Title, Album artist, Artist, Duration (s), Genre, Year, Release year, Note, Path, Play count, Favorite, Rating), an operator (is, is not, contains, does not contain, starts with, ends with, is greater than, is less than, matches regex) and a value. Auto-DJ and the AI DJ are not filtered. | no rules | `settings.queue.filters` (list of `field`, `op`, `value`, `enabled`) |
+| Player filters | **Add rule** adds a rule that keeps matching songs out of the queue when you play or queue them. Each rule has an on/off switch, a field (Title, Album artist, Artist, Duration (s), Genre, Year, Release year, Note, Path, Play count, Favorite, Rating), an operator (is, is not, contains, does not contain, starts with, ends with, is greater than, is less than, matches regex) and a value. Number fields compare as numbers (`3.0` is 3); Release year is the year of the album's release date, or the song's year when the server has no release date, the same as the Release year column. Auto-DJ and the AI DJ are not filtered. | no rules | `settings.queue.filters` (list of `field`, `op`, `value`, `enabled`) |
 
 ### Visualizer
 

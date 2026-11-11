@@ -10,11 +10,6 @@ pub fn partial_date(iso: &str) -> String {
     crate::ui::album_detail::format::partial_date(iso.split(['T', ' ']).next().unwrap_or(iso))
 }
 
-/// The year of a partial ISO date.
-pub fn year_of(iso: &str) -> Option<i32> {
-    iso.trim().get(..4)?.parse().ok()
-}
-
 /// day.js' `fromNow` buckets as (past, future) sentence patterns. Each is one catalog key, because
 /// languages inflect the amount differently per sentence ("vor 5 Tagen", not "vor" + "5 Tage").
 const RELATIVE: [(&str, &str); 11] = [
@@ -91,8 +86,6 @@ mod tests {
         assert_eq!(partial_date("2001-03-12T10:00:00Z"), "Mar 12, 2001");
         assert_eq!(partial_date("sometime"), "sometime");
         assert_eq!(partial_date("2001-13-40"), "2001-13-40");
-        assert_eq!(year_of("1999-05-01"), Some(1999));
-        assert_eq!(year_of("x"), None);
     }
 
     #[test]

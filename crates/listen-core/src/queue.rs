@@ -1639,6 +1639,44 @@ mod tests {
     }
 
     #[test]
+    fn release_year_filter_uses_the_release_date_like_the_column() {
+        use crate::settings::{FilterField, FilterOp, PlayerFilter};
+        let mut remaster = song("remaster");
+        remaster.year = Some(1975);
+        remaster.extra.release_date = Some("2011-05-01".into());
+        assert_eq!(remaster.release_year(), Some(2011));
+        assert_eq!(crate::model::year_of("1999-05-01"), Some(1999));
+        assert_eq!(crate::model::year_of("x"), None);
+        let rule = |field| PlayerFilter { field, op: FilterOp::Gt, value: "2000".into(), enabled: true };
+        assert!(rule(FilterField::ReleaseYear).matches(&remaster));
+        assert!(!rule(FilterField::Year).matches(&remaster));
+        // Without a release date the song's own year counts.
+        remaster.extra.release_date = None;
+        assert!(!rule(FilterField::ReleaseYear).matches(&remaster));
+    }
+
+    #[test]
+    fn number_is_compares_numerically() {
+        use crate::settings::{FilterField, FilterOp, PlayerFilter};
+        let mut rated = song("rated");
+        rated.rating = Some(3);
+        let rule = |op, value: &str| PlayerFilter {
+            field: FilterField::Rating,
+            op,
+            value: value.into(),
+            enabled: true,
+        };
+        assert!(rule(FilterOp::Is, "3.0").matches(&rated));
+        assert!(rule(FilterOp::Is, " 3 ").matches(&rated));
+        assert!(!rule(FilterOp::IsNot, "3.0").matches(&rated));
+        assert!(rule(FilterOp::IsNot, "4").matches(&rated));
+        // Text fields still compare as text.
+        let title =
+            PlayerFilter { field: FilterField::Name, op: FilterOp::Is, value: "1.0".into(), enabled: true };
+        assert!(!title.matches(&song("1")));
+    }
+
+    #[test]
     fn reasons_serialise_as_codes_and_old_queues_load() {
         let mut q = Queue::default();
         q.set(vec![song("a")], 0);

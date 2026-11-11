@@ -422,9 +422,7 @@ impl ListItem for Song {
             ColumnId::Artists => self.artist_line(),
             ColumnId::Genres | ColumnId::GenreBadge => list_text(&self.genres),
             ColumnId::Year => self.year?.to_string(),
-            ColumnId::ReleaseYear => {
-                self.extra.release_date.as_deref().and_then(super::dates::year_of).or(self.year)?.to_string()
-            }
+            ColumnId::ReleaseYear => self.release_year()?.to_string(),
             ColumnId::Composer => nonempty(list_text(&self.extra.composers))?,
             ColumnId::Date => super::dates::partial_date(self.extra.date.as_deref()?),
             ColumnId::ReleaseDate => super::dates::partial_date(self.extra.release_date.as_deref()?),

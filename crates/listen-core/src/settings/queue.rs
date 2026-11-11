@@ -206,20 +206,25 @@ impl PlayerFilter {
             FilterField::Favorite => Some(song.favorite.to_string()),
             FilterField::Duration => Some(song.duration.as_secs().to_string()),
             FilterField::Year => Some(song.year.unwrap_or(0).to_string()),
-            FilterField::ReleaseYear => Some(song.year.unwrap_or(0).to_string()),
+            FilterField::ReleaseYear => Some(song.release_year().unwrap_or(0).to_string()),
             FilterField::PlayCount => Some(song.play_count.unwrap_or(0).to_string()),
             FilterField::Rating => Some(song.rating.unwrap_or(0).to_string()),
         };
         let Some(have) = text else { return false };
         let want = self.value.trim();
         let (hl, wl) = (have.to_lowercase(), want.to_lowercase());
+        // Number fields compare by value for every operator ("3.0" is 3), text only when the value is no number.
+        let same = match (self.field.kind(), have.parse::<f64>(), want.parse::<f64>()) {
+            (FieldKind::Number, Ok(a), Ok(b)) => a == b,
+            _ => hl == wl,
+        };
         match self.op {
             FilterOp::Contains => hl.contains(&wl),
             FilterOp::NotContains => !hl.contains(&wl),
             FilterOp::StartsWith => hl.starts_with(&wl),
             FilterOp::EndsWith => hl.ends_with(&wl),
-            FilterOp::Is => hl == wl,
-            FilterOp::IsNot => hl != wl,
+            FilterOp::Is => same,
+            FilterOp::IsNot => !same,
             FilterOp::Regex => re.is_some_and(|r| r.is_match(&have)),
             FilterOp::Gt | FilterOp::Lt => match (have.parse::<f64>(), want.parse::<f64>()) {
                 (Ok(a), Ok(b)) if self.op == FilterOp::Gt => a > b,

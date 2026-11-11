@@ -105,14 +105,7 @@ fn fact(m: &GroupMeta, item: AlbumGroupItem) -> Option<String> {
     match item {
         AlbumGroupItem::AlbumArtists => (!s.album_artists.is_empty()).then(String::new),
         AlbumGroupItem::ReleaseDate => s.extra.release_date.as_deref().map(partial_date),
-        AlbumGroupItem::ReleaseYear => s
-            .extra
-            .release_date
-            .as_deref()
-            .and_then(super::dates::year_of)
-            .or(s.year)
-            .filter(|y| *y > 0)
-            .map(|y| y.to_string()),
+        AlbumGroupItem::ReleaseYear => s.release_year().filter(|y| *y > 0).map(|y| y.to_string()),
         AlbumGroupItem::SongCount => {
             Some(if m.count == 1 { "1 track".into() } else { format!("{} tracks", m.count) })
         }

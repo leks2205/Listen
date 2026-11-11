@@ -129,7 +129,18 @@ pub struct MbzIds {
     pub album: Option<String>,
 }
 
+/// The year of a partial ISO date (`2001`, `2001-03` or `2001-03-12`).
+pub fn year_of(iso: &str) -> Option<i32> {
+    iso.trim().get(..4)?.parse().ok()
+}
+
 impl Song {
+    /// The year of the release the song is on, else the song's own year: what every "Release year" shows
+    /// and filters on (table column, album group header, player filter).
+    pub fn release_year(&self) -> Option<i32> {
+        self.extra.release_date.as_deref().and_then(year_of).or(self.year)
+    }
+
     /// A song with only its identity and title set; everything else empty, zero or `false`.
     ///
     /// Use it with struct update syntax for test songs and songs synthesised from a partial record
