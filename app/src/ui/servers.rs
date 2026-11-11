@@ -239,7 +239,7 @@ pub fn edit_modal(state: &Listen) -> Option<ModalParts<'_>> {
             } else {
                 if let Some(current) = &form.ytm_profile {
                     body = body.push(label_w(
-                        format!("Channels signed in with {}:", current.label()),
+                        crate::i18n::trf("Channels signed in with {}:", &[&current.label()]),
                         metrics::font_sm(),
                         t.muted,
                         Weight::Normal,
@@ -271,7 +271,7 @@ pub fn edit_modal(state: &Listen) -> Option<ModalParts<'_>> {
                 {
                     body = body.push(
                         button(label_w(
-                            format!("Use {} instead", other.label()),
+                            crate::i18n::trf("Use {} instead", &[&other.label()]),
                             metrics::font_md(),
                             t.foreground,
                             Weight::Semibold,
@@ -361,7 +361,7 @@ pub fn action_required<'a>(state: &'a Listen, failure: &'a Failure) -> Element<'
         .servers
         .iter()
         .find(|s| s.id == *failure.id())
-        .map_or_else(|| "this server".to_string(), |s| s.name.clone());
+        .map_or_else(|| crate::i18n::tr("this server").to_string(), |s| s.name.clone());
     let (title, message) = failure_text(failure, &name);
     let wide = |title: &'static str, primary: bool, msg: Message| {
         let color = if primary { iced::Color::WHITE } else { t.foreground };

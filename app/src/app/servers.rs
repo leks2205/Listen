@@ -620,14 +620,16 @@ pub fn jf_options(o: ServerOptions) -> listen_jellyfin::Options {
     listen_jellyfin::Options { ignore_ssl: o.ignore_ssl, prefer_instant_mix: o.prefer_instant_mix }
 }
 
-/// Reason texts of the action-required page: (title, message).
+/// Reason texts of the action-required page: (title, message), translated (`name` goes in as it is).
 pub fn failure_text(failure: &Failure, name: &str) -> (String, String) {
     match failure {
         Failure::Credentials { .. } => (
-            format!("Sign in to {name} again"),
+            crate::i18n::trf("Sign in to {} again", &[&name]),
             "Listen has no saved password for this server, or the server no longer accepts it.".into(),
         ),
-        Failure::Unreachable { reason, .. } => (format!("Could not reach {name}"), reason.clone()),
+        Failure::Unreachable { reason, .. } => {
+            (crate::i18n::trf("Could not reach {}", &[&name]), reason.clone())
+        }
     }
 }
 
