@@ -27,8 +27,10 @@ pub fn decode(bytes: &[u8]) -> Result<Pcm, String> {
         let id = &bytes[at..at + 4];
         let declared = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
         let body = at + 8;
-        // Streaming encoders write 0 or 0xFFFFFFFF for "until the end".
-        let len = if declared == 0 || body + declared > bytes.len() { bytes.len() - body } else { declared };
+        // Streaming encoders write 0 or 0xFFFFFFFF as the `data` size for "until the end"; any other chunk
+        // may really be empty (an empty LIST), so only `data` is open-ended.
+        let open_ended = id == b"data" && (declared == 0 || declared == u32::MAX as usize);
+        let len = if open_ended || body + declared > bytes.len() { bytes.len() - body } else { declared };
         match id {
             b"fmt " if len >= 16 => {
                 let format = u16::from_le_bytes([bytes[body], bytes[body + 1]]);
@@ -37,6 +39,10 @@ pub fn decode(bytes: &[u8]) -> Result<Pcm, String> {
                 bits = u16::from_le_bytes([bytes[body + 14], bytes[body + 15]]);
                 if format != 1 && format != 0xFFFE {
                     return Err(format!("unsupported WAV format {format}"));
+                }
+                // A zero rate would make the clip's duration infinite (it times the break).
+                if rate == 0 || channels == 0 {
+                    return Err("WAV header without rate/channels".into());
                 }
             }
             b"data" => {
@@ -141,6 +147,25 @@ mod tests {
         let mut bytes = encode(&tone(24_000, 0.2));
         bytes[40..44].copy_from_slice(&0u32.to_le_bytes());
         assert_eq!(decode(&bytes).unwrap().samples.len(), 24_000);
+    }
+
+    #[test]
+    fn an_empty_chunk_before_data_is_skipped() {
+        let pcm = tone(24_000, 0.2);
+        let mut bytes = encode(&pcm);
+        // An empty LIST chunk between `fmt ` and `data`.
+        bytes.splice(36..36, *b"LIST\0\0\0\0");
+        assert_eq!(decode(&bytes).unwrap(), pcm);
+    }
+
+    #[test]
+    fn a_zero_rate_header_is_rejected() {
+        let mut bytes = encode(&tone(24_000, 0.2));
+        bytes[24..28].copy_from_slice(&0u32.to_le_bytes());
+        assert!(decode(&bytes).is_err());
+        let mut bytes = encode(&tone(24_000, 0.2));
+        bytes[22..24].copy_from_slice(&0u16.to_le_bytes());
+        assert!(decode(&bytes).is_err());
     }
 
     #[test]
