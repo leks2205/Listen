@@ -67,13 +67,10 @@ pub fn request(provider: &str, key: &str, target: &str, text: &str) -> Option<Re
             headers: vec![("Ocp-Apim-Subscription-Key", key.trim().to_string())],
             body: json!([{ "Text": text }]),
         }),
+        // The key goes in a header, never in the URL: URLs end up in logs, proxies and error texts.
         "Google Cloud" => Some(Request {
-            url: format!(
-                "https://translation.googleapis.com/language/translate/v2?target={}&key={}",
-                enc(target),
-                enc(key.trim())
-            ),
-            headers: vec![],
+            url: format!("https://translation.googleapis.com/language/translate/v2?target={}", enc(target)),
+            headers: vec![("x-goog-api-key", key.trim().to_string())],
             body: json!({ "format": "text", "q": text }),
         }),
         _ => None,
@@ -140,13 +137,19 @@ mod tests {
 
     #[test]
     fn builds_the_google_request() {
-        let r = request("Google Cloud", "k&y", "zh-Hans", "a").unwrap();
-        assert_eq!(
-            r.url,
-            "https://translation.googleapis.com/language/translate/v2?target=zh-Hans&key=k%26y"
-        );
+        let r = request("Google Cloud", " k&y ", "zh-Hans", "a").unwrap();
+        assert_eq!(r.url, "https://translation.googleapis.com/language/translate/v2?target=zh-Hans");
         assert_eq!(r.body, json!({"format": "text", "q": "a"}));
-        assert!(r.headers.is_empty());
+        assert_eq!(r.headers, [("x-goog-api-key", "k&y".to_string())]);
+    }
+
+    #[test]
+    fn api_keys_never_go_into_the_url() {
+        for p in PROVIDERS {
+            let r = request(p, "SECRET-KEY", "de", "a").unwrap();
+            assert!(!r.url.contains("SECRET"), "{p}: {}", r.url);
+            assert!(r.headers.iter().any(|(_, v)| v == "SECRET-KEY"), "{p}");
+        }
     }
 
     #[test]
