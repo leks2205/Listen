@@ -123,8 +123,13 @@ impl VoiceModel {
 }
 
 /// Sung stretches from per-frame singing probabilities, as DJustify's `voiced_segments`: frames above 0.5,
-/// a 0.4 s majority (median) filter, gaps under 0.3 s bridged, stretches under 0.4 s dropped.
+/// a 0.4 s majority (median) filter, gaps under 0.3 s bridged, stretches under 0.4 s dropped. No frames, no
+/// stretches.
 pub fn voiced_segments(probs: &[f32]) -> Vec<(f32, f32)> {
+    // The reflecting index below never lands inside an empty slice and would loop forever.
+    if probs.is_empty() {
+        return Vec::new();
+    }
     let n = probs.len();
     let on: Vec<u8> = probs.iter().map(|&p| u8::from(p > 0.5)).collect();
     let k = (0.4 * FPS) as usize | 1;
@@ -725,6 +730,12 @@ mod tests {
         assert_eq!(f.len(), N_MELS);
         assert_eq!(f[0].len(), N_FFT / 2 + 1);
         assert!(sum(0) > 0.0 && sum(40) > 0.0 && sum(79) > 0.0);
+    }
+
+    #[test]
+    fn no_frames_have_no_sung_stretches() {
+        assert!(voiced_segments(&[]).is_empty());
+        assert!(voiced_segments(&[0.9]).is_empty(), "one frame is shorter than a stretch");
     }
 
     #[test]
