@@ -292,16 +292,16 @@ pub fn privacy(public: bool) -> &'static str {
     if public { "PUBLIC" } else { "PRIVATE" }
 }
 
-/// YouTube Music refuses titles with angle brackets.
-pub fn clean_title(name: &str) -> String {
+/// YouTube Music refuses playlist titles and descriptions with angle brackets.
+pub fn strip_angle_brackets(name: &str) -> String {
     name.chars().filter(|c| !matches!(c, '<' | '>')).collect()
 }
 
 /// Body of `playlist/create`.
 pub fn create_body(name: &str, description: &str, public: bool, videos: &[String]) -> Value {
     json!({
-        "title": clean_title(name),
-        "description": clean_title(description),
+        "title": strip_angle_brackets(name),
+        "description": strip_angle_brackets(description),
         "privacyStatus": privacy(public),
         "videoIds": videos,
     })
@@ -312,12 +312,13 @@ pub fn create_body(name: &str, description: &str, public: bool, videos: &[String
 pub fn metadata_actions(name: Option<&str>, description: Option<&str>, public: Option<bool>) -> Vec<Value> {
     let mut actions = Vec::new();
     if let Some(name) = name {
-        actions.push(json!({"action": "ACTION_SET_PLAYLIST_NAME", "playlistName": clean_title(name)}));
+        actions
+            .push(json!({"action": "ACTION_SET_PLAYLIST_NAME", "playlistName": strip_angle_brackets(name)}));
     }
     if let Some(description) = description {
         actions.push(json!({
             "action": "ACTION_SET_PLAYLIST_DESCRIPTION",
-            "playlistDescription": clean_title(description),
+            "playlistDescription": strip_angle_brackets(description),
         }));
     }
     if let Some(public) = public {
@@ -362,13 +363,14 @@ pub fn delete_failure(json: &Value) -> Option<String> {
     )
 }
 
-/// Why `browse/edit_playlist` didn't add the songs, `None` on success.
+/// Why a `browse/edit_playlist` call failed, `None` on success: the verdict for every edit
+/// (add, remove, move, rename, description and privacy).
 pub fn edit_failure(json: &Value) -> Option<String> {
     let status = json.get("status").and_then(Value::as_str).unwrap_or("");
     if status.contains("SUCCEEDED") {
         return None;
     }
-    // YouTube Music answers a duplicate with a "add anyway?" dialog.
+    // YouTube Music answers adding a duplicate with an "add anyway?" dialog.
     if json.to_string().contains("DEDUPE_OPTION_SKIP") {
         return Some("it is already in that playlist".into());
     }

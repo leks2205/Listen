@@ -1245,7 +1245,7 @@ impl MusicSource for YouTubeMusic {
         if self.guest {
             return Err(SourceError::Unsupported);
         }
-        let title: String = name.chars().filter(|c| !matches!(c, '<' | '>')).collect();
+        let title = library::strip_angle_brackets(name);
         let raw = id.strip_prefix("VL").unwrap_or(id);
         let q = library::RawPost::new(
             "browse/edit_playlist",
@@ -1298,8 +1298,13 @@ impl MusicSource for YouTubeMusic {
             .get("playlistId")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| SourceError::Other("YouTube Music did not create the playlist".into()))?;
-        let mut created =
-            self.playlist_stub(id, &library::clean_title(&new.name), None, &[], Some(songs.len() as u32));
+        let mut created = self.playlist_stub(
+            id,
+            &library::strip_angle_brackets(&new.name),
+            None,
+            &[],
+            Some(songs.len() as u32),
+        );
         created.description = Some(new.comment.clone()).filter(|c| !c.trim().is_empty());
         created.public = new.public;
         Ok(created)
