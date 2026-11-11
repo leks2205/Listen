@@ -114,10 +114,15 @@ fn norm(key: &str) -> String {
     key.chars().filter(|c| *c != '-' && *c != '_' && *c != ' ').flat_map(char::to_lowercase).collect()
 }
 
-/// Parses a colour; also accepts `#rgb`, `#rrggbbaa` (alpha dropped).
+/// Parses a colour; also accepts `#rgb`, `#rrggbbaa` (alpha dropped). The input is arbitrary user
+/// text (the accent field, theme files): anything that is not ASCII is `None`, never a panic.
 pub fn parse_color(value: &Value) -> Option<Rgb> {
     let s = value.as_str()?.trim();
     if let Some(hex) = s.strip_prefix('#') {
+        // `len()` counts bytes and the arms below slice by byte: only valid for ASCII.
+        if !hex.is_ascii() {
+            return None;
+        }
         let hex = match hex.len() {
             3 => hex.chars().flat_map(|c| [c, c]).collect::<String>(),
             6 => hex.to_string(),
@@ -431,6 +436,20 @@ mod tests {
             list.iter().map(|(i, t)| (i.clone(), parse_text(t, "json").unwrap())).collect();
         let (_, errors) = resolve_all(&f);
         assert!(errors.iter().any(|e| e.file == "t0" && e.message.contains("longer")));
+    }
+
+    #[test]
+    fn parse_color_never_panics_on_non_ascii() {
+        for s in [
+            "#ff\u{d55c}\u{d55c}",
+            "#a\u{20ac}\u{20ac}b",
+            "#\u{d55c}",
+            "#\u{e9}\u{e9}\u{e9}",
+            "#ff\u{e9}\u{e9}\u{e9}",
+        ] {
+            assert_eq!(parse_color(&Value::String(s.into())), None, "{s}");
+        }
+        assert_eq!(parse_color(&Value::String("#ff8800cc".into())), Some(Rgb(255, 136, 0)));
     }
 
     #[test]
