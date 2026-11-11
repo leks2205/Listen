@@ -58,21 +58,28 @@ pub fn is_radio_edit(song: &Song) -> bool {
 
 /// Which version to keep when several are on offer: radio edits first, then
 /// the plain song, then extended/live/remixed and other special versions.
+/// Markers are whole words ("Demons (Live)" is special, "Demons" and "Alive" are not), as in
+/// `substitute::tags_of`.
 pub fn version_rank(song: &Song) -> u8 {
     if is_radio_edit(song) {
         return 0;
     }
     let t = song.title.to_lowercase();
-    const SPECIAL: [&str; 25] = [
+    let words: Vec<&str> = t.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    let has = |marker: &str| {
+        let m: Vec<&str> = marker.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+        words.windows(m.len()).any(|w| w == m.as_slice())
+    };
+    // Matched as word sequences: "m/v" is the words "m" "v".
+    const SPECIAL: &[&str] = &[
         // Music videos and performance clips: the song itself is the version to play.
-        " mv",
+        "mv",
         "m/v",
         "music video",
         "official video",
         "performance video",
         "lyric video",
         "stage",
-        "@ ",
         "fancam",
         "dance practice",
         "special clip",
@@ -81,6 +88,7 @@ pub fn version_rank(song: &Song) -> u8 {
         "extended",
         "live",
         "remix",
+        "remixed",
         "club mix",
         "instrumental",
         "acoustic",
@@ -91,7 +99,8 @@ pub fn version_rank(song: &Song) -> u8 {
         "a cappella",
         "acapella",
     ];
-    if SPECIAL.iter().any(|m| t.contains(m)) { 2 } else { 1 }
+    // "@ " marks a performance clip ("Song @ Inkigayo"); it has no letters to match as a word.
+    if t.contains("@ ") || SPECIAL.iter().any(|m| has(m)) { 2 } else { 1 }
 }
 
 /// One version per song, keeping the list's order: where several versions
@@ -230,5 +239,30 @@ mod tests {
         assert_eq!(titles, ["Song A (Radio Edit)", "Song B"]);
         assert!(is_radio_edit(&song("Hit - Radio Version", "X")));
         assert!(!is_radio_edit(&song("Radio Ga Ga", "Queen")));
+    }
+
+    #[test]
+    fn version_rank_ignores_tag_words_inside_the_name() {
+        let mut live = song("Demons (Live)", "X");
+        live.album = Some("A".into());
+        let mut studio = song("Demons", "X");
+        studio.album = Some("B".into());
+        assert_eq!(dedupe_versions(vec![live, studio])[0].title, "Demons");
+        for plain in ["Alive", "Demons", "Undercover", "Backstage", "Discover", "Oliver"] {
+            assert_eq!(version_rank(&song(plain, "X")), 1, "{plain}");
+        }
+        for special in [
+            "Song (Live)",
+            "Song - Live at Wembley",
+            "Song MV",
+            "Song (M/V)",
+            "Song @ Inkigayo",
+            "Song (Remixed)",
+            "Song (A Cappella)",
+            "Song [Dance Practice]",
+            "Song (Sped Up)",
+        ] {
+            assert_eq!(version_rank(&song(special, "X")), 2, "{special}");
+        }
     }
 }
