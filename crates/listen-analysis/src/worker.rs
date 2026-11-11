@@ -224,7 +224,8 @@ impl Worker {
         };
         let outcome = match result {
             None => {
-                self.stop().await;
+                // Mid-job the helper only reads stdin after the job: closing it would not stop it.
+                self.kill().await;
                 return Err(AnalysisError::Cancelled);
             }
             Some(Ok((n, answer))) if n > 0 => serde_json::from_str::<Answer>(&answer)
@@ -255,8 +256,9 @@ impl Worker {
         }
     }
 
-    /// Closes the helper's stdin (it exits and its memory goes back to the
-    /// system) and waits briefly; kills it otherwise.
+    /// Closes the helper's stdin and waits up to 5 s for it to exit (its memory goes back to the
+    /// system), then kills it. Graceful only between jobs: a helper in the middle of a job reads stdin
+    /// after it, so it is killed after the 5 s.
     pub async fn stop(&mut self) {
         let Some(Running { mut child, stdin, .. }) = self.running.take() else { return };
         drop(stdin);
@@ -265,10 +267,42 @@ impl Worker {
         }
         tracing::info!("analysis helper stopped; main {} MB", proc_mb(None, "VmRSS").unwrap_or(0));
     }
+
+    /// Kills the helper at once (a cancelled job; its partial work is worthless).
+    async fn kill(&mut self) {
+        let Some(Running { mut child, .. }) = self.running.take() else { return };
+        let _ = child.kill().await;
+        tracing::info!("analysis helper killed (job cancelled)");
+    }
 }
 
 impl Default for Worker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A busy helper never sees stdin close; a cancel must not wait for it.
+    #[tokio::test]
+    async fn cancel_mid_job_returns_within_a_second() {
+        // Stands in for a helper deep in a job: reads the request, then works without reading stdin.
+        let script = "read request; exec sleep 30";
+        let mut worker = Worker::with_command("/bin/sh".into(), vec!["-c".into(), script.into()]);
+        let cancel = Cancel::default();
+        let trigger = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            trigger.cancel();
+        });
+        let opts = Opts { beats: BeatSource::Own, bpm_hint: None, voice: None };
+        let started = Instant::now();
+        let result = worker.analyze("/music/a.flac", &opts, &cancel).await;
+        assert!(matches!(result, Err(AnalysisError::Cancelled)), "{result:?}");
+        assert!(started.elapsed() < Duration::from_secs(1), "took {:?}", started.elapsed());
+        assert!(!worker.is_running());
     }
 }
