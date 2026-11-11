@@ -222,6 +222,7 @@ fn capitalise(w: &str) -> String {
 }
 
 /// Resolves `id` by following `extends` (custom ids first, then built-in); child colours win.
+/// A file that extends its own id extends the built-in it shadows (`nord.json` with `"extends": "nord"`).
 /// Errors on cycles or excessive depth.
 fn resolve(id: &str, raws: &HashMap<String, RawTheme>) -> Result<(Palette, Option<String>), String> {
     // Collect the chain child -> ... -> root.
@@ -239,10 +240,15 @@ fn resolve(id: &str, raws: &HashMap<String, RawTheme>) -> Result<(Palette, Optio
         let raw = &raws[cur];
         chain.push(raw);
         match raw.extends.as_deref() {
-            Some(next) if raws.contains_key(next) => cur = next,
+            // A self-reference means the built-in of that name, the natural way to tweak one.
+            Some(next) if next != cur && raws.contains_key(next) => cur = next,
             Some(builtin) => {
                 base = Some(palette(builtin).ok_or_else(|| {
-                    format!("\"extends\": no theme called \"{builtin}\" (built-in or in this folder)")
+                    if builtin == cur {
+                        format!("\"extends\" loops back to \"{cur}\"")
+                    } else {
+                        format!("\"extends\": no theme called \"{builtin}\" (built-in or in this folder)")
+                    }
                 })?);
                 break;
             }
@@ -396,6 +402,27 @@ mod tests {
         assert_eq!(t.palette.mode, ThemeMode::Dark);
         assert_eq!(t.extends.as_deref(), Some("tokyoNight"));
         assert_eq!(t.name, "Mine");
+    }
+
+    #[test]
+    fn a_custom_theme_may_extend_the_builtin_it_shadows() {
+        let f = files(&[
+            ("nord", r##"{"extends":"nord","colors":{"primary":"#ff0000"}}"##),
+            ("mine", r##"{"extends":"nord","colors":{"surface":"#111111"}}"##),
+            ("self", r#"{"extends":"self"}"#),
+        ]);
+        let (themes, errors) = resolve_all(&f);
+        let base = palette("nord").unwrap();
+        let nord = themes.iter().find(|t| t.id == "nord").unwrap();
+        assert_eq!(nord.palette.primary, Rgb(255, 0, 0));
+        assert_eq!(nord.palette.background, base.background);
+        // Another file extending "nord" gets the tweaked one, which is what the folder names.
+        let mine = themes.iter().find(|t| t.id == "mine").unwrap();
+        assert_eq!((mine.palette.primary, mine.palette.background), (Rgb(255, 0, 0), base.background));
+        // Without a built-in of that name, a self-reference is still a loop.
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(errors[0].file, "self");
+        assert!(errors[0].message.contains("loops back"), "{}", errors[0].message);
     }
 
     #[test]

@@ -41,7 +41,7 @@ primary = "#ff8844"
 | Key | Meaning |
 | --- | --- |
 | `name` | The name shown in the pickers. Defaults to the file name. |
-| `extends` | The theme to start from: a built-in theme id (for example `tokyoNight` or `defaultLight`) or another file in the folder. Your colours win over the parent's. Chains can be up to 10 deep; a loop is an error. Without `extends`, the theme starts from `defaultDark`, or from `defaultLight` if `mode` is `light`. |
+| `extends` | The theme to start from: a built-in theme id (for example `tokyoNight` or `defaultLight`) or another file in the folder. Your colours win over the parent's. Chains can be up to 10 deep; a loop is an error. A file named after a built-in theme replaces it; to tweak a built-in, name the file after it and extend it by that name (`nord.json` with `"extends": "nord"` starts from the built-in Nord). Without `extends`, the theme starts from `defaultDark`, or from `defaultLight` if `mode` is `light`. |
 | `mode` | `dark` or `light`. Defaults to the parent's mode. |
 | `colors` | The colours you want to change. |
 

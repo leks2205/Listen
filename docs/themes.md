@@ -24,7 +24,9 @@ The file name is the theme id and appears in the theme pickers as "Name (custom)
 ```
 
 - `extends`: a built-in theme id (e.g. `tokyoNight`, `defaultLight`) or another file in the
-  folder (chains up to 10 deep; loops are errors). The child's colours win.
+  folder (chains up to 10 deep; loops are errors). The child's colours win. A file named after a
+  built-in theme replaces it in the pickers; to tweak it, extend it by its own name (`nord.json` with
+  `"extends": "nord"` starts from the built-in Nord).
   Without `extends` the theme starts from `defaultDark` (or `defaultLight` if `mode` is `light`).
 - `mode`: `dark` or `light` (default: taken from the parent).
 - `name`: display name (default: the file name).
