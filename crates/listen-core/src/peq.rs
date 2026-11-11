@@ -210,43 +210,114 @@ pub fn mpv_filter(p: &Profile) -> String {
     format!("@{MPV_LABEL}:lavfi=[{}]", parts.join(","))
 }
 
-/// Reads AutoEq's `ParametricEQ.txt` (also Equalizer APO's format): `Preamp: -6.3 dB` and
-/// `Filter N: ON PK Fc 105 Hz Gain 5.6 dB Q 0.70` lines (`LSC`/`LS`, `HSC`/`HS` for shelves).
-/// `None` when there is no enabled filter.
-pub fn parse_parametric_eq(text: &str) -> Option<(f32, Vec<Filter>)> {
-    let mut preamp = 0.0;
-    let mut filters = Vec::new();
-    for line in text.lines() {
+/// What [`parse_parametric_eq_report`] read from an AutoEq or Equalizer APO text.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ParametricEqImport {
+    /// The sum of every `Preamp:` line in dB (Equalizer APO adds them up).
+    pub preamp: f32,
+    pub filters: Vec<Filter>,
+    /// The lines that ask for something this profile can't express (other filter types, a peak
+    /// without Q or bandwidth, channel or device sections, graphic EQ ...), trimmed, in order.
+    /// Callers show their number so an import never changes the sound without a word.
+    pub skipped: Vec<String>,
+}
+
+/// Reads AutoEq's `ParametricEQ.txt` and the peak/shelf subset of Equalizer APO's format:
+/// `Preamp: -6.3 dB` and `Filter N: ON PK Fc 105 Hz Gain 5.6 dB Q 0.70` lines (the number may be
+/// left out: `Filter: ON ...`). Peaks are `PK`, `PEQ` or `Modal` and need `Q q` or `BW Oct n`;
+/// shelves are `LSC`/`LS` and `HSC`/`HS` with `Q q`, a slope `LSC 12 dB`, or neither (Q 0.7, as
+/// AutoEq writes them). Disabled (`OFF`) filters, comments and lines that are not
+/// `Command: parameters` are ignored, as APO ignores them; anything else is listed in `skipped`.
+pub fn parse_parametric_eq_report(text: &str) -> ParametricEqImport {
+    let mut out = ParametricEqImport::default();
+    for line in text.lines().map(str::trim) {
         let words: Vec<&str> = line.split_whitespace().collect();
-        if words.first().is_some_and(|w| w.eq_ignore_ascii_case("preamp:")) {
-            if let Some(v) = words.get(1).and_then(|v| v.parse().ok()) {
-                preamp = v;
+        let Some(&command) = words.first() else { continue };
+        if command.starts_with('#') || !line.contains(':') {
+            continue;
+        }
+        let command = command.trim_end_matches(':');
+        if command.eq_ignore_ascii_case("preamp") {
+            match words.get(1).and_then(|v| v.parse::<f32>().ok()).filter(|v| v.is_finite()) {
+                Some(v) => out.preamp += v,
+                None => out.skipped.push(line.to_string()),
             }
             continue;
         }
-        if !words.first().is_some_and(|w| w.eq_ignore_ascii_case("filter"))
-            || !words.iter().any(|w| w.eq_ignore_ascii_case("on"))
-        {
+        if !command.eq_ignore_ascii_case("filter") {
+            // `Channel: all` and `Device: all` change nothing; every other command does.
+            let all = words.len() == 2 && words[1].eq_ignore_ascii_case("all");
+            if !(all && (command.eq_ignore_ascii_case("channel") || command.eq_ignore_ascii_case("device"))) {
+                out.skipped.push(line.to_string());
+            }
             continue;
         }
-        let after = |key: &str| {
-            let i = words.iter().position(|w| w.eq_ignore_ascii_case(key))?;
-            words.get(i + 1)?.parse::<f32>().ok()
-        };
-        let kind = words.iter().find_map(|w| match w.to_ascii_uppercase().as_str() {
-            "PK" | "PEQ" => Some(FilterKind::Peak),
-            "LSC" | "LS" => Some(FilterKind::LowShelf),
-            "HSC" | "HS" => Some(FilterKind::HighShelf),
-            _ => None,
-        });
-        let (Some(kind), Some(freq), Some(gain)) = (kind, after("fc"), after("gain")) else { continue };
-        // Shelves without a Q are AutoEq's 0.7.
-        let q = after("q").unwrap_or(0.7);
-        if freq.is_finite() && gain.is_finite() && q.is_finite() && freq > 0.0 && q > 0.0 {
-            filters.push(Filter { kind, freq, gain, q });
+        if words.iter().any(|w| w.eq_ignore_ascii_case("off")) {
+            continue;
+        }
+        match apo_filter(&words) {
+            Some(f) => out.filters.push(f),
+            None => out.skipped.push(line.to_string()),
         }
     }
-    (!filters.is_empty()).then_some((preamp, filters))
+    out
+}
+
+/// One enabled APO `Filter` line as a band; `None` when this profile can't express it.
+fn apo_filter(words: &[&str]) -> Option<Filter> {
+    let on = words.iter().position(|w| w.eq_ignore_ascii_case("on"))?;
+    let words = &words[on + 1..];
+    let number = |i: usize| words.get(i)?.parse::<f32>().ok().filter(|v| v.is_finite());
+    let after = |key: &str| number(words.iter().position(|w| w.eq_ignore_ascii_case(key))? + 1);
+    let kind = match words.first()?.to_ascii_uppercase().as_str() {
+        "PK" | "PEQ" | "MODAL" => FilterKind::Peak,
+        "LSC" | "LS" => FilterKind::LowShelf,
+        "HSC" | "HS" => FilterKind::HighShelf,
+        // LP, HP, BP, NO, AP, IIR, ...: no peak or shelf.
+        _ => return None,
+    };
+    let (freq, gain) = (after("fc")?, after("gain")?);
+    // `BW Oct n`: the bandwidth in octaves.
+    let bw_q = words
+        .windows(3)
+        .find(|w| w[0].eq_ignore_ascii_case("bw") && w[1].eq_ignore_ascii_case("oct"))
+        .and_then(|w| w[2].parse::<f64>().ok())
+        .filter(|n| n.is_finite() && *n > 0.0)
+        .map(|n| (2f64.powf(n).sqrt() / (2f64.powf(n) - 1.0)) as f32);
+    let q = match kind {
+        FilterKind::Peak => after("q").or(bw_q)?,
+        FilterKind::LowShelf | FilterKind::HighShelf => {
+            // `LS 6dB` / `HS 12dB` are first/second-order shelves at a corner frequency: another filter.
+            if words.get(1).is_some_and(|w| w.len() > 2 && w.to_ascii_lowercase().ends_with("db")) {
+                return None;
+            }
+            // `LSC x dB`: a slope of x dB per octave (RBJ's S = x / 12).
+            let slope = number(1).filter(|_| words.get(2).is_some_and(|w| w.eq_ignore_ascii_case("db")));
+            match (after("q"), slope) {
+                (Some(q), _) => q,
+                (None, Some(x)) if x > 0.0 => shelf_q(gain, f64::from(x) / 12.0)?,
+                (None, Some(_)) => return None,
+                // AutoEq's value, about RBJ's steepest slope without overshoot (S = 1, Q 0.707).
+                (None, None) => 0.7,
+            }
+        }
+    };
+    (freq > 0.0 && q > 0.0 && q.is_finite()).then_some(Filter { kind, freq, gain, q })
+}
+
+/// The Q of a shelf with RBJ slope `s` (1 = 12 dB per octave) at `gain` dB; `None` when the slope
+/// is steeper than a biquad shelf allows at that gain.
+fn shelf_q(gain: f32, s: f64) -> Option<f32> {
+    let a = 10f64.powf(f64::from(gain) / 40.0);
+    let inv_q2 = (a + 1.0 / a) * (1.0 / s - 1.0) + 2.0;
+    (inv_q2 > 0.0).then(|| (1.0 / inv_q2.sqrt()) as f32)
+}
+
+/// [`parse_parametric_eq_report`] as `(preamp, filters)`; `None` when there is no enabled filter.
+/// It does not say which lines were left out: prefer the report where the user can be told.
+pub fn parse_parametric_eq(text: &str) -> Option<(f32, Vec<Filter>)> {
+    let r = parse_parametric_eq_report(text);
+    (!r.filters.is_empty()).then_some((r.preamp, r.filters))
 }
 
 /// One profile of the bundled AutoEq index.
@@ -443,6 +514,58 @@ Filter 7: OFF PK Fc 1422 Hz Gain 1.0 dB Q 2.38
         assert_eq!(p.filters[0], Filter { kind: FilterKind::LowShelf, freq: 105.0, gain: 5.6, q: 0.7 });
         assert_eq!(p.filters[5].kind, FilterKind::HighShelf);
         assert!(parse_parametric_eq("Preamp: -3 dB\n").is_none());
+    }
+
+    #[test]
+    fn apo_unnumbered_filter_and_bandwidth_lines_parse() {
+        let (_, f) = parse_parametric_eq("Filter: ON PK Fc 1000 Hz Gain 3 dB BW Oct 1").unwrap();
+        assert_eq!(f.len(), 1);
+        assert!((f[0].q - 2f32.sqrt()).abs() < 1e-4, "{}", f[0].q);
+        // A peak without Q or bandwidth is not given a shelf's Q: it is left out and reported.
+        assert_eq!(parse_parametric_eq("Filter 1: ON PK Fc 1000 Hz Gain 3 dB"), None);
+        let r = parse_parametric_eq_report(
+            "Filter 1: ON PK Fc 1000 Hz Gain 3 dB\nFilter 2: ON PEQ Fc 100 Hz Gain 1.0 dB BW Oct 0.167",
+        );
+        assert_eq!(r.skipped, ["Filter 1: ON PK Fc 1000 Hz Gain 3 dB"]);
+        assert!((r.filters[0].q - 8.64).abs() < 0.01, "{}", r.filters[0].q);
+        // Several preamps add up, as in APO.
+        let r =
+            parse_parametric_eq_report("Preamp: -3 dB\nPreamp: -2.5 dB\nFilter: ON LS Fc 300 Hz Gain 5.0 dB");
+        assert_eq!(r.preamp, -5.5);
+        assert_eq!(r.filters, [Filter { kind: FilterKind::LowShelf, freq: 300.0, gain: 5.0, q: 0.7 }]);
+        // A slope of 12 dB per octave is RBJ's S = 1: Q 1/sqrt(2) at any gain.
+        let r = parse_parametric_eq_report("Filter: ON HSC 12 dB Fc 100 Hz Gain -6.0 dB");
+        assert!((r.filters[0].q - 0.5f32.sqrt()).abs() < 1e-4, "{:?}", r.filters);
+    }
+
+    #[test]
+    fn unsupported_apo_lines_are_reported_not_misread() {
+        let text = "# comment
+Device: all
+Channel: all
+Preamp: -6 dB
+Filter 1: ON PK Fc 50 Hz Gain -3.0 dB Q 10.00
+Filter 2: OFF PK Fc 80 Hz Gain 2.0 dB Q 1.00
+Filter 3: ON HP Fc 30 Hz
+Filter 4: ON LS 6dB Fc 50.0 Hz Gain 7.2 dB
+Channel: L
+GraphicEQ: 25 6; 40 4.5
+plain words are ignored
+";
+        let r = parse_parametric_eq_report(text);
+        assert_eq!(r.preamp, -6.0);
+        assert_eq!(r.filters, [Filter { kind: FilterKind::Peak, freq: 50.0, gain: -3.0, q: 10.0 }]);
+        assert_eq!(
+            r.skipped,
+            [
+                "Filter 3: ON HP Fc 30 Hz",
+                "Filter 4: ON LS 6dB Fc 50.0 Hz Gain 7.2 dB",
+                "Channel: L",
+                "GraphicEQ: 25 6; 40 4.5"
+            ]
+        );
+        assert!(parse_parametric_eq_report(VERITE).skipped.is_empty());
+        assert!(parse_parametric_eq_report("hd 600").skipped.is_empty(), "a search is not an import");
     }
 
     #[test]

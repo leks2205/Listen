@@ -102,7 +102,7 @@ From then on the profile is applied whenever that output plays, and taken off wh
 
 On Android the same section is in **Settings**, above the **Equalizer**. The phone binds a profile to the output media plays on (Bluetooth, wired, USB or the speaker, by the device's name), so the same headphones over Bluetooth and over a cable are two outputs, and a switch applies at once, also during a transition.
 
-You can also paste the text of an AutoEq or Equalizer APO `ParametricEQ.txt` into the search box and choose **Use pasted profile**. **Other outputs** lists the profiles bound to outputs that don't play now; **Remove** takes one away. **Headphone correction** (on by default) turns all of them off without forgetting them.
+You can also paste the text of an AutoEq or Equalizer APO `ParametricEQ.txt` into the search box and choose **Use pasted profile**. Listen reads the preamp (several `Preamp:` lines add up, as in Equalizer APO) and the peak and shelf filters (`PK`, `PEQ`, `LS`, `LSC`, `HS`, `HSC`, with `Q`, `BW Oct` or a slope). Lines it can't apply, such as other filter types, a peak without Q or bandwidth, or channel and device sections, are left out, and the box says how many. **Other outputs** lists the profiles bound to outputs that don't play now; **Remove** takes one away. **Headphone correction** (on by default) turns all of them off without forgetting them.
 
 Every profile keeps its preamp (limited to -30 to 0 dB), lowered further when its bands boost more than it leaves room for. Listen finds the true peak of the correction, also of a very narrow band, so no frequency from 20 Hz to 20 kHz comes out louder than it went in and the correction itself never clips; volume levelling's limiter comes after it as usual.
 

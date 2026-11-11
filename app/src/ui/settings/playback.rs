@@ -500,10 +500,15 @@ fn headphone(state: &Listen) -> Element<'_, Message> {
             .on_input(move |v| hp(H::Query(v))),
     ]
     .spacing(metrics::space_sm());
+    let pasted = peq::parse_parametric_eq_report(query);
     let hits: Vec<&peq::Entry> = if query.is_empty() {
         peq::suggest(&output_label).into_iter().collect()
-    } else if peq::parse_parametric_eq(query).is_some() {
+    } else if !pasted.filters.is_empty() {
         search = search.push(small_button(state, "Use pasted profile", Some(hp(H::UsePasted))));
+        if !pasted.skipped.is_empty() {
+            let left_out = crate::i18n::trf("Lines left out (not supported): {}", &[&pasted.skipped.len()]);
+            search = search.push(label(left_out, metrics::font_sm(), t.muted));
+        }
         Vec::new()
     } else {
         peq::search(query, 8)

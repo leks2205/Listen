@@ -2791,6 +2791,7 @@
 "No profile": "Kein Profil",
 "Headphone model, or paste a ParametricEQ.txt": "Kopfhörermodell, oder eine ParametricEQ.txt einfügen",
 "Use pasted profile": "Eingefügtes Profil verwenden",
+"Lines left out (not supported): {}": "Weggelassene Zeilen (nicht unterstützt): {}",
 "Find your headphones": "Deine Kopfhörer finden",
 "About 6000 models from AutoEq (oratory1990 and crinacle first). Picking one binds it to this output.": "Etwa 6000 Modelle von AutoEq (oratory1990 und crinacle zuerst). Die Auswahl gilt für diesen Ausgang.",
 "Other outputs": "Andere Ausgänge",
