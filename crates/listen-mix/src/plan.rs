@@ -182,7 +182,10 @@ pub struct TransitionPlan {
     pub gain: Envelope,
     /// Sorted by `at_out_s`.
     pub eq: Vec<EqEvent>,
-    /// Best stretch (outgoing file time) for the AI DJ to talk over: no lead vocal on either deck.
+    /// Stretch (outgoing file time) for the AI DJ to talk over; what it promises depends on the kind.
+    /// Blends: the longest stretch without lead vocal on either deck touching the blend (from up to 16 bars
+    /// before it to its end), if longer than 0.5 s. Fades: only under an outro or across talk-over, the
+    /// clip's length ending at the fade's end, vocals not checked. `None` for handovers and gapless joins.
     pub voice_window: Option<(f64, f64)>,
     /// Both decks' loudness across the blend for the equal-loudness trim
     /// ([`crate::loudness::blend_trim`]); `None` for handovers or without analysed loudness.
