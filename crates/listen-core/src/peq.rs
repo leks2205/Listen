@@ -387,7 +387,8 @@ fn parse_entry(line: &str) -> Option<Entry> {
 }
 
 /// The bundled AutoEq index (about 6000 headphones, one profile per model; oratory1990 first,
-/// then crinacle, then the other sources). Decompressed on first use.
+/// then crinacle, then the other sources). Decompressed on first use. The data is MIT-licensed
+/// (`data/AUTOEQ-LICENSE`); every bundled data file must keep its notice in the repository's `NOTICE.md`.
 pub fn index() -> &'static [Entry] {
     static INDEX: OnceLock<Vec<Entry>> = OnceLock::new();
     INDEX.get_or_init(|| {
@@ -510,6 +511,18 @@ impl Cascade {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bundled_data_is_listed_in_notice() {
+        let dir = env!("CARGO_MANIFEST_DIR");
+        let notice =
+            std::fs::read_to_string(format!("{dir}/../../NOTICE.md")).expect("NOTICE.md at the repo root");
+        for entry in std::fs::read_dir(format!("{dir}/data")).unwrap() {
+            let name = entry.unwrap().file_name().into_string().unwrap();
+            let path = format!("crates/listen-core/data/{name}");
+            assert!(notice.contains(&path), "NOTICE.md must name the bundled {path} (with its licence)");
+        }
+    }
+
     use super::*;
 
     const VERITE: &str = "Preamp: -6.3 dB

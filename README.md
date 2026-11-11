@@ -347,8 +347,8 @@ Poppins (SIL Open Font License). Icons: [Lucide](https://lucide.dev), [Remix Ico
 Listen is free software: you can redistribute it and/or modify it under the terms of the
 [GNU Affero General Public License v3.0](LICENSE) or (at your option) any later version.
 
-Parts are derived from Feishin and stay under the GNU General Public License v3.0; fonts, icons and the Rust crates
-Listen is built from keep their own licenses. See [NOTICE.md](NOTICE.md) and the `THIRD_PARTY_LICENSES.html` that
+Parts are derived from Feishin and stay under the GNU General Public License v3.0; fonts, icons, the bundled AutoEq
+headphone profiles and the Rust crates Listen is built from keep their own licenses. See [NOTICE.md](NOTICE.md) and the `THIRD_PARTY_LICENSES.html` that
 ships with every release.
 
 The name "Listen" and the app icon are not covered by the license. If you publish a modified version, please give

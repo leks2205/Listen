@@ -43,7 +43,7 @@ Needs `wine`, `curl`, `sha256sum`, `cargo-about` and the MinGW toolchain. The in
 - `targets` covers both `x86_64-unknown-linux-gnu` and `x86_64-pc-windows-gnu`, so one file serves both platforms.
 - Build and dev dependencies are ignored, and a workaround is set for the `ring` crate.
 
-`packaging/about.hbs` is the page template. Fonts, icons and the parts derived from Feishin are listed in `NOTICE.md`, which ships next to the page.
+`packaging/about.hbs` is the page template. Fonts, icons, bundled data (the AutoEq headphone profiles) and the parts derived from Feishin are listed in `NOTICE.md`, which ships next to the page. Every file in `crates/listen-core/data/` must be named there; the test `bundled_data_is_listed_in_notice` fails otherwise.
 
 ## GitHub releases and the updater
 
