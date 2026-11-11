@@ -119,7 +119,8 @@ pub struct Learnt {
     /// Share of the fit in [`Learnt::weights`] (labels / 300, 0 below 30 labels).
     pub trust: f32,
     /// Cross-validated AUC of the fitted model (5 folds) and of today's default cost, on the same
-    /// transitions; `None` with too few labels of either kind.
+    /// transitions. `auc_cv` is `None` below [`MIN_LABELS`] labels or `MIN_EACH` (5) of either outcome;
+    /// `auc_default` is computed from any number of labels and is `None` only when one outcome is missing.
     pub auc_cv: Option<f32>,
     pub auc_default: Option<f32>,
     /// The fitted weights alone (clamped), `None` when nothing could be fitted.
@@ -161,7 +162,8 @@ fn device(e: &Entry) -> &str {
     e.ctx.as_ref().map_or("", |c| c.device.as_str())
 }
 
-/// Seconds the entry's song had played when it was written (plays from about 0.41 of the song on).
+/// Seconds the entry's song had played when it was written. Entries from app versions before 0.41
+/// have no `at_s` (plays too record it since then), so half the song is assumed.
 fn elapsed(e: &Entry) -> f32 {
     e.at_s.unwrap_or(e.duration_secs as f32 * 0.5)
 }

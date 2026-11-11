@@ -105,7 +105,7 @@ pub struct Entry {
     pub album_id: Option<String>,
     pub image: Option<ImageRef>,
     pub duration_secs: u32,
-    /// Seconds into the song when it ended (skips; plays recorded from 0.41 on).
+    /// Seconds into the song when it ended (skips; plays too since app version 0.41).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_s: Option<f32>,
     /// `at_s` as a share of the song's length, 0–1.
