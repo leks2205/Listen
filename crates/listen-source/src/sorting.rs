@@ -61,9 +61,9 @@ pub const NAVIDROME_ALBUMS: &[SortOption<AlbumSort>] = &[
     opt(AlbumSort::Year, "Release year", D),
 ];
 
+/// Jellyfin has no id order (`ItemSortBy`), so "ID" is not offered (as in Feishin's map).
 pub const JELLYFIN_ALBUMS: &[SortOption<AlbumSort>] = &[
     opt(AlbumSort::AlbumArtist, "Album artist", A),
-    opt(AlbumSort::Id, "ID", A),
     opt(AlbumSort::CommunityRating, "Community rating", D),
     opt(AlbumSort::CriticRating, "Critic rating", D),
     opt(AlbumSort::Name, "Name", A),

@@ -527,6 +527,7 @@ pub fn album_sort(s: AlbumSort) -> &'static str {
         AlbumSort::RecentlyAdded => "DateCreated,SortName",
         AlbumSort::RecentlyPlayed => "DatePlayed",
         AlbumSort::ReleaseDate | AlbumSort::Year => "ProductionYear,PremiereDate,SortName",
+        // Not offered for Jellyfin (`sorting::JELLYFIN_ALBUMS`); a stored one gets the name order.
         AlbumSort::Name
         | AlbumSort::Id
         | AlbumSort::Favorited
@@ -1138,6 +1139,24 @@ impl MusicSource for Jellyfin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_offered_sort_maps_to_its_own_sort_by() {
+        fn distinct<S: Copy + std::fmt::Debug>(
+            options: &[listen_source::SortOption<S>],
+            key: fn(S) -> &'static str,
+        ) {
+            let mut seen = std::collections::HashMap::new();
+            for o in options {
+                if let Some(other) = seen.insert(key(o.sort), o.sort) {
+                    panic!("{:?} and {other:?} both send SortBy={}", o.sort, key(o.sort));
+                }
+            }
+        }
+        distinct(sorting::JELLYFIN_ALBUMS, album_sort);
+        distinct(sorting::JELLYFIN_SONGS, song_sort);
+        distinct(sorting::JELLYFIN_ARTISTS, artist_sort);
+    }
 
     #[test]
     fn ticks_convert_once_with_100ns_units() {
