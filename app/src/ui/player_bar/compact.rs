@@ -226,8 +226,10 @@ mod tests {
     #[test]
     fn popover_sits_just_above_the_speaker() {
         let window = Size::new(700.0, 1000.0);
-        // Bar from y = 910, seek strip to 924, controls centred in the 76 px under it.
-        let top = 924.0 + (76.0 - metrics::CONTROL) / 2.0;
+        // Bar from y = 910; the seek strip overlays its top, so the controls are centred in the
+        // whole bar height (tests/compact_layout.rs checks this against the real layout).
+        let bar_top = window.height - metrics::PLAYER_BAR_HEIGHT;
+        let top = bar_top + (metrics::PLAYER_BAR_HEIGHT - metrics::CONTROL) / 2.0;
         assert_eq!(speaker_top(window.height), top);
         assert_eq!(popover_position(window).y + POPOVER.height + 2.0, top);
     }
