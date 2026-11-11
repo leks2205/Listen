@@ -45,18 +45,54 @@ pub struct Subsonic {
     native: NativeState,
 }
 
-/// Whether the server is Navidrome (native API usable), found out by the ping.
+/// What kind of server the ping found ([`NativeState::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ServerKind {
+    Unknown = 0,
+    Navidrome = 1,
+    Other = 2,
+}
+
+/// What the ping found out about the server, and how Navidrome's native API is doing.
 #[derive(Default)]
 struct NativeState {
-    /// 0 unknown, 1 Navidrome, 2 not usable.
+    /// What the last ping said ([`ServerKind`] as a `u8`). Only `note_ping` writes it: a failing
+    /// native request never turns a Navidrome into another server (that would hide its shares).
     kind: std::sync::atomic::AtomicU8,
+    /// The native API is unusable for good (route missing, login refused): Subsonic lists and no
+    /// smart playlists until the next ping. Temporary failures set `pause_until` instead.
+    broken: std::sync::atomic::AtomicBool,
     features: std::sync::Mutex<native::Features>,
     token: std::sync::Mutex<Option<String>>,
     /// One login at a time, so parallel loads share a token (Navidrome rate-limits `/auth/login`).
     login: tokio::sync::Mutex<()>,
-    /// After a rate-limited login, Subsonic is used until this time.
+    /// After a rate-limited login or a failed native list, Subsonic is used until this time.
     pause_until: std::sync::Mutex<Option<std::time::Instant>>,
     genre_ids: std::sync::Mutex<Option<std::collections::HashMap<String, String>>>,
+}
+
+impl NativeState {
+    fn server(&self) -> ServerKind {
+        match self.kind.load(std::sync::atomic::Ordering::Relaxed) {
+            1 => ServerKind::Navidrome,
+            2 => ServerKind::Other,
+            _ => ServerKind::Unknown,
+        }
+    }
+
+    /// A Navidrome whose native API has not failed for good: its sorts, filters and smart playlists.
+    fn usable(&self) -> bool {
+        self.server() == ServerKind::Navidrome && !self.broken.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn paused(&self) -> bool {
+        self.pause_until.lock().unwrap().is_some_and(|t| std::time::Instant::now() < t)
+    }
+
+    fn pause_a_minute(&self) {
+        *self.pause_until.lock().unwrap() =
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(60));
+    }
 }
 
 /// Per-server sign-in options (Feishin's "legacy authentication", "ignore SSL").
@@ -131,34 +167,44 @@ impl Subsonic {
         let navidrome = root["type"].as_str().is_some_and(|t| t.eq_ignore_ascii_case("navidrome"));
         *self.native.features.lock().unwrap() =
             native::Features::from_version(root["serverVersion"].as_str());
-        self.native.kind.store(if navidrome { 1 } else { 2 }, Ordering::Relaxed);
+        let kind = if navidrome { ServerKind::Navidrome } else { ServerKind::Other };
+        self.native.kind.store(kind as u8, Ordering::Relaxed);
+        self.native.broken.store(false, Ordering::Relaxed);
     }
 
-    /// True for a Navidrome server whose native API works (detected on first use).
+    /// True for a Navidrome server whose native API works (detected on first use; false while
+    /// paused after a temporary failure).
     async fn navidrome(&self) -> bool {
-        use std::sync::atomic::Ordering;
-        if self.native.pause_until.lock().unwrap().is_some_and(|t| std::time::Instant::now() < t) {
+        if self.native.paused() {
             return false;
         }
-        if self.native.kind.load(Ordering::Relaxed) == 0 {
+        if self.native.server() == ServerKind::Unknown {
             match self.ping_info().await {
                 Ok(root) => self.note_ping(&root),
                 Err(_) => return false,
             }
         }
-        self.native.kind.load(Ordering::Relaxed) == 1
+        self.native.usable()
     }
 
+    /// Falls back to Subsonic after a failed native request: for good when the native API is
+    /// missing or refuses the login, for a minute after anything else (a proxy's 502 while
+    /// Navidrome restarts must not cost the session its smart playlists, shares and sorts).
     fn native_off(&self, why: &SourceError) {
-        if matches!(why, SourceError::RateLimited) {
-            // Temporary: try the native API again after a minute.
-            tracing::info!("Navidrome login rate-limited, using Subsonic for a minute");
-            *self.native.pause_until.lock().unwrap() =
-                Some(std::time::Instant::now() + std::time::Duration::from_secs(60));
-            return;
+        match why {
+            SourceError::RateLimited => {
+                tracing::info!("Navidrome login rate-limited, using Subsonic for a minute");
+                self.native.pause_a_minute();
+            }
+            SourceError::Auth(_) | SourceError::Server { code: 404 | 405, .. } => {
+                tracing::warn!("Navidrome native API unavailable, using Subsonic: {why}");
+                self.native.broken.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            _ => {
+                tracing::warn!("Navidrome native list failed, using Subsonic for a minute: {why}");
+                self.native.pause_a_minute();
+            }
         }
-        tracing::warn!("Navidrome native API unavailable, using Subsonic: {why}");
-        self.native.kind.store(2, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn features(&self) -> native::Features {
@@ -172,7 +218,7 @@ impl Subsonic {
             return Ok(token);
         }
         // ...or was refused for logging in too often.
-        if self.native.pause_until.lock().unwrap().is_some_and(|t| std::time::Instant::now() < t) {
+        if self.native.paused() {
             return Err(SourceError::RateLimited);
         }
         let url = self.base.join("auth/login").map_err(|e| SourceError::Other(e.to_string()))?;
@@ -184,8 +230,7 @@ impl Subsonic {
             .await
             .map_err(|e| SourceError::Network(e.without_url().to_string()))?;
         if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            *self.native.pause_until.lock().unwrap() =
-                Some(std::time::Instant::now() + std::time::Duration::from_secs(60));
+            self.native.pause_a_minute();
             return Err(SourceError::RateLimited);
         }
         if !resp.status().is_success() {
@@ -509,18 +554,19 @@ impl MusicSource for Subsonic {
     }
 
     fn capabilities(&self) -> Capabilities {
-        // Smart playlists and shares are Navidrome-only, known after the ping.
+        // Smart playlists and shares are Navidrome-only, known after the ping; smart playlists
+        // and playlist covers also need its native API.
         let mut caps = capabilities();
-        match self.native.kind.load(std::sync::atomic::Ordering::Relaxed) {
-            1 => {
+        match self.native.server() {
+            ServerKind::Navidrome if self.native.usable() => {
                 caps |= Capabilities::SMART_PLAYLISTS;
                 // Navidrome 0.61 can store a cover for a playlist.
                 if self.features().playlist_image {
                     caps |= Capabilities::PLAYLIST_IMAGE;
                 }
             }
-            2 => caps -= Capabilities::SHARES,
-            _ => {}
+            ServerKind::Navidrome | ServerKind::Unknown => {}
+            ServerKind::Other => caps -= Capabilities::SHARES,
         }
         caps
     }
@@ -532,31 +578,19 @@ impl MusicSource for Subsonic {
     }
 
     fn album_sorts(&self) -> &'static [SortOption<AlbumSort>] {
-        if self.native.kind.load(std::sync::atomic::Ordering::Relaxed) == 1 {
-            sorting::NAVIDROME_ALBUMS
-        } else {
-            sorting::SUBSONIC_ALBUMS
-        }
+        if self.native.usable() { sorting::NAVIDROME_ALBUMS } else { sorting::SUBSONIC_ALBUMS }
     }
 
     fn song_sorts(&self) -> &'static [SortOption<SongSort>] {
-        if self.native.kind.load(std::sync::atomic::Ordering::Relaxed) == 1 {
-            sorting::NAVIDROME_SONGS
-        } else {
-            sorting::SUBSONIC_SONGS
-        }
+        if self.native.usable() { sorting::NAVIDROME_SONGS } else { sorting::SUBSONIC_SONGS }
     }
 
     fn artist_sorts(&self) -> &'static [SortOption<ArtistSort>] {
-        if self.native.kind.load(std::sync::atomic::Ordering::Relaxed) == 1 {
-            sorting::NAVIDROME_ARTISTS
-        } else {
-            sorting::SUBSONIC_ARTISTS
-        }
+        if self.native.usable() { sorting::NAVIDROME_ARTISTS } else { sorting::SUBSONIC_ARTISTS }
     }
 
     fn album_filters(&self) -> QueryFilters {
-        if self.native.kind.load(std::sync::atomic::Ordering::Relaxed) == 1 {
+        if self.native.usable() {
             let tags = if self.features().bfr { QueryFilters::TAGS } else { QueryFilters::empty() };
             QueryFilters::FAVORITE
                 | QueryFilters::RATED
@@ -587,7 +621,7 @@ impl MusicSource for Subsonic {
     }
 
     fn song_filters(&self) -> QueryFilters {
-        if self.native.kind.load(std::sync::atomic::Ordering::Relaxed) == 1 {
+        if self.native.usable() {
             let tags = if self.features().bfr { QueryFilters::TAGS } else { QueryFilters::empty() };
             QueryFilters::FAVORITE
                 | QueryFilters::RATED
