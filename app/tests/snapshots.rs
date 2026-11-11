@@ -1491,7 +1491,10 @@ fn queue_toolbar_narrow_with_selection() {
     busy_queue(&mut state);
     state.config.settings.sidebar.queue_width = 340.0;
     state.lists.entry(&ListId::SideQueue).selection.set_many([1, 5, 6]);
-    let _ = state.update(Message::Queue(QueueMsg::MoreMenu(Some(iced::Point::new(1380.0, 150.0)))));
+    let _ = state.update(Message::Queue(QueueMsg::MoreMenu(Some((
+        iced::Point::new(1380.0, 150.0),
+        listen::ui::queue::overflow_tier(340.0),
+    )))));
     render_state("queue-toolbar-narrow", state);
 }
 

@@ -306,8 +306,8 @@ fn table_of<'a>(state: &'a Listen, id: ListId) -> Element<'a, Message> {
         .view()
 }
 
-/// The queue rows under a toolbar (also used by the full-screen player), for
-/// a panel `width` px wide.
+/// The queue rows under a toolbar (also used by the full-screen player). `_width` is not used: the
+/// toolbar measures the width it gets itself, and its "…" menu takes the fold tier from there.
 pub fn list(state: &Listen, _width: f32) -> Element<'_, Message> {
     column![
         toolbar(state, ListId::SideQueue),
@@ -318,8 +318,8 @@ pub fn list(state: &Listen, _width: f32) -> Element<'_, Message> {
 
 // ---- the toolbar -------------------------------------------------------------------------
 
-/// Widths under which the buttons fold into the "…" menu, step by step
-/// (Feishin: 480 / 380 / 300 px).
+/// Widths under which the buttons fold into the "…" menu, step by step (Feishin: 480 / 380 / 300 px).
+/// Tier 1 folds only the server-sync buttons, so it may fold nothing (see [`folded`]).
 pub fn overflow_tier(width: f32) -> u8 {
     if width <= 300.0 {
         3
@@ -330,6 +330,90 @@ pub fn overflow_tier(width: f32) -> u8 {
     } else {
         0
     }
+}
+
+/// A toolbar action; at narrow widths it moves into the "…" menu. The toolbar and the menu both
+/// list these, so a button and its menu item share one glyph and one name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueTool {
+    Save,
+    Restore,
+    Shuffle,
+    Clear,
+    Jump,
+    Create,
+}
+
+impl QueueTool {
+    /// In toolbar (and menu) order.
+    pub const ALL: [QueueTool; 6] = [
+        QueueTool::Save,
+        QueueTool::Restore,
+        QueueTool::Shuffle,
+        QueueTool::Clear,
+        QueueTool::Jump,
+        QueueTool::Create,
+    ];
+
+    /// The first [`overflow_tier`] at which the tool is in the "…" menu instead of the toolbar.
+    fn folds_at(self) -> u8 {
+        match self {
+            QueueTool::Save | QueueTool::Restore => 1,
+            QueueTool::Jump | QueueTool::Create => 2,
+            QueueTool::Shuffle | QueueTool::Clear => 3,
+        }
+    }
+
+    /// Only servers that keep a play queue offer save / restore.
+    fn needs_sync(self) -> bool {
+        matches!(self, QueueTool::Save | QueueTool::Restore)
+    }
+
+    fn glyph(self) -> Icon {
+        match self {
+            QueueTool::Save => Icon::LuUpload,
+            QueueTool::Restore => Icon::LuDownload,
+            QueueTool::Shuffle => Icon::LuShuffle,
+            QueueTool::Clear => Icon::LuTrash2,
+            QueueTool::Jump => Icon::LuLocateFixed,
+            QueueTool::Create => Icon::RiPlayListAddLine,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            QueueTool::Save => "Save queue to server",
+            QueueTool::Restore => "Restore queue from server",
+            QueueTool::Shuffle => "Shuffle queue",
+            QueueTool::Clear => "Clear queue",
+            QueueTool::Jump => "Jump to playing song",
+            QueueTool::Create => "Create playlist from queue",
+        }
+    }
+
+    /// The message, `None` while it can't run (a save / restore is running).
+    fn message(self, state: &Listen) -> Option<Message> {
+        let m = match self {
+            QueueTool::Save => QueueMsg::SaveToServer,
+            QueueTool::Restore => QueueMsg::RestoreFromServer,
+            QueueTool::Shuffle => QueueMsg::Shuffle,
+            QueueTool::Clear => QueueMsg::Clear,
+            QueueTool::Jump => QueueMsg::JumpToCurrent,
+            QueueTool::Create => QueueMsg::CreatePlaylist,
+        };
+        (!(self.needs_sync() && state.queue_ui.busy)).then_some(Message::Queue(m))
+    }
+}
+
+/// The tools a toolbar at fold `tier` shows (`sync`: the server keeps a play queue).
+pub fn unfolded(tier: u8, sync: bool) -> Vec<QueueTool> {
+    QueueTool::ALL.into_iter().filter(|x| (sync || !x.needs_sync()) && tier < x.folds_at()).collect()
+}
+
+/// The tools a toolbar at fold `tier` moves into its "…" menu; the "…" button shows only when this
+/// is not empty.
+pub fn folded(tier: u8, sync: bool) -> Vec<QueueTool> {
+    QueueTool::ALL.into_iter().filter(|x| (sync || !x.needs_sync()) && tier >= x.folds_at()).collect()
 }
 
 fn tool<'a>(
@@ -357,50 +441,14 @@ fn tool<'a>(
 pub fn toolbar(state: &Listen, id: ListId) -> Element<'_, Message> {
     let t = state.tokens;
     responsive(move |size| {
+        // The tier from the width this toolbar really has; the "…" menu receives it in its message.
         let tier = overflow_tier(size.width);
         let sync = state.queue_server_sync();
-        let q = |m: QueueMsg| Some(Message::Queue(m));
         let mut tools = Row::new().spacing(metrics::space_xs()).align_y(Alignment::Center);
-        if sync && tier < 1 {
-            tools = tools
-                .push(tool(
-                    state,
-                    Icon::LuUpload,
-                    if state.queue_ui.busy { None } else { q(QueueMsg::SaveToServer) },
-                    false,
-                    "Save queue to server",
-                ))
-                .push(tool(
-                    state,
-                    Icon::LuDownload,
-                    if state.queue_ui.busy { None } else { q(QueueMsg::RestoreFromServer) },
-                    false,
-                    "Restore queue from server",
-                ));
+        for x in unfolded(tier, sync) {
+            tools = tools.push(tool(state, x.glyph(), x.message(state), false, x.name()));
         }
-        if tier < 3 {
-            tools = tools
-                .push(tool(state, Icon::LuShuffle, q(QueueMsg::Shuffle), false, "Shuffle queue"))
-                .push(tool(state, Icon::LuTrash2, q(QueueMsg::Clear), false, "Clear queue"));
-        }
-        if tier < 2 {
-            tools = tools
-                .push(tool(
-                    state,
-                    Icon::LuLocateFixed,
-                    q(QueueMsg::JumpToCurrent),
-                    false,
-                    "Jump to playing song",
-                ))
-                .push(tool(
-                    state,
-                    Icon::RiPlayListAddLine,
-                    q(QueueMsg::CreatePlaylist),
-                    false,
-                    "Create playlist from queue",
-                ));
-        }
-        if tier > 0 {
+        if !folded(tier, sync).is_empty() {
             tools = tools.push(super::list::anchor::anchored(
                 super::tip::tip(
                     state,
@@ -412,7 +460,12 @@ pub fn toolbar(state: &Listen, id: ListId) -> Element<'_, Message> {
                     None,
                     super::tip::Position::Bottom,
                 ),
-                |b| Message::Queue(QueueMsg::MoreMenu(Some(iced::Point::new(b.x, b.y + b.height + 4.0)))),
+                move |b| {
+                    Message::Queue(QueueMsg::MoreMenu(Some((
+                        iced::Point::new(b.x, b.y + b.height + 4.0),
+                        tier,
+                    ))))
+                },
             ));
         }
         let search = iced::widget::text_input(crate::i18n::tr("Search"), &state.queue_ui.search)
@@ -441,45 +494,24 @@ pub fn toolbar(state: &Listen, id: ListId) -> Element<'_, Message> {
     .into()
 }
 
-/// The folded buttons as a popover under the "…" button.
-fn more_menu<'a>(state: &'a Listen) -> Element<'a, Message> {
+/// The buttons the toolbar at fold `tier` folded, as a popover under its "…" button.
+fn more_menu<'a>(state: &'a Listen, tier: u8) -> Element<'a, Message> {
     let t = state.tokens;
-    let width = state.config.settings.sidebar.queue_width;
-    let page = state.route == crate::app::Route::NowPlaying;
-    let tier = overflow_tier(if page { state.page_width() } else { width });
-    let item = |glyph: Icon, name: &'static str, msg: QueueMsg, enabled: bool| -> Element<'a, Message> {
-        button(
-            row![
-                icon(glyph, metrics::font_lg(), t.foreground),
-                label_w(name, metrics::font_md(), t.foreground, Weight::Medium)
-            ]
-            .spacing(metrics::space_md())
-            .align_y(Alignment::Center),
-        )
-        .width(Length::Fill)
-        .padding(Padding::from([8.0, metrics::space_md()]))
-        .style(style::nav_item(t, false))
-        .on_press_maybe(enabled.then(|| Message::Queue(msg)))
-        .into()
-    };
     let mut col = Column::new();
-    if state.queue_server_sync() && tier >= 1 {
-        let free = !state.queue_ui.busy;
-        col = col
-            .push(item(Icon::LuUpload, "Save queue to server", QueueMsg::SaveToServer, free))
-            .push(item(Icon::LuDownload, "Restore queue from server", QueueMsg::RestoreFromServer, free));
-    }
-    if tier >= 3 {
-        col = col.push(item(Icon::LuShuffle, "Shuffle queue", QueueMsg::Shuffle, true)).push(item(
-            Icon::LuTrash2,
-            "Clear queue",
-            QueueMsg::Clear,
-            true,
-        ));
-    }
-    if tier >= 2 {
-        col = col.push(item(Icon::LuLocateFixed, "Go to current song", QueueMsg::JumpToCurrent, true)).push(
-            item(Icon::RiPlayListAddLine, "Create playlist from queue", QueueMsg::CreatePlaylist, true),
+    for x in folded(tier, state.queue_server_sync()) {
+        col = col.push(
+            button(
+                row![
+                    icon(x.glyph(), metrics::font_lg(), t.foreground),
+                    label_w(x.name(), metrics::font_md(), t.foreground, Weight::Medium)
+                ]
+                .spacing(metrics::space_md())
+                .align_y(Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding(Padding::from([8.0, metrics::space_md()]))
+            .style(style::nav_item(t, false))
+            .on_press_maybe(x.message(state)),
         );
     }
     iced::widget::opaque(container(col).width(260).padding(4).style(move |_| container::Style {
@@ -931,13 +963,13 @@ pub fn overlay<'a>(state: &'a Listen, root: Element<'a, Message>) -> Element<'a,
     if state.queue_drawer_visible() {
         out = out.push(drawer(state));
     }
-    if let Some(at) = state.queue_ui.more_menu {
+    if let Some((at, tier)) = state.queue_ui.more_menu {
         let close = Message::Queue(QueueMsg::MoreMenu(None));
         let at = super::popover::place(at, iced::Size::new(260.0, 200.0), state.window_size);
         let backdrop = mouse_area(space().width(Length::Fill).height(Length::Fill))
             .on_press(close.clone())
             .on_right_press(close);
-        out = out.push(backdrop).push(iced::widget::pin(more_menu(state)).position(at));
+        out = out.push(backdrop).push(iced::widget::pin(more_menu(state, tier)).position(at));
     }
     out.into()
 }
@@ -953,6 +985,31 @@ mod tests {
         assert_eq!(overflow_tier(380.0), 2);
         assert_eq!(overflow_tier(300.0), 3);
         assert_eq!(overflow_tier(120.0), 3);
+    }
+
+    #[test]
+    fn the_more_menu_holds_exactly_what_the_toolbar_folded() {
+        for sync in [false, true] {
+            for tier in 0..=3 {
+                let mut both = unfolded(tier, sync);
+                both.extend(folded(tier, sync));
+                let all: Vec<QueueTool> =
+                    QueueTool::ALL.into_iter().filter(|x| sync || !x.needs_sync()).collect();
+                assert_eq!(both.len(), all.len(), "tier {tier}, sync {sync}: a tool is lost or doubled");
+                assert!(all.iter().all(|x| both.contains(x)), "tier {tier}, sync {sync}");
+            }
+        }
+        assert_eq!(folded(1, true), [QueueTool::Save, QueueTool::Restore]);
+        assert_eq!(folded(2, false), [QueueTool::Jump, QueueTool::Create]);
+        assert_eq!(unfolded(3, true), []);
+    }
+
+    #[test]
+    fn the_more_button_shows_only_when_something_is_folded() {
+        assert!(folded(0, true).is_empty());
+        assert!(folded(1, false).is_empty(), "tier 1 without sync must not offer an empty menu");
+        assert!(!folded(1, true).is_empty());
+        assert!(!folded(2, false).is_empty());
     }
 
     #[test]

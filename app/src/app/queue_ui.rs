@@ -59,8 +59,9 @@ pub struct QueueUi {
     pub drawer_open: bool,
     /// The pointer is over the drawer.
     pub drawer_inside: bool,
-    /// Where the toolbar's "…" menu is open.
-    pub more_menu: Option<iced::Point>,
+    /// Where the toolbar's "…" menu is open, and the fold tier of the toolbar that opened it (the menu
+    /// lists exactly what that toolbar folded; see `ui::queue::folded`).
+    pub more_menu: Option<(iced::Point, u8)>,
     /// A save to / restore from the server is running.
     pub busy: bool,
     /// Track changes since the queue was last saved to the server.
@@ -81,7 +82,8 @@ pub enum QueueMsg {
     JumpToCurrent,
     CreatePlaylist,
     RemoveSelected,
-    MoreMenu(Option<iced::Point>),
+    /// Open the "…" menu at a point with the opening toolbar's fold tier, or close it.
+    MoreMenu(Option<(iced::Point, u8)>),
     SaveToServer,
     Saved(Result<usize, String>),
     RestoreFromServer,
