@@ -34,7 +34,7 @@ pub fn recent(state: &Listen) -> Element<'_, Message> {
     if state.history_view.recent.is_empty() {
         return empty(state, "Recently Played", empty_hint(state));
     }
-    song_list(state, "HISTORY", "Recently Played", String::new(), None, &state.history_view.recent, |i| {
+    song_list(state, "History", "Recently Played", String::new(), None, &state.history_view.recent, |i| {
         Message::History(HistoryMsg::PlayRecent(i))
     })
 }
@@ -45,9 +45,9 @@ pub fn mix(state: &Listen, kind: MixKind) -> Element<'_, Message> {
     }
     song_list(
         state,
-        "MIX",
+        "Mix",
         kind.title(),
-        format!("{} • ", kind.blurb()),
+        format!("{} • ", crate::i18n::tr(kind.blurb())),
         None,
         &state.history_view.mix,
         |i| Message::History(HistoryMsg::PlayMix(i)),
@@ -103,7 +103,7 @@ pub fn learnable(state: &Listen) -> Element<'_, Message> {
     if !status.is_empty() {
         sub = format!("{status} • {sub}");
     }
-    song_list(state, "MIX", "Learnable songs", sub, None, &l.songs, |i| {
+    song_list(state, "Mix", "Learnable songs", sub, None, &l.songs, |i| {
         Message::Learn(crate::app::learnable::LearnMsg::Play(i))
     })
 }

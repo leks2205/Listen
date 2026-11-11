@@ -1,6 +1,6 @@
 //! A titled song list (Recently Played and the mixes). Playlists have their own page, `ui/playlist_page`.
 
-use super::{cover, icon, label, label_w};
+use super::{cover, icon, label_w};
 use crate::app::{Listen, Message, ScrollState};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
@@ -44,13 +44,15 @@ pub fn song_list<'a>(
     .padding(Padding::from([9.0, 24.0]))
     .style(style::wide_play_button(t))
     .on_press_maybe((!songs.is_empty()).then(|| play(0)));
-    let meta = format!("{subtitle}{} songs • {}", songs.len(), format_duration(total));
+    // `subtitle` comes translated from the caller; the rest is translated here.
+    let meta =
+        format!("{subtitle}{}", crate::i18n::trf("{} songs • {}", &[&songs.len(), &format_duration(total)]));
     let header = row![
         cover(state, image, 250.0, metrics::radius_md(), Icon::LuListMusic),
         column![
-            label_w(kind, metrics::font_md(), t.foreground, Weight::Semibold),
+            label_w(crate::i18n::tr(kind).to_uppercase(), metrics::font_md(), t.foreground, Weight::Semibold),
             super::header_title(crate::i18n::tr(title), t.foreground),
-            label(meta, metrics::font_md(), t.muted).wrapping(iced::widget::text::Wrapping::Word),
+            super::data_label(meta, metrics::font_md(), t.muted).wrapping(iced::widget::text::Wrapping::Word),
             play_btn,
         ]
         .spacing(metrics::space_sm()),
