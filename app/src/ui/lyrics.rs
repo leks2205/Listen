@@ -88,8 +88,8 @@ fn line_height(state: &Listen, lyrics: &Lyrics, m: &Metrics, i: usize, active: O
     if let Some(t) = state.lyrics_ui.translation_of(lyrics, i) {
         h += 2.0 + wrapped_rows(t, sub, m.width) * sub * LINE_HEIGHT;
     }
-    if romaji_of(s, line).is_some() {
-        h += 2.0 + wrapped_rows(&line.text, sub, m.width) * sub * LINE_HEIGHT;
+    if let Some(r) = romaji_of(s, line) {
+        h += 2.0 + wrapped_rows(&r, sub, m.width) * sub * LINE_HEIGHT;
     }
     h
 }
