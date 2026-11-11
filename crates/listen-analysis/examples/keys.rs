@@ -2,7 +2,7 @@
 //! tuning offsets from `synth::key_song`), each round-tripped through MP3 and mpv.
 //!
 //! ```sh
-//! cargo run --release -p listen-analysis --example keys -- [--basic 40] [--pop 120] [-v]
+//! cargo run --release -p listen-analysis --example keys -- [--basic 40] [--pop 120] [-v] [--dump profiles.jsonl]
 //! ```
 
 use listen_analysis::{Cancel, Opts, key, spectral, structure};

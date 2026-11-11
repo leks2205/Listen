@@ -3,6 +3,7 @@
 //! ```sh
 //! cargo run --release -p listen-analysis --example inspect -- song.mp3 [models-dir]
 //! ```
+//! Without a complete `models-dir` (Beat This!) it uses the own beat tracker; it says which one ran.
 
 use listen_analysis::{BeatModel, BeatSource, Cancel, Opts, spectral, structure};
 
@@ -12,8 +13,17 @@ async fn main() {
     let input = args.get(1).expect("usage: inspect <file-or-url> [models-dir]");
     let beats = match args.get(2).and_then(|d| BeatModel::in_dir(std::path::Path::new(d))) {
         Some(m) => BeatSource::BeatThis(m),
-        None => BeatSource::Own,
+        None => {
+            if let Some(dir) = args.get(2) {
+                eprintln!("warning: no complete Beat This! model pair in {dir}");
+            }
+            BeatSource::Own
+        }
     };
+    eprintln!(
+        "beat tracker: {}",
+        if matches!(beats, BeatSource::BeatThis(_)) { "Beat This!" } else { "own (dynamic programming)" }
+    );
     let pcm = listen_analysis::decode(input, &Cancel::default()).await.expect("decode");
     let opts = Opts { beats, bpm_hint: None, voice: None };
     let (f, tm) = listen_analysis::analyze_timed(&pcm, &opts);

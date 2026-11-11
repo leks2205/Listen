@@ -2,10 +2,12 @@
 //! analyser, compared with the BPM tags and with each other.
 //!
 //! ```sh
-//! cargo run --release -p listen-analysis --example bench -- --n 60
+//! cargo run --release -p listen-analysis --example bench -- [--n 60] [--reuse] [--fast] [--synthetic N]
 //! ```
-//! Server from `LISTEN_ND_URL` / `LISTEN_ND_USER` / `LISTEN_ND_PASS` or `.env.test`. Decoded audio is cached
-//! in `target/analysis-bench/`; `--reuse` re-analyses the same songs without downloading.
+//! Server from `LISTEN_ND_URL` / `LISTEN_ND_USER` / `LISTEN_ND_PASS` or `.env.test`. Decoded audio is always
+//! cached in `target/analysis-bench/` (by song id); `--reuse` keeps the previous song list (`songs.json`)
+//! instead of drawing a new random sample. `--fast` skips stratum-dsp. `--synthetic N` runs N generated
+//! songs instead (no server needed). Every mode first downloads the Beat This! models (once).
 
 #[cfg(unix)]
 use listen_analysis::beats::{self, BeatEstimate};
