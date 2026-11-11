@@ -165,6 +165,7 @@ impl Config {
                 let mut cfg: Self = toml::from_str(&text)
                     .map_err(|source| ConfigError::Parse { path: path.into(), source })?;
                 cfg.settings.sidebar.add_missing_items();
+                cfg.settings.lists.album_group.normalize();
                 for (action, key) in Settings::default().hotkeys {
                     cfg.settings.hotkeys.entry(action).or_insert(key);
                 }
@@ -261,6 +262,18 @@ mod tests {
         // A custom application is kept.
         std::fs::write(&path, "[settings.window]\ndiscord_client_id = \"42\"\n").unwrap();
         assert_eq!(Config::load(&path).unwrap().settings.window.discord_client_id, "42");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn album_group_is_repaired_on_load() {
+        let dir = std::env::temp_dir().join(format!("listen-cfg-group-{}", std::process::id()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[settings.lists.album_group]\nimage_size = 5000\nitems = []\n").unwrap();
+        let group = Config::load(&path).unwrap().settings.lists.album_group;
+        assert_eq!(group.image_size, 256);
+        assert_eq!(group.items.len(), crate::settings::AlbumGroupItem::ALL.len());
         std::fs::remove_dir_all(&dir).ok();
     }
 

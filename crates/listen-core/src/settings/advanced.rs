@@ -209,6 +209,7 @@ pub fn import_json(base: &Settings, json: &str) -> Result<ImportReport, String> 
     }
     let mut settings: Settings = serde_json::from_value(root).map_err(|e| e.to_string())?;
     settings.sidebar.add_missing_items();
+    settings.lists.album_group.normalize();
     for (action, key) in Settings::default().hotkeys {
         settings.hotkeys.entry(action).or_insert(key);
     }

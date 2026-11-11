@@ -595,8 +595,21 @@ impl GridConfig {
     pub fn for_item(item: ItemType) -> Self {
         let defaults = item.card_rows();
         // The default lines first (enabled), then the other available columns.
-        let mut rows: Vec<CardRow> =
+        let rows: Vec<CardRow> =
             defaults.iter().map(|id| CardRow { id: *id, enabled: true, align: Align::Start }).collect();
+        let mut grid = Self {
+            size: CardSize::Default,
+            gap: Gap::Sm,
+            items_per_row_enabled: false,
+            items_per_row: 6,
+            rows,
+        };
+        grid.add_missing_rows(item);
+        grid
+    }
+
+    /// Appends, switched off, every column of `item` that can be a line under a card and has no row yet.
+    fn add_missing_rows(&mut self, item: ItemType) {
         for id in item.columns() {
             let useful = !matches!(
                 id,
@@ -609,11 +622,10 @@ impl GridConfig {
                     | ColumnId::UserFavorite
                     | ColumnId::UserRating
             );
-            if useful && !rows.iter().any(|r| r.id == *id) {
-                rows.push(CardRow { id: *id, enabled: false, align: Align::Start });
+            if useful && !self.rows.iter().any(|r| r.id == *id) {
+                self.rows.push(CardRow { id: *id, enabled: false, align: Align::Start });
             }
         }
-        Self { size: CardSize::Default, gap: Gap::Sm, items_per_row_enabled: false, items_per_row: 6, rows }
     }
 
     pub fn enabled_rows(&self) -> impl Iterator<Item = &CardRow> {
@@ -626,8 +638,11 @@ impl GridConfig {
         self.rows.swap(i, j);
     }
 
+    /// Like [`TableConfig::normalize`]: adds the card lines of `item` a saved config does not have yet (new
+    /// versions, switched off), drops the ones that do not exist for it, and clamps the cards per row.
     pub fn normalize(&mut self, item: ItemType) {
         self.rows.retain(|c| item.columns().contains(&c.id));
+        self.add_missing_rows(item);
         self.items_per_row = self.items_per_row.clamp(1, 20);
     }
 }
@@ -857,7 +872,8 @@ impl AlbumGroupConfig {
         self.items.swap(i, j);
     }
 
-    /// Adds the facts a saved config does not have (newer versions).
+    /// Adds the facts a saved config does not have (newer versions) and clamps the image size. Runs on every
+    /// load and import (`Config::load`, `import_json`); the header is drawn straight from the stored value.
     pub fn normalize(&mut self) {
         for item in AlbumGroupItem::ALL {
             if !self.items.iter().any(|e| e.item == item) {
@@ -1141,6 +1157,21 @@ mod tests {
         let mut partial = AlbumGroupConfig { items: vec![], ..Default::default() };
         partial.normalize();
         assert_eq!(partial.items.len(), AlbumGroupItem::ALL.len());
+    }
+
+    #[test]
+    fn saved_grid_config_gets_new_card_rows_back_off() {
+        let mut old = GridConfig::for_item(ItemType::Album);
+        old.rows.retain(|r| !matches!(r.id, ColumnId::ReleaseDate | ColumnId::LastPlayed));
+        old.normalize(ItemType::Album);
+        for id in [ColumnId::ReleaseDate, ColumnId::LastPlayed] {
+            assert!(old.rows.iter().any(|r| r.id == id && !r.enabled), "{id:?} is back, off");
+        }
+        // Never a line that is not useful under a card, and no duplicates.
+        assert!(old.rows.iter().all(|r| r.id != ColumnId::Image));
+        let n = old.rows.len();
+        old.normalize(ItemType::Album);
+        assert_eq!(old.rows.len(), n);
     }
 
     #[test]
