@@ -1021,44 +1021,49 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let a = &state.config.settings.analysis;
     let m = &state.config.settings.mixing;
+    // Each fragment is translated where it is built; the joined text is shown as it is.
     let status = match &state.analysis_status {
-        _ if !a.enabled => "Off.".to_string(),
-        None => "Starting…".to_string(),
+        _ if !a.enabled => crate::i18n::tr("Off.").to_string(),
+        None => crate::i18n::tr("Starting…").to_string(),
         Some(st) => {
-            let mut parts = vec![format!("{} songs analysed", st.songs)];
+            use crate::i18n::{tr, trf};
+            let mut parts = vec![trf("{} songs analysed", &[&st.songs])];
             if st.machines.len() > 1 {
                 let per: Vec<String> = st.machines.iter().map(|(name, n)| format!("{name}: {n}")).collect();
                 parts.push(format!("({})", per.join(", ")));
             }
             if let Some((n, done)) = st.library {
-                parts.push(format!("· library {n} songs{}", if done { "" } else { " (listing…)" }));
+                parts.push(trf("· library {} songs{}", &[&n, &if done { "" } else { tr(" (listing…)") }]));
             }
             if st.queued > 0 {
-                parts.push(format!("· {} waiting", st.queued));
+                parts.push(trf("· {} waiting", &[&st.queued]));
             }
             if let Some(why) = st.waiting {
-                parts.push(format!("({why})"));
+                parts.push(format!("({})", tr(why)));
             }
-            let mut line = parts.join(" ");
+            let mut lines = vec![parts.join(" ")];
             if let Some(cur) = &st.current {
-                line.push_str(&format!("\nNow: {cur}"));
+                lines.push(trf("Now: {}", &[cur]));
             }
             if let Some(e) = &st.error {
-                line.push_str(&format!("\n{e}"));
+                lines.push(e.clone());
             }
-            line.push_str(&format!(
-                "\nBeats: {} · vocals: {} · this machine: {}",
-                st.beats, st.vocals, st.machine
+            lines.push(trf(
+                "Beats: {} · vocals: {} · this machine: {}",
+                &[&tr(st.beats), &tr(st.vocals), &st.machine],
             ));
             // Its fetches are budgeted, so it's never crawled.
             if state.config.servers.iter().any(|s| s.kind == listen_core::model::SourceKind::YouTubeMusic) {
-                line.push_str(if state.config.settings.analysis.youtube_music {
-                    "\nYouTube Music: analysed on demand (queue and DJ candidates)"
-                } else {
-                    "\nYouTube Music: not analysed"
-                });
+                lines.push(
+                    tr(if state.config.settings.analysis.youtube_music {
+                        "YouTube Music: analysed on demand (queue and DJ candidates)"
+                    } else {
+                        "YouTube Music: not analysed"
+                    })
+                    .to_string(),
+                );
             }
-            line
+            lines.join("\n")
         }
     };
     let detected = state.analysis_status.as_ref().map(|s| s.dir.display().to_string()).unwrap_or_default();
@@ -1098,7 +1103,7 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
              to measure it and keeps only the results. Off by default; asks for an analysis folder first.",
             switch(a.youtube_music && !a.shared_dir.trim().is_empty(), Setting::AnalysisYtm),
         ),
-        container(label(status, metrics::font_sm(), t.muted)).into(),
+        container(crate::ui::data_label(status, metrics::font_sm(), t.muted)).into(),
         line(
             state,
             "Whole library",

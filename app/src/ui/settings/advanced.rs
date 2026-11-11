@@ -31,10 +31,13 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
     let drive_line = match state.rip.drives.first() {
         Some(d) => {
             let offset = match listen_rip::whipper::resolve_offset(r.read_offset, d) {
-                Some((o, src)) => format!("read offset {o:+} ({})", src.label()),
-                None => "read offset unknown — enter it or use “Verify offset”".into(),
+                Some((o, src)) => crate::i18n::trf(
+                    "read offset {} ({})",
+                    &[&format!("{o:+}"), &crate::i18n::tr(src.label())],
+                ),
+                None => crate::i18n::tr("read offset unknown — enter it or use “Verify offset”").to_string(),
             };
-            format!("{} at {} — {offset}", d.label(), d.device.display())
+            crate::i18n::trf("{} at {} — {}", &[&d.label(), &d.device.display(), &offset])
         }
         None => "No CD drive connected (a USB drive is picked up when it's plugged in).".into(),
     };
@@ -148,7 +151,11 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
             rows.push(
                 column![
                     label(e.folder.display().to_string(), metrics::font_sm(), t.foreground),
-                    label(format!("Add the disc: {}", e.submit_url), metrics::font_xs(), t.muted),
+                    label(
+                        crate::i18n::trf("Add the disc: {}", &[&e.submit_url]),
+                        metrics::font_xs(),
+                        t.muted
+                    ),
                 ]
                 .spacing(2)
                 .into(),
@@ -524,7 +531,10 @@ pub(super) fn cache(state: &Listen) -> Element<'_, Message> {
         small(state, "Clear", Some(Message::Advanced(AdvancedMsg::ClearMemory))),
     )];
     for kind in CacheKind::ALL {
-        let size = state.adv.cache_size(kind).map_or("measuring...".to_string(), format_bytes);
+        let size = state
+            .adv
+            .cache_size(kind)
+            .map_or_else(|| crate::i18n::tr("measuring…").to_string(), format_bytes);
         let (name, hint): (&'static str, &'static str) = match kind {
             CacheKind::Covers => ("Cover art cache", "Downloaded album and artist images."),
             CacheKind::YtmAudio => ("YouTube Music audio cache", "Songs kept for gapless play and replays."),
@@ -533,7 +543,7 @@ pub(super) fn cache(state: &Listen) -> Element<'_, Message> {
         rows.push(line(
             state,
             name,
-            format!("{hint} {size} on disk."),
+            crate::i18n::trf("{} {} on disk.", &[&crate::i18n::tr(hint), &size]),
             small(state, "Clear", Some(Message::Advanced(AdvancedMsg::ClearAsk(Some(kind))))),
         ));
     }

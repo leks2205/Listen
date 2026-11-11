@@ -108,12 +108,17 @@ fn lastfm_rows(state: &Listen) -> Vec<Element<'_, Message>> {
     let status = state.lastfm.status.clone();
     if state.lastfm.scrobbler.is_some() {
         let waiting = state.lastfm.scrobbler.as_ref().map_or(0, |s| s.waiting());
-        let mut hint = format!(
+        let mut hint = crate::i18n::trf(
             "Connected as {}. Every song is scrobbled, YouTube Music included, under the name most people use on Last.fm.",
-            lf.user
+            &[&lf.user],
         );
         if waiting > 0 {
-            hint.push_str(&format!(" {waiting} plays wait to be sent."));
+            hint.push(' ');
+            hint.push_str(&if waiting == 1 {
+                crate::i18n::tr("1 play waits to be sent.").to_string()
+            } else {
+                crate::i18n::trf("{} plays wait to be sent.", &[&waiting])
+            });
         }
         return vec![
             line(state, "Last.fm", hint, button("Disconnect", Some(Message::LastFm(L::Disconnect)))),

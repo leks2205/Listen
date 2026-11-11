@@ -1,4 +1,13 @@
 {
+"measuring…": "wird gemessen …",
+" (listing…)": " (wird aufgelistet …)",
+"Now: {}": "Jetzt: {}",
+"Beats: {} · vocals: {} · this machine: {}": "Beats: {} · Gesang: {} · dieser Computer: {}",
+"YouTube Music: analysed on demand (queue and DJ candidates)": "YouTube Music: bei Bedarf analysiert (Warteschlange und DJ-Kandidaten)",
+"YouTube Music: not analysed": "YouTube Music: nicht analysiert",
+"Connected as {}. Every song is scrobbled, YouTube Music included, under the name most people use on Last.fm.": "Verbunden als {}. Jeder Song wird gescrobbelt, auch YouTube Music, unter dem Namen, den die meisten auf Last.fm nutzen.",
+"1 play waits to be sent.": "1 Wiedergabe wartet auf das Senden.",
+"{} plays wait to be sent.": "{} Wiedergaben warten auf das Senden.",
 "Recommended": "Empfohlen",
 "Finding songs…": "Suche Titel…",
 "Add to this playlist": "Zu dieser Wiedergabeliste hinzufügen",

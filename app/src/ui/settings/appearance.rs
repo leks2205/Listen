@@ -134,11 +134,13 @@ pub fn colour_rows(state: &Listen) -> Vec<Element<'_, Message>> {
 fn themes_folder(state: &Listen) -> Element<'_, Message> {
     let loaded = &state.appearance.loaded;
     let hint = match &state.appearance.themes_dir {
-        Some(dir) => format!(
+        Some(dir) => crate::i18n::trf(
             "{} custom theme(s){} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.",
-            loaded.themes.len(),
-            if loaded.overrides.is_empty() { "" } else { ", overrides active" },
-            dir.display()
+            &[
+                &loaded.themes.len(),
+                &if loaded.overrides.is_empty() { "" } else { crate::i18n::tr(", overrides active") },
+                &dir.display(),
+            ],
         ),
         None => "Not available in the demo.".into(),
     };
