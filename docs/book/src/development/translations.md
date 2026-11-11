@@ -14,6 +14,16 @@ Listen uses a gettext-style scheme: **the English text is the key**. Code writes
 
 Because the English text is the key, changing an English string in the code also changes its key. After editing a string, update every table that has the old text, or the translations stop matching.
 
+### In the view code
+
+- `ui::label`, `label_w`, `text_in` and `t_text` translate the whole string they get. Use them for UI text only. User data (titles, artists, album, playlist, genre and server names, lyrics, error texts from servers) goes through `ui::data_label`, `data_label_w` or `verbatim`, which never translate: a song called "Home" must not turn into its German menu entry.
+- A sentence with a hole is built with `trf("Added {} songs", &[&n])`. A `format!` result only matches a catalog pattern by accident (short patterns need number holes), and the words in a hole are never translated, so translate a fragment before it goes into a hole, and translate before `to_uppercase`, `ellipsize` or joining.
+- iced draws checkbox labels, `text_input` placeholders and `pick_list` options itself: pass `tr(..)` text, and wrap pick_list options in `ui::Tr`.
+- `ui::plural(n, "song")` returns a translated count and needs the keys `1 song` and `{} songs`.
+- Write `…`, not `...`.
+
+`app/src/ui/i18n_rules.rs` and `i18n::tests::every_plural_noun_has_german_keys` check the mechanical part of these rules.
+
 ## Files
 
 | Path | Content |

@@ -16,6 +16,8 @@ pub mod fullscreen;
 pub mod handoff;
 pub mod history;
 pub mod home;
+#[cfg(test)]
+mod i18n_rules;
 pub mod item;
 pub mod item_controls;
 pub mod kinetic;
