@@ -54,6 +54,12 @@ pub fn marquee_pos(t: f32, overflow: f32) -> f32 {
 /// The badge texts for the badge ids in `ids` (in that order), ready to show: the counted ones
 /// ("Disc 2") are translated here, the rest is data (codec, genres, year). Ids the song has no data
 /// for are skipped, as is `release_year` next to `year`.
+/// Whether [`badges`] can draw badge `id`: `release_type` is in the shared list, but a `Song` has no
+/// release type, so the menu leaves it out (a config that has it keeps it; it shows nothing).
+pub fn can_render(id: &str) -> bool {
+    id != "release_type"
+}
+
 pub fn badges(song: &Song, ids: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut push = |s: String| {
@@ -191,6 +197,14 @@ mod tests {
         s.disc_number = Some(2);
         s.track_number = Some(5);
         s
+    }
+
+    #[test]
+    fn every_badge_in_menu_can_render() {
+        let s = song();
+        for (id, _) in listen_core::settings::BADGES.iter().filter(|(id, _)| can_render(id)) {
+            assert!(!badges(&s, &[(*id).to_string()]).is_empty(), "badge {id} is offered but never drawn");
+        }
     }
 
     #[test]

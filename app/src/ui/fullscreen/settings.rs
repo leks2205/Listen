@@ -142,7 +142,9 @@ fn form(state: &Listen) -> Element<'_, Message> {
     // The badges under the title.
     let items = &state.config.settings.player_bar.info_items;
     let mut badges = Column::new().spacing(metrics::space_xs());
-    for pair in BADGES.chunks(2) {
+    let offered: Vec<&(&str, &str)> =
+        BADGES.iter().filter(|(id, _)| super::metadata::can_render(id)).collect();
+    for pair in offered.chunks(2) {
         let mut r = row![].spacing(metrics::space_md());
         for (id, name) in pair {
             let id = (*id).to_string();
