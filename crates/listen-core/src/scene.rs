@@ -13,8 +13,8 @@
 //! Where two songs can't be compared on tags, their CLaMP 3 audio embeddings can: on the index of
 //! 2026-11-06 (305 songs, 184 K-pop, 14 US hip hop) K-pop↔K-pop pairs have a median cosine of 0.59
 //! (p25 0.49) and K-pop↔US hip hop 0.41 (p95 0.56, 2 % ≥ 0.60), so ≥ [`AUDIO_SAME`] counts as the same
-//! scene. Same artist is always the same scene; an artist heard right next to another in the listening
-//! history ([`Neighbours`]) is too when nothing else is known.
+//! scene. Same artist is the same scene unless both eras are known and more than a decade apart; an artist
+//! heard right next to another in the listening history ([`Neighbours`]) is too when nothing else is known.
 //!
 //! A scene also has an **era** (the decade: before 1980, the 1980s, …, the 2020s), read from the tags
 //! ("2020s", "90s ballad", "1st-generation K-pop"), else the song's year, else the artist's other tagged
@@ -878,10 +878,16 @@ fn read_jsonl<T: serde::de::DeserializeOwned>(dir: &Path) -> Vec<T> {
         .collect()
 }
 
-/// How a candidate relates to one song: tags first, then sound, then the artist.
+/// How a candidate relates to one song: the artist first (the same artist is one scene within a decade),
+/// then the tags, then the sound, then the listening history.
 pub fn fit(a: &Profile, b: &Profile, neighbours: &Neighbours) -> Fit {
     if !a.artist.is_empty() && a.artist == b.artist {
-        return Fit::Same(1.0);
+        // The era is part of the scene for the same artist too: their 1980s ballad and 2020s single are
+        // two scenes, so a session or a bridge never mixes an artist's decades.
+        return match (a.scene.era, b.scene.era) {
+            (Some(x), Some(y)) if x.abs_diff(y) > ERA_SPAN => Fit::Other("era"),
+            _ => Fit::Same(1.0),
+        };
     }
     let cos = match (&a.audio, &b.audio) {
         (Some(x), Some(y)) => Some(x.cos(y)),
@@ -1005,14 +1011,18 @@ impl<'a> Gate<'a> {
     /// sung in known languages it must be sung in one of them (an instrumental record only when the
     /// listener played it, `heard`, and it shares a family beyond pop/electronic with both songs), and a
     /// record the listener never played must score at least [`MIN_UNHEARD_BRIDGE`]. The same artist as one
-    /// of the songs always passes.
+    /// of the songs passes when it is from that song's era (within a decade).
     pub fn judge_bridge(&self, c: &Profile, heard: bool) -> Result<f32, Reject> {
         let score = self.judge(c)?;
         if !self.active() {
             return Ok(score);
         }
-        let same_artist =
-            !c.artist.is_empty() && (c.artist == self.out.artist || c.artist == self.inn.artist);
+        // `fit` puts an artist's song from another decade in another scene, so this exemption never
+        // carries an artist's other era across.
+        let same_artist = !c.artist.is_empty()
+            && [&self.out, &self.inn]
+                .iter()
+                .any(|s| c.artist == s.artist && fit(c, s, self.neighbours).is_same());
         if same_artist {
             return Ok(score);
         }
@@ -1650,6 +1660,32 @@ mod tests {
         let mixed = Gate::new(tags(KPOP90), tags(KPOP), &n);
         assert!(mixed.judge(&tags(KPOP90)).is_ok() && mixed.judge(&tags(KPOP)).is_ok());
         assert!(mixed.judge(&tags(KPOP80)).is_ok(), "the 1980s are within a decade of the 1990s side");
+    }
+
+    fn by(artist: &str, t: &str) -> Profile {
+        Profile { artist: artist.into(), ..tags(t) }
+    }
+
+    #[test]
+    fn same_artist_from_another_decade_is_another_era() {
+        let n = Neighbours::default();
+        assert_eq!(fit(&by("x", KPOP80), &by("x", KPOP), &n), Fit::Other("era"));
+        assert_eq!(fit(&by("x", KPOP10), &by("x", KPOP), &n), Fit::Same(1.0), "a decade apart is one era");
+        let undated = Profile { artist: "x".into(), ..Default::default() };
+        assert_eq!(fit(&undated, &by("x", KPOP80), &n), Fit::Same(1.0), "an unknown era doesn't split them");
+        // A bridge between two of the artist's 2020s songs is never their 1990s song.
+        let g = Gate::new(by("x", KPOP), by("x", KPOP), &n);
+        assert_eq!(g.judge_bridge(&by("x", KPOP90), true), Err(Reject::OtherEra));
+        assert!(g.judge_bridge(&by("x", KPOP10), true).is_ok());
+    }
+
+    #[test]
+    fn led_session_of_one_artist_keeps_the_current_decade() {
+        let n = Neighbours::default();
+        let songs = std::iter::once(by("x", KPOP80)).chain((0..4).map(|_| by("x", KPOP)));
+        let led = Session::led(songs, &n);
+        assert_eq!(led.scene().and_then(|s| s.era), Some(1980), "{}", led.describe());
+        assert_eq!(led.judge(&by("x", KPOP)), Err(Reject::OtherEra));
     }
 
     #[test]
