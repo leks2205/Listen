@@ -21,7 +21,7 @@ const MONTHS: [&str; 12] = [
 ];
 
 /// `2001-03-12` as "Mar 12, 2001", `2001-03` as "March 2001", `2001` as "2001";
-/// anything else as it is.
+/// anything else as it is. Month names are translated (the order stays English).
 pub fn partial_date(s: &str) -> String {
     let s = s.trim();
     let parts: Vec<&str> = s.split('-').collect();
@@ -29,14 +29,18 @@ pub fn partial_date(s: &str) -> String {
     match parts.as_slice() {
         [y] if y.len() == 4 && num(y).is_some() => (*y).to_string(),
         [y, m] if y.len() == 4 => match num(m).filter(|m| (1..=12).contains(m)) {
-            Some(m) => format!("{} {y}", MONTHS[m as usize - 1]),
+            Some(m) => format!("{} {y}", crate::i18n::tr(MONTHS[m as usize - 1])),
             None => s.to_string(),
         },
         [y, m, d] if y.len() == 4 => {
             // Date tags are free text: take the day by chars, a byte slice panics inside a multi-byte char.
             let day: String = d.chars().take(2).collect();
             match (num(m).filter(|m| (1..=12).contains(m)), num(&day)) {
-                (Some(m), Some(d)) => format!("{} {d}, {y}", &MONTHS[m as usize - 1][..3]),
+                (Some(m), Some(d)) => {
+                    // By chars: a translated month name may start with a multi-byte letter.
+                    let short: String = crate::i18n::tr(MONTHS[m as usize - 1]).chars().take(3).collect();
+                    format!("{short} {d}, {y}")
+                }
                 _ => s.to_string(),
             }
         }
@@ -109,11 +113,15 @@ pub fn meta_items(album: &Album) -> Vec<String> {
     {
         items.push(partial_date(original));
     }
-    let prefix = if items.is_empty() { "" } else { "Released " };
+    // After an original date the release date says what it is.
+    let released =
+        |when: String| if items.is_empty() { when } else { crate::i18n::trf("Released {}", &[&when]) };
     if let Some(date) = &info.release_date {
-        items.push(format!("{prefix}{}", partial_date(date)));
+        let item = released(partial_date(date));
+        items.push(item);
     } else if let Some(year) = album.year.filter(|y| *y > 0) {
-        items.push(format!("{prefix}{year}"));
+        let item = released(year.to_string());
+        items.push(item);
     }
     let tracks = album.song_count.map(|n| n as usize).unwrap_or(album.songs.len());
     items.push(plural(tracks, "track"));
