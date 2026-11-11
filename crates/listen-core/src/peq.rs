@@ -4,7 +4,9 @@
 //! AutoEq and ffmpeg's `equalizer`/`lowshelf`/`highshelf` use). The desktop renders it as one mpv
 //! `lavfi` stage ([`mpv_filter`]); Android runs [`Cascade`] in its mixer. Profiles come from the
 //! bundled AutoEq index ([`index`], [`search`], [`suggest`]) or an imported `ParametricEQ.txt`
-//! ([`parse_parametric_eq`]), and are bound to an output device by its id.
+//! ([`parse_parametric_eq`]), and are bound to an output device by its id. Every consumer limits a
+//! band to [`FREQ_RANGE`], [`Q_RANGE`] and [`GAIN_RANGE`] through [`Filter::clamped`], so both
+//! platforms play, and the drawn curve and the preamp describe, the same numbers.
 
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
@@ -31,6 +33,28 @@ pub struct Filter {
     pub q: f32,
 }
 
+/// Centre/corner frequencies a band may have (Hz).
+pub const FREQ_RANGE: std::ops::RangeInclusive<f32> = 10.0..=22_000.0;
+/// Q values a band may have (mpv's `equalizer` accepts up to 40).
+pub const Q_RANGE: std::ops::RangeInclusive<f32> = 0.01..=40.0;
+/// Gains a band may have (dB).
+pub const GAIN_RANGE: std::ops::RangeInclusive<f32> = -30.0..=30.0;
+
+impl Filter {
+    /// The band inside [`FREQ_RANGE`], [`Q_RANGE`] and [`GAIN_RANGE`]: what every consumer
+    /// ([`coefficients`], so the response, the preamp and [`Cascade`]; [`mpv_filter`]; the
+    /// importer) uses. Clamp through here, never with literals at one consumer.
+    pub fn clamped(&self) -> Filter {
+        let clamp = |v: f32, r: &std::ops::RangeInclusive<f32>| v.clamp(*r.start(), *r.end());
+        Filter {
+            kind: self.kind,
+            freq: clamp(self.freq, &FREQ_RANGE),
+            gain: clamp(self.gain, &GAIN_RANGE),
+            q: clamp(self.q, &Q_RANGE),
+        }
+    }
+}
+
 /// A headphone correction: the profile's name, where it comes from and its bands.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -43,12 +67,14 @@ pub struct Profile {
     pub filters: Vec<Filter>,
 }
 
-/// Normalised biquad coefficients `[b0, b1, b2, a1, a2]` (a0 = 1) at sample rate `sr`.
+/// Normalised biquad coefficients `[b0, b1, b2, a1, a2]` (a0 = 1) at sample rate `sr`, of the band
+/// as [`Filter::clamped`] limits it (and below Nyquist).
 pub fn coefficients(f: &Filter, sr: f64) -> [f64; 5] {
+    let f = &f.clamped();
     let a = 10f64.powf(f64::from(f.gain) / 40.0);
     let w0 = 2.0 * PI * (f64::from(f.freq) / sr).clamp(1e-6, 0.499);
     let (sin, cos) = w0.sin_cos();
-    let alpha = sin / (2.0 * f64::from(f.q).max(0.01));
+    let alpha = sin / (2.0 * f64::from(f.q));
     let (b0, b1, b2, a0, a1, a2) = match f.kind {
         FilterKind::Peak => {
             (1.0 + alpha * a, -2.0 * cos, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * cos, 1.0 - alpha / a)
@@ -194,18 +220,13 @@ pub fn mpv_filter(p: &Profile) -> String {
         return String::new();
     }
     let mut parts = vec![format!("volume={:.2}dB", p.safe_preamp(48_000.0))];
-    for f in &p.filters {
+    for f in p.filters.iter().map(Filter::clamped) {
         let name = match f.kind {
             FilterKind::Peak => "equalizer",
             FilterKind::LowShelf => "lowshelf",
             FilterKind::HighShelf => "highshelf",
         };
-        parts.push(format!(
-            "{name}=f={:.2}:t=q:w={:.4}:g={:.2}:r=f64",
-            f.freq.clamp(10.0, 22_000.0),
-            f.q.clamp(0.01, 40.0),
-            f.gain.clamp(-30.0, 30.0)
-        ));
+        parts.push(format!("{name}=f={:.2}:t=q:w={:.4}:g={:.2}:r=f64", f.freq, f.q, f.gain));
     }
     format!("@{MPV_LABEL}:lavfi=[{}]", parts.join(","))
 }
@@ -302,7 +323,7 @@ fn apo_filter(words: &[&str]) -> Option<Filter> {
             }
         }
     };
-    (freq > 0.0 && q > 0.0 && q.is_finite()).then_some(Filter { kind, freq, gain, q })
+    (freq > 0.0 && q > 0.0 && q.is_finite()).then_some(Filter { kind, freq, gain, q }.clamped())
 }
 
 /// The Q of a shelf with RBJ slope `s` (1 = 12 dB per octave) at `gain` dB; `None` when the slope
@@ -665,6 +686,23 @@ plain words are ignored
             let want = p.with_safe_preamp(sr).response_db(freq, sr);
             assert!((got - want).abs() < 0.05, "{freq} Hz: {got:.3} vs {want:.3}");
         }
+    }
+
+    #[test]
+    fn mpv_stage_and_cascade_use_the_same_limits() {
+        let wild = Filter { kind: FilterKind::Peak, freq: 30_000.0, gain: 35.0, q: 60.0 };
+        let tame = wild.clamped();
+        assert_eq!(tame, Filter { kind: FilterKind::Peak, freq: 22_000.0, gain: 30.0, q: 40.0 });
+        assert_eq!(coefficients(&wild, 96_000.0), coefficients(&tame, 96_000.0));
+        let low = Filter { kind: FilterKind::LowShelf, freq: 1.0, gain: -50.0, q: 0.0001 };
+        assert_eq!(coefficients(&low, 48_000.0), coefficients(&low.clamped(), 48_000.0));
+        let p = |f| Profile { filters: vec![f], ..Profile::default() };
+        assert_eq!(p(wild).safe_preamp(96_000.0), p(tame).safe_preamp(96_000.0));
+        let stage = mpv_filter(&p(wild));
+        assert!(stage.contains("equalizer=f=22000.00:t=q:w=40.0000:g=30.00:r=f64"), "{stage}");
+        // The importer stores what plays.
+        let (_, f) = parse_parametric_eq("Filter: ON PK Fc 1000 Hz Gain 35 dB Q 60").unwrap();
+        assert_eq!(f[0], Filter { kind: FilterKind::Peak, freq: 1000.0, gain: 30.0, q: 40.0 });
     }
 
     #[test]
