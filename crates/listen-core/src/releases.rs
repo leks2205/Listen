@@ -325,7 +325,8 @@ impl Radar {
         self.releases.retain(|r| now - r.found <= FEED_DAYS * 86_400);
     }
 
-    /// The feed, newest find first (within a find, albums before singles, then by artist).
+    /// The feed, newest find first; within a find, newest year first (releases without a year last), then
+    /// albums before singles, then by artist.
     pub fn feed(&self, now: i64) -> Vec<Release> {
         let mut out: Vec<Release> =
             self.releases.iter().filter(|r| now - r.found <= FEED_DAYS * 86_400).cloned().collect();
@@ -481,6 +482,33 @@ mod tests {
             ]
         );
         assert!(w[0].top && w[1].top && !w[2].top);
+    }
+
+    #[test]
+    fn feed_orders_by_find_then_year_then_albums_first() {
+        let rel = |id: &str, kind: &str, year: Option<i32>, found: i64| Release {
+            id: id.into(),
+            title: id.into(),
+            kind: kind.into(),
+            year,
+            image: None,
+            artist: "A".into(),
+            artist_id: "UCa".into(),
+            found,
+            top: false,
+        };
+        let r = Radar {
+            releases: vec![
+                rel("album25", "album", Some(2025), 10),
+                rel("noyear", "album", None, 10),
+                rel("single26", "single", Some(2026), 10),
+                rel("album26", "album", Some(2026), 10),
+                rel("later", "single", Some(2020), 20),
+            ],
+            ..Radar::default()
+        };
+        let ids: Vec<_> = r.feed(30).into_iter().map(|x| x.id).collect();
+        assert_eq!(ids, ["later", "album26", "single26", "album25", "noyear"]);
     }
 
     #[test]
