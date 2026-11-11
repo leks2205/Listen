@@ -87,36 +87,38 @@ pub struct Restored {
 const GRAB: f32 = 80.0;
 
 impl WindowState {
-    /// The saved state made safe to open: size at least `min` and within the display; position dropped
-    /// when no display shows the title area, else moved fully onto one. `can_place`: false on Wayland.
+    /// The saved state made safe to open: size at least `min` and within the display it lands on (the one
+    /// showing its title area, else the first display, also when it cannot be placed); position dropped when no
+    /// display shows the title area, else moved fully onto one. `can_place`: false on Wayland. Without
+    /// `displays` only `min` applies.
     pub fn restore(&self, displays: &[Rect], min: (f32, f32), can_place: bool) -> Restored {
         let finite = |v: f32, fallback: f32| if v.is_finite() { v } else { fallback };
         let mut w = finite(self.width, 1600.0).max(min.0);
         let mut h = finite(self.height, 950.0).max(min.1);
         let mut position = None;
-        if can_place
-            && !displays.is_empty()
-            && let (Some(x), Some(y)) = (self.x, self.y)
-            && x.is_finite()
-            && y.is_finite()
-        {
-            // The display that shows most of the window; none = it is off screen.
-            let window = Rect::new(x, y, w, h);
-            let grab = Rect::new(x, y, w.min(GRAB * 2.0), GRAB.min(h));
-            let best = displays
-                .iter()
-                .filter(|d| d.intersection_area(&grab) > 0.0)
-                .max_by(|a, b| a.intersection_area(&window).total_cmp(&b.intersection_area(&window)));
-            if let Some(d) = best {
-                w = w.min(d.w).max(min.0.min(d.w));
-                h = h.min(d.h).max(min.1.min(d.h));
-                let nx = x.min(d.x + d.w - w).max(d.x);
-                let ny = y.min(d.y + d.h - h).max(d.y);
-                position = Some((nx, ny));
+        // The display that shows most of the window's title area; none = off screen or not placeable.
+        let saved_at = (self.x, self.y);
+        let best = match saved_at {
+            (Some(x), Some(y)) if can_place && x.is_finite() && y.is_finite() => {
+                let window = Rect::new(x, y, w, h);
+                let grab = Rect::new(x, y, w.min(GRAB * 2.0), GRAB.min(h));
+                displays
+                    .iter()
+                    .filter(|d| d.intersection_area(&grab) > 0.0)
+                    .max_by(|a, b| a.intersection_area(&window).total_cmp(&b.intersection_area(&window)))
+                    .map(|d| (d, x, y))
             }
-        } else if let Some(d) = displays.first() {
+            _ => None,
+        };
+        // Every path fits the size to a display: an off-screen window opens unplaced but no larger.
+        if let Some(d) = best.map(|(d, _, _)| d).or(displays.first()) {
             w = w.min(d.w).max(min.0.min(d.w));
             h = h.min(d.h).max(min.1.min(d.h));
+        }
+        if let Some((d, x, y)) = best {
+            let nx = x.min(d.x + d.w - w).max(d.x);
+            let ny = y.min(d.y + d.h - h).max(d.y);
+            position = Some((nx, ny));
         }
         Restored { size: (w, h), position, maximized: self.maximized, fullscreen: self.fullscreen }
     }
@@ -251,6 +253,23 @@ mod tests {
         assert_eq!(s.restore(&screen(), MIN, true).position, None);
         let s = WindowState { x: Some(-5000.0), y: Some(-5000.0), ..Default::default() };
         assert_eq!(s.restore(&screen(), MIN, true).position, None);
+    }
+
+    #[test]
+    fn restore_shrinks_a_window_from_an_unplugged_bigger_display() {
+        let s = WindowState {
+            width: 3800.0,
+            height: 2100.0,
+            x: Some(6000.0),
+            y: Some(0.0),
+            ..Default::default()
+        };
+        let r = s.restore(&screen(), MIN, true);
+        assert_eq!(r.position, None);
+        assert_eq!(r.size, (1920.0, 1080.0));
+        // Never placed: still no larger than the display.
+        let s = WindowState { width: 3800.0, height: 2100.0, ..Default::default() };
+        assert_eq!(s.restore(&screen(), MIN, true).size, (1920.0, 1080.0));
     }
 
     #[test]

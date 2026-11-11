@@ -100,7 +100,8 @@ impl Listen {
         }
         let Some(saved) = self.config.settings.window.state else { return };
         let wayland = is_wayland();
-        let displays = if wayland || saved.x.is_none() { Vec::new() } else { displays() };
+        // Displays also for a never-placed window: restore fits its size to one.
+        let displays = if wayland { Vec::new() } else { displays() };
         let restored = saved.restore(&displays, MIN_SIZE, !wayland);
         self.window_size = iced::Size::new(restored.size.0, restored.size.1);
         self.win.normal_size = Some(self.window_size);

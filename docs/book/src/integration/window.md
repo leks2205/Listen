@@ -41,7 +41,7 @@ Only one Listen runs per user. Starting it a second time (from the launcher, a f
 
 Listen remembers the size, position (where the system allows), maximised and full-screen state of the main window and restores them at the next start. It is saved shortly after you stop resizing or moving the window, and again when you close it.
 
-If a saved position is off-screen (for example the monitor was unplugged), the window is moved back onto a display, and it is shrunk if it is bigger than the display. On Wayland, Listen cannot read or set the position, so only the size and the maximised/full-screen flags are restored. The default size is 1600 by 950.
+If a saved position is off-screen (for example the monitor was unplugged), the window opens where the system places it; a window hanging over a display edge is moved fully onto that display. Either way it is shrunk if it is bigger than the display. On Wayland, Listen cannot read or set the position, so only the size and the maximised/full-screen flags are restored. The default size is 1600 by 950.
 
 ## Title bar
 
