@@ -195,6 +195,16 @@ fn name_ref(name: &str) -> Vec<ArtistRef> {
 }
 
 /// Playlist ids need the `VL` prefix for browsing.
+/// Gives the albums without a year (history entries) the year of the same album in `library`;
+/// albums that aren't saved stay without one.
+fn fill_years(albums: &mut [Album], library: &[Album]) {
+    let years: std::collections::HashMap<&str, i32> =
+        library.iter().filter_map(|a| Some((a.id.as_str(), a.year?))).collect();
+    for a in albums.iter_mut().filter(|a| a.year.is_none()) {
+        a.year = years.get(a.id.as_str()).copied();
+    }
+}
+
 /// Whether a raw InnerTube answer counts as signed in: every page a guest gets has the sign-in
 /// button, and no page an account gets has it.
 fn signed_in_answer(guest: bool, text: &str) -> bool {
@@ -763,7 +773,8 @@ impl MusicSource for YouTubeMusic {
         listen_source::sorting::LIBRARY_ARTISTS
     }
 
-    // Library albums carry no likes, genres or artist ids: only the year range filters.
+    // Library albums carry no likes, genres or artist ids: only the year range filters
+    // (recently played albums take their year from the library, see `fill_years`).
     fn album_filters(&self) -> listen_source::QueryFilters {
         listen_source::QueryFilters::YEAR_RANGE
     }
@@ -780,7 +791,17 @@ impl MusicSource for YouTubeMusic {
         // Search, sort and filters work on the library (Library > Albums), like the list pages
         // of the other sources; the catalogue search is the search page.
         let items = match q.sort {
-            AlbumSort::RecentlyPlayed => self.recent_albums().await?,
+            AlbumSort::RecentlyPlayed => {
+                let mut recent = self.recent_albums().await?;
+                // History entries carry no year: a year range would drop every one of them.
+                if q.year_min.is_some() || q.year_max.is_some() {
+                    match self.library_albums().await {
+                        Ok(library) => fill_years(&mut recent, &library),
+                        Err(e) => tracing::warn!("recently played albums: no years from the library: {e}"),
+                    }
+                }
+                recent
+            }
             _ => self.library_albums().await?,
         };
         let items = query::albums_in(items, q);
@@ -1948,6 +1969,26 @@ mod tests {
         yt.refresh().await;
         assert!(yt.songs.lock().await.is_none() && yt.albums.lock().await.is_none());
         assert!(yt.playlist_cache.lock().await.is_empty() && yt.playlist_partial.lock().await.is_empty());
+    }
+
+    #[test]
+    fn recently_played_albums_keep_their_library_year() {
+        let album = |id: &str, year: Option<i32>| Album {
+            year,
+            ..Album::new(id, ServerId("yt".into()), SourceKind::YouTubeMusic, id)
+        };
+        let mut recent = vec![album("MPRE1", None), album("MPRE2", None), album("MPRE3", Some(1999))];
+        let library = [album("MPRE1", Some(2020)), album("MPRE3", Some(2001))];
+        fill_years(&mut recent, &library);
+        assert_eq!(recent.iter().map(|a| a.year).collect::<Vec<_>>(), [Some(2020), None, Some(1999)]);
+        let q = AlbumQuery {
+            sort: AlbumSort::RecentlyPlayed,
+            year_min: Some(2010),
+            year_max: Some(2025),
+            ..Default::default()
+        };
+        let kept: Vec<_> = query::albums_in(recent, &q).into_iter().map(|a| a.id).collect();
+        assert_eq!(kept, ["MPRE1"]);
     }
 
     #[test]
