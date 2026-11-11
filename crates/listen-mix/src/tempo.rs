@@ -2,9 +2,10 @@
 //! steps per minute) into a [`TempoTarget`], smooth it, decide when the queue is worth re-ranking, and pick
 //! or re-rank songs by how well their tempo fits. Half and double time count (85 BPM fits 170).
 //!
-//! The fit is judged at the faster of the two pulses ([`fit_distance`]): `TempoTarget::distance` halves a
-//! double-time song, so for a 70 BPM target it lets 124–156 BPM in (a 130 BPM song is "5 off"), while the
-//! queue re-rank keeps only 132–148. Here a 70 target fits 62–78, 132–148 and 31–39 BPM.
+//! The fit is judged at the faster of the two pulses ([`fit_distance`], [`fits`]): a 70 BPM target fits
+//! 62–78, 132–148 and 31–39 BPM ([`TOLERANCE`]), so a 130 BPM song (10 off 140) does not fit 70. A re-rank
+//! ([`rerank_queue`]) keeps only half that window ([`KEEP_TOLERANCE`]: 66–74, 136–144 and 33–37 at 70), so
+//! the queue stays inside the fit while the target drifts up to [`RERANK_STEP`] between re-ranks.
 //!
 //! Evidence note: music does not measurably change heart rate during exercise (Terry et al. 2020);
 //! matching step cadence has better support. This is "music that fits my effort", not training guidance.
@@ -459,6 +460,19 @@ mod tests {
         // 75 (×2 = 150), 148 and 153 are within 4 BPM; closest first into the automatic slots, manual items in place.
         assert_eq!(titles(&q), ["now", "mine x90", "c x75", "user x60", "d x148", "b x153"]);
         assert_eq!(q.current().unwrap().song.title, "now");
+    }
+
+    #[test]
+    fn a_rerank_keeps_half_the_fit_window() {
+        let t = target(70.0);
+        let kept = |b: f32| fit_distance(&t, b) <= KEEP_TOLERANCE.min(t.tol);
+        for b in [66.0, 74.0, 136.0, 144.0, 33.0, 37.0] {
+            assert!(kept(b) && fits(&t, b), "{b}");
+        }
+        // Inside the fit, outside the re-rank's window.
+        for b in [62.0, 65.0, 75.0, 78.0, 132.0, 135.0, 145.0, 148.0, 31.0, 32.0, 38.0, 39.0] {
+            assert!(!kept(b) && fits(&t, b), "{b}");
+        }
     }
 
     #[test]
