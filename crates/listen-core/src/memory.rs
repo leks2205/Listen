@@ -4,9 +4,10 @@
 //! [`PlayStatus::Played`](crate::history::PlayStatus) entries (time in days).
 //!
 //! Two uses:
-//! - **Forgotten favourites**: played a lot once ([`FORGOTTEN_MIN_PLAYS`]+, at a high peak activation),
-//!   nothing for [`FORGOTTEN_QUIET_DAYS`], low activation now. They fill the Auto-DJ's familiar slot,
-//!   the AI DJ pool and the Rediscover mix.
+//! - **Forgotten favourites**: played at least [`FORGOTTEN_MIN_PLAYS`] times, none in the last
+//!   [`FORGOTTEN_QUIET_DAYS`]; ranked by plays, peak activation and how far the activation has fallen
+//!   since ([`SongMemory::forgotten_score`]). They fill the Auto-DJ's familiar slot, the AI DJ pool and
+//!   the Rediscover mix.
 //! - **Worn out**: skipped again and again lately ([`WORN_SKIPS`] times in [`WORN_DAYS`] days), or skipped
 //!   while its activation is very high. Rested from every automatic pick until the skips age out; songs
 //!   the user starts always play.
@@ -66,7 +67,12 @@ pub struct SongMemory {
 
 impl SongMemory {
     /// Forgotten-favourite score: how much loved (plays, peak) and how much faded since.
+    /// `f64::NEG_INFINITY` for a song never played (its peak and activation are both
+    /// `NEG_INFINITY`, which would make the formula NaN and rank it above every played song).
     pub fn forgotten_score(&self) -> f64 {
+        if self.plays == 0 {
+            return f64::NEG_INFINITY;
+        }
         f64::from(self.plays).ln() + self.peak - self.activation
     }
 
@@ -139,13 +145,14 @@ impl Memory {
         v
     }
 
-    /// Songs with at least `min_plays` plays and none in the last `quiet_days`, ranked like
-    /// [`Self::forgotten`] (the Rediscover mix).
+    /// Songs with at least `min_plays` plays (at least one, whatever `min_plays` says: a song only ever
+    /// skipped was never a favourite) and none in the last `quiet_days`, ranked like [`Self::forgotten`]
+    /// (the Rediscover mix).
     pub fn faded(&self, min_plays: u32, quiet_days: i64, limit: usize) -> Vec<&SongMemory> {
         let mut v: Vec<&SongMemory> = self
             .songs
             .values()
-            .filter(|m| m.plays >= min_plays && m.last_played < self.now - quiet_days * DAY)
+            .filter(|m| m.plays >= min_plays.max(1) && m.last_played < self.now - quiet_days * DAY)
             .collect();
         sort_by_score(&mut v);
         v.truncate(limit);
@@ -267,6 +274,17 @@ mod tests {
         let s = only.get(&song("New")).unwrap();
         assert_eq!((s.plays, s.last_played), (0, 0));
         assert!(s.activation.is_infinite());
+    }
+
+    #[test]
+    fn faded_never_ranks_unplayed_songs() {
+        let mut e = skips("New", &[40]);
+        e.extend(plays("Old", &[100, 101]));
+        let m = Memory::new(&e, NOW);
+        let faded: Vec<&str> = m.faded(0, 30, 5).iter().map(|s| s.song.title.as_str()).collect();
+        assert_eq!(faded, ["Old"]);
+        assert!(m.songs.values().all(|s| !s.forgotten_score().is_nan()));
+        assert_eq!(m.get(&song("New")).unwrap().forgotten_score(), f64::NEG_INFINITY);
     }
 
     #[test]
