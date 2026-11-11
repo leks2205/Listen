@@ -156,7 +156,9 @@ fn lastfm_rows(state: &Listen) -> Vec<Element<'_, Message>> {
     .spacing(8)
     .align_y(Alignment::Center);
     let hint = status.unwrap_or_else(|| {
-        "Scrobble every song to Last.fm, YouTube Music included. Needs a free Last.fm API account          (last.fm/api/account/create): paste its API key and shared secret, then press Connect and allow          access in the browser."
+        "Scrobble every song to Last.fm, YouTube Music included. Needs a free Last.fm API account \
+         (last.fm/api/account/create): paste its API key and shared secret, then press Connect and allow \
+         access in the browser."
             .into()
     });
     vec![line(state, "Last.fm", hint, fields.into())]
