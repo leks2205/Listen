@@ -422,8 +422,10 @@ mod duration_secs {
         s.serialize_f64(d.as_secs_f64())
     }
 
+    /// Stored and synced data is untrusted: a negative, NaN, infinite or overflowing value is an
+    /// unknown length (zero), like a missing one, so one bad entry never panics or drops a whole queue.
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Duration, D::Error> {
-        Ok(Duration::from_secs_f64(f64::deserialize(d)?.max(0.0)))
+        Ok(Duration::try_from_secs_f64(f64::deserialize(d)?.max(0.0)).unwrap_or(Duration::ZERO))
     }
 }
 
@@ -446,6 +448,21 @@ mod tests {
         assert!(!page.has_more());
         let page: Page<u8> = Page { items: vec![], start_index: 4, total: None };
         assert!(!page.has_more());
+    }
+
+    #[test]
+    fn song_with_absurd_duration_does_not_panic() {
+        let song = Song::new("1", ServerId("s".into()), SourceKind::Subsonic, "T");
+        for bad in [serde_json::json!(1e300), serde_json::json!(1e20), serde_json::json!(-5.0)] {
+            let mut json = serde_json::to_value(&song).unwrap();
+            json["duration"] = bad.clone();
+            let back: Song = serde_json::from_value(json).unwrap();
+            assert_eq!(back.duration, Duration::ZERO, "{bad}");
+        }
+        let mut json = serde_json::to_value(&song).unwrap();
+        json["duration"] = serde_json::json!(245.5);
+        let back: Song = serde_json::from_value(json).unwrap();
+        assert_eq!(back.duration, Duration::from_secs_f64(245.5));
     }
 
     #[test]
