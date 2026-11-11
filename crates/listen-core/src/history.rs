@@ -5,7 +5,7 @@ use crate::model::{ArtistRef, ImageRef, ServerId, Song, SourceKind};
 use chrono::{DateTime, Datelike, FixedOffset, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -176,15 +176,66 @@ impl Entry {
 pub struct History {
     pub entries: Vec<Entry>,
     path: Option<PathBuf>,
+    /// Well-formed lines this version cannot read (a newer version's status or fields). Every rewrite of
+    /// the file puts them back, so an older app never deletes a newer one's plays.
+    unknown: Vec<Unknown>,
+    /// Damaged lines skipped by `load` (a torn append, a bad byte).
+    skipped: usize,
+}
+
+/// A line kept verbatim, with the play key `merge` and `prune` need.
+#[derive(Debug, Clone)]
+struct Unknown {
+    ts: i64,
+    song_id: String,
+    line: String,
 }
 
 impl History {
-    /// Loads the file; a missing file is an empty history, broken lines are skipped.
+    /// Loads the file. A missing file is an empty history. Each line stands on its own: a damaged one costs
+    /// only itself ([`History::skipped_lines`]), and well-formed lines this version cannot read are kept for
+    /// the next rewrite. A file that exists but cannot be read gives a history that is never written
+    /// ([`History::path`] is `None`), so an empty copy can never replace it.
     pub fn load(path: &Path) -> Self {
-        let entries = std::fs::read_to_string(path)
-            .map(|t| t.lines().filter_map(|l| serde_json::from_str(l).ok()).collect())
-            .unwrap_or_default();
-        Self { entries, path: Some(path.to_path_buf()) }
+        let bytes = match std::fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => {
+                tracing::warn!(
+                    "history {} is unreadable, keeping it untouched this run: {e}",
+                    path.display()
+                );
+                return Self::in_memory();
+            }
+        };
+        let mut h = Self { path: Some(path.to_path_buf()), ..Self::default() };
+        for line in bytes.split(|&b| b == b'\n').map(<[u8]>::trim_ascii).filter(|l| !l.is_empty()) {
+            if let Ok(entry) = serde_json::from_slice::<Entry>(line) {
+                h.entries.push(entry);
+                continue;
+            }
+            match serde_json::from_slice::<serde_json::Value>(line) {
+                Ok(v @ serde_json::Value::Object(_)) => h.unknown.push(Unknown {
+                    ts: v.get("ts").and_then(serde_json::Value::as_i64).unwrap_or(0),
+                    song_id: v
+                        .get("song_id")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    line: String::from_utf8_lossy(line).into_owned(),
+                }),
+                _ => h.skipped += 1,
+            }
+        }
+        if h.skipped > 0 {
+            tracing::warn!("history {}: skipped {} damaged line(s)", path.display(), h.skipped);
+        }
+        h
+    }
+
+    /// How many damaged lines the last [`History::load`] skipped.
+    pub fn skipped_lines(&self) -> usize {
+        self.skipped
     }
 
     /// A history that is never written to disk (demo mode, tests).
@@ -201,8 +252,20 @@ impl History {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
-            writeln!(f, "{}", serde_json::to_string(&entry).map_err(std::io::Error::other)?)?;
+            let mut line = serde_json::to_string(&entry).map_err(std::io::Error::other)?;
+            line.push('\n');
+            let mut f = std::fs::OpenOptions::new().create(true).read(true).append(true).open(path)?;
+            // A crash mid-append leaves a line without its newline; gluing this entry onto it would lose both.
+            if f.metadata()?.len() > 0 {
+                let mut last = [0u8];
+                f.seek(SeekFrom::End(-1))?;
+                f.read_exact(&mut last)?;
+                if last[0] != b'\n' {
+                    line.insert(0, '\n');
+                }
+            }
+            // One write per entry, so the line lands whole or not at all as far as the OS allows.
+            f.write_all(line.as_bytes())?;
         }
         self.entries.push(entry);
         Ok(())
@@ -213,7 +276,7 @@ impl History {
         if index < self.entries.len() {
             let mut left = self.entries.clone();
             left.remove(index);
-            self.write(&left)?;
+            self.write(&left, &self.unknown)?;
             self.entries = left;
         }
         Ok(())
@@ -227,6 +290,7 @@ impl History {
             }
         }
         self.entries.clear();
+        self.unknown.clear();
         Ok(())
     }
 
@@ -243,6 +307,9 @@ impl History {
         let mut left: Vec<Entry> =
             self.entries.iter().filter(|e| !gone.contains(&same(e))).cloned().collect();
         let mut changed = self.entries.len() - left.len();
+        let unknown: Vec<Unknown> =
+            self.unknown.iter().filter(|u| !gone.contains(&(u.ts, u.song_id.clone()))).cloned().collect();
+        let unknown_gone = unknown.len() != self.unknown.len();
         let mut seen: HashSet<(i64, String)> = left.iter().map(same).collect();
         for e in incoming {
             let k = same(&e);
@@ -251,10 +318,11 @@ impl History {
                 changed += 1;
             }
         }
-        if changed > 0 {
+        if changed > 0 || unknown_gone {
             left.sort_by_key(|e| e.ts);
-            self.write(&left)?;
+            self.write(&left, &unknown)?;
             self.entries = left;
+            self.unknown = unknown;
         }
         Ok(changed)
     }
@@ -262,20 +330,36 @@ impl History {
     /// Drops entries older than `max_age_days`. Returns how many were removed.
     pub fn prune(&mut self, max_age_days: Option<i64>, now: i64) -> std::io::Result<usize> {
         let Some(days) = max_age_days else { return Ok(0) };
-        let left: Vec<Entry> = self.entries.iter().filter(|e| e.ts >= now - days * DAY).cloned().collect();
+        let cutoff = now - days * DAY;
+        let left: Vec<Entry> = self.entries.iter().filter(|e| e.ts >= cutoff).cloned().collect();
+        let unknown: Vec<Unknown> = self.unknown.iter().filter(|u| u.ts >= cutoff).cloned().collect();
         let removed = self.entries.len() - left.len();
-        if removed > 0 {
-            self.write(&left)?;
+        if removed > 0 || unknown.len() != self.unknown.len() {
+            self.write(&left, &unknown)?;
             self.entries = left;
+            self.unknown = unknown;
         }
         Ok(removed)
     }
 
-    fn write(&self, entries: &[Entry]) -> std::io::Result<()> {
+    /// Replaces the file atomically (temp file + rename) with `entries` in their order and the kept
+    /// unknown lines, each before the first entry that is later than it.
+    fn write(&self, entries: &[Entry], unknown: &[Unknown]) -> std::io::Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
+        let mut rest: Vec<&Unknown> = unknown.iter().collect();
+        rest.sort_by_key(|u| u.ts);
+        let mut rest = rest.into_iter().peekable();
         let mut text = String::new();
         for e in entries {
+            while let Some(u) = rest.next_if(|u| u.ts <= e.ts) {
+                text.push_str(&u.line);
+                text.push('\n');
+            }
             text.push_str(&serde_json::to_string(e).map_err(std::io::Error::other)?);
+            text.push('\n');
+        }
+        for u in rest {
+            text.push_str(&u.line);
             text.push('\n');
         }
         let tmp = path.with_extension("jsonl.tmp");
@@ -677,6 +761,59 @@ mod tests {
         assert!(!path.exists());
         assert!(History::load(&path).is_empty());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_torn_last_line_costs_only_itself() {
+        let path = temp("torn");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut korean = at(1, 9, "2");
+        korean.title = "한국어 노래".into();
+        let whole = serde_json::to_string(&at(0, 9, "1")).unwrap();
+        let torn = serde_json::to_vec(&korean).unwrap();
+        // Cut inside the first Hangul syllable: the file is no longer valid UTF-8.
+        let cut = torn.windows(3).position(|w| w == "한".as_bytes()).unwrap() + 1;
+        let mut bytes = format!("{whole}\n").into_bytes();
+        bytes.extend_from_slice(&torn[..cut]);
+        std::fs::write(&path, bytes).unwrap();
+        let mut h = History::load(&path);
+        assert_eq!((h.entries.len(), h.skipped_lines()), (1, 1));
+        h.add(at(2, 9, "3")).unwrap();
+        let again = History::load(&path);
+        assert_eq!(again.entries.len(), 2, "the next append starts on a fresh line");
+        assert_eq!(again.skipped_lines(), 1);
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_file_is_never_overwritten() {
+        // A directory where the file should be cannot be read as a file.
+        let path = temp("unreadable");
+        std::fs::create_dir_all(&path).unwrap();
+        let mut h = History::load(&path);
+        assert_eq!(h.path(), None);
+        h.add(at(0, 9, "1")).unwrap();
+        assert_eq!(h.merge(vec![at(1, 9, "2")], &[]).unwrap(), 1);
+        assert!(path.is_dir(), "nothing was written over it");
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn lines_this_version_cannot_read_survive_a_prune() {
+        let path = temp("unknown");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let old = serde_json::to_string(&at(0, 9, "1")).unwrap();
+        let newer = serde_json::to_string(&at(300, 9, "2")).unwrap().replace("\"played\"", "\"paused\"");
+        let kept = serde_json::to_string(&at(301, 9, "3")).unwrap();
+        std::fs::write(&path, format!("{old}\n{newer}\n{kept}\n")).unwrap();
+        let mut h = History::load(&path);
+        assert_eq!((h.entries.len(), h.skipped_lines()), (2, 0));
+        assert_eq!(h.prune(Some(365), BASE + 400 * DAY).unwrap(), 1);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{newer}\n{kept}\n"));
+        // A removal from another device reaches it too.
+        h.merge(Vec::new(), &[(BASE + 300 * DAY + 9 * 3600, "2".into())]).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{kept}\n"));
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
     #[test]
