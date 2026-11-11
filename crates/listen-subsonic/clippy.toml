@@ -1,0 +1,5 @@
+# Duration::from_secs_f64 panics on NaN, negative and huge values, and this crate converts values a
+# server or a device sends: use Duration::try_from_secs_f64 and handle the error.
+disallowed-methods = [
+    { path = "std::time::Duration::from_secs_f64", reason = "panics on NaN/negative/huge input; use Duration::try_from_secs_f64" },
+]

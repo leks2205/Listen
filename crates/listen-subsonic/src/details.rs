@@ -179,9 +179,12 @@ fn parse_iso(s: &str) -> Option<SystemTime> {
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
     let secs = days * 86_400 + h * 3600 + mi * 60 - offset;
-    u64::try_from(secs)
-        .ok()
-        .map(|s| UNIX_EPOCH + Duration::from_secs(s) + Duration::from_secs_f64(sec.fract()))
+    // `sec` holds the whole seconds too; NaN, negative and huge values give `None`.
+    Some(
+        UNIX_EPOCH
+            + Duration::from_secs(u64::try_from(secs).ok()?)
+            + Duration::try_from_secs_f64(sec).ok()?,
+    )
 }
 
 #[cfg(test)]
@@ -283,5 +286,10 @@ mod tests {
         assert_eq!(s.expires, Some(at));
         assert!(share(&json!({"id": "i"}), None).is_none());
         assert_eq!(parse_iso("2026-10-16T12:30:00+02:00"), parse_iso("2026-10-16T10:30:00Z"));
+        let (a, b) =
+            (parse_iso("2026-10-16T10:30:45.5Z").unwrap(), parse_iso("2026-10-16T10:30:00Z").unwrap());
+        assert_eq!(a.duration_since(b).unwrap(), Duration::from_millis(45_500));
+        assert_eq!(parse_iso("2026-10-16T10:30:NaNZ"), None);
+        assert_eq!(parse_iso("2026-10-16T10:30:1e30Z"), None);
     }
 }

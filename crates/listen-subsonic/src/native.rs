@@ -320,8 +320,9 @@ fn b(v: &Value, k: &str) -> bool {
     v.get(k).and_then(Value::as_bool).unwrap_or(false)
 }
 
+/// Seconds from the server; zero when missing, negative or out of range (never a panic).
 fn secs(v: &Value, k: &str) -> Duration {
-    Duration::from_secs_f64(v.get(k).and_then(Value::as_f64).unwrap_or(0.0).max(0.0))
+    v.get(k).and_then(Value::as_f64).and_then(|s| Duration::try_from_secs_f64(s).ok()).unwrap_or_default()
 }
 
 fn genres(v: &Value) -> Vec<String> {
@@ -584,6 +585,14 @@ mod tests {
         assert_eq!(mood, ["Disc 2", "Disc 10", "Happy"], "natural order");
         // Song lists keep the barcode, not the track totals.
         assert!(tag_filters(&rows, true).iter().any(|t| t.name == "barcode"));
+    }
+
+    #[test]
+    fn server_durations_never_panic() {
+        assert_eq!(secs(&serde_json::json!({"duration": 1e30}), "duration"), Duration::ZERO);
+        assert_eq!(secs(&serde_json::json!({"duration": -5.0}), "duration"), Duration::ZERO);
+        assert_eq!(secs(&serde_json::json!({}), "duration"), Duration::ZERO);
+        assert_eq!(secs(&serde_json::json!({"duration": 245.5}), "duration"), Duration::from_millis(245_500));
     }
 
     #[test]

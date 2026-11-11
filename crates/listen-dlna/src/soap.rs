@@ -87,7 +87,8 @@ pub fn format_time(d: Duration) -> String {
 }
 
 /// Parses "H:MM:SS[.mmm]", with the optional sign and "+" some renderers add.
-/// `NOT_IMPLEMENTED` and the like give `None`.
+/// `NOT_IMPLEMENTED`, negative, NaN and out-of-range values give `None` (never a panic: the text
+/// comes from the renderer).
 pub fn parse_time(text: &str) -> Option<Duration> {
     let text = text.trim().trim_start_matches('+');
     let mut parts = text.split(':');
@@ -97,7 +98,7 @@ pub fn parse_time(text: &str) -> Option<Duration> {
     }
     let secs: f64 = s.split('/').next()?.parse().ok()?;
     let total = h.parse::<u64>().ok()? as f64 * 3600.0 + m.parse::<u64>().ok()? as f64 * 60.0 + secs;
-    (total.is_finite() && total >= 0.0).then(|| Duration::from_secs_f64(total))
+    Duration::try_from_secs_f64(total).ok()
 }
 
 /// What a renderer shows about the track.
@@ -202,6 +203,16 @@ mod tests {
         assert_eq!(parse_time("NOT_IMPLEMENTED"), None);
         assert_eq!(parse_time("-0:00:01"), None);
         assert_eq!(parse_time(""), None);
+    }
+
+    #[test]
+    fn parse_time_never_panics_on_renderer_values() {
+        assert_eq!(parse_time("0:00:1e30"), None);
+        assert_eq!(parse_time("99999999999999999999:00:00"), None);
+        assert_eq!(parse_time("18446744073709551615:00:00"), None);
+        assert_eq!(parse_time("0:00:NaN"), None);
+        assert_eq!(parse_time("0:00:inf"), None);
+        assert_eq!(parse_time("0:00:-1"), None);
     }
 
     #[test]
