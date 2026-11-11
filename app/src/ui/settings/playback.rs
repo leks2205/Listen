@@ -439,7 +439,7 @@ fn equalizer(state: &Listen) -> Element<'_, Message> {
         ),
         row![
             column![
-                label(format!("Pre {:+.0}", p.equalizer_preamp), metrics::font_xs(), t.muted),
+                label(format!("Pre {:+.1}", p.equalizer_preamp), metrics::font_xs(), t.muted),
                 vertical_slider(-12.0..=12.0, p.equalizer_preamp, |g| Message::Setting(Setting::EqPreamp(g)))
                     .step(0.5_f32)
                     .height(120),
