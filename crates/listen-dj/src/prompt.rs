@@ -256,6 +256,20 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
         "" => String::new(),
         n => format!("\nNotes from the listener (follow them unless they break the rules below): {n}\n"),
     };
+    // The steps name only fields of this persona's answer schema (`base_schema`): a co-host show answers
+    // in `turns`, each with its own style, and has no top-level `line` or `style`.
+    let (length, style) = match &persona.cohost {
+        Some(_) => (
+            "1–3 short sentences when one host talks; a two-host exchange follows the co-host rules above",
+            "3. Each turn's `style`: a short English direction for that speaker's voice (emotion, pace) that \
+             suits the turn and the persona.",
+        ),
+        None => (
+            "1–3 short sentences",
+            "3. `style`: a short English direction for the voice (emotion, pace) that suits this line and the \
+             persona.",
+        ),
+    };
     format!(
         "You are the host of a personal radio show inside a music player.\n\
          Persona: {brief}\n{duo}\n\
@@ -283,7 +297,7 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
          2. Write the spoken break that airs right after the song playing now, before your new \
          set. Speak {language} (natural, spoken, informal — in German the du-Form). Keep song titles and artist names in their \
          original language. Refer back to one or two songs that just played and tease the new set \
-         (e.g. the first artist or the vibe) without reading out a list. 1–3 short sentences; \
+         (e.g. the first artist or the vibe) without reading out a list. {length}; \
          the prompt says how long it may be and how it sits against the music. No greeting on every break, no station names, no made-up \
          facts about artists — if unsure, talk about the sound and mood instead. Never repeat \
          the idea or phrasing of your previous line. Plain text only: no emojis, markdown or \
@@ -302,12 +316,11 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
          year in a song's line is its release year: use it rather than guessing an era. \
          Never read out play counts; \"one you haven't played in a while\" is fine. A candidate's \
          \"from now:\" states how it fits the song playing now (keys, tempo, energy): trust it.\n\
-         3. `style`: a short English direction for the voice (emotion, pace) that suits this line \
-         and the persona.\n\
+         {style}\n\
          4. `mood`: a few words describing the mood you are keeping.\n\
          5. `notes`: one per pick, in the same order — a short reason the listener sees next to the song \
          in the queue (why it fits right now: its sound, how it follows the previous song, that it is new \
-         to them or one they haven't played in a while). Speak {language}, at most 80 characters, no song \
+         to them or one they haven't played in a while). Speak {language}, at most {NOTE_MAX} characters, no song \
          title, no made-up facts.",
         brief = persona.brief,
         duo = duo
@@ -498,7 +511,10 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
         "items": { "type": "string" },
         "minItems": set_min,
         "maxItems": set_max,
-        "description": "One note per pick, same order: why this song fits right now, in the show's language, at most 80 characters (no song title)"
+        "description": format!(
+            "One note per pick, same order: why this song fits right now, in the show's language, at most \
+             {NOTE_MAX} characters (no song title)"
+        )
     });
     if let Some(co) = &persona.cohost {
         return json!({
@@ -697,6 +713,35 @@ mod tests {
             Familiarity { plays: 12, last_played_days: Some(3), ..Familiarity::default() }.tag().unwrap();
         let familiar = HashMap::from([(pool[1].id.clone(), known)]);
         assert!(!offers_new(&bare_request(&pool, &familiar, &notes, &requests)));
+    }
+
+    #[test]
+    fn duo_prompt_names_only_fields_its_schema_has() {
+        for persona in PERSONAS.iter() {
+            let text = system_instruction(persona, &Show::default());
+            let schema = response_schema(persona, 2, 5, false);
+            let top = &schema["properties"];
+            let turn = &top["turns"]["items"]["properties"];
+            // A numbered step ("3. `style`: …") names a top-level field of the answer.
+            for line in text.lines().map(str::trim_start) {
+                let Some((n, rest)) = line.split_once(". `") else { continue };
+                if n.chars().all(|c| c.is_ascii_digit()) {
+                    let field = rest.split('`').next().unwrap();
+                    assert!(top.get(field).is_some(), "{}: step names `{field}`, not in {top}", persona.id);
+                }
+            }
+            // Every other field it names is in the answer somewhere.
+            for field in text.split('`').skip(1).step_by(2) {
+                assert!(
+                    top.get(field).is_some() || turn.get(field).is_some(),
+                    "{}: `{field}` is not in the schema",
+                    persona.id
+                );
+            }
+            let limit = format!("at most {NOTE_MAX} characters");
+            assert!(text.contains(&limit) && top["notes"]["description"].as_str().unwrap().contains(&limit));
+        }
+        assert!(PERSONAS.iter().any(|p| p.cohost.is_some()), "a two-host persona is checked");
     }
 
     #[test]
