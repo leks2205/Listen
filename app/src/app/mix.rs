@@ -787,8 +787,8 @@ impl Listen {
         self.mix.ramps.retain(|r| r.deck != deck);
     }
 
-    /// Sets a deck's echo from file time `at_s` ([`deck_echo_commands`]: delays and repeat levels at once,
-    /// the send and dry gates ramp at `at_s`); only what changed is sent, in order.
+    /// Sets a deck's echo from file time `at_s` ([`deck_echo_commands`], whose contract `to` must keep: the
+    /// send and dry are gates that ramp at `at_s`); only what changed is sent, in order.
     fn set_echo(&mut self, deck: usize, to: EchoParams, at_s: f64) -> Task<Message> {
         let from = self.mix.echo[deck].unwrap_or(EchoParams::IDLE);
         if from == to {

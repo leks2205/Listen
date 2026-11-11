@@ -282,9 +282,17 @@ impl DeckEcho {
 
 /// `af-command`s (target, option, value) on [`DECK_MIX_LABEL`] that take a deck's echo from `from` to
 /// `to` at file time `at_s` (sent ahead; the gates switch at `at_s` with a [`DECK_ECHO_GLIDE_S`] ramp).
-/// Delays and repeat levels change at once: they come first and while the send is still closed. The
-/// send opens once and closes once per echo; [`DeckEcho::IDLE`] resets every gate at once (the deck
+/// The send opens once and closes once per echo; [`DeckEcho::IDLE`] resets every gate at once (the deck
 /// stops or the mix is cancelled).
+///
+/// # Contract
+/// The send and the dry signal are gates, not faders; anything else would need a one-sample jump, which
+/// clicks. So, apart from a move to [`DeckEcho::IDLE`]:
+/// - the send level changes only while the send is closed (`from.send` or `to.send` is 0);
+/// - the dry signal may drop to any level but only comes back to full (1.0);
+/// - `delay_s` and `taps` change only while the send is closed (`from.send` is 0).
+///
+/// Debug builds assert this.
 pub fn deck_echo_commands(
     from: &DeckEcho,
     to: &DeckEcho,
@@ -301,6 +309,18 @@ pub fn deck_echo_commands(
         c.push((DECK_ECHO_MIX, "weights", weights(to)));
         return c;
     }
+    debug_assert!(
+        from.send <= 0.0 || to.send <= 0.0 || (to.send - from.send).abs() <= 1e-6,
+        "deck echo: the send is a gate; its level changes only while it is closed ({from:?} -> {to:?})"
+    );
+    debug_assert!(
+        to.dry <= from.dry || to.dry >= 1.0,
+        "deck echo: the dry signal only comes back to full ({from:?} -> {to:?})"
+    );
+    debug_assert!(
+        from.send <= 0.0 || ((from.delay_s - to.delay_s).abs() <= 1e-4 && from.taps == to.taps),
+        "deck echo: delays and repeat levels change only while the send is closed ({from:?} -> {to:?})"
+    );
     if (from.delay_s - to.delay_s).abs() > 1e-4 {
         // adelay's `delays` command sets only the listed channels (`all` counts at init only): one entry
         // per channel, up to 7.1.

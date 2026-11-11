@@ -244,6 +244,45 @@ mod tests {
     }
 
     #[test]
+    fn echo_levels_are_gates_not_faders() {
+        let on = DeckEcho { delay_s: 0.5, taps: [0.5, 0.25, 0.125, 0.0625], send: 1.0, dry: 1.0 };
+        let ducked = DeckEcho { dry: 0.3, ..on };
+        // The dry signal may drop to any level (one gate with that floor)…
+        assert_eq!(
+            deck_echo_commands(&on, &ducked, 5.0),
+            [
+                ("afade@ed", "silence", "0.3000".to_string()),
+                ("afade@ed", "start_time", "5.000000".to_string()),
+            ]
+        );
+        // …and comes back to full by disarming the gate.
+        assert_eq!(
+            deck_echo_commands(&ducked, &on, 6.0),
+            [("afade@ed", "start_time", "1000000".to_string())]
+        );
+        // The repeats are retuned while the send is closed.
+        let closed = DeckEcho { send: 0.0, ..on };
+        let retuned = DeckEcho { delay_s: 0.25, ..closed };
+        assert_eq!(deck_echo_commands(&closed, &retuned, 7.0).len(), 4);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "the dry signal only comes back to full")]
+    fn echo_dry_never_comes_back_to_a_partial_level() {
+        let on = DeckEcho { delay_s: 0.5, taps: [0.5, 0.25, 0.125, 0.0625], send: 1.0, dry: 1.0 };
+        deck_echo_commands(&DeckEcho { dry: 0.0, ..on }, &DeckEcho { dry: 0.5, ..on }, 1.0);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "the send is a gate")]
+    fn echo_send_is_not_faded_while_open() {
+        let on = DeckEcho { delay_s: 0.5, taps: [0.5, 0.25, 0.125, 0.0625], send: 1.0, dry: 1.0 };
+        deck_echo_commands(&on, &DeckEcho { send: 0.6, ..on }, 1.0);
+    }
+
+    #[test]
     fn deck_chain_appends_mix_filters_to_the_user_eq() {
         let mut p = Playback::default();
         let deck = deck_audio_filters(&p);
