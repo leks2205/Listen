@@ -16,7 +16,9 @@ pub struct Channel {
     pub handle: String,
     /// Brand-account page id; `None` for the Google account's own identity.
     pub page_id: Option<String>,
-    /// Songs in the library (first page; `more` if there are further pages).
+    /// Songs in the library (first page; `more` if there are further pages). Also 0 when the size
+    /// could not be read, even when asked twice (logged as a warning); [`Channel::label`] then says
+    /// "empty library".
     pub songs: usize,
     pub more: bool,
 }
@@ -135,6 +137,26 @@ pub(crate) fn parse_library_size(v: &Value) -> (usize, bool) {
     (songs.len(), !cont.is_empty() || !cont2.is_empty())
 }
 
+/// The library size of the channel `name`, asked a second time after an error: an unread size
+/// counts as an empty library and sorts the channel last, so a passing error must not decide which
+/// channel is offered as the one holding the music.
+async fn library_size<F, Fut>(name: &str, mut probe: F) -> (usize, bool)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<Value, String>>,
+{
+    for attempt in 1..=2 {
+        match probe().await {
+            Ok(v) => return parse_library_size(&v),
+            Err(e) => tracing::warn!("library size of {name} (attempt {attempt}): {e}"),
+        }
+        if attempt == 1 {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+    }
+    (0, false)
+}
+
 /// The session's identities with their library sizes (fullest first).
 pub async fn list(cookies: &str) -> Result<Vec<Channel>, String> {
     let own = CookieToken::new(cookies, None).await?;
@@ -146,9 +168,7 @@ pub async fn list(cookies: &str) -> Result<Vec<Channel>, String> {
     for c in &mut channels {
         let token = CookieToken::new(cookies, c.page_id.clone()).await?;
         let body = Map::from_iter([("browseId".to_string(), json!("FEmusic_liked_videos"))]);
-        if let Ok(v) = raw(token, "browse", body).await {
-            (c.songs, c.more) = parse_library_size(&v);
-        }
+        (c.songs, c.more) = library_size(&c.name, || raw(token.clone(), "browse", body.clone())).await;
     }
     // Stable: keeps YouTube's order among equally full channels.
     channels.sort_by_key(|c| std::cmp::Reverse((c.more, c.songs)));
@@ -158,6 +178,21 @@ pub async fn list(cookies: &str) -> Result<Vec<Channel>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_channel_whose_size_failed_is_asked_again() {
+        let lib = json!({"contents": [{"musicResponsiveListItemRenderer": {}}, {"musicResponsiveListItemRenderer": {}}]});
+        let calls = std::cell::Cell::new(0);
+        let size = library_size("Mixtape", || {
+            calls.set(calls.get() + 1);
+            let answer = if calls.get() == 1 { Err("timed out".to_string()) } else { Ok(lib.clone()) };
+            async move { answer }
+        })
+        .await;
+        assert_eq!((size, calls.get()), ((2, false), 2));
+        let size = library_size("Mixtape", || async { Err("timed out".to_string()) }).await;
+        assert_eq!(size, (0, false));
+    }
 
     #[test]
     fn parses_accounts_and_library_size() {
