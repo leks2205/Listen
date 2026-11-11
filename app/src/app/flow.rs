@@ -46,7 +46,7 @@ impl Listen {
         let recent = &before[before.len().saturating_sub(5)..];
         listen_mix::score::FlowCtx {
             recent: recent.iter().filter_map(|s| lookup(s)).collect(),
-            recent_artists: recent.iter().map(|s| s.artist_line().to_lowercase()).collect(),
+            recent_artists: listen_mix::score::recent_artist_names(recent.iter().copied()),
             weights: self.flow_weights(),
             ..Default::default()
         }

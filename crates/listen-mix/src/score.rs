@@ -88,7 +88,9 @@ pub struct FlowCtx {
     /// Timbre normalisation; when `None`, [`order`] and [`rank`] estimate it
     /// from the candidates.
     pub timbre: Option<TimbreStats>,
-    /// Lower-case names of artists played recently (mildly penalised).
+    /// Names of the artists of the recently played songs, one entry per artist (mildly penalised).
+    /// Compared case-insensitively with Unicode case folding; build it with [`recent_artist_names`],
+    /// not from a joined artist line ("IU, SUGA" matches neither IU nor SUGA).
     pub recent_artists: Vec<String>,
 }
 
@@ -241,11 +243,21 @@ fn neutral_cost(w: &Weights) -> f32 {
         + w.mixability * 0.5
 }
 
+/// [`FlowCtx::recent_artists`] for `songs`: one lower-case name per artist of every song.
+pub fn recent_artist_names<'a>(songs: impl IntoIterator<Item = &'a Song>) -> Vec<String> {
+    songs.into_iter().flat_map(|s| s.artists.iter().map(|a| a.name.to_lowercase())).collect()
+}
+
+/// Artist names are equal ignoring case, Unicode-aware ("Ärzte" = "ärzte"; ASCII folding misses it).
+fn same_name(a: &str, b: &str) -> bool {
+    a.chars().flat_map(char::to_lowercase).eq(b.chars().flat_map(char::to_lowercase))
+}
+
 pub(crate) fn same_artist(a: &Song, b: &Song) -> bool {
     a.artists.iter().any(|x| {
         b.artists.iter().any(|y| match (&x.id, &y.id) {
             (Some(i), Some(j)) => i == j,
-            _ => x.name.eq_ignore_ascii_case(&y.name),
+            _ => same_name(&x.name, &y.name),
         })
     })
 }
@@ -262,7 +274,7 @@ pub(crate) fn repeat_penalty(before: &[&Song], next: &Song, ctx: &FlowCtx) -> f3
             p += w.album_repeat;
         }
     }
-    if next.artists.iter().any(|a| ctx.recent_artists.iter().any(|r| r.eq_ignore_ascii_case(&a.name))) {
+    if next.artists.iter().any(|a| ctx.recent_artists.iter().any(|r| same_name(r, &a.name))) {
         p += 0.5 * w.artist_repeat;
     }
     p
@@ -386,6 +398,7 @@ mod tests {
     use super::*;
     use crate::testutil::{flow, song};
     use listen_core::analysis::Camelot;
+    use listen_core::model::ArtistRef;
 
     fn key(n: u8, minor: bool) -> Camelot {
         Camelot { number: n, minor }
@@ -550,5 +563,29 @@ mod tests {
             &recent,
         );
         assert_eq!(r, [1, 0]);
+    }
+
+    #[test]
+    fn recent_artist_penalty_matches_each_artist_in_any_case() {
+        let cur = song("now", "Z", None, None);
+        let f = flow(Some(120.0), Some(key(8, true)), 0.5);
+        let cands = |artist: &str| [cand("z", artist, Some(f.clone())), cand("w", "New", Some(f.clone()))];
+        // Non-ASCII capitals: the entry is lower-cased with Unicode rules, the candidate is not.
+        let ctx = FlowCtx { recent_artists: vec!["ärzte".into()], ..FlowCtx::default() };
+        assert_eq!(rank((&cur, Some(&f)), &cands("Ärzte"), &ctx), [1, 0]);
+        let ctx = FlowCtx { recent_artists: vec!["ÉDITH PIAF".into()], ..FlowCtx::default() };
+        assert_eq!(rank((&cur, Some(&f)), &cands("Édith Piaf"), &ctx), [1, 0]);
+        // A two-artist song played recently: a candidate by either of them is penalised.
+        let mut duet = song("duet", "IU", None, None);
+        duet.artists.push(ArtistRef { id: None, name: "SUGA".into() });
+        let names = recent_artist_names([&duet]);
+        assert_eq!(names, ["iu", "suga"]);
+        let ctx = FlowCtx { recent_artists: names, ..FlowCtx::default() };
+        assert_eq!(rank((&cur, Some(&f)), &cands("IU"), &ctx), [1, 0]);
+        assert_eq!(rank((&cur, Some(&f)), &cands("Suga"), &ctx), [1, 0]);
+        // The same artist back to back is matched the same way.
+        let prev = song("prev", "Ärzte", None, None);
+        let next = song("next", "ÄRZTE", None, None);
+        assert!(same_artist(&prev, &next));
     }
 }
