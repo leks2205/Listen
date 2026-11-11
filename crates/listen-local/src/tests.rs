@@ -297,6 +297,28 @@ async fn search_genres_and_paging() {
     assert!(src.random_songs(5, Some("jazz")).await.unwrap().is_empty());
 }
 
+/// `LocalFolder::connect` for tests: the scan cache goes into `root` (removed with it), never into
+/// the user's platform cache folder.
+async fn connect(id: ServerId, root: &Path) -> Result<LocalFolder> {
+    LocalFolder::connect_in(id, root.to_str().unwrap(), false, Some(root.join(".scan-cache.bin"))).await
+}
+
+#[tokio::test]
+async fn connect_tests_leave_no_file_in_the_platform_cache() {
+    let dir = std::env::temp_dir().join(format!("listen-local-nocache-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let id = ServerId("nocache".into());
+    connect(id.clone(), &dir).await.unwrap();
+    assert!(dir.join(".scan-cache.bin").is_file(), "the cache went to the test's folder");
+    assert!(cache::cache_file(&id, &dir).is_none_or(|p| !p.exists()), "and not to the platform cache");
+    std::fs::remove_dir_all(&dir).unwrap();
+    // Every test connects through `connect` above; a direct call would use the platform cache.
+    let direct = ["LocalFolder::", "connect("].concat();
+    let direct_full = ["LocalFolder::", "connect_full("].concat();
+    let source = include_str!("tests.rs");
+    assert!(!source.contains(&direct) && !source.contains(&direct_full), "tests must use connect()");
+}
+
 #[tokio::test]
 async fn scans_a_real_folder_and_streams_files() {
     let dir = std::env::temp_dir().join(format!("listen-local-test-{}", std::process::id()));
@@ -322,14 +344,14 @@ async fn scans_a_real_folder_and_streams_files() {
     std::fs::write(album_dir.join("notes.txt"), "x").unwrap();
     std::fs::write(album_dir.join("Folder.jpg"), [0xff, 0xd8, 0xff]).unwrap();
 
-    let src = LocalFolder::connect(ServerId("l".into()), dir.to_str().unwrap()).await.unwrap();
+    let src = connect(ServerId("l".into()), &dir).await.unwrap();
     assert_eq!(src.song_count(), 1);
     let songs = src.songs(&SongQuery::default()).await.unwrap().items;
     assert_eq!(songs[0].title, "01 Song");
     assert!(songs[0].duration > Duration::ZERO);
     let stream = src.stream(&songs[0]).await.unwrap();
     assert!(stream.url.starts_with("file://") && stream.url.ends_with("01%20Song.wav"));
-    assert!(LocalFolder::connect(ServerId("l".into()), "/definitely/not/here").await.is_err());
+    assert!(connect(ServerId("l".into()), Path::new("/definitely/not/here")).await.is_err());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
@@ -360,11 +382,11 @@ async fn reconnecting_picks_up_added_and_removed_files() {
     wav.extend_from_slice(&[128u8; 800]);
     std::fs::write(dir.join("a.wav"), &wav).unwrap();
     let id = ServerId("r".into());
-    assert_eq!(LocalFolder::connect(id.clone(), dir.to_str().unwrap()).await.unwrap().song_count(), 1);
+    assert_eq!(connect(id.clone(), &dir).await.unwrap().song_count(), 1);
     std::fs::write(dir.join("b.wav"), &wav).unwrap();
-    assert_eq!(LocalFolder::connect(id.clone(), dir.to_str().unwrap()).await.unwrap().song_count(), 2);
+    assert_eq!(connect(id.clone(), &dir).await.unwrap().song_count(), 2);
     std::fs::remove_file(dir.join("a.wav")).unwrap();
-    assert_eq!(LocalFolder::connect(id, dir.to_str().unwrap()).await.unwrap().song_count(), 1);
+    assert_eq!(connect(id, &dir).await.unwrap().song_count(), 1);
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

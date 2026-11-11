@@ -382,6 +382,18 @@ impl LocalFolder {
     }
 
     async fn connect_with(server_id: ServerId, root: &str, full: bool) -> Result<Self> {
+        let cache = cache::cache_file(&server_id, Path::new(root.trim()));
+        Self::connect_in(server_id, root, full, cache).await
+    }
+
+    /// Like [`Self::connect_with`], with the scan cache at `cache` (`None`: no cache). Tests pass a
+    /// file inside their temp folder, so they never write into the user's platform cache folder.
+    pub(crate) async fn connect_in(
+        server_id: ServerId,
+        root: &str,
+        full: bool,
+        cache: Option<PathBuf>,
+    ) -> Result<Self> {
         let root = PathBuf::from(root.trim());
         if !root.is_dir() {
             return Err(SourceError::Other(format!("{} is not a folder.", root.display())));
@@ -389,7 +401,7 @@ impl LocalFolder {
         let (scan_root, id) = (root.clone(), server_id.clone());
         let index = tokio::task::spawn_blocking(move || {
             let started = std::time::Instant::now();
-            let files = scan_cached(&id, &scan_root, full);
+            let files = scan::scan_with_cache(&scan_root, cache.as_deref(), full);
             let scanned = started.elapsed();
             let index = Index::build(&id, files);
             tracing::info!(
