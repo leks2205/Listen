@@ -41,7 +41,8 @@ fn apply_order<T>(items: &mut [T], order: SortOrder, random: bool) {
     }
 }
 
-/// The albums that match the filters and the search, in the query's order.
+/// The albums that match the filters and the search, in the query's order. Sorts with no key here
+/// (`Random` aside) keep the input order as their ascending order, and `Descending` reverses it.
 pub fn albums(mut items: Vec<Album>, q: &AlbumQuery) -> Vec<Album> {
     let needle = q.search.as_deref().map(lower).filter(|s| !s.is_empty());
     let fav = q.favorite_filter();
@@ -67,10 +68,12 @@ pub fn albums(mut items: Vec<Album>, q: &AlbumQuery) -> Vec<Album> {
         AlbumSort::SongCount => items.sort_by_key(|a| a.song_count.unwrap_or(0)),
         AlbumSort::MostPlayed => items.sort_by_key(|a| a.play_count.unwrap_or(0)),
         AlbumSort::Favorited => items.sort_by_key(|a| a.favorite),
-        AlbumSort::Random | AlbumSort::Id | AlbumSort::RecentlyAdded | AlbumSort::RecentlyPlayed => {}
+        // ISO 8601 text sorts chronologically; never played sorts first.
+        AlbumSort::RecentlyPlayed => items.sort_by_cached_key(|a| a.info.last_played.clone()),
+        // No key: the input order is the ascending order (ytmusic's query.rs relies on Descending reversing it).
+        AlbumSort::Random | AlbumSort::Id | AlbumSort::RecentlyAdded => {}
     }
     let random = q.sort == AlbumSort::Random;
-    // "Id" keeps the server's order unflipped, as in Feishin's client sort.
     apply_order(&mut items, q.order, random);
     items
 }
@@ -137,12 +140,15 @@ fn sort_songs(items: &mut [Song], q: &SongQuery) {
         SongSort::Rating => items.sort_by_key(|s| s.rating.unwrap_or(0)),
         SongSort::MostPlayed => items.sort_by_key(|s| s.play_count.unwrap_or(0)),
         SongSort::RecentlyAdded => items.sort_by(|a, b| a.created.cmp(&b.created)),
-        SongSort::Random | SongSort::Id | SongSort::RecentlyPlayed => {}
+        SongSort::RecentlyPlayed => items.sort_by_cached_key(|s| s.extra.last_played.clone()),
+        // No key: the input order is the ascending order, and Descending reverses it.
+        SongSort::Random | SongSort::Id => {}
     }
     apply_order(items, q.order, q.sort == SongSort::Random);
 }
 
-/// The songs that match the filters and the search, in the query's order.
+/// The songs that match the filters and the search, in the query's order (sorts with no key keep
+/// the input order as their ascending order, as in [`albums`]).
 ///
 /// One-shot use: no haystack Vec is built for every row. The per-field checks
 /// lower-case only the rows that reach the search filter, and only until a field
@@ -203,7 +209,8 @@ impl SongList {
     }
 }
 
-/// The artists that match the filters and the search, in the query's order.
+/// The artists that match the filters and the search, in the query's order (sorts with no key keep
+/// the input order as their ascending order, as in [`albums`]).
 pub fn artists(mut items: Vec<Artist>, q: &ArtistQuery) -> Vec<Artist> {
     let needle = q.search.as_deref().map(lower).filter(|s| !s.is_empty());
     let fav = if q.favorites_only { Some(true) } else { q.favorite };
@@ -215,7 +222,14 @@ pub fn artists(mut items: Vec<Artist>, q: &ArtistQuery) -> Vec<Artist> {
         ArtistSort::AlbumCount => items.sort_by_key(|a| a.album_count.unwrap_or(0)),
         ArtistSort::SongCount => items.sort_by_key(|a| a.song_count.unwrap_or(0)),
         ArtistSort::Favorited => items.sort_by_key(|a| a.favorite),
-        _ => {}
+        ArtistSort::Rating => items.sort_by_key(|a| a.rating.unwrap_or(0)),
+        // No key on an Artist: the input order is the ascending order. Listed one by one (no `_`), so a
+        // new sort has to decide here instead of silently reversing the input.
+        ArtistSort::RecentlyAdded
+        | ArtistSort::Random
+        | ArtistSort::MostPlayed
+        | ArtistSort::Duration
+        | ArtistSort::Album => {}
     }
     apply_order(&mut items, q.order, q.sort == ArtistSort::Random);
     items
@@ -267,6 +281,58 @@ mod tests {
         assert_eq!(names(&albums(lib(), &q)), ["Gamma", "Beta", "alpha"]);
         let q = AlbumQuery { sort: AlbumSort::Year, ..Default::default() };
         assert_eq!(names(&albums(lib(), &q)), ["alpha", "Beta", "Gamma"]);
+    }
+
+    #[test]
+    fn id_sort_descending_reverses_the_input_order() {
+        let q = AlbumQuery { sort: AlbumSort::Id, ..Default::default() };
+        assert_eq!(names(&albums(lib(), &q)), ["Beta", "alpha", "Gamma"]);
+        let q = AlbumQuery { sort: AlbumSort::Id, order: SortOrder::Descending, ..Default::default() };
+        assert_eq!(names(&albums(lib(), &q)), ["Gamma", "alpha", "Beta"]);
+    }
+
+    #[test]
+    fn recently_played_albums_sort_by_last_played() {
+        let mut items = lib();
+        items[0].info.last_played = Some("2024-05-01T10:00:00Z".into());
+        items[2].info.last_played = Some("2023-01-01T10:00:00Z".into());
+        let q = AlbumQuery {
+            sort: AlbumSort::RecentlyPlayed,
+            order: SortOrder::Descending,
+            ..Default::default()
+        };
+        assert_eq!(names(&albums(items, &q)), ["Beta", "Gamma", "alpha"], "never played last");
+        let mut items = vec![song("1", "a", "x", "y"), song("2", "b", "x", "y"), song("3", "c", "x", "y")];
+        items[1].extra.last_played = Some("2024-05-01T10:00:00Z".into());
+        items[2].extra.last_played = Some("2023-01-01T10:00:00Z".into());
+        let q =
+            SongQuery { sort: SongSort::RecentlyPlayed, order: SortOrder::Descending, ..Default::default() };
+        let ids: Vec<String> = songs(items, &q).into_iter().map(|s| s.id).collect();
+        assert_eq!(ids, ["2", "3", "1"]);
+    }
+
+    #[test]
+    fn artists_sort_by_rating() {
+        let artist = |id: &str, rating: Option<u8>| Artist {
+            rating,
+            ..Artist {
+                id: id.into(),
+                server_id: ServerId("s".into()),
+                source: SourceKind::Subsonic,
+                name: id.into(),
+                image: None,
+                album_count: None,
+                song_count: None,
+                favorite: false,
+                rating: None,
+                biography: None,
+                similar: vec![],
+            }
+        };
+        let items = vec![artist("A", Some(2)), artist("B", None), artist("C", Some(5))];
+        let q = ArtistQuery { sort: ArtistSort::Rating, order: SortOrder::Descending, ..Default::default() };
+        let ids: Vec<String> = artists(items, &q).into_iter().map(|a| a.id).collect();
+        assert_eq!(ids, ["C", "A", "B"]);
     }
 
     #[test]
