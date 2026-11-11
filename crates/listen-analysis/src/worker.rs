@@ -1,6 +1,7 @@
 //! Analysis in a short-lived helper process (`listen --analysis-worker`). Decoding and the beat
-//! model peak at a few hundred MB per song that glibc never returns, so the helper exits when
-//! idle and the next job starts a fresh one. Protocol: one JSON line per request on stdin, one
+//! model peak at a few hundred MB per song that glibc never returns, so the client stops the helper
+//! when idle ([`Worker::stop_if_idle`]) and the next job starts a fresh one. The helper has no timer
+//! of its own: it runs until its stdin closes. Protocol: one JSON line per request on stdin, one
 //! per answer on stdout, one job at a time.
 
 use crate::{AnalysisError, BeatModel, BeatSource, Cancel, Opts, VoiceModel, analyze_url};
@@ -12,7 +13,8 @@ use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
-/// The helper exits after the queue has been empty this long.
+/// [`Worker::stop_if_idle`] stops the helper once it has been unused this long. The client must call
+/// it periodically while the queue is empty: the helper has no timer of its own.
 pub const IDLE_EXIT: Duration = Duration::from_secs(30);
 
 /// A helper whose resident memory is above this after a job is replaced:
@@ -122,7 +124,8 @@ struct Running {
     stdout: BufReader<ChildStdout>,
 }
 
-/// The client side: starts the helper on demand and stops it when idle.
+/// The client side: starts the helper on demand. Call [`Worker::stop_if_idle`] periodically while the
+/// queue is empty (e.g. every 10 s); without it an idle helper keeps its memory forever.
 pub struct Worker {
     program: PathBuf,
     args: Vec<String>,
@@ -248,8 +251,8 @@ impl Worker {
         }
     }
 
-    /// Stops the helper if it has been idle for [`IDLE_EXIT`]; call it when
-    /// the queue is empty.
+    /// Stops the helper if it has been idle for [`IDLE_EXIT`]. The only idle timeout there is: call it
+    /// periodically while the queue is empty.
     pub async fn stop_if_idle(&mut self) {
         if self.running.is_some() && self.last_used.elapsed() >= IDLE_EXIT {
             self.stop().await;
