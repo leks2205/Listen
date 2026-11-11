@@ -11,7 +11,7 @@ pub mod mobile;
 mod related;
 pub mod settings;
 
-pub use lyrics::{LYRICS_ID, lyric_line_height};
+pub use lyrics::LYRICS_ID;
 pub use mobile::mobile;
 
 use super::{data_label, data_label_w, icon, label, song_cover};
