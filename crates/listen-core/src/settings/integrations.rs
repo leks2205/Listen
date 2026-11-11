@@ -9,7 +9,7 @@ use super::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DiscordDisplay {
-    /// The application name.
+    /// Listen's application name (serialized `feishin`, Feishin's value for it); not a Feishin mode.
     #[default]
     Feishin,
     Song,
