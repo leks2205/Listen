@@ -150,7 +150,7 @@ impl Mpv {
         let mut cmd = Command::new(&opts.binary);
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
-        let child = cmd
+        let mut child = cmd
             .args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -159,7 +159,7 @@ impl Mpv {
             .spawn()
             .map_err(MpvError::Spawn)?;
 
-        let (reader, writer) = connect(&socket).await?;
+        let (reader, writer) = connect(&socket, &mut child).await?;
         let pending: Pending = Arc::default();
         let (events_tx, events_rx) = mpsc::unbounded_channel();
         tokio::spawn(read_loop(reader, pending.clone(), events_tx));
@@ -339,10 +339,11 @@ fn ipc_path() -> PathBuf {
 type Reader = Box<dyn tokio::io::AsyncRead + Send + Unpin>;
 type Writer = Box<dyn tokio::io::AsyncWrite + Send + Unpin>;
 
-/// mpv creates the socket asynchronously after start; retry for a while.
-async fn connect(path: &std::path::Path) -> Result<(Reader, Writer), MpvError> {
+/// mpv creates the socket asynchronously after start; retry for a while, but give up at once when
+/// the process is gone (bad extra parameter, wrong binary): its socket will never appear.
+async fn connect(path: &std::path::Path, child: &mut Child) -> Result<(Reader, Writer), MpvError> {
     let mut last_err = None;
-    // Up to 15 s: a cold mpv start on a busy machine can take a while.
+    // Up to 15 s while mpv runs: a cold start on a busy machine can take a while.
     for _ in 0..300 {
         #[cfg(unix)]
         match tokio::net::UnixStream::connect(path).await {
@@ -359,6 +360,11 @@ async fn connect(path: &std::path::Path) -> Result<(Reader, Writer), MpvError> {
                 return Ok((Box::new(r), Box::new(w)));
             }
             Err(e) => last_err = Some(e),
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(MpvError::Connect(std::io::Error::other(format!(
+                "mpv exited at start ({status}); check the mpv path and extra parameters"
+            ))));
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -448,6 +454,31 @@ mod tests {
         assert_eq!(windows_audio_defaults(&user), ["--no-video"]);
         let all = ["--no-video".into(), "--force-window=no".into(), "--vo=null".into()];
         assert!(windows_audio_defaults(&all).is_empty());
+    }
+
+    /// `false` ignores its arguments and exits 1: a start-up failure must not wait for the socket.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawn_fails_fast_when_mpv_exits_at_start() {
+        let opts = MpvOptions { binary: "false".into(), null_audio: true, ..Default::default() };
+        let started = std::time::Instant::now();
+        let err = Mpv::spawn(&opts).await.err().expect("no mpv runs");
+        assert!(started.elapsed() < Duration::from_secs(2), "took {:?}", started.elapsed());
+        assert!(matches!(&err, MpvError::Connect(_)), "{err:?}");
+        assert!(err.to_string().contains("exited at start"), "{err}");
+        // The same for a real mpv refusing an unknown extra parameter (skipped without mpv).
+        let opts = MpvOptions { extra_args: vec!["--no-such-option-here".into()], ..opts };
+        let opts =
+            MpvOptions { binary: std::env::var_os("LISTEN_MPV").map_or("mpv".into(), Into::into), ..opts };
+        let started = std::time::Instant::now();
+        match Mpv::spawn(&opts).await {
+            Err(MpvError::Spawn(_)) => {}
+            Err(e) => {
+                assert!(e.to_string().contains("exited at start"), "{e}");
+                assert!(started.elapsed() < Duration::from_secs(5), "took {:?}", started.elapsed());
+            }
+            Ok(_) => panic!("mpv accepted an unknown option"),
+        }
     }
 
     #[tokio::test]
