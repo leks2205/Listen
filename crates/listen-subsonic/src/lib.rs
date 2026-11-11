@@ -44,7 +44,13 @@ pub struct Subsonic {
     password: String,
     native: NativeState,
     lists: ListCache,
+    /// Whether the server takes form POSTs (OpenSubsonic `formPost`): 0 unknown, 1 yes, 2 no.
+    form_post: std::sync::atomic::AtomicU8,
 }
+
+/// Longer queries go out as a form POST where the server allows it: proxies cap the request line
+/// (nginx: 8 KB), and a queue or playlist sends one id per song.
+const LONG_QUERY: usize = 2000;
 
 /// Most items read for one whole list ([`ListCache`]): 20 requests of 500.
 const FULL_LIST_MAX: usize = 10_000;
@@ -182,6 +188,7 @@ impl Subsonic {
             password: password.to_string(),
             native: NativeState::default(),
             lists: ListCache::default(),
+            form_post: std::sync::atomic::AtomicU8::new(0),
         })
     }
 
@@ -194,6 +201,10 @@ impl Subsonic {
         let kind = if navidrome { ServerKind::Navidrome } else { ServerKind::Other };
         self.native.kind.store(kind as u8, Ordering::Relaxed);
         self.native.broken.store(false, Ordering::Relaxed);
+        if root["openSubsonic"].as_bool() != Some(true) {
+            // Only OpenSubsonic servers list their extensions (formPost among them).
+            self.form_post.store(2, Ordering::Relaxed);
+        }
     }
 
     /// True for a Navidrome server whose native API works (detected on first use; false while
@@ -422,7 +433,8 @@ impl Subsonic {
         &self.server_id
     }
 
-    /// `{base}rest/{endpoint}?u&t&s&v&c&f=json&{params}`.
+    /// `{base}rest/{endpoint}?u&t&s&v&c&f=json&{params}`: the GET form of a request. A long one is
+    /// sent as a form POST instead where the server allows it (see `call`).
     fn url(&self, endpoint: &str, params: &[(&str, String)]) -> Url {
         let mut url = self.base.join(&format!("rest/{endpoint}")).expect("valid endpoint");
         {
@@ -439,6 +451,7 @@ impl Subsonic {
     }
 
     /// Calls an endpoint and extracts `subsonic-response[key]` (or checks status only if `key` is empty).
+    /// A query longer than [`LONG_QUERY`] is posted as a form when the server lists `formPost`.
     async fn call<T: DeserializeOwned + Default>(
         &self,
         endpoint: &str,
@@ -446,15 +459,69 @@ impl Subsonic {
         params: &[(&str, String)],
     ) -> Result<T> {
         let url = self.url(endpoint, params);
-        tracing::debug!("GET {}", redact(url.as_str()));
-        let resp =
-            self.http.get(url).send().await.map_err(|e| SourceError::Network(e.without_url().to_string()))?;
+        let long = url.query().map_or(0, str::len) > LONG_QUERY;
+        let post = long && self.takes_form_posts().await;
+        parse_response(self.send(url, post).await?, key)
+    }
+
+    /// Sends a request built by `url`, as a GET or as a form POST of its query; the response JSON.
+    /// A non-2xx answer that is not a Subsonic envelope (a proxy's error page) is reported with
+    /// its HTTP status, never as a JSON parse error.
+    async fn send(&self, mut url: Url, post: bool) -> Result<Value> {
+        let net = |e: reqwest::Error| SourceError::Network(e.without_url().to_string());
+        let resp = if post {
+            let form = url.query().unwrap_or_default().to_string();
+            url.set_query(None);
+            tracing::debug!("POST {}", url.as_str());
+            self.http
+                .post(url)
+                .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .body(form)
+                .send()
+                .await
+                .map_err(net)?
+        } else {
+            tracing::debug!("GET {}", redact(url.as_str()));
+            self.http.get(url).send().await.map_err(net)?
+        };
         let status = resp.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(SourceError::Auth(format!("HTTP {status}")));
         }
-        let body: Value = resp.json().await.map_err(|e| SourceError::Parse(e.without_url().to_string()))?;
-        parse_response(body, key)
+        let text = resp.text().await.map_err(net)?;
+        let body = serde_json::from_str::<Value>(&text);
+        let envelope = body.as_ref().is_ok_and(|b| b.get("subsonic-response").is_some());
+        if !status.is_success() && !envelope {
+            let message = match status.as_u16() {
+                413 | 414 => "request too large".into(),
+                _ => format!("HTTP {status}"),
+            };
+            return Err(SourceError::Server { code: i32::from(status.as_u16()), message });
+        }
+        body.map_err(|e| SourceError::Parse(e.to_string()))
+    }
+
+    /// Whether the server lists the OpenSubsonic `formPost` extension (asked once).
+    async fn takes_form_posts(&self) -> bool {
+        use std::sync::atomic::Ordering;
+        match self.form_post.load(Ordering::Relaxed) {
+            1 => return true,
+            2 => return false,
+            _ => {}
+        }
+        let url = self.url("getOpenSubsonicExtensions", &[]);
+        let found = match self
+            .send(url, false)
+            .await
+            .and_then(|b| parse_response::<Value>(b, "openSubsonicExtensions"))
+        {
+            Ok(list) => list.as_array().is_some_and(|l| l.iter().any(|e| e["name"] == "formPost")),
+            // Not an OpenSubsonic server.
+            Err(SourceError::Server { .. } | SourceError::NotFound | SourceError::Parse(_)) => false,
+            Err(_) => return false,
+        };
+        self.form_post.store(if found { 1 } else { 2 }, Ordering::Relaxed);
+        found
     }
 
     pub async fn ping_info(&self) -> Result<Value> {
