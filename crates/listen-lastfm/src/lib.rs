@@ -28,6 +28,20 @@ const MAX_AGE_S: i64 = 14 * 24 * 3600;
 const CACHE_DAYS: i64 = 30;
 const CACHE_MAX: usize = 5000;
 
+/// Last.fm's API error codes (<https://www.last.fm/api/errorcodes>) that change what Listen does.
+mod api_code {
+    /// The artist, track or album doesn't exist (a lookup answers `None`, not an error).
+    pub const NOT_FOUND: i64 = 6;
+    pub const OPERATION_FAILED: i64 = 8;
+    /// The session key is no longer valid.
+    pub const INVALID_SESSION: i64 = 9;
+    pub const SERVICE_OFFLINE: i64 = 11;
+    /// The sign-in token has not been authorised (yet).
+    pub const TOKEN_NOT_AUTHORISED: i64 = 14;
+    pub const TEMPORARILY_UNAVAILABLE: i64 = 16;
+    pub const RATE_LIMIT: i64 = 29;
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Last.fm error {code}: {message}")]
@@ -43,19 +57,25 @@ impl Error {
     pub fn transient(&self) -> bool {
         match self {
             Error::Http(_) => true,
-            Error::Api { code, .. } => matches!(code, 8 | 11 | 16 | 29),
+            Error::Api { code, .. } => matches!(
+                *code,
+                api_code::OPERATION_FAILED
+                    | api_code::SERVICE_OFFLINE
+                    | api_code::TEMPORARILY_UNAVAILABLE
+                    | api_code::RATE_LIMIT
+            ),
             Error::Bad(_) => false,
         }
     }
 
     /// The session key is no longer valid: sign in again.
     pub fn signed_out(&self) -> bool {
-        matches!(self, Error::Api { code: 9, .. })
+        matches!(self, Error::Api { code: api_code::INVALID_SESSION, .. })
     }
 
     /// Sign-in: the user has not allowed access (yet).
     pub fn not_authorized(&self) -> bool {
-        matches!(self, Error::Api { code: 14, .. })
+        matches!(self, Error::Api { code: api_code::TOKEN_NOT_AUTHORISED, .. })
     }
 }
 
@@ -200,7 +220,7 @@ impl Client {
                     bio: a["bio"]["summary"].as_str().unwrap_or("").to_string(),
                 }))
             }
-            Err(Error::Api { code: 6, .. }) => Ok(None),
+            Err(Error::Api { code: api_code::NOT_FOUND, .. }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -241,7 +261,7 @@ impl Client {
                 let album = t["album"]["title"].as_str().filter(|s| !s.is_empty()).map(String::from);
                 Ok(Some((artist, name.to_string(), album, num(&t["listeners"]))))
             }
-            Err(Error::Api { code: 6, .. }) => Ok(None),
+            Err(Error::Api { code: api_code::NOT_FOUND, .. }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -253,7 +273,7 @@ impl Client {
         let p = vec![("artist".into(), artist.into()), ("album".into(), album.into())];
         match self.call("album.getInfo", p, false, false).await {
             Ok(v) => Ok(album_image_of(&v)),
-            Err(Error::Api { code: 6, .. }) => Ok(None),
+            Err(Error::Api { code: api_code::NOT_FOUND, .. }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -267,7 +287,7 @@ impl Client {
         ];
         match self.call("album.getInfo", p, false, false).await {
             Ok(v) => Ok(v["album"]["name"].as_str().map(|n| (n.to_string(), num(&v["album"]["listeners"])))),
-            Err(Error::Api { code: 6, .. }) => Ok(None),
+            Err(Error::Api { code: api_code::NOT_FOUND, .. }) => Ok(None),
             Err(e) => Err(e),
         }
     }
