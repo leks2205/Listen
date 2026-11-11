@@ -138,7 +138,8 @@ pub fn is_instrumental(song: &Song) -> bool {
 }
 
 /// The instrumental version of `song` among search `results`: same song key (title without extras,
-/// main artist) and an instrumental title. An instrumental `song` stands for itself.
+/// main artist) and an instrumental title. Never `song` itself: for an instrumental `song` this is another
+/// instrumental or `None`, so callers skip songs that already are instrumental ([`is_instrumental`]).
 pub fn instrumental_of(song: &Song, results: &[Song]) -> Option<Song> {
     let key = song_key(song);
     results.iter().find(|r| is_instrumental(r) && song_key(r) == key && r.id != song.id).cloned()
