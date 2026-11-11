@@ -458,7 +458,11 @@ impl LocalFolder {
             .filter(|e| {
                 query.genre.as_ref().is_none_or(|g| e.album.genres.iter().any(|x| x.eq_ignore_ascii_case(g)))
             })
+            // Album artists and track artists, as on the artist page (`artist_albums`).
             .filter(|e| query.artist_id.as_ref().is_none_or(|a| e.artist_ids.contains(a)))
+            .filter(|e| {
+                query.artist_ids.is_empty() || query.artist_ids.iter().any(|a| e.artist_ids.contains(a))
+            })
             .filter(|e| {
                 needle
                     .as_ref()
@@ -533,8 +537,16 @@ impl MusicSource for LocalFolder {
     }
 
     async fn albums(&self, query: &AlbumQuery) -> Result<Page<Album>> {
-        // The sort is done; the year range and genre lists are the shared filters (order untouched).
-        let rest = AlbumQuery { sort: AlbumSort::Id, order: SortOrder::Ascending, ..query.clone() };
+        // `sorted_albums` sorted and applied genre, artists and search; the shared pass adds the
+        // year range and genre lists (order untouched). Its artist filter knows only album
+        // artists, so the artists are cleared for it.
+        let rest = AlbumQuery {
+            sort: AlbumSort::Id,
+            order: SortOrder::Ascending,
+            artist_id: None,
+            artist_ids: Vec::new(),
+            ..query.clone()
+        };
         Ok(page(
             listen_source::clientside::albums(self.sorted_albums(query), &rest),
             query.start,

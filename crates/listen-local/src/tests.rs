@@ -457,6 +457,28 @@ fn index_build_matches_the_old_linear_lookups() {
 }
 
 #[tokio::test]
+async fn album_artist_filter_matches_artist_albums() {
+    let src = folder(build_fixture());
+    let ids = |albums: Vec<Album>| -> Vec<String> {
+        let mut ids: Vec<String> = albums.into_iter().map(|a| a.id).collect();
+        ids.sort();
+        ids
+    };
+    for name in ["Guest", "The Band", "Alice", "Dup"] {
+        let artist = artist_id(name);
+        let page_ids = ids(src.artist_albums(&artist).await.unwrap());
+        assert!(!page_ids.is_empty(), "{name}");
+        let many = AlbumQuery { artist_ids: vec![artist.clone()], ..Default::default() };
+        assert_eq!(ids(src.albums(&many).await.unwrap().items), page_ids, "artist_ids {name}");
+        let one = AlbumQuery { artist_id: Some(artist.clone()), ..Default::default() };
+        assert_eq!(ids(src.albums(&one).await.unwrap().items), page_ids, "artist_id {name}");
+    }
+    // Several artists: albums of any of them.
+    let both = AlbumQuery { artist_ids: vec![artist_id("Guest"), artist_id("Alice")], ..Default::default() };
+    assert_eq!(src.albums(&both).await.unwrap().items.len(), 2);
+}
+
+#[tokio::test]
 async fn one_folder_with_and_without_album_artist_is_one_album() {
     let src = folder(build_fixture());
     let ids: Vec<&str> = src.index.albums.iter().map(|e| e.album.id.as_str()).collect();

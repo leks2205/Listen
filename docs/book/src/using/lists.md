@@ -95,7 +95,7 @@ The filter window offers the filters the server supports, so you may not see all
 | **Rated** | **Any**, **Yes** or **No**. |
 | **Compilation** | Albums only. |
 | **Recently played** | Albums only. |
-| **Artists** | Pick one or, with **Multiple**, several artists. |
+| **Artists** | Pick one or, with **Multiple**, several artists. For a local folder this lists the same albums as the artist's page, including albums the artist only appears on as a track artist. |
 | **Genres** | Pick one or, with **Multiple**, several genres. |
 | **Year** | A single year or a **From** and **To** range. |
 | **Tags** | The server's custom tags, with a list of values to pick from. |
