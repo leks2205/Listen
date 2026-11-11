@@ -1716,6 +1716,7 @@ impl YouTubeMusic {
                     }
                     tracing::warn!("YouTube Music answered signed out — reading the browser cookies again");
                     session.mark_stale();
+                    session.refresh_now().await;
                     refreshed = true;
                 }
                 Err(SourceError::Auth(e)) => return Err(SourceError::Auth(e)),

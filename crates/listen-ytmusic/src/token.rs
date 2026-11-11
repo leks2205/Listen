@@ -11,6 +11,7 @@ use crate::browser;
 use serde_json::Value;
 use sha1::Digest;
 use std::borrow::Cow;
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -50,19 +51,41 @@ fn rotated_out(json: &str) -> bool {
     signed_out_page(json) && !GUEST.try_with(|guest| *guest).unwrap_or(false)
 }
 
+/// Reads the cookie header again (blocking): a browser profile's database, or a test's stand-in.
+type Reader = Arc<dyn Fn() -> Result<String, String> + Send + Sync>;
+
 /// The cookie header in use, and where to read it from again.
 #[derive(Debug, Clone)]
 pub struct Session(Arc<SessionInner>);
 
-#[derive(Debug)]
 struct SessionInner {
-    /// The browser profile to read the cookies from again; `None` for a cookie export or a guest.
-    profile: Option<browser::Profile>,
+    /// Reads the cookies from the browser profile again; `None` for a cookie export or a guest.
+    reader: Option<Reader>,
     fresh: Mutex<Fresh>,
     /// YouTube answered signed out (see [`signed_out_page`]): read the cookies again.
     stale: AtomicBool,
-    /// One refresh at a time.
+    /// A re-read is under way (one at a time).
     refreshing: AtomicBool,
+}
+
+impl fmt::Debug for SessionInner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SessionInner")
+            .field("can_refresh", &self.reader.is_some())
+            .field("fresh", &self.fresh)
+            .field("stale", &self.stale)
+            .field("refreshing", &self.refreshing)
+            .finish()
+    }
+}
+
+/// Clears the `refreshing` flag when a re-read ends, also if the reader panicked.
+struct RefreshDone<'a>(&'a AtomicBool);
+
+impl Drop for RefreshDone<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
 }
 
 #[derive(Debug)]
@@ -77,10 +100,15 @@ struct Fresh {
 
 impl Session {
     fn new(cookies: &str, profile: Option<browser::Profile>) -> Result<Self, String> {
+        let reader = profile.map(|profile| Arc::new(move || profile.youtube_header()) as Reader);
+        Self::with_reader(cookies, reader)
+    }
+
+    fn with_reader(cookies: &str, reader: Option<Reader>) -> Result<Self, String> {
         let cookies = cookies.trim().trim_end_matches(';').to_string();
         let sapisid = sapisid(&cookies)?;
         Ok(Self(Arc::new(SessionInner {
-            profile,
+            reader,
             fresh: Mutex::new(Fresh { cookies, sapisid, read_at: Instant::now(), tried_at: Instant::now() }),
             stale: AtomicBool::new(false),
             refreshing: AtomicBool::new(false),
@@ -89,14 +117,16 @@ impl Session {
 
     /// Whether the cookies of this session can be read again at all.
     pub fn can_refresh(&self) -> bool {
-        self.0.profile.is_some()
+        self.0.reader.is_some()
     }
 
-    /// The cookie header and its SAPISID, read from the browser again when they are old or when
-    /// YouTube answered signed out. A browser that cannot be read keeps the cookies Listen has.
+    /// The cookie header and its SAPISID. When they are old or YouTube answered signed out, a
+    /// re-read starts in the background and this request still goes out with the cookies held now
+    /// ([`Session::refresh_now`] waits for the new ones). A browser that cannot be read keeps the
+    /// cookies Listen has.
     fn header(&self) -> (String, String) {
         if self.due() {
-            self.refresh();
+            self.refresh_in_background();
         }
         let fresh = self.0.fresh.lock().unwrap_or_else(|e| e.into_inner());
         (fresh.cookies.clone(), fresh.sapisid.clone())
@@ -119,7 +149,7 @@ impl Session {
     }
 
     fn due(&self) -> bool {
-        if self.0.profile.is_none() {
+        if self.0.reader.is_none() {
             return false;
         }
         let Ok(fresh) = self.0.fresh.lock() else { return false };
@@ -130,34 +160,69 @@ impl Session {
         stale && fresh.tried_at.elapsed() >= RETRY_AFTER
     }
 
-    /// Reads the cookies from the browser profile again (blocking: the cookie database is a file).
-    fn refresh(&self) {
-        let Some(profile) = self.0.profile.clone() else { return };
-        if self.0.refreshing.swap(true, Ordering::SeqCst) {
+    /// Starts a re-read without waiting for it. ytmapi-rs calls `headers()` inside its request
+    /// future, and a re-read (a database copy, `secret-tool`, maybe a keyring unlock prompt) must
+    /// not block an async worker.
+    fn refresh_in_background(&self) {
+        if self.0.reader.is_none() || self.0.refreshing.swap(true, Ordering::SeqCst) {
             return;
         }
-        let read = profile.youtube_header();
-        self.0.refreshing.store(false, Ordering::SeqCst);
+        let session = self.clone();
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => drop(runtime.spawn_blocking(move || session.read_again())),
+            // Not inside a runtime: the caller is synchronous anyway.
+            Err(_) => session.read_again(),
+        }
+    }
+
+    /// Reads the cookies from the browser again and waits for them (off the async workers); a
+    /// re-read already under way is waited for instead of starting another.
+    pub async fn refresh_now(&self) {
+        let session = self.clone();
+        let _ = tokio::task::spawn_blocking(move || session.refresh()).await;
+    }
+
+    /// Blocking form of [`Session::refresh_now`].
+    fn refresh(&self) {
+        if self.0.reader.is_none() {
+            return;
+        }
+        if self.0.refreshing.swap(true, Ordering::SeqCst) {
+            while self.0.refreshing.load(Ordering::SeqCst) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            return;
+        }
+        self.read_again();
+    }
+
+    /// Reads the cookies again (blocking). The caller has set `refreshing`; it is cleared once the
+    /// new cookies are stored, so a waiting [`Session::refresh`] sees them.
+    fn read_again(&self) {
+        let _done = RefreshDone(&self.0.refreshing);
+        let read =
+            self.0.reader.as_ref().map_or_else(|| Err("no browser profile".to_string()), |reader| reader());
+        let read = read.and_then(|header| match sapisid(&header) {
+            Ok(id) => Ok((header, id)),
+            Err(_) => Err("the browser cookies have no SAPISID now".to_string()),
+        });
         {
             // Whether it worked or not, the next attempt waits (a locked keyring must not be asked
             // on every request).
             let mut fresh = self.0.fresh.lock().unwrap_or_else(|e| e.into_inner());
             fresh.tried_at = Instant::now();
-            if let Ok(header) = &read
-                && let Ok(id) = sapisid(header)
-            {
-                tracing::info!("read the browser cookies again ({} B)", header.len());
+            if let Ok((header, id)) = &read {
                 fresh.cookies = header.clone();
-                fresh.sapisid = id;
+                fresh.sapisid = id.clone();
                 fresh.read_at = Instant::now();
-                drop(fresh);
-                self.0.stale.store(false, Ordering::Relaxed);
-                SIGNED_OUT.store(false, Ordering::Relaxed);
-                return;
             }
         }
         match read {
-            Ok(_) => tracing::warn!("the browser cookies have no SAPISID now"),
+            Ok((header, _)) => {
+                self.0.stale.store(false, Ordering::Relaxed);
+                SIGNED_OUT.store(false, Ordering::Relaxed);
+                tracing::info!("read the browser cookies again ({} B)", header.len());
+            }
             Err(e) => tracing::warn!("could not read the browser cookies again: {e}"),
         }
     }
@@ -357,6 +422,45 @@ mod tests {
     fn the_signed_out_page_is_recognised() {
         assert!(signed_out_page(r#"{"contents":{"foo":{"signInEndpoint":{"clickTrackingParams":"x"}}}}"#));
         assert!(!signed_out_page(r#"{"contents":{"singleColumnBrowseResultsRenderer":{}}}"#));
+    }
+
+    /// A browser session whose re-read takes `delay` and returns `header`.
+    fn reading_session(delay: Duration, header: &'static str) -> Session {
+        let reader: Reader = Arc::new(move || {
+            std::thread::sleep(delay);
+            Ok(header.to_string())
+        });
+        Session::with_reader("SAPISID=old; SID=x", Some(reader)).unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn refresh_never_blocks_headers() {
+        let session = reading_session(Duration::from_millis(1500), "SAPISID=new; SID=y");
+        session.mark_stale();
+        let started = Instant::now();
+        let (cookies, id) = session.header();
+        assert!(started.elapsed() < Duration::from_millis(500), "headers() waited {:?}", started.elapsed());
+        assert_eq!((cookies.as_str(), id.as_str()), ("SAPISID=old; SID=x", "old"));
+        // The re-read finishes in the background.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while session.header().1 != "new" {
+            assert!(Instant::now() < deadline, "the background re-read never landed");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(session.header().0, "SAPISID=new; SID=y");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn refresh_now_waits_for_the_new_cookies() {
+        let session = reading_session(Duration::from_millis(300), "SAPISID=new; SID=y");
+        session.refresh_now().await;
+        assert_eq!(session.header().1, "new");
+        // A re-read already under way is waited for, not skipped.
+        let session = reading_session(Duration::from_millis(300), "SAPISID=new; SID=y");
+        session.mark_stale();
+        assert_eq!(session.header().1, "old");
+        session.refresh_now().await;
+        assert_eq!(session.header().1, "new");
     }
 
     #[test]
