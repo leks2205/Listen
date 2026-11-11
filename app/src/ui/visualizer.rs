@@ -996,7 +996,7 @@ mod modal {
                 state,
                 "Select Preset",
                 pick_list(all, state.viz.preset.clone(), |n| Message::Viz(VizMsg::PresetPick(n)))
-                    .placeholder("Pick a preset")
+                    .placeholder(crate::i18n::tr("Pick a preset"))
                     .width(240)
                     .into(),
             ),

@@ -367,7 +367,9 @@ fn preset_buttons<'a>(
     let t = state.tokens;
     let selected = (!current.is_empty()).then(|| current.to_string());
     let mut r = row![
-        pick_list(names, selected, move |n| Message::Audio(on_pick(n))).placeholder("Preset").width(160)
+        pick_list(names, selected, move |n| Message::Audio(on_pick(n)))
+            .placeholder(crate::i18n::tr("Preset"))
+            .width(160)
     ]
     .spacing(metrics::space_sm())
     .align_y(Alignment::Center);
@@ -1069,13 +1071,16 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
     let detected = state.analysis_status.as_ref().map(|s| s.dir.display().to_string()).unwrap_or_default();
     let dir_value = state.analysis_dir_input.clone().unwrap_or_else(|| a.shared_dir.clone());
     let dir = row![
-        text_input(if detected.is_empty() { "Listen's data folder" } else { &detected }, &dir_value)
-            .size(metrics::font_md())
-            .padding(Padding::from([6.0, 8.0]))
-            .style(style::input(t))
-            .width(320)
-            .on_input(|v| Message::Setting(Setting::AnalysisDirInput(v)))
-            .on_submit(Message::Setting(Setting::AnalysisDirSave)),
+        text_input(
+            if detected.is_empty() { crate::i18n::tr("Listen's data folder") } else { &detected },
+            &dir_value
+        )
+        .size(metrics::font_md())
+        .padding(Padding::from([6.0, 8.0]))
+        .style(style::input(t))
+        .width(320)
+        .on_input(|v| Message::Setting(Setting::AnalysisDirInput(v)))
+        .on_submit(Message::Setting(Setting::AnalysisDirSave)),
         button(label_w("Save", metrics::font_sm(), t.foreground, Weight::Semibold))
             .padding(Padding::from([6.0, 10.0]))
             .style(style::default_button(t))

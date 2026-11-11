@@ -74,7 +74,7 @@ pub fn playlists<'a>(state: &'a Listen, p: Picker<'a>) -> (Element<'a, Message>,
         col = col.push(
             container(
                 iced::widget::checkbox(on)
-                    .label("Skip duplicates")
+                    .label(crate::i18n::tr("Skip duplicates"))
                     .size(16)
                     .text_size(metrics::font_sm())
                     .on_toggle(|v| Message::PlaylistPage(PlaylistPageMsg::SkipDuplicates(v))),

@@ -58,7 +58,7 @@ fn body<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Message> {
     }
     let flag = |name: &'static str, on: bool, f: fn(bool) -> SmartMsg| {
         checkbox(on)
-            .label(name)
+            .label(crate::i18n::tr(name))
             .size(16)
             .text_size(metrics::font_sm())
             .on_toggle(move |v| Message::Smart(f(v)))

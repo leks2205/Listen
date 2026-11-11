@@ -47,7 +47,7 @@ fn input<'a>(
     value: &'a str,
     on: impl Fn(String) -> Message + 'a,
 ) -> Element<'a, Message> {
-    text_input(placeholder, value)
+    text_input(crate::i18n::tr(placeholder), value)
         .font(crate::ui::font_for(value, crate::appearance::current_font()))
         .on_input(on)
         .size(metrics::font_sm())
@@ -126,7 +126,7 @@ fn value<'a>(
             pick_list(choices, selected, move |c: PlaylistChoice| {
                 msg(SmartMsg::Rule(path.clone(), i, RuleEdit::A(c.id)))
             })
-            .placeholder("Playlist")
+            .placeholder(crate::i18n::tr("Playlist"))
             .text_size(metrics::font_sm())
             .width(Length::FillPortion(2))
             .into()
@@ -153,7 +153,7 @@ fn rule_row<'a>(
     let field = pick_list(e.fields.clone(), selected, move |f: FieldOpt| {
         msg(SmartMsg::Rule(field_path.clone(), i, RuleEdit::Field(f)))
     })
-    .placeholder("Field")
+    .placeholder(crate::i18n::tr("Field"))
     .text_size(metrics::font_sm())
     .width(Length::FillPortion(2));
 
@@ -162,7 +162,7 @@ fn rule_row<'a>(
     let op = pick_list(ops, ops.iter().find(|o| o.id == r.op).copied(), move |o| {
         msg(SmartMsg::Rule(op_path.clone(), i, RuleEdit::Op(o)))
     })
-    .placeholder("Operator")
+    .placeholder(crate::i18n::tr("Operator"))
     .text_size(metrics::font_sm())
     .width(Length::FillPortion(2));
 
@@ -233,7 +233,7 @@ pub fn sort_and_limit<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Messa
         let field = pick_list(e.sorts.clone(), selected, move |f: FieldOpt| {
             msg(SmartMsg::Sort(SortEdit::Field(i, f)))
         })
-        .placeholder("Field")
+        .placeholder(crate::i18n::tr("Field"))
         .text_size(metrics::font_sm())
         .width(220);
         let order = pick_list(
@@ -272,7 +272,7 @@ pub fn sort_and_limit<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Messa
         ]
         .spacing(metrics::space_xs())
         .align_y(Alignment::Center),
-        text_input(if mode == "#" { "No limit" } else { "0 - 100" }, text)
+        text_input(if mode == "#" { crate::i18n::tr("No limit") } else { "0 - 100" }, text)
             .on_input(|v| msg(SmartMsg::Sort(SortEdit::Limit(v))))
             .size(metrics::font_sm())
             .padding(Padding::from([5.0, 8.0]))

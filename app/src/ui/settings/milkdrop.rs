@@ -76,7 +76,7 @@ pub(super) fn milkdrop(state: &Listen) -> Element<'_, Message> {
             "Preset folder",
             count,
             row![
-                text_input("Default folder", &typed)
+                text_input(crate::i18n::tr("Default folder"), &typed)
                     .size(metrics::font_md())
                     .padding(Padding::from([6.0, 8.0]))
                     .style(style::input(t))
@@ -93,7 +93,7 @@ pub(super) fn milkdrop(state: &Listen) -> Element<'_, Message> {
         // Picking a preset: a search box, since packs have thousands.
         let found = matches(mk.presets.iter().map(|p| p.name.as_str()), &mk.query);
         let mut pick = column![
-            text_input("Search presets", &mk.query)
+            text_input(crate::i18n::tr("Search presets"), &mk.query)
                 .size(metrics::font_md())
                 .padding(Padding::from([6.0, 8.0]))
                 .style(style::input(t))
