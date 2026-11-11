@@ -256,7 +256,8 @@ pub fn classify_error(status: u16, body: &str) -> DjError {
             .flatten()
             .find_map(|d| d["retryDelay"].as_str())
             .and_then(|s| s.trim_end_matches('s').parse::<f64>().ok())
-            .map(Duration::from_secs_f64);
+            // The server's text: a negative, NaN or huge value is ignored (`from_secs_f64` would panic).
+            .and_then(|secs| Duration::try_from_secs_f64(secs).ok());
         return DjError::Quota { daily, retry_after };
     }
     if status == 401
@@ -287,6 +288,20 @@ mod tests {
         let key = r#"{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}"#;
         assert_eq!(classify_error(400, key), DjError::Auth);
         assert!(matches!(classify_error(500, "oops"), DjError::Api(m) if m.contains("500")));
+    }
+
+    #[test]
+    fn a_malformed_retry_delay_is_ignored_not_a_panic() {
+        for delay in ["-1s", "NaN", "inf", "1e30s"] {
+            let body = format!(
+                r#"{{"error":{{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{{"retryDelay":"{delay}"}}]}}}}"#
+            );
+            assert_eq!(
+                classify_error(429, &body),
+                DjError::Quota { daily: false, retry_after: None },
+                "{delay}"
+            );
+        }
     }
 
     #[test]
