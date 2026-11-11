@@ -38,7 +38,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let count = if shown.len() == radio.stations.len() {
         plural(radio.stations.len(), "station")
     } else {
-        format!("{} of {}", shown.len(), plural(radio.stations.len(), "station"))
+        crate::i18n::trf("{} of {}", &[&shown.len(), &plural(radio.stations.len(), "station")])
     };
     let top = row![
         label_w("Radio", 36.0, t.foreground, Weight::Bold),

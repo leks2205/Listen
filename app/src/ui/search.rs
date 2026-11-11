@@ -69,7 +69,11 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             continue;
         }
         let active = this == tab;
-        let text = if s.query.trim().is_empty() { name.to_string() } else { format!("{name} ({count})") };
+        let text = if s.query.trim().is_empty() {
+            crate::i18n::tr(name).to_string()
+        } else {
+            crate::i18n::trf("{} ({})", &[&crate::i18n::tr(name), &count])
+        };
         tab_row = tab_row.push(
             button(label_w(
                 text,

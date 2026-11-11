@@ -46,32 +46,43 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         Some(h) => image(h.clone()).width(56).height(56).into(),
         None => super::art((60, 60, 70), 56.0, metrics::radius_md(), Icon::LuDisc3),
     };
+    let activity = crate::i18n::tr_cow(job.activity.as_str().into());
     let (status, color): (String, Color) = match &job.stage {
         Stage::Ripping => {
+            // listen-rip's per-track activities ("Reading track 3 of 12") carry the counter themselves;
+            // keep that wording in listen-rip's pipeline or the counter shows twice.
             let text = if job.activity.contains("track") || job.track == 0 {
-                format!("Ripping · {}", job.activity)
+                crate::i18n::trf("Ripping · {}", &[&activity])
             } else {
-                format!("Ripping track {} of {} · {}", job.track, job.total, job.activity)
+                crate::i18n::trf("Ripping track {} of {} · {}", &[&job.track, &job.total, &activity])
             };
             (text, t.muted)
         }
-        Stage::Tagging => (format!("Tagging · {}", job.activity), t.muted),
-        Stage::Publishing => ("Copying to the music folder…".into(), t.muted),
-        Stage::NeedsDecision(why) => (format!("{why}. Publish the rest anyway?"), WARN),
-        Stage::WaitingForDestination(why) => (format!("Waiting for the music folder: {why}"), WARN),
+        Stage::Tagging => (crate::i18n::trf("Tagging · {}", &[&activity]), t.muted),
+        Stage::Publishing => (crate::i18n::tr("Copying to the music folder…").to_string(), t.muted),
+        Stage::NeedsDecision(why) => (crate::i18n::trf("{}. Publish the rest anyway?", &[why]), WARN),
+        Stage::WaitingForDestination(why) => {
+            (crate::i18n::trf("Waiting for the music folder: {}", &[why]), WARN)
+        }
         Stage::Done => (
             job.report
                 .as_ref()
-                .map(|r| format!("Filed in {} · {}", r.folder.display(), r.accuraterip_line()))
-                .unwrap_or_else(|| "Done".into()),
+                .map(|r| {
+                    let ar = crate::i18n::tr_cow(r.accuraterip_line().into()).into_owned();
+                    crate::i18n::trf("Filed in {} · {}", &[&r.folder.display(), &ar])
+                })
+                .unwrap_or_else(|| crate::i18n::tr("Done").to_string()),
             t.foreground,
         ),
-        Stage::Failed(why) => (format!("Failed: {why}"), WARN),
-        Stage::Cancelled => ("Cancelled — nothing was copied to the music folder.".into(), t.muted),
+        Stage::Failed(why) => (crate::i18n::trf("Failed: {}", &[why]), WARN),
+        Stage::Cancelled => {
+            (crate::i18n::tr("Cancelled — nothing was copied to the music folder.").to_string(), t.muted)
+        }
     };
     let mut info = column![
         label_w(job.title(), metrics::font_md(), t.foreground, Weight::Semibold),
-        label(status, metrics::font_sm(), color),
+        // Built translated above; error texts and paths inside stay as they are.
+        crate::ui::data_label(status, metrics::font_sm(), color),
     ]
     .spacing(4)
     .width(Length::Fill);
