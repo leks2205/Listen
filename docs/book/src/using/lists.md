@@ -100,7 +100,7 @@ The filter window offers the filters the server supports, so you may not see all
 | **Year** | A single year or a **From** and **To** range. |
 | **Tags** | The server's custom tags, with a list of values to pick from. |
 
-On plain Subsonic servers only one of **Favorited**, **Artists**, **Genres** and **Year** can be used at a time; the others show "Off while another of these filters is on". **Reset** clears all filters, **Done** closes the window. The filter button lights up while a filter is active.
+On plain Subsonic servers only one of **Favorited**, **Artists**, **Genres** and **Year** can be used at a time on the album list; the others show "Off while another of these filters is on". A search combined with a genre or a year range searches that genre's (or range's) albums. **Favorited: no** is not available there (the server cannot list songs or albums that are not favourites), so that list shows an error instead of everything. **Reset** clears all filters, **Done** closes the window. The filter button lights up while a filter is active.
 
 Listen remembers the sort, order, search and filters of the Albums and Tracks pages and of genre pages between sessions.
 

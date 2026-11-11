@@ -43,6 +43,29 @@ pub struct Subsonic {
     /// For Navidrome's native login (list pages sort and filter through its own API).
     password: String,
     native: NativeState,
+    lists: ListCache,
+}
+
+/// Most items read for one whole list ([`ListCache`]): 20 requests of 500.
+const FULL_LIST_MAX: usize = 10_000;
+const FULL_LIST_PAGE: usize = 500;
+
+/// Whole lists read to combine filters (or an order) the Subsonic API cannot, kept for the next
+/// pages of the same list; page 1 (`start == 0`) always reads the list again.
+#[derive(Default)]
+struct ListCache {
+    albums: std::sync::Mutex<Option<(String, Vec<Album>)>>,
+    songs: std::sync::Mutex<Option<(String, Vec<Song>)>>,
+}
+
+/// A cached whole list for `key`, unless this is page 1.
+fn cached<T: Clone>(
+    slot: &std::sync::Mutex<Option<(String, Vec<T>)>>,
+    key: &str,
+    start: usize,
+) -> Option<Vec<T>> {
+    let guard = slot.lock().unwrap();
+    guard.as_ref().filter(|(k, _)| start > 0 && k == key).map(|(_, items)| items.clone())
 }
 
 /// What kind of server the ping found ([`NativeState::kind`]).
@@ -158,6 +181,7 @@ impl Subsonic {
             transcode: Default::default(),
             password: password.to_string(),
             native: NativeState::default(),
+            lists: ListCache::default(),
         })
     }
 
@@ -440,6 +464,58 @@ impl Subsonic {
     fn page_params(start: usize, limit: usize) -> (usize, usize) {
         (start, if limit == 0 { 100 } else { limit.min(500) })
     }
+
+    /// Every album of one `getAlbumList2` list (`list` = its `type` and filter parameters), at
+    /// most [`FULL_LIST_MAX`], cached for the next pages of the same list.
+    async fn full_album_list(&self, list: Vec<(&'static str, String)>, start: usize) -> Result<Vec<Album>> {
+        let key = format!("{list:?}");
+        if let Some(items) = cached(&self.lists.albums, &key, start) {
+            return Ok(items);
+        }
+        let mut items: Vec<Album> = Vec::new();
+        while items.len() < FULL_LIST_MAX {
+            let mut params = list.clone();
+            params.push(("size", FULL_LIST_PAGE.to_string()));
+            params.push(("offset", items.len().to_string()));
+            let page: types::AlbumList = self.call("getAlbumList2", "albumList2", &params).await?;
+            items.extend(page.album.iter().map(|a| normalize::album(&self.server_id, a)));
+            if page.album.len() < FULL_LIST_PAGE {
+                break;
+            }
+        }
+        if items.len() >= FULL_LIST_MAX {
+            tracing::warn!("Subsonic album list cut at {FULL_LIST_MAX} albums");
+        }
+        *self.lists.albums.lock().unwrap() = Some((key, items.clone()));
+        Ok(items)
+    }
+
+    /// Every song of a genre (`getSongsByGenre`), at most [`FULL_LIST_MAX`], cached for the next
+    /// pages of the same list.
+    async fn full_genre_songs(&self, genre: &str, start: usize) -> Result<Vec<Song>> {
+        let key = format!("genre:{genre}");
+        if let Some(items) = cached(&self.lists.songs, &key, start) {
+            return Ok(items);
+        }
+        let mut items: Vec<Song> = Vec::new();
+        while items.len() < FULL_LIST_MAX {
+            let params = [
+                ("genre", genre.to_string()),
+                ("count", FULL_LIST_PAGE.to_string()),
+                ("offset", items.len().to_string()),
+            ];
+            let page: types::Songs = self.call("getSongsByGenre", "songsByGenre", &params).await?;
+            items.extend(page.song.iter().map(|c| normalize::song(&self.server_id, c)));
+            if page.song.len() < FULL_LIST_PAGE {
+                break;
+            }
+        }
+        if items.len() >= FULL_LIST_MAX {
+            tracing::warn!("Subsonic genre list cut at {FULL_LIST_MAX} songs");
+        }
+        *self.lists.songs.lock().unwrap() = Some((key, items.clone()));
+        Ok(items)
+    }
 }
 
 /// Validates a Subsonic envelope and returns `key`'s payload.
@@ -591,6 +667,8 @@ impl MusicSource for Subsonic {
     async fn refresh(&self) {
         // Genres added by a scan get their ids at the next filtered list.
         *self.native.genre_ids.lock().unwrap() = None;
+        *self.lists.albums.lock().unwrap() = None;
+        *self.lists.songs.lock().unwrap() = None;
     }
 
     fn album_sorts(&self) -> &'static [SortOption<AlbumSort>] {
@@ -664,6 +742,11 @@ impl MusicSource for Subsonic {
             }
         }
         let (start, limit) = Self::page_params(q.start, q.limit);
+        // Every filter applies or the list fails: a dropped filter shows a list that only looks
+        // filtered. Subsonic cannot list the albums that are NOT favourites.
+        if q.favorite_filter() == Some(false) {
+            return Err(SourceError::Unsupported);
+        }
         // As in Feishin: artist and favourite filters read those lists, then sort and page locally.
         let mut artists = q.artist_ids.clone();
         artists.extend(q.artist_id.clone());
@@ -682,6 +765,17 @@ impl MusicSource for Subsonic {
             let needle = q.search.clone();
             let items = clientside::albums(items, &AlbumQuery { search: needle, ..rest });
             return Ok(clientside::page(&items, q.start, q.limit));
+        }
+        let genre_or_year =
+            q.genre.is_some() || !q.genres.is_empty() || q.year_min.is_some() || q.year_max.is_some();
+        if let Some(text) = q.search.as_deref().filter(|t| !t.is_empty())
+            && genre_or_year
+        {
+            // search3 knows no genre or year: search the genre's (year's) whole list here.
+            let all = self.full_album_list(album_list_type(q), q.start).await?;
+            let only_search =
+                AlbumQuery { search: Some(text.into()), sort: AlbumSort::Id, ..Default::default() };
+            return Ok(clientside::page(&clientside::albums(all, &only_search), q.start, q.limit));
         }
         if let Some(text) = q.search.as_deref().filter(|t| !t.is_empty()) {
             let r: types::SearchResult3 = self
@@ -924,10 +1018,35 @@ impl MusicSource for Subsonic {
             }
         }
         let (start, limit) = Self::page_params(q.start, q.limit);
-        let genre = q.genre.as_ref().or(q.genres.first());
-        if let (Some(genre), None, false) =
-            (genre, q.search.as_deref().filter(|t| !t.is_empty()), q.favorites_only)
-        {
+        let genre = q.genre.as_ref().or(q.genres.first()).filter(|g| !g.is_empty());
+        let search = q.search.as_deref().filter(|t| !t.is_empty());
+        // Every filter applies or the list fails (see `albums`); `favorite_filter` folds in
+        // `favorites_only`. Subsonic cannot list the songs that are NOT favourites.
+        match q.favorite_filter() {
+            Some(false) => return Err(SourceError::Unsupported),
+            Some(true) => {
+                // The starred list is complete: genre and search filter it here.
+                let starred: types::SearchResult3 = self.call("getStarred2", "starred2", &[]).await?;
+                let items: Vec<Song> =
+                    starred.song.iter().map(|c| normalize::song(&self.server_id, c)).collect();
+                let rest = SongQuery {
+                    search: q.search.clone(),
+                    genre: genre.cloned(),
+                    sort: SongSort::Id,
+                    ..Default::default()
+                };
+                return Ok(clientside::page(&clientside::songs(items, &rest), q.start, q.limit));
+            }
+            None => {}
+        }
+        if let (Some(genre), Some(text)) = (genre, search) {
+            // search3 knows no genre: search the genre's whole list here.
+            let all = self.full_genre_songs(genre, q.start).await?;
+            let only_search =
+                SongQuery { search: Some(text.into()), sort: SongSort::Id, ..Default::default() };
+            return Ok(clientside::page(&clientside::songs(all, &only_search), q.start, q.limit));
+        }
+        if let Some(genre) = genre {
             let r: types::Songs = self
                 .call(
                     "getSongsByGenre",
@@ -940,28 +1059,6 @@ impl MusicSource for Subsonic {
                 start_index: start,
                 total: None,
             });
-        }
-        if q.favorites_only || q.favorite == Some(true) {
-            let starred: types::SearchResult3 = self.call("getStarred2", "starred2", &[]).await?;
-            let items: Vec<Song> = starred
-                .song
-                .iter()
-                .skip(start)
-                .take(limit)
-                .map(|c| normalize::song(&self.server_id, c))
-                .collect();
-            return Ok(Page { items, start_index: start, total: Some(starred.song.len()) });
-        }
-        if let Some(genre) = q.genre.as_deref().filter(|g| !g.is_empty()) {
-            let r: types::Songs = self
-                .call(
-                    "getSongsByGenre",
-                    "songsByGenre",
-                    &[("genre", genre.into()), ("count", limit.to_string()), ("offset", start.to_string())],
-                )
-                .await?;
-            let items = r.song.iter().map(|c| normalize::song(&self.server_id, c)).collect();
-            return Ok(Page { items, start_index: start, total: None });
         }
         // An empty search3 query lists all songs on Navidrome (and most OpenSubsonic servers).
         let text = q.search.clone().unwrap_or_default();
