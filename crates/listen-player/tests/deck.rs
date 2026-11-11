@@ -1,5 +1,7 @@
 //! Deck primitives for DJ mixing, against a real mpv with `--ao=null`.
-//! Skipped when no mpv binary is available (`LISTEN_MPV` overrides the path).
+//! Skipped when no mpv binary is available (`LISTEN_MPV` overrides the path), except
+//! `levelling_stage_takes_gain_live`, which fails without mpv: it is the only check that the
+//! levelling gain is audible.
 
 use listen_core::settings::{
     DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL, DECK_TEMPO_FALLBACK, DeckEcho, LEVELLING_LABEL,

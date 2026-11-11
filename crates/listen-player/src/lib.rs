@@ -571,10 +571,12 @@ mod tests {
         assert!(s.properties().contains(&("audio-samplerate", json!(0))));
     }
 
-    /// Real mpv (skipped when it is not installed): every property is accepted.
+    /// Real mpv (skipped when it is not installed; `LISTEN_MPV` overrides the path, as in the
+    /// integration tests): every property is accepted.
     #[tokio::test]
     async fn mpv_accepts_all_audio_properties() {
-        let opts = MpvOptions { null_audio: true, ..Default::default() };
+        let binary = std::env::var_os("LISTEN_MPV").map_or("mpv".into(), Into::into);
+        let opts = MpvOptions { binary, null_audio: true, ..Default::default() };
         let Ok((player, _events)) = Player::spawn(&opts).await else { return };
         let s = AudioSettings {
             replay_gain: "album".into(),
