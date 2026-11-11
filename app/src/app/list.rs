@@ -633,7 +633,7 @@ impl Listen {
                     Some(ListData::Albums(a)) => a,
                     _ => return (start, start),
                 };
-                list::detail::visible_blocks(scroll, &albums[start..end])
+                list::detail::visible_blocks(self, scroll, &albums[start..end])
             }
         };
         (start + first, start + last)
@@ -684,7 +684,7 @@ impl Listen {
                     Some(ListData::Albums(a)) => a,
                     _ => return Task::none(),
                 };
-                list::detail::block_span(&albums[start..], local)
+                list::detail::block_span(self, &albums[start..], local)
             }
         };
         match list::scroll_into_view(scroll.offset, scroll.height, top, height) {

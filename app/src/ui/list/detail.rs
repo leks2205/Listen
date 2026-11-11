@@ -1,6 +1,7 @@
 //! The detail display type for albums: every album is a block with its cover,
-//! facts and track list (Feishin's "detail" list). Blocks have a known height
-//! (from the album's song count), so the list stays virtualized.
+//! facts and track list (Feishin's "detail" list). A block's height follows the tracks it
+//! draws (the album's own or the fetched ones, else its song count while they load), so the
+//! list stays virtualized.
 
 use super::Body;
 use super::table::interactive;
@@ -22,22 +23,25 @@ const INFO: f32 = 76.0;
 const TRACK_ROW: f32 = 32.0;
 const OVERSCAN: f32 = 400.0;
 
-fn track_count(album: &Album) -> usize {
-    album.song_count.map(|n| n as usize).unwrap_or(album.songs.len()).max(1)
+/// Track rows of a block: the tracks it draws, or the song count before they are fetched (YouTube
+/// Music albums have no count, and a server's count can be short).
+fn track_count(state: &Listen, album: &Album) -> usize {
+    (album.song_count.unwrap_or(0) as usize).max(album_tracks(state, album).len()).max(1)
 }
 
-/// Height of an album's block.
-pub fn block_height(album: &Album) -> f32 {
-    2.0 * PAD_V + (COVER + INFO).max(track_count(album) as f32 * TRACK_ROW) + 1.0
+/// Height of an album's block. It must equal the drawn height: the virtualizer and scroll-into-view
+/// (`app/list.rs`) place the blocks by it.
+pub fn block_height(state: &Listen, album: &Album) -> f32 {
+    2.0 * PAD_V + (COVER + INFO).max(track_count(state, album) as f32 * TRACK_ROW) + 1.0
 }
 
 /// `[first, last)` blocks intersecting the viewport.
-pub fn visible_blocks(scroll: ScrollState, albums: &[Album]) -> (usize, usize) {
+pub fn visible_blocks(state: &Listen, scroll: ScrollState, albums: &[Album]) -> (usize, usize) {
     let height = if scroll.height > 0.0 { scroll.height } else { 1200.0 };
     let (from, to) = (scroll.offset - OVERSCAN, scroll.offset + height + OVERSCAN);
     let (mut first, mut last, mut y) = (None, albums.len(), 0.0);
     for (i, a) in albums.iter().enumerate() {
-        let h = block_height(a);
+        let h = block_height(state, a);
         if first.is_none() && y + h >= from {
             first = Some(i);
         }
@@ -51,9 +55,9 @@ pub fn visible_blocks(scroll: ScrollState, albums: &[Album]) -> (usize, usize) {
 }
 
 /// Top and height of block `index`.
-pub fn block_span(albums: &[Album], index: usize) -> (f32, f32) {
-    let top: f32 = albums.iter().take(index).map(block_height).sum();
-    (top, albums.get(index).map_or(0.0, block_height))
+pub fn block_span(state: &Listen, albums: &[Album], index: usize) -> (f32, f32) {
+    let top: f32 = albums.iter().take(index).map(|a| block_height(state, a)).sum();
+    (top, albums.get(index).map_or(0.0, |a| block_height(state, a)))
 }
 
 /// The tracks of an album: the ones it carries, or the ones fetched for the detail view.
@@ -69,9 +73,9 @@ pub fn view<'a>(body: &Body<'a, Album>) -> Element<'a, Message> {
     let albums = &body.items[body.start..body.end];
     let scroll =
         ScrollState { offset: body.list.scroll.offset, height: body.size.height, width: body.size.width };
-    let (first, last) = visible_blocks(scroll, albums);
-    let before: f32 = albums.iter().take(first).map(block_height).sum();
-    let after: f32 = albums.iter().skip(last).map(block_height).sum();
+    let (first, last) = visible_blocks(body.state, scroll, albums);
+    let before: f32 = albums.iter().take(first).map(|a| block_height(body.state, a)).sum();
+    let after: f32 = albums.iter().skip(last).map(|a| block_height(body.state, a)).sum();
 
     let mut out = Column::new().push(space().height(before));
     for (local, album) in albums.iter().enumerate().take(last).skip(first) {
@@ -101,7 +105,8 @@ fn block<'a>(body: &Body<'a, Album>, index: usize, album: &'a Album) -> Element<
         size: listen_core::settings::RowSize::Default,
         hovered: body.list.hover == Some(index),
         selected,
-        width: (body.size.width - COVER - 120.0).max(120.0),
+        // Only the artists line reads it, and that line sits in the cover column.
+        width: COVER,
         card: false,
     };
     let name = super::columns::link(
@@ -119,7 +124,7 @@ fn block<'a>(body: &Body<'a, Album>, index: usize, album: &'a Album) -> Element<
     if !album.genres.is_empty() {
         facts.push(album.genres.join(", "));
     }
-    facts.push(plural(track_count(album), "song"));
+    facts.push(plural(track_count(body.state, album), "song"));
     if !album.duration.is_zero() {
         facts.push(format_duration(album.duration));
     }
@@ -150,7 +155,7 @@ fn block<'a>(body: &Body<'a, Album>, index: usize, album: &'a Album) -> Element<
         column![cover, container(info).padding(Padding::from([metrics::space_sm(), 0.0]))].width(COVER);
     let stacked = row![left, container(list).width(Length::Fill)].spacing(metrics::space_md());
     let framed = container(stacked)
-        .height(block_height(album) - 1.0)
+        .height(block_height(body.state, album) - 1.0)
         .padding(Padding::from([PAD_V, PAD_V]))
         .style(move |_| container::Style {
             background: selected.then(|| iced::Background::Color(style::alpha(t.primary, 0.14))),
@@ -241,29 +246,47 @@ mod tests {
             .collect()
     }
 
+    fn state() -> Listen {
+        Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() }).0
+    }
+
     #[test]
     fn blocks_grow_with_their_tracks() {
+        let s = state();
         let short = albums(1, 3);
         let long = albums(1, 20);
-        assert!(block_height(&long[0]) > block_height(&short[0]));
+        assert!(block_height(&s, &long[0]) > block_height(&s, &short[0]));
         // A short album is as tall as its cover.
-        assert!(block_height(&short[0]) >= COVER + 2.0 * PAD_V);
+        assert!(block_height(&s, &short[0]) >= COVER + 2.0 * PAD_V);
+    }
+
+    #[test]
+    fn block_height_covers_fetched_tracks() {
+        let mut s = state();
+        let mut album = albums(1, 0).remove(0);
+        album.song_count = None;
+        let songs = crate::demo::album_songs(0);
+        let fetched: Vec<Song> = songs.iter().cycle().take(14).cloned().collect();
+        assert_eq!(fetched.len(), 14);
+        s.lists.detail.insert((album.server_id.clone(), album.id.clone()), fetched);
+        assert!(block_height(&s, &album) >= 14.0 * TRACK_ROW + 2.0 * PAD_V);
     }
 
     #[test]
     fn only_blocks_in_view_are_built() {
+        let s = state();
         let list = albums(200, 10);
-        let h = block_height(&list[0]);
+        let h = block_height(&s, &list[0]);
         let at = |offset: f32| ScrollState { offset, height: 800.0, width: 1000.0 };
-        let (first, last) = visible_blocks(at(0.0), &list);
+        let (first, last) = visible_blocks(&s, at(0.0), &list);
         assert_eq!(first, 0);
         assert!((3..10).contains(&last), "{last}");
-        let (first, last) = visible_blocks(at(h * 100.0), &list);
+        let (first, last) = visible_blocks(&s, at(h * 100.0), &list);
         assert!((97..=100).contains(&first), "{first}");
         assert!(last > first && last <= 108, "{last}");
-        let (top, height) = block_span(&list, 50);
+        let (top, height) = block_span(&s, &list, 50);
         assert_eq!(top, 50.0 * h);
         assert_eq!(height, h);
-        assert_eq!(visible_blocks(at(1e9), &list).0, list.len());
+        assert_eq!(visible_blocks(&s, at(1e9), &list).0, list.len());
     }
 }
