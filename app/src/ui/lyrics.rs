@@ -208,7 +208,8 @@ fn word_line<'a>(
     let ui = &state.lyrics_ui;
     let mut r = Row::new();
     for p in listen_lyrics::gemini::pieces(text) {
-        // Lute colours: new words in the accent, learning ones half way, known ones plain.
+        // Lute colours: new words in the accent, learning ones half way, known ones plain (the Words
+        // tooltip describes these).
         let shade = match (&ui.vocab, p.word) {
             (Some(words), true) => {
                 let lemma = ui.glosses.get(p.text).map(|g| g.lemma.as_str());
@@ -473,7 +474,7 @@ fn controls(state: &Listen) -> Element<'_, Message> {
             top = top.push(crate::ui::tip::tip_plain(
                 t,
                 label(crate::i18n::trf("{} % known", &[&pct]), metrics::font_sm(), t.muted),
-                "Share of this song's Korean words you know in Lute. New words are green, words you are learning light green.",
+                "Share of this song's Korean words you know in Lute. New words are shown in the accent colour, words you are learning in a lighter shade.",
                 crate::ui::tip::Position::Top,
             ));
         }
