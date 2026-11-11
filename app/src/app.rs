@@ -2546,8 +2546,6 @@ impl Listen {
         self.live_token.store(self.play_token, std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// Plays the queue's current item from its start, replacing what mpv plays: a running mix is
-    /// cancelled and only this item's stream is resolved (the next one is prefetched later).
     /// Starts playback after songs were added while nothing played: the current song of a queue that
     /// had not started, or the first song added after the queue ran past its end.
     fn start_added(&mut self) -> Task<Message> {
@@ -2557,6 +2555,8 @@ impl Listen {
         self.start_current()
     }
 
+    /// Plays the queue's current item from its start, replacing what mpv plays: a running mix is
+    /// cancelled and only this item's stream is resolved (the next one is prefetched later).
     fn start_current(&mut self) -> Task<Message> {
         // A mix in progress stops; the new song plays on the active deck.
         let cancel = self.mix_cancel("another song was started");
