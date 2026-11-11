@@ -76,11 +76,15 @@ pub(crate) fn wheel_volume<'a>(content: impl Into<Element<'a, Message>>) -> Elem
         .into()
 }
 
-/// "42" or "Muted": the tooltip text over a volume control.
+/// "42" or "Muted" (translated), after the DLNA device's name while casting: the text of a volume control.
 pub(crate) fn volume_text(state: &Listen) -> String {
-    let level = if state.playback.muted { "Muted".to_string() } else { state.playback.volume.to_string() };
+    let level = if state.playback.muted {
+        crate::i18n::tr("Muted").to_string()
+    } else {
+        state.playback.volume.to_string()
+    };
     match state.dlna_device() {
-        Some(name) => format!("{name}: {level}"),
+        Some(name) => crate::i18n::trf("{}: {}", &[&name, &level]),
         None => level,
     }
 }

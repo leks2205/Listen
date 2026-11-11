@@ -38,7 +38,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
         body = body.push(field("Description", "What is it for?", &form.comment, P::FormComment));
         body = body.push(
             checkbox(form.public)
-                .label("Public")
+                .label(crate::i18n::tr("Public"))
                 .size(16)
                 .text_size(metrics::font_md())
                 .on_toggle_maybe((!form.busy).then_some(|v| msg(P::FormPublic(v)))),
@@ -46,7 +46,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
     }
     if form.has_image() {
         let status = match (&form.image, form.remove_image) {
-            (Some(image), _) => format!("New cover: {}", image.name),
+            (Some(image), _) => crate::i18n::trf("New cover: {}", &[&image.name]),
             (None, true) => "The uploaded cover will be removed.".to_string(),
             (None, false) => "Cover".to_string(),
         };

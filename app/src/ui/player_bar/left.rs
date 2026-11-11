@@ -99,7 +99,7 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
             row![
                 icon(Icon::LuMicVocal, metrics::font_md(), t.primary),
                 label_w(
-                    format!("AI DJ · {}", state.dj_persona().name),
+                    crate::i18n::trf("AI DJ · {}", &[&state.dj_persona().name]),
                     metrics::font_md(),
                     t.primary,
                     Weight::Medium
@@ -135,7 +135,7 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
                 Some(next) => row![
                     icon(Icon::LuShuffle, metrics::font_sm(), t.primary),
                     label(
-                        fit(&format!("Mixing into “{}”", next.song.title), metrics::font_sm()),
+                        fit(&crate::i18n::trf("Mixing into “{}”", &[&next.song.title]), metrics::font_sm()),
                         metrics::font_sm(),
                         t.primary
                     ),
