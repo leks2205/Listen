@@ -158,3 +158,19 @@ async fn register_keeps_the_previous_song_reachable() {
     assert_eq!(http.get(&urls[3]).send().await.unwrap().status(), 200, "previous song");
     assert_eq!(http.get(&urls[2]).send().await.unwrap().status(), 404, "older songs are gone");
 }
+
+#[tokio::test]
+async fn dropping_the_proxy_closes_open_connections() {
+    use tokio::io::AsyncReadExt;
+    let p = proxy().await;
+    // A client that connects and says nothing holds a connection task.
+    let mut idle = tokio::net::TcpStream::connect(p.addr()).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    drop(p);
+    let mut buf = [0u8; 16];
+    let read = tokio::time::timeout(std::time::Duration::from_secs(1), idle.read(&mut buf)).await;
+    match read {
+        Ok(Ok(0) | Err(_)) => {}
+        other => panic!("the connection outlived the proxy: {other:?}"),
+    }
+}

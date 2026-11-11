@@ -29,7 +29,12 @@ const KEEP: usize = 2;
 /// Token and entry, oldest first.
 type Routes = Arc<Mutex<VecDeque<(String, Entry)>>>;
 
-/// The running server. Dropping it stops it.
+/// How long a client may take to send its request head (a LAN host that connects and stays
+/// silent must not hold a task and a socket for good).
+const HEAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The running server. Dropping it stops it: the accept loop and every open connection (the
+/// connections are tasks of a `JoinSet` the accept loop owns).
 #[derive(Debug)]
 pub struct Proxy {
     addr: SocketAddr,
@@ -88,14 +93,29 @@ impl Proxy {
         let routes: Routes = Arc::default();
         let shared = routes.clone();
         let task = tokio::spawn(async move {
+            // Connections live in this set, never detached: aborting this task drops the set,
+            // which aborts every transfer still running.
+            let mut conns = tokio::task::JoinSet::new();
             loop {
-                let Ok((stream, _)) = listener.accept().await else { continue };
-                let routes = shared.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = serve(stream, routes).await {
-                        tracing::debug!("DLNA proxy: {e}");
-                    }
-                });
+                tokio::select! {
+                    accepted = listener.accept() => match accepted {
+                        Ok((stream, _)) => {
+                            let routes = shared.clone();
+                            conns.spawn(async move {
+                                if let Err(e) = serve(stream, routes).await {
+                                    tracing::debug!("DLNA proxy: {e}");
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            // E.g. out of file descriptors: wait instead of spinning.
+                            tracing::debug!("DLNA proxy accept: {e}");
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        }
+                    },
+                    // Finished connections leave the set.
+                    Some(_) = conns.join_next(), if !conns.is_empty() => {}
+                }
             }
         });
         Ok(Proxy { addr, routes, task })
@@ -189,7 +209,9 @@ fn dlna_headers(mime: &str, len: Option<u64>, extra: &mut Vec<(&'static str, Str
 }
 
 async fn serve(mut stream: TcpStream, routes: Routes) -> std::io::Result<()> {
-    let req = read_request(&mut stream).await?;
+    let req = tokio::time::timeout(HEAD_TIMEOUT, read_request(&mut stream))
+        .await
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::TimedOut))??;
     let head_only = req.method == "HEAD";
     if req.method != "GET" && !head_only {
         return respond(&mut stream, "405 Method Not Allowed", &[("Content-Length", "0".into())]).await;
