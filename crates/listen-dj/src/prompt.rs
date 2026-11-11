@@ -1,6 +1,7 @@
 //! What the text model is asked (seed, what played, the last line, the
 //! candidate pool) and how its answer is checked.
 
+use crate::familiarity::{Familiarity, NEW_TAG};
 use crate::persona::Persona;
 use listen_core::model::Song;
 use serde::Deserialize;
@@ -293,7 +294,7 @@ pub fn system_instruction(persona: &Persona, show: &Show) -> String {
          airs over the start of your set's first song, keep it shorter than that song's \
          instrumental intro (\"intro … s\" in its note) so you never talk over the singer.\n\
          What the listener knows: candidates may carry a tag from their listening history — \
-         \"new to you\" (never played here; \"new artist\" = no song of that artist either) or \
+         \"{NEW_TAG}\" (never played here; \"new artist\" = no song of that artist either) or \
          \"plays N, last played …\" (\"favourite\" = played a lot). Mix a few familiar songs with new \
          ones. When your set has a new-to-you song and you speak, introduce one of them with one short \
          story line (where it comes from, what it is about, why it fits now) so it lands; use only facts \
@@ -346,7 +347,7 @@ fn song_line(out: &mut String, song: &Song, notes: &HashMap<String, String>, mix
 
 /// Some candidate is tagged new to the listener (the break should introduce one, the schema asks which).
 pub fn offers_new(r: &PlanRequest<'_>) -> bool {
-    r.candidates.iter().any(|s| r.familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")))
+    r.candidates.iter().any(|s| r.familiar.get(&s.id).is_some_and(|t| Familiarity::is_new_tag(t)))
 }
 
 /// The per-set prompt.
@@ -450,7 +451,7 @@ pub fn user_prompt(r: &PlanRequest<'_>) -> String {
         .candidates
         .iter()
         .enumerate()
-        .filter(|(_, s)| r.familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")))
+        .filter(|(_, s)| r.familiar.get(&s.id).is_some_and(|t| Familiarity::is_new_tag(t)))
         .map(|(i, _)| i.to_string())
         .collect();
     if !new.is_empty() {
@@ -645,6 +646,57 @@ mod tests {
         // A space late in the note is still a word boundary to cut at.
         let note = format!("{} {}", "가".repeat(60), "하".repeat(40));
         assert_eq!(clip_note(&note), format!("{}…", "가".repeat(60)));
+    }
+
+    /// A plain request over `pool`; the first song is the seed.
+    fn bare_request<'a>(
+        pool: &'a [Song],
+        familiar: &'a HashMap<String, String>,
+        notes: &'a HashMap<String, String>,
+        requests: &'a crate::steer::Requests,
+    ) -> PlanRequest<'a> {
+        PlanRequest {
+            persona: &PERSONAS[0],
+            seed: &pool[0],
+            seed_context: &[],
+            listener_picks: &[],
+            mood: None,
+            seed_mood: None,
+            played: &[],
+            current: Some(&pool[0]),
+            last_line: None,
+            candidates: pool,
+            notes,
+            familiar,
+            set_min: 2,
+            set_max: 5,
+            first: false,
+            mode: BreakMode::Intro,
+            duo: false,
+            show: Show::default(),
+            requests,
+            requests_fresh: false,
+        }
+    }
+
+    #[test]
+    fn offers_new_follows_the_familiarity_tag() {
+        let pool = vec![
+            song("Teardrop", "Massive Attack", 1998, "Trip-Hop"),
+            song("Roads", "Portishead", 1994, "Trip-Hop"),
+        ];
+        let (notes, requests) = (HashMap::new(), crate::steer::Requests::default());
+        for new_artist in [false, true] {
+            let tag = Familiarity { new_to_you: true, new_artist, ..Familiarity::default() }.tag().unwrap();
+            let familiar = HashMap::from([(pool[1].id.clone(), tag)]);
+            let req = bare_request(&pool, &familiar, &notes, &requests);
+            assert!(offers_new(&req), "{familiar:?}");
+            assert!(user_prompt(&req).contains("New to the listener: candidates 1."), "{familiar:?}");
+        }
+        let known =
+            Familiarity { plays: 12, last_played_days: Some(3), ..Familiarity::default() }.tag().unwrap();
+        let familiar = HashMap::from([(pool[1].id.clone(), known)]);
+        assert!(!offers_new(&bare_request(&pool, &familiar, &notes, &requests)));
     }
 
     #[test]

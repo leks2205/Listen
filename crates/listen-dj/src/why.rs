@@ -1,14 +1,10 @@
 //! "Why this song?": the reason shown next to a song a DJ picked (see [`listen_core::queue::Why`]).
 //! One reason per song, chosen by priority so it says something the listener can check.
 
-use crate::familiarity::Familiarity;
+use crate::familiarity::{FAVOURITE_PLAYS, FORGOTTEN_DAYS, Familiarity};
 use listen_core::queue::{Picker, Why, WhyCode};
 
 const DAY: i64 = 86_400;
-/// A "favourite" has this many plays (the same bar as the AI DJ's "favourite" tag).
-const FAVOURITE_PLAYS: u32 = 10;
-/// … and is "forgotten" after this many days without a play.
-const FORGOTTEN_DAYS: u32 = 60;
 
 /// A favourite not heard for a while: its last play in Unix seconds.
 fn forgotten(f: &Familiarity, now: i64) -> Option<i64> {

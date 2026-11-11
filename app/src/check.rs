@@ -558,7 +558,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
     let energy_of = |s: &listen_core::model::Song| listen_dj::steer::Facts {
         energy: flow.get(&s.id).map(|f| f.mood.energy),
         bpm: flow.get(&s.id).and_then(|f| f.bpm),
-        new_to_you: familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")),
+        new_to_you: familiar.get(&s.id).is_some_and(|t| listen_dj::familiarity::Familiarity::is_new_tag(t)),
         plays: familiar
             .get(&s.id)
             .and_then(|t| t.split("plays ").nth(1))
@@ -696,8 +696,9 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
                     let title = s.title.to_lowercase();
                     !said.is_empty() && (said.contains(&title) || title.contains(&said))
                 });
-                let new =
-                    named.is_some_and(|s| familiar.get(&s.id).is_some_and(|t| t.starts_with("new to you")));
+                let new = named.is_some_and(|s| {
+                    familiar.get(&s.id).is_some_and(|t| listen_dj::familiarity::Familiarity::is_new_tag(t))
+                });
                 named_new += usize::from(new);
                 println!(
                     "introduces: “{}”{}",

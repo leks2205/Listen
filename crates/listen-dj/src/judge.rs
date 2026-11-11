@@ -2,6 +2,7 @@
 //! prompt or the text model changes (LLM-as-a-judge agrees moderately with expert raters on music
 //! recommendation explanations, RecSys 2026).
 
+use crate::familiarity::NEW_TAG;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::fmt::Write;
@@ -27,7 +28,7 @@ pub struct Case<'a> {
 impl Case<'_> {
     /// The set has a song tagged new to the listener, so the break should introduce one.
     pub fn has_new(&self) -> bool {
-        self.set.iter().any(|s| s.contains("[new to you"))
+        self.set.iter().any(|s| s.contains(&format!("[{NEW_TAG}")))
     }
 }
 
@@ -88,7 +89,8 @@ impl Verdict {
 }
 
 pub fn system_instruction() -> String {
-    "You grade one spoken break of an AI radio DJ inside a personal music player. Be strict and \
+    format!(
+        "You grade one spoken break of an AI radio DJ inside a personal music player. Be strict and \
      literal. Answer only with the JSON object.\n\
      - grounded: false if the break states a fact about an artist or song (origin, members, history, \
      awards, chart places, what a lyric means) that is wrong or that you cannot confirm; talking about \
@@ -98,13 +100,13 @@ pub fn system_instruction() -> String {
      - language: true if it is spoken in the required language (song titles and artist names may stay \
      in their original language).\n\
      - fresh: false if it repeats the idea or phrasing of the previous break.\n\
-     - introduces_new: true if the break names at least one song of the new set tagged \"new to you\" \
+     - introduces_new: true if the break names at least one song of the new set tagged \"{NEW_TAG}\" \
      (or its artist) and says anything about it — its origin, era, scene, what it is about, or how it \
      sounds or feels. False only if no new-to-you song is mentioned, or only its bare title.\n\
      - no_mix_talk: false only if it uses DJ craft terms: blend, crossfade, cut, fade, beat-matching, \
      BPM, tempo or key. Metaphors about mood or energy (\"shift down a gear\") are fine.\n\
      - problems: one short English sentence on what is wrong, empty if nothing."
-        .into()
+    )
 }
 
 pub fn user_prompt(c: &Case) -> String {

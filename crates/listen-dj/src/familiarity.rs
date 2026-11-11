@@ -14,6 +14,14 @@ const DAY: i64 = 86_400;
 const MIN_PLAYS: usize = 100;
 const MIN_DAYS: i64 = 14;
 
+/// How a [`Familiarity::tag`] for a never-played song starts. The prompt, the plan schema and the judge
+/// find new songs by it: test a tag with [`Familiarity::is_new_tag`], never with a copy of the text.
+pub const NEW_TAG: &str = "new to you";
+/// A song with this many plays is tagged "favourite" (and is the "Why this song?" favourite).
+pub const FAVOURITE_PLAYS: u32 = 10;
+/// From this many days without a play the tag says "not heard for N months" (a forgotten favourite).
+pub const FORGOTTEN_DAYS: u32 = 60;
+
 /// What the listener knows about one song.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Familiarity {
@@ -32,7 +40,7 @@ impl Familiarity {
     /// nothing is known.
     pub fn tag(&self) -> Option<String> {
         if self.new_to_you {
-            return Some(if self.new_artist { "new to you, new artist".into() } else { "new to you".into() });
+            return Some(if self.new_artist { format!("{NEW_TAG}, new artist") } else { NEW_TAG.into() });
         }
         let days = self.last_played_days?;
         if self.plays == 0 {
@@ -41,15 +49,20 @@ impl Familiarity {
         let when = match days {
             0 => "today".to_string(),
             1 => "yesterday".to_string(),
-            d if d < 60 => format!("{d} days ago"),
+            d if d < FORGOTTEN_DAYS => format!("{d} days ago"),
             d => format!("not heard for {} months", d / 30),
         };
-        let fav = if self.plays >= 10 { "favourite, " } else { "" };
-        Some(if days >= 60 {
+        let fav = if self.plays >= FAVOURITE_PLAYS { "favourite, " } else { "" };
+        Some(if days >= FORGOTTEN_DAYS {
             format!("{fav}plays {}, {when}", self.plays)
         } else {
             format!("{fav}plays {}, last played {when}", self.plays)
         })
+    }
+
+    /// Whether a [`tag`](Self::tag) marks a song new to the listener.
+    pub fn is_new_tag(tag: &str) -> bool {
+        tag.starts_with(NEW_TAG)
     }
 }
 
@@ -190,6 +203,10 @@ mod tests {
         assert_eq!(angel.tag().unwrap(), "new to you");
         let new = l.of(&entry("Roads", "Portishead", 0).to_song());
         assert_eq!(new.tag().unwrap(), "new to you, new artist");
+        assert!(
+            Familiarity::is_new_tag(&new.tag().unwrap()) && Familiarity::is_new_tag(&angel.tag().unwrap())
+        );
+        assert!(!Familiarity::is_new_tag(&f.tag().unwrap()));
     }
 
     #[test]
