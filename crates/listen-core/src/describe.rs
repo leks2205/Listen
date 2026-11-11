@@ -181,7 +181,8 @@ pub struct Filter {
     pub vocal_max: Option<f32>,
     #[serde(default)]
     pub vocal_min: Option<f32>,
-    /// Camelot code ("8A"); compatible keys (same, ±1, relative) pass.
+    /// Camelot code ("8A"); compatible keys (same, ±1, relative) pass. A code that does not parse filters
+    /// nothing.
     #[serde(default)]
     pub key: Option<String>,
 }
@@ -192,7 +193,9 @@ impl Filter {
     }
 
     pub fn allows(&self, f: Option<&Facets>) -> bool {
-        if self.is_empty() {
+        let want_key = self.key.as_deref().and_then(parse_camelot);
+        // An unparsable key is no filter, so it must not drop the songs without facts either.
+        if want_key.is_none() && (Filter { key: None, ..self.clone() }).is_empty() {
             return true;
         }
         let Some(f) = f else { return false };
@@ -202,7 +205,7 @@ impl Filter {
             }
             v.is_some_and(|v| lo.is_none_or(|lo| v >= lo) && hi.is_none_or(|hi| v <= hi))
         };
-        let key_ok = match self.key.as_deref().and_then(parse_camelot) {
+        let key_ok = match want_key {
             None => true,
             Some(want) => f.key.is_some_and(|k| k.distance(want) <= 0.15),
         };
@@ -244,14 +247,15 @@ impl Filter {
     }
 }
 
-/// "8A" / "11b" → a Camelot key.
+/// "8A" / "11b" → a Camelot key; anything else (also non-ASCII client input) → `None`.
 pub fn parse_camelot(s: &str) -> Option<Camelot> {
     let s = s.trim();
-    let (num, ring) = s.split_at(s.len().checked_sub(1)?);
-    let number: u8 = num.parse().ok().filter(|n| (1..=12).contains(n))?;
+    // Split at the last char, not the last byte: a multi-byte char there is client input, not a panic.
+    let ring = s.chars().next_back()?;
+    let number: u8 = s[..s.len() - ring.len_utf8()].parse().ok().filter(|n| (1..=12).contains(n))?;
     match ring {
-        "A" | "a" => Some(Camelot { number, minor: true }),
-        "B" | "b" => Some(Camelot { number, minor: false }),
+        'A' | 'a' => Some(Camelot { number, minor: true }),
+        'B' | 'b' => Some(Camelot { number, minor: false }),
         _ => None,
     }
 }
@@ -696,6 +700,19 @@ mod tests {
             f.allows(Some(&at(8, true))) && f.allows(Some(&at(9, true))) && f.allows(Some(&at(8, false)))
         );
         assert!(!f.allows(Some(&at(2, true))) && !f.allows(Some(&Facets::default())));
+    }
+
+    #[test]
+    fn parse_camelot_rejects_non_ascii_without_panicking() {
+        for code in ["8가", "8Ａ", "8é", "가", "", " "] {
+            assert!(parse_camelot(code).is_none(), "{code:?}");
+        }
+        assert_eq!(parse_camelot(" 11b "), Some(Camelot { number: 11, minor: false }));
+        // A key that does not parse filters nothing, so songs without facts stay in.
+        let f = Filter { key: Some("8가".into()), ..Default::default() };
+        assert!(f.allows(None));
+        let f = Filter { key: Some("8가".into()), bpm_min: Some(100.0), ..Default::default() };
+        assert!(!f.allows(None));
     }
 
     #[test]
