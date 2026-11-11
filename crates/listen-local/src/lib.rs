@@ -354,15 +354,13 @@ pub fn scan_cached(server: &ServerId, root: &Path, full: bool) -> Vec<Scanned> {
     scan::scan_with_cache(root, cache.as_deref(), full)
 }
 
-/// Deletes this server+root's scan cache, for a removed server or a changed local
-/// folder path. Missing cache folders/files are fine.
-pub fn forget_cache(server: &ServerId, root: &Path) {
-    let Some(path) = cache::cache_file(server, root) else { return };
-    match std::fs::remove_file(&path) {
-        Ok(()) => tracing::debug!("removed scan cache {}", path.display()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => tracing::warn!("could not remove scan cache {}: {e}", path.display()),
-    }
+/// Deletes every scan cache of this server, for a removed server or a changed local folder
+/// path. Takes no root: the old folder may be gone, and the file name of its cache depends on
+/// how the path resolved when it was written. Missing cache folders/files are fine.
+pub fn forget_cache(server: &ServerId) {
+    let Some(dir) = cache::cache_dir() else { return };
+    let deleted = cache::forget_in(&dir, server);
+    tracing::debug!("removed {deleted} scan caches of {}", server.0);
 }
 
 /// A folder on this computer, scanned into memory.

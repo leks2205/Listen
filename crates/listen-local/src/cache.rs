@@ -225,22 +225,48 @@ pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The start of every cache file name of `server`: the part that does not depend on
+/// the root or on the filesystem, so [`forget_in`] can find files whose root is gone.
+fn server_prefix(server: &ServerId) -> String {
+    format!("library-{:016x}-", crate::fnv1a(server.0.as_str()))
+}
+
 /// The file name for a server and root; separate from the platform cache folder so
 /// it can be tested without `ProjectDirs` (and without a real home directory).
 pub(crate) fn cache_name(server: &ServerId, root: &Path) -> String {
     let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    format!(
-        "library-{:016x}-{:016x}.bin",
-        crate::fnv1a(server.0.as_str()),
-        crate::fnv1a(&root.to_string_lossy())
-    )
+    format!("{}{:016x}.bin", server_prefix(server), crate::fnv1a(&root.to_string_lossy()))
+}
+
+/// The platform cache folder of the scan caches. `None` if none can be determined.
+pub(crate) fn cache_dir() -> Option<PathBuf> {
+    let dirs = directories::ProjectDirs::from("", "", "Listen")?;
+    Some(dirs.cache_dir().join("listen-local"))
 }
 
 /// Where this root's cache lives: the platform cache folder, one file per server and
 /// canonical root path. `None` if no cache folder can be determined.
 pub(crate) fn cache_file(server: &ServerId, root: &Path) -> Option<PathBuf> {
-    let dirs = directories::ProjectDirs::from("", "", "Listen")?;
-    Some(dirs.cache_dir().join("listen-local").join(cache_name(server, root)))
+    Some(cache_dir()?.join(cache_name(server, root)))
+}
+
+/// Deletes every cache file of `server` in `dir`, whatever root it was written for (the
+/// root may be gone or spelled differently by now). Returns how many were deleted.
+pub(crate) fn forget_in(dir: &Path, server: &ServerId) -> usize {
+    let prefix = server_prefix(server);
+    let Ok(listing) = std::fs::read_dir(dir) else { return 0 };
+    let mut deleted = 0;
+    for entry in listing.flatten() {
+        let name = entry.file_name();
+        if !name.to_str().is_some_and(|n| n.starts_with(&prefix) && n.ends_with(".bin")) {
+            continue;
+        }
+        match std::fs::remove_file(entry.path()) {
+            Ok(()) => deleted += 1,
+            Err(e) => tracing::warn!("could not remove scan cache {}: {e}", entry.path().display()),
+        }
+    }
+    deleted
 }
 
 // ---- binary encoding -------------------------------------------------------
@@ -524,6 +550,27 @@ mod tests {
         put_u64(&mut out, crate::fnv1a_bytes(body));
         out.extend_from_slice(body);
         out
+    }
+
+    #[test]
+    fn forget_cache_finds_the_cache_of_a_deleted_folder() {
+        let base = std::env::temp_dir().join(format!("listen-forget-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (dir, root) = (base.join("cache"), base.join("music"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        let (server, other) = (ServerId("l".into()), ServerId("m".into()));
+        // Written for the root as the user typed it (trailing separator, canonical at write time).
+        let typed = PathBuf::from(format!("{}/", root.display()));
+        let mine = dir.join(cache_name(&server, &typed));
+        let theirs = dir.join(cache_name(&other, &root));
+        std::fs::write(&mine, b"x").unwrap();
+        std::fs::write(&theirs, b"x").unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(forget_in(&dir, &server), 1);
+        assert!(!mine.exists(), "the cache of the deleted folder is gone");
+        assert!(theirs.exists(), "another server's cache is kept");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

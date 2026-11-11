@@ -334,7 +334,7 @@ impl Listen {
                     && old != new_root
                 {
                     // The old folder's cache would otherwise stay behind forever.
-                    listen_local::forget_cache(&id, std::path::Path::new(&old));
+                    listen_local::forget_cache(&id);
                 }
                 if let Some(f) = &self.servers.edit {
                     set_music_dir(&mut self.config, &id, &f.music_server, &f.music_local);

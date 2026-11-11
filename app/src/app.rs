@@ -1738,7 +1738,7 @@ impl Listen {
         if let Some(server) = self.config.servers.iter().find(|s| s.id == *id)
             && server.kind == SourceKind::Local
         {
-            listen_local::forget_cache(id, std::path::Path::new(&server.url));
+            listen_local::forget_cache(id);
         }
         self.config.servers.retain(|s| s.id != *id);
         self.config.server_options.remove(&id.0);
