@@ -139,27 +139,38 @@ impl ShardStore {
 
     /// Writes all pending records (one `write` per chunk, so a reader sees
     /// whole lines or a torn last line, never interleaved garbage).
+    ///
+    /// On an I/O error nothing is lost: the unwritten records stay pending and the next flush retries
+    /// them (in a new chunk when the failed write may have left a torn line).
     pub fn flush(&mut self) -> io::Result<()> {
         self.writer.last_flush = Instant::now();
-        let mut pending = std::mem::take(&mut self.writer.pending).into_iter().peekable();
-        while pending.peek().is_some() {
+        while !self.writer.pending.is_empty() {
             let path = self.chunk_path(self.writer.number);
             let mut block = String::new();
-            while let Some(line) = pending.peek() {
-                if !block.is_empty()
+            let mut taken = 0;
+            for line in &self.writer.pending {
+                if taken > 0
                     && (self.writer.bytes + (block.len() + line.len() + 1) as u64 > ROTATE_BYTES
-                        || self.writer.records >= ROTATE_RECORDS)
+                        || self.writer.records + taken >= ROTATE_RECORDS)
                 {
                     break;
                 }
                 block.push_str(line);
                 block.push('\n');
-                self.writer.records += 1;
-                pending.next();
+                taken += 1;
             }
             let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-            file.write_all(block.as_bytes())?;
-            file.flush()?;
+            if let Err(e) = file.write_all(block.as_bytes()).and_then(|()| file.flush()) {
+                // Part of the block may be on disk without its newline: appending the retry there would
+                // glue two records into one damaged line, so the retry starts the next chunk.
+                self.writer.number += 1;
+                self.writer.bytes = 0;
+                self.writer.records = 0;
+                return Err(e);
+            }
+            // Only written records leave the queue (a failed write keeps them for the next flush).
+            self.writer.pending.drain(..taken);
+            self.writer.records += taken;
             self.writer.bytes += block.len() as u64;
             // Written by this process: the reader needn't parse them.
             let len = file.metadata()?.len();
@@ -497,6 +508,29 @@ mod tests {
         .unwrap();
         me.refresh().unwrap();
         assert!(me.lookup("s4", &file()).is_some());
+    }
+
+    #[test]
+    fn a_failed_flush_keeps_its_records_for_the_next_one() {
+        let dir = TempDir::new("failed-flush");
+        let chunk = dir.0.join("v1/m-1/000001.jsonl");
+        {
+            let mut a = ShardStore::open(&dir.0, "m-1").unwrap();
+            for i in 0..3 {
+                a.append(rec(&format!("s{i}"), "m-1", 1, true)).unwrap();
+            }
+            // The chunk can't be opened for writing (a directory in its place: unmounted folder, lock, …).
+            fs::create_dir_all(&chunk).unwrap();
+            assert!(a.flush().is_err());
+            assert_eq!(a.writer.pending.len(), 3, "nothing is dropped");
+            assert_eq!(a.writer.records, 0, "the rotation count only counts written records");
+            fs::remove_dir(&chunk).unwrap();
+            a.flush().unwrap();
+            assert!(a.writer.pending.is_empty());
+            assert_eq!(a.writer.records, 3);
+        }
+        let b = ShardStore::open(&dir.0, "m-2").unwrap();
+        assert_eq!(b.len(), 3);
     }
 
     #[test]
