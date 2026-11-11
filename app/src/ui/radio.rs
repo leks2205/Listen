@@ -128,26 +128,27 @@ pub fn station_image<'a>(
 fn station_card<'a>(state: &'a Listen, station: &'a listen_source::InternetRadio) -> Element<'a, Message> {
     let t = state.tokens;
     let active = state.radio.active.as_ref().filter(|a| a.station.id == station.id);
-    let playing = active.is_some() && state.playback.playing;
-    let mut meta = Column::new().spacing(2).push(label_w(
+    let mut meta = Column::new().spacing(2).push(crate::ui::data_label_w(
         station.name.as_str(),
         metrics::font_lg(),
         if active.is_some() { t.primary } else { t.foreground },
         Weight::Medium,
     ));
     if let Some(title) = active.and_then(|a| a.title.as_deref()) {
-        meta = meta.push(label(format!("Now playing: {title}"), metrics::font_sm(), t.primary));
+        meta =
+            meta.push(label(crate::i18n::trf("Now playing: {}", &[&title]), metrics::font_sm(), t.primary));
     }
-    meta = meta.push(label(station.stream_url.as_str(), metrics::font_sm(), t.muted));
+    meta = meta.push(crate::ui::data_label(station.stream_url.as_str(), metrics::font_sm(), t.muted));
     if let Some(home) = &station.home_page_url {
         meta = meta.push(label(home.as_str(), metrics::font_sm(), t.muted));
     }
-    // The server's picture of the station, else the radio glyph (pause while it plays).
+    // The server's picture of the station, else the radio glyph (stop while it is the active station:
+    // a click on it stops it).
     let picture = station_image(state, station);
     let badge: Element<'a, Message> = match picture {
         Some(img) => img,
         None => container(icon(
-            if playing { Icon::LuPause } else { Icon::LuRadio },
+            if active.is_some() { Icon::LuSquare } else { Icon::LuRadio },
             metrics::font_xl(),
             if active.is_some() { t.primary } else { t.muted },
         ))
