@@ -69,8 +69,7 @@ impl Gemini {
     /// Asks the text model for the next set and the break line.
     pub async fn plan(&self, model: &str, req: &PlanRequest<'_>) -> Result<(Plan, Usage), DjError> {
         // A short pool (Tell the DJ kept only one or two songs) can't fill a longer set: ask for what's there.
-        let set_max = req.set_max.max(1).min(req.candidates.len().max(1));
-        let set_min = req.set_min.max(1).min(set_max);
+        let (set_min, set_max) = req.set_bounds();
         let body = json!({
             "model": model,
             "system_instruction": prompt::system_instruction(req.persona, &req.show),
@@ -88,8 +87,7 @@ impl Gemini {
         let reply = self.post(&body, Duration::from_secs(45)).await?;
         let usage = usage(&reply);
         let text = outputs(&reply, "text").filter_map(|c| c["text"].as_str()).collect::<String>();
-        let plan = prompt::parse_plan(&text, req.candidates.len(), req.set_min, req.set_max)
-            .map_err(DjError::Api)?;
+        let plan = prompt::parse_plan(&text, req.candidates.len(), set_min, set_max).map_err(DjError::Api)?;
         tracing::info!(
             "AI DJ plan from {model} in {:.1}s ({usage}): {} songs, mood “{}”",
             started.elapsed().as_secs_f32(),

@@ -1,4 +1,4 @@
-//! The AI DJ: when a set's last song starts, Gemini picks the next 2–5 songs from a library pool and writes
+//! The AI DJ: when a set's last song starts, Gemini picks the next set of songs (Settings → AI DJ → Songs per set) from a library pool and writes
 //! the break, which is spoken and aired. The break sits at random between songs (clip in mpv's "next" slot),
 //! over the song's end, the next song's start, or across the change; those three play on a second mpv under
 //! which the music is ducked (see `fade`). Any failure falls back to the Auto-DJ; playback never waits.

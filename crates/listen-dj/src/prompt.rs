@@ -120,7 +120,9 @@ pub struct PlanRequest<'a> {
     /// What the listener knows of a song, by id ("new to you", "plays 12, last played 3 days ago"); from
     /// the listening history (`familiarity::Listening::tags`). Shown for candidates.
     pub familiar: &'a HashMap<String, String>,
+    /// Fewest songs wanted in the set; read it through [`PlanRequest::set_bounds`] (≥ 1, ≤ `set_max`).
     pub set_min: usize,
+    /// Most songs wanted in the set; read it through [`PlanRequest::set_bounds`] (≥ 1, ≤ the pool).
     pub set_max: usize,
     /// First set after switching the DJ on (the line is an intro).
     pub first: bool,
@@ -134,6 +136,16 @@ pub struct PlanRequest<'a> {
     pub requests: &'a crate::steer::Requests,
     /// A request changed since the last set: the break acknowledges it.
     pub requests_fresh: bool,
+}
+
+impl PlanRequest<'_> {
+    /// The set size to ask for, `(min, max)`: at least one song, `min ≤ max`, and never more than the pool
+    /// holds (a short pool can't fill a longer set). Callers may pass raw settings; every consumer of
+    /// `set_min`/`set_max` (prompt, schema, answer repair) goes through this one rule.
+    pub fn set_bounds(&self) -> (usize, usize) {
+        let max = self.set_max.max(1).min(self.candidates.len().max(1));
+        (self.set_min.max(1).min(max), max)
+    }
 }
 
 /// What the listener set up for the show (Settings → AI DJ). Every field may be empty.
@@ -446,12 +458,8 @@ pub fn user_prompt(r: &PlanRequest<'_>) -> String {
         None if !r.first => p.push_str("\nYou haven't said anything yet.\n"),
         None => {}
     }
-    let _ = writeln!(
-        p,
-        "\nCandidates (pick {}–{} by number):",
-        r.set_min.min(r.candidates.len()),
-        r.set_max.min(r.candidates.len())
-    );
+    let (set_min, set_max) = r.set_bounds();
+    let _ = writeln!(p, "\nCandidates (pick {set_min}–{set_max} by number):");
     for (i, song) in r.candidates.iter().enumerate() {
         let _ = write!(p, "{i}. ");
         song_line(&mut p, song, r.notes, true);
@@ -693,6 +701,34 @@ mod tests {
             requests,
             requests_fresh: false,
         }
+    }
+
+    #[test]
+    fn prompt_and_schema_agree_on_set_size() {
+        let pool: Vec<Song> = (0..10).map(|i| song(&format!("Song {i}"), "Artist", 2000, "Pop")).collect();
+        let (familiar, notes, requests) = (HashMap::new(), HashMap::new(), crate::steer::Requests::default());
+        let mut req = bare_request(&pool, &familiar, &notes, &requests);
+        // A hand-edited config may set the minimum above the maximum: the maximum wins.
+        (req.set_min, req.set_max) = (5, 3);
+        assert_eq!(req.set_bounds(), (3, 3));
+        let (min, max) = req.set_bounds();
+        let schema = response_schema(req.persona, min, max, false);
+        assert!(user_prompt(&req).contains("pick 3–3 by number"));
+        assert_eq!(
+            (
+                schema["properties"]["picks"]["minItems"].as_u64(),
+                schema["properties"]["picks"]["maxItems"].as_u64()
+            ),
+            (Some(3), Some(3))
+        );
+        // Zero and more than the pool are clamped the same way.
+        (req.set_min, req.set_max) = (0, 40);
+        assert_eq!(req.set_bounds(), (1, 10));
+        assert!(user_prompt(&req).contains("pick 1–10 by number"));
+        let short = &pool[..2];
+        req.candidates = short;
+        (req.set_min, req.set_max) = (3, 5);
+        assert_eq!(req.set_bounds(), (2, 2));
     }
 
     #[test]

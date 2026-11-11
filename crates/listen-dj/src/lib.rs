@@ -1,4 +1,4 @@
-//! AI DJ: picks the next set of 2–5 songs that fit a seed song's mood from a library candidate
+//! AI DJ: picks the next set of songs (Settings → AI DJ → Songs per set) that fit a seed song's mood from a library candidate
 //! pool and writes a radio-style line for the break, one [`gemini::Gemini::plan`] call per set;
 //! [`gemini::Gemini::speak`] turns the line into a WAV clip (Gemini TTS).
 
