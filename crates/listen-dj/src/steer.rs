@@ -281,7 +281,8 @@ fn median(mut v: Vec<f32>) -> Option<f32> {
 /// at least [`MIN_POOL`] songs; an energy request keeps every song on its side of the bar when at least
 /// [`MIN_STEERED`] are, else the [`MIN_POOL`] that fit it best. `reference`: the energy to beat for Calmer / More energy (the replaced songs' mean, else the
 /// song playing now); without one, the pool's median. Songs without analysis never pass an energy filter
-/// when enough analysed ones do.
+/// when enough analysed ones do, and a pool without any analysed song is left alone (with or without a
+/// reference: nothing in it is measured, so there is nothing to rank by).
 pub fn filter_pool<T: Clone>(
     pool: Vec<T>,
     facts: impl Fn(&T) -> Facts,
@@ -301,6 +302,10 @@ pub fn filter_pool<T: Clone>(
             Chip::Calmer | Chip::MoreEnergy => {
                 let calmer = *chip == Chip::Calmer;
                 let known: Vec<f32> = pool.iter().filter_map(|(_, f)| f.energy).collect();
+                // No candidate measured: the request can't narrow this pool, even when the reference is known.
+                if known.is_empty() {
+                    continue;
+                }
                 let Some(bar) = reference.or_else(|| median(known)) else { continue };
                 let fits = |e: f32| if calmer { e < bar } else { e > bar };
                 let kept: Vec<(T, Facts)> =
@@ -453,6 +458,16 @@ mod tests {
         let energies: Vec<Option<f32>> = (0..20).map(|i| Some(i as f32 / 20.0)).collect();
         let kept = ids(filter_pool(pool(&energies), |s| s.1, &with(&[Chip::Calmer]), None));
         assert_eq!(kept, (0..10).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn energy_requests_leave_an_unanalysed_pool_alone_even_with_a_reference() {
+        // The replaced songs (or the song playing now) are analysed, the candidates are not.
+        let e = vec![None; 12];
+        for chip in [Chip::Calmer, Chip::MoreEnergy] {
+            let kept = ids(filter_pool(pool(&e), |s| s.1, &with(&[chip]), Some(0.5)));
+            assert_eq!(kept, (0..12).collect::<Vec<_>>(), "{chip:?}");
+        }
     }
 
     #[test]
