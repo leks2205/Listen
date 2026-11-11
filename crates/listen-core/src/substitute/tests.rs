@@ -436,3 +436,19 @@ fn song_of_a_music_video() {
     video_only.album = None;
     assert!(song_of_video(&video_only, &[ytm("Love Riot", "aespa", 166)]).is_none(), "results need an album");
 }
+
+#[test]
+fn video_song_name_ignores_apostrophes_inside_words() {
+    let v = |t: &str| ytm(t, "X", 200);
+    assert_eq!(video_song_name(&v("Girls' Generation 'Gee' MV")), "Gee");
+    assert_eq!(video_song_name(&v("SEVENTEEN 'Don't Wanna Cry' Official MV")), "Don't Wanna Cry");
+    assert_eq!(video_song_name(&v("SEVENTEEN ‘Don’t Wanna Cry’ Official MV")), "Don’t Wanna Cry");
+    assert_eq!(video_song_name(&v("aespa 'Love Riot' MV")), "Love Riot");
+    assert_eq!(video_song_name(&v("아이유「좋은 날」뮤비")), "좋은 날");
+    let gee = ytm("Gee", "Girls' Generation", 200);
+    let mut mv = ytm("Girls' Generation 'Gee' MV", "SMTOWN", 230);
+    mv.album = None;
+    let mut song = gee.clone();
+    song.album = Some("The 1st Mini Album".into());
+    assert_eq!(song_of_video(&mv, &[song]).map(|s| s.title.clone()), Some(gee.title));
+}

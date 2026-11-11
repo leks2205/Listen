@@ -406,16 +406,32 @@ pub fn best_match<'a>(wanted: &Song, candidates: &'a [Song]) -> Option<&'a Song>
 fn video_song_name(video: &Song) -> String {
     let t = video.title.as_str();
     for (open, close) in [('\'', '\''), ('‘', '’'), ('"', '"'), ('“', '”'), ('「', '」')] {
-        if let Some(i) = t.find(open) {
-            let rest = &t[i + open.len_utf8()..];
-            if let Some(j) = rest.find(close)
-                && j > 0
-            {
-                return rest[..j].to_string();
-            }
+        if let Some(name) = quoted(t, open, close) {
+            return name;
         }
     }
     parse_title(t, &artist_keys(video, &[])).text
+}
+
+/// The first non-empty `open … close` quote in `t`. A mark that is also an apostrophe only counts at a word
+/// edge (an opening `'` at the start or after a space or bracket, a closing `'`/`’` before a non-letter), so
+/// "Girls' Generation 'Gee'" and "'Don't Wanna Cry'" quote the song, not a fragment between apostrophes.
+fn quoted(t: &str, open: char, close: char) -> Option<String> {
+    let apostrophe = |c: char| c == '\'' || c == '’';
+    for (i, _) in t.match_indices(open) {
+        let before = t[..i].chars().next_back();
+        if apostrophe(open) && before.is_some_and(|c| !c.is_whitespace() && !"([{".contains(c)) {
+            continue;
+        }
+        let rest = &t[i + open.len_utf8()..];
+        for (j, _) in rest.match_indices(close) {
+            let after = rest[j + close.len_utf8()..].chars().next();
+            if j > 0 && (!apostrophe(close) || after.is_none_or(|c| !c.is_alphanumeric())) {
+                return Some(rest[..j].to_string());
+            }
+        }
+    }
+    None
 }
 
 /// The song (art track) of a music video among search results: same name and artist, with an
