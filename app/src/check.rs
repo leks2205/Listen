@@ -500,7 +500,7 @@ async fn run_ai_dj(check: AiDjCheck) -> Result<(), String> {
         ("Angel", "Massive Attack", 1998, "Trip-Hop", (78.0, 4, true, 0.45), "new to you"),
         ("Hyperballad", "Björk", 1995, "Electronic", (120.0, 7, false, 0.55), "new to you, new artist"),
         ("Cherry Blossom Girl", "Air", 2004, "Downtempo", (92.0, 9, true, 0.3), "plays 3, not heard for 4 months"),
-        ("Intro", "The xx", 2009, "Indie", (100.0, 6, true, 0.45), "favourite, plays 31, last played yesterday"),
+        ("Intro", "The xx", 2009, "Indie", (100.0, 6, true, 0.45), "favourite, plays 31, last played a day ago"),
         ("Breathe", "Télépopmusik", 2001, "Downtempo", (78.0, 3, true, 0.35), "new to you, new artist"),
         ("Midnight City", "M83", 2011, "Synthpop", (105.0, 4, false, 0.75), "plays 9, last played 20 days ago"),
         ("Mr. Brightside", "The Killers", 2004, "Rock", (148.0, 1, false, 0.9), "plays 2, last played 40 days ago"),

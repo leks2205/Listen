@@ -27,7 +27,8 @@ pub const FORGOTTEN_DAYS: u32 = 60;
 pub struct Familiarity {
     /// Plays of any version of the song.
     pub plays: u32,
-    /// Days since the last play (0 = today); `None` = never played.
+    /// Whole 24-hour periods since the last play (0 = within the last 24 hours, not "since midnight");
+    /// `None` = never played.
     pub last_played_days: Option<u32>,
     /// Never played, and the history is long enough to say so.
     pub new_to_you: bool,
@@ -46,9 +47,10 @@ impl Familiarity {
         if self.plays == 0 {
             return None;
         }
+        // Elapsed time, not calendar days: "today" would be false for a song played late last night.
         let when = match days {
-            0 => "today".to_string(),
-            1 => "yesterday".to_string(),
+            0 => "within the last 24 hours".to_string(),
+            1 => "a day ago".to_string(),
             d if d < FORGOTTEN_DAYS => format!("{d} days ago"),
             d => format!("not heard for {} months", d / 30),
         };
@@ -130,7 +132,7 @@ impl Listening {
 }
 
 /// Songs from the history the AI DJ may add to its pool: the heavy rotation of the last 30 days (not
-/// played today) and favourites not heard for two months, most played first. The caller keeps those
+/// played within the last 24 hours) and favourites not heard for two months, most played first. The caller keeps those
 /// that fit the moment.
 pub fn history_candidates(entries: &[Entry], now: i64, limit: usize) -> (Vec<Song>, Vec<Song>) {
     let played: Vec<Entry> = entries.iter().filter(|e| e.status == PlayStatus::Played).cloned().collect();
@@ -219,9 +221,25 @@ mod tests {
             l.of(&entry("Glory Box", "Portishead", 0).to_song()).tag().unwrap(),
             "favourite, plays 12, last played 30 days ago"
         );
-        assert_eq!(l.of(&entry("Today", "X", 0).to_song()).tag().unwrap(), "plays 1, last played today");
+        assert_eq!(
+            l.of(&entry("Today", "X", 0).to_song()).tag().unwrap(),
+            "plays 1, last played within the last 24 hours"
+        );
         let f = Familiarity { plays: 3, last_played_days: Some(95), ..Default::default() };
         assert_eq!(f.tag().unwrap(), "plays 3, not heard for 3 months");
+    }
+
+    #[test]
+    fn played_last_night_is_not_today() {
+        // Eleven hours ago may be yesterday evening: the tag claims only what the elapsed time proves.
+        let l = Listening::new(&long_history(vec![entry("Late", "X", NOW - 11 * 3600)]), NOW);
+        let tag = l.of(&entry("Late", "X", 0).to_song()).tag().unwrap();
+        assert_eq!(tag, "plays 1, last played within the last 24 hours");
+        assert!(!tag.contains("today"), "{tag}");
+        let l = Listening::new(&long_history(vec![entry("Late", "X", NOW - 30 * 3600)]), NOW);
+        let tag = l.of(&entry("Late", "X", 0).to_song()).tag().unwrap();
+        assert_eq!(tag, "plays 1, last played a day ago");
+        assert!(!tag.contains("yesterday"), "{tag}");
     }
 
     #[test]
