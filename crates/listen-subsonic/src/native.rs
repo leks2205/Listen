@@ -141,7 +141,7 @@ fn year(min: Option<i32>, max: Option<i32>) -> Option<String> {
     max.or(min).filter(|y| *y > 0).map(|y| y.to_string())
 }
 
-/// `GET /api/album` parameters. `genre_ids` are Navidrome genre ids (see `Native::genre_ids`).
+/// `GET /api/album` parameters. `genre_ids` are Navidrome genre ids (see `Subsonic::genre_ids`).
 pub fn album_params(q: &AlbumQuery, genre_ids: &[String], features: Features) -> Params {
     let mut p = Params::new();
     paging(&mut p, q.start, q.limit);

@@ -327,30 +327,38 @@ impl Subsonic {
         Err(SourceError::Auth("native login refused".into()))
     }
 
-    /// Navidrome genre ids for genre names (the native filters take ids).
-    async fn genre_ids(&self, names: &[String]) -> Result<Vec<String>> {
+    /// Navidrome genre ids for genre names (the native filters take ids). A name the cached map
+    /// lacks (a genre added by a scan since) reloads it once; `None` when a name is still
+    /// unknown, so the caller answers "no match" instead of sending an unfiltered request.
+    async fn genre_ids(&self, names: &[String]) -> Result<Option<Vec<String>>> {
         if names.is_empty() {
-            return Ok(vec![]);
+            return Ok(Some(vec![]));
         }
-        let known = self.native.genre_ids.lock().unwrap().is_some();
-        if !known {
-            let params: native::Params = vec![("_start", "0".into()), ("_end", "5000".into())];
-            let (rows, _) = self.native_get("genre", &params).await?;
-            let map = rows
-                .iter()
-                .filter_map(|g| Some((g["name"].as_str()?.to_lowercase(), g["id"].as_str()?.to_string())))
-                .collect();
-            *self.native.genre_ids.lock().unwrap() = Some(map);
+        let lookup = |map: &std::collections::HashMap<String, String>| -> Option<Vec<String>> {
+            names.iter().map(|n| map.get(&n.to_lowercase()).cloned()).collect()
+        };
+        let cached = self.native.genre_ids.lock().unwrap().as_ref().and_then(lookup);
+        if cached.is_some() {
+            return Ok(cached);
         }
-        let guard = self.native.genre_ids.lock().unwrap();
-        let map = guard.as_ref().expect("filled above");
-        Ok(names.iter().filter_map(|n| map.get(&n.to_lowercase()).cloned()).collect())
+        let params: native::Params = vec![("_start", "0".into()), ("_end", "5000".into())];
+        let (rows, _) = self.native_get("genre", &params).await?;
+        let map = rows
+            .iter()
+            .filter_map(|g| Some((g["name"].as_str()?.to_lowercase(), g["id"].as_str()?.to_string())))
+            .collect();
+        let ids = lookup(&map);
+        *self.native.genre_ids.lock().unwrap() = Some(map);
+        Ok(ids)
     }
 
     async fn native_albums(&self, q: &AlbumQuery) -> Result<Page<Album>> {
         let mut names = q.genres.clone();
         names.extend(q.genre.clone());
-        let ids = self.genre_ids(&names).await?;
+        // A genre the server does not know matches nothing (never the whole library).
+        let Some(ids) = self.genre_ids(&names).await? else {
+            return Ok(Page { items: vec![], start_index: q.start, total: Some(0) });
+        };
         let params = native::album_params(q, &ids, self.features());
         let (rows, total) = self.native_get("album", &params).await?;
         Ok(Page {
@@ -363,7 +371,10 @@ impl Subsonic {
     async fn native_songs(&self, q: &SongQuery) -> Result<Page<Song>> {
         let mut names = q.genres.clone();
         names.extend(q.genre.clone());
-        let ids = self.genre_ids(&names).await?;
+        // A genre the server does not know matches nothing (never the whole library).
+        let Some(ids) = self.genre_ids(&names).await? else {
+            return Ok(Page { items: vec![], start_index: q.start, total: Some(0) });
+        };
         let params = native::song_params(q, &ids, self.features());
         let (rows, total) = self.native_get("song", &params).await?;
         Ok(Page {
@@ -575,6 +586,11 @@ impl MusicSource for Subsonic {
         let root = self.ping_info().await?;
         self.note_ping(&root);
         Ok(())
+    }
+
+    async fn refresh(&self) {
+        // Genres added by a scan get their ids at the next filtered list.
+        *self.native.genre_ids.lock().unwrap() = None;
     }
 
     fn album_sorts(&self) -> &'static [SortOption<AlbumSort>] {
