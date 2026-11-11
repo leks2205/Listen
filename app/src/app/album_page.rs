@@ -97,9 +97,10 @@ impl TrackSort {
     }
 }
 
+/// Shown translated: the sort pick lists draw this `Display` as it is.
 impl std::fmt::Display for TrackSort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.label())
+        f.write_str(crate::i18n::tr(self.label()))
     }
 }
 

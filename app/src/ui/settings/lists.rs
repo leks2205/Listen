@@ -14,7 +14,7 @@ struct Choice(PlayBehavior);
 
 impl std::fmt::Display for Choice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.label())
+        f.write_str(crate::i18n::tr(self.0.label()))
     }
 }
 
