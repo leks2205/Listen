@@ -13,7 +13,7 @@
 //! - [`clip`] turns a song's analysis into the view of its stretch the planner works on; [`plan_into`] and
 //!   [`plan_out_of`] plan the two legs.
 
-use crate::plan::{Kind, Opts, PlanCtx, Side, TransitionPlan, plan, plan_with};
+use crate::plan::{Kind, Opts, PlanCtx, SHORT_BLEND_VOCALS_TOUCH, Side, TransitionPlan, plan, plan_with};
 use crate::score::{FlowCtx, TimbreStats, pair_cost};
 use listen_core::analysis::{Features, FlowFeatures, SectionKind};
 pub use listen_core::queue::BridgeCut;
@@ -239,11 +239,12 @@ pub fn choose_with_gain(
     best.map(|(_, c)| c)
 }
 
-/// A leg worth a bridge: beat-matched, and a short blend only where the vocals don't touch.
+/// A leg worth a bridge: beat-matched, and a short blend only where the vocals don't touch (the planner
+/// says so only in the reason, worded by [`SHORT_BLEND_VOCALS_TOUCH`]).
 fn beat_matched(p: &TransitionPlan) -> bool {
     match p.kind {
         Kind::BeatBlend { .. } => true,
-        Kind::ShortBlend { .. } => !p.reason.contains("vocals touch"),
+        Kind::ShortBlend { .. } => !p.reason.contains(SHORT_BLEND_VOCALS_TOUCH),
         _ => false,
     }
 }
@@ -411,6 +412,19 @@ mod tests {
         let direct = plan(&a, &c, &ctx(&s, 10.0));
         let a = FeatBuilder::new(124.0, 96).intro(8).outro(16).build();
         assert!(gap(&a, &c, &direct, &s).is_some_and(|w| w.contains("keys")));
+    }
+
+    #[test]
+    fn a_short_blend_whose_vocals_touch_is_never_a_bridge_leg() {
+        // Faint vocals everywhere: too much clash for a beat blend, a short blend's vocals touch.
+        let s = Mixing::default();
+        let mut out = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
+        let mut inn = FeatBuilder::new(124.0, 64).intro(0).outro(0).build();
+        out.bars.vocal.iter_mut().chain(inn.bars.vocal.iter_mut()).for_each(|v| *v = 89);
+        let p = plan(&out, &inn, &ctx(&s, 30.0));
+        assert!(matches!(p.kind, Kind::ShortBlend { .. }), "{:?}: {}", p.kind, p.reason);
+        assert!(p.reason.contains(SHORT_BLEND_VOCALS_TOUCH), "{}", p.reason);
+        assert!(!beat_matched(&p) && always_try(&p), "{}", p.reason);
     }
 
     #[test]

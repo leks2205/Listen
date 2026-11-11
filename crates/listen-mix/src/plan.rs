@@ -38,6 +38,9 @@ const EARLY_IN_MAX_S: f64 = 90.0;
 /// With "Transitions may skip parts of songs: short", the most an early cue-out may cut off the outgoing
 /// song before its outro, and the most of the incoming intro a cue-in may skip (s).
 pub const SHORT_SKIP_S: f64 = 16.0;
+/// The wording of a [`Kind::ShortBlend`] whose vocals touch, inside its [`TransitionPlan::reason`]. The bridge
+/// picker reads it (such a leg is not beat-matched), so planner and picker share this constant.
+pub(crate) const SHORT_BLEND_VOCALS_TOUCH: &str = "short blend, vocals touch";
 /// Score per second of the outgoing song cut off, and of the incoming intro skipped.
 const CUT_PER_S: f32 = 0.02;
 const SKIP_PER_S: f32 = 0.01;
@@ -1235,7 +1238,7 @@ fn build(o: &Side, i: &Side, c: Cand, ctx: &PlanCtx, opts: Opts) -> TransitionPl
         CandKind::Short => (
             Kind::ShortBlend { bars },
             vec![(0.0, 1.0, 0.0), (blend_s, 0.0, 1.0)],
-            if c.clash > 0.05 { "short blend, vocals touch" } else { "short blend between the vocals" },
+            if c.clash > 0.05 { SHORT_BLEND_VOCALS_TOUCH } else { "short blend between the vocals" },
         ),
         CandKind::Filter => {
             eq.push(EqEvent {
