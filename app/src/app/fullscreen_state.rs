@@ -84,8 +84,32 @@ pub enum FsSetting {
     /// The expand button on the bar's cover (off: the sidebar image goes too).
     ExpandArt(bool),
     ShowRemaining(bool),
-    RightVisible(usize, bool),
-    RightMove(usize, i8),
+    /// A right-hand button (by id) shown / hidden.
+    RightVisible(String, bool),
+    /// A right-hand button (by id) one place up (-1) or down (1) among the known buttons.
+    RightMove(String, i8),
+}
+
+/// The right-hand buttons the settings list shows: the saved ones it knows, in the saved order, then the
+/// known buttons the saved list lacks (shown). Ids from another version stay in the config but not here.
+pub fn right_controls_shown(saved: &[RightControl]) -> Vec<RightControl> {
+    let known = |id: &str| listen_core::settings::RIGHT_CONTROLS.iter().any(|(k, _)| *k == id);
+    let mut out: Vec<RightControl> = saved.iter().filter(|c| known(&c.id)).cloned().collect();
+    for (id, _) in listen_core::settings::RIGHT_CONTROLS {
+        if !out.iter().any(|c| c.id == *id) {
+            out.push(RightControl { id: (*id).into(), visible: true });
+        }
+    }
+    out
+}
+
+/// Adds the known buttons a saved list lacks (shown), so every button the settings list shows exists.
+fn complete_right_controls(saved: &mut Vec<RightControl>) {
+    for (id, _) in listen_core::settings::RIGHT_CONTROLS {
+        if !saved.iter().any(|c| c.id == *id) {
+            saved.push(RightControl { id: (*id).into(), visible: true });
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -362,23 +386,27 @@ impl Listen {
                     }
                 }
                 FsSetting::ShowRemaining(v) => b.show_time_remaining = v,
-                FsSetting::RightVisible(i, v) => {
-                    if let Some(c) = b.right_controls.get_mut(i) {
+                FsSetting::RightVisible(id, v) => {
+                    complete_right_controls(&mut b.right_controls);
+                    if let Some(c) = b.right_controls.iter_mut().find(|c| c.id == id) {
                         c.visible = v;
                     }
                 }
-                FsSetting::RightMove(i, dir) => {
-                    if b.right_controls.len() < listen_core::settings::RIGHT_CONTROLS.len() {
-                        // A saved list from before a button existed: complete it first.
-                        for (id, _) in listen_core::settings::RIGHT_CONTROLS {
-                            if !b.right_controls.iter().any(|c| c.id == *id) {
-                                b.right_controls.push(RightControl { id: (*id).into(), visible: true });
-                            }
-                        }
-                    }
-                    let j = i.checked_add_signed(isize::from(dir)).filter(|j| *j < b.right_controls.len());
-                    if let (Some(j), true) = (j, i < b.right_controls.len()) {
-                        b.right_controls.swap(i, j);
+                FsSetting::RightMove(id, dir) => {
+                    complete_right_controls(&mut b.right_controls);
+                    // Positions of the buttons the list shows; unknown ids keep their place.
+                    let shown: Vec<usize> = (0..b.right_controls.len())
+                        .filter(|&i| {
+                            listen_core::settings::RIGHT_CONTROLS
+                                .iter()
+                                .any(|(k, _)| *k == b.right_controls[i].id)
+                        })
+                        .collect();
+                    if let Some(k) = shown.iter().position(|&i| b.right_controls[i].id == id)
+                        && let Some(&other) =
+                            k.checked_add_signed(isize::from(dir)).and_then(|j| shown.get(j))
+                    {
+                        b.right_controls.swap(shown[k], other);
                     }
                 }
             }
@@ -519,6 +547,26 @@ fn dominant_color(img: &image::RgbaImage) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn right_visible_toggles_a_button_missing_from_an_old_saved_list() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        s.config.settings.player_bar.right_controls.retain(|c| c.id != "sleep_timer");
+        s.config
+            .settings
+            .player_bar
+            .right_controls
+            .insert(0, RightControl { id: "gone".into(), visible: true });
+        let msg = |m| Message::Fullscreen(FullscreenMsg::Setting(m));
+        let _ = s.update(msg(FsSetting::RightVisible("sleep_timer".into(), false)));
+        let saved = &s.config.settings.player_bar.right_controls;
+        assert!(saved.iter().any(|c| c.id == "sleep_timer" && !c.visible));
+        assert!(!right_controls_shown(saved).iter().any(|c| c.id == "gone"), "unknown ids are not listed");
+        // Moving the first listed button up does nothing; moving it down swaps it with the second.
+        let first = right_controls_shown(saved)[0].id.clone();
+        let _ = s.update(msg(FsSetting::RightMove(first.clone(), 1)));
+        assert_eq!(right_controls_shown(&s.config.settings.player_bar.right_controls)[1].id, first);
+    }
 
     #[test]
     fn idle_opens_only_when_quiet_playing_and_closed() {

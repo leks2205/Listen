@@ -315,13 +315,9 @@ fn right_controls_follow_the_setting() {
     let mut s = state();
     let (w, _, r_all) = (s.window_size.width, 0, listen::ui::player_bar::column_widths(&s, 1000.0).2);
     let _ = w;
-    let index = |s: &Listen, id: &str| {
-        s.config.settings.player_bar.right_controls.iter().position(|c| c.id == id).unwrap()
-    };
     // Hide the queue button and the sleep timer.
     for id in ["queue", "sleep_timer"] {
-        let i = index(&s, id);
-        let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::RightVisible(i, false))));
+        let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::RightVisible(id.into(), false))));
     }
     let r_less = listen::ui::player_bar::column_widths(&s, 1000.0).2;
     assert!(r_less < r_all, "{r_less} < {r_all}");
@@ -331,8 +327,7 @@ fn right_controls_follow_the_setting() {
     );
     // Moving the volume up two places (past the hidden queue button) puts it before the favourite.
     for _ in 0..2 {
-        let i = index(&s, "volume");
-        let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::RightMove(i, -1))));
+        let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::RightMove("volume".into(), -1))));
     }
     let order = s.config.settings.player_bar.right_controls_ordered();
     assert_eq!(order[order.len() - 2..], ["volume", "favorite"]);

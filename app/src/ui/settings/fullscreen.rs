@@ -45,13 +45,7 @@ pub(super) fn player_bar_rows(state: &Listen) -> Vec<Element<'_, Message>> {
             row![].into(),
         ),
     ];
-    // Every known button, in the saved order (new ones last).
-    let mut items = b.right_controls.clone();
-    for (id, _) in RIGHT_CONTROLS {
-        if !items.iter().any(|c| c.id == *id) {
-            items.push(listen_core::settings::RightControl { id: (*id).into(), visible: true });
-        }
-    }
+    let items = crate::app::fullscreen_state::right_controls_shown(&b.right_controls);
     let last = items.len().saturating_sub(1);
     let arrow = |glyph: Icon, to: Option<Message>| {
         crate::ui::tip::tip_icon(
@@ -69,13 +63,16 @@ pub(super) fn player_bar_rows(state: &Listen) -> Vec<Element<'_, Message>> {
         rows.push(
             row![
                 checkbox(item.visible)
-                    .label(name)
-                    .on_toggle(move |v| set(FsSetting::RightVisible(i, v)))
+                    .label(crate::i18n::tr(name))
+                    .on_toggle({
+                        let id = item.id.clone();
+                        move |v| set(FsSetting::RightVisible(id.clone(), v))
+                    })
                     .size(18)
                     .text_size(metrics::font_md()),
                 iced::widget::space().width(iced::Length::Fill),
-                arrow(Icon::LuChevronUp, (i > 0).then(|| set(FsSetting::RightMove(i, -1)))),
-                arrow(Icon::LuChevronDown, (i < last).then(|| set(FsSetting::RightMove(i, 1)))),
+                arrow(Icon::LuChevronUp, (i > 0).then(|| set(FsSetting::RightMove(item.id.clone(), -1)))),
+                arrow(Icon::LuChevronDown, (i < last).then(|| set(FsSetting::RightMove(item.id.clone(), 1)))),
             ]
             .spacing(metrics::space_sm())
             .align_y(Alignment::Center)
