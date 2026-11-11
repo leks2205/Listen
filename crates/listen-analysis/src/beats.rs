@@ -239,8 +239,9 @@ fn straighten(beats: &[f32]) -> Vec<f32> {
         .collect()
 }
 
-/// Mean of `v` over a ±40 ms window around `t`.
-fn around(frames: &Frames, v: &[f32], t: f32) -> f32 {
+/// Peak of `v` within ±40 ms of `t`. A peak, not a mean: onsets are frame-quantised, a mean would smear
+/// them (and change the pulse clarity and the downbeat votes built on it).
+fn peak_around(frames: &Frames, v: &[f32], t: f32) -> f32 {
     let r = frames.range(t - 0.04, t + 0.04);
     if r.is_empty() { 0.0 } else { v[r.clone()].iter().copied().fold(0.0, f32::max) }
 }
@@ -271,7 +272,7 @@ fn downbeat_phase_own(frames: &Frames, beats: &[f32], per_bar: usize) -> usize {
     let mut scores = vec![0f32; per_bar];
     let mut chroma_scores = vec![0f32; per_bar];
     for (i, &t) in beats.iter().enumerate() {
-        scores[i % per_bar] += around(frames, &frames.low_flux, t) / low_mean.max(1e-9);
+        scores[i % per_bar] += peak_around(frames, &frames.low_flux, t) / low_mean.max(1e-9);
         chroma_scores[i % per_bar] += chroma_change(t);
     }
     let norm = |v: &mut Vec<f32>| {
@@ -293,8 +294,8 @@ fn pulse_clarity(frames: &Frames, env: &[f32], beats: &[f32]) -> f32 {
     }
     let (mut on, mut off) = (0f32, 0f32);
     for w in beats.windows(2) {
-        on += around(frames, env, w[0]);
-        off += around(frames, env, 0.5 * (w[0] + w[1]));
+        on += peak_around(frames, env, w[0]);
+        off += peak_around(frames, env, 0.5 * (w[0] + w[1]));
     }
     ((on - off) / (on + off).max(1e-9)).clamp(0.0, 1.0)
 }
