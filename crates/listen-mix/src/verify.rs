@@ -2,10 +2,11 @@
 //! armed it is played through on the analysis curves — both decks' loudness (bar curve anchored on the
 //! integrated loudness, [`LocalLevel`]), lead-vocal likelihood (with synced lyrics merged in) and the
 //! plan's gain envelope, equal-loudness trim, EQ moves and echo repeats — every [`STEP_S`]. A plan fails
-//! when the mix falls below the quieter song's own level and the edge-to-edge line, or rises above the
-//! louder one and the line, while both sound (by more than [`MAX_LEVEL_LU`]), when both decks are audibly sung at once, or when the outgoing
-//! leaves in the middle of a sung line (with synced lyrics). Failing
-//! plans give way to the planner's next option ([`crate::plan::alternatives`]), then the plain fade.
+//! when, while both sound, the mix rises above the louder song's own level and the edge-to-edge line by
+//! more than [`MAX_LEVEL_LU`] (a bump), or falls below the quieter one and the line by more than
+//! [`MAX_LEVEL_LU`] − [`HOLE_MARGIN_LU`] (a hole: the margin is the curves' error); when both decks are
+//! audibly sung at once; or when the outgoing leaves in the middle of a sung line (with synced lyrics).
+//! Failing plans give way to the planner's next option ([`crate::plan::alternatives`]), then the plain fade.
 //!
 //! No audio is needed, so this runs at plan time on both apps (the desktop plans before it fetches
 //! the incoming file). [`audio_levels`] measures the same dip and bump on a rendered preview
@@ -17,7 +18,8 @@ use listen_core::analysis::{Features, cue};
 
 /// Simulation step (wall s).
 pub const STEP_S: f64 = 0.1;
-/// Largest hole or bump of the summed loudness during a blend (LU, see [`Check::dip_lu`]).
+/// Largest bump of the summed loudness during a blend (LU, see [`Check::bump_lu`]); a hole fails
+/// [`HOLE_MARGIN_LU`] earlier (see [`Check::dip_lu`]).
 pub const MAX_LEVEL_LU: f32 = 1.5;
 /// The curves' error on a hole (LU): rendered blends' holes measured (stereo BS.1770, decks aligned)
 /// against the modelled ones differ by about this much (bug 57: −0.69, +0.58, −0.11 on the lyric-armed
@@ -39,10 +41,12 @@ pub const MAX_TRIED: usize = 6;
 /// The outcome of one plan's simulation.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Check {
-    /// Largest hole / bump of the summed loudness during the blend (LU,
-    /// ≥ 0): how far the mix falls below the quieter / rises above the louder of the two songs' own
-    /// (levelled) loudness while both sound. `None` without measured loudness or for handovers (no overlap).
+    /// Largest hole of the summed loudness during the blend (LU, ≥ 0): how far the mix falls below the
+    /// quieter of the two songs' own (levelled) loudness while both sound. Fails above [`MAX_LEVEL_LU`] −
+    /// [`HOLE_MARGIN_LU`]. `None` without measured loudness or for handovers (no overlap).
     pub dip_lu: Option<f32>,
+    /// Largest bump (LU, ≥ 0): how far the mix rises above the louder of the two songs' own (levelled)
+    /// loudness while both sound. Fails above [`MAX_LEVEL_LU`]. `None` as for [`Check::dip_lu`].
     pub bump_lu: Option<f32>,
     /// Seconds with both decks audibly sung (echo repeats count on the outgoing side).
     pub clash_s: f32,
