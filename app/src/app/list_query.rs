@@ -221,8 +221,18 @@ pub enum FilterEdit {
     TagPick(String),
     MultiGenre(bool),
     MultiArtist(bool),
-    OptionSearch(String),
+    /// The search text of one picker.
+    OptionSearch(OptionList, String),
     Reset,
+}
+
+/// The searchable pickers of the filter modal. Each has its own search text: they are shown together,
+/// and one shared text would filter all of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OptionList {
+    Artists,
+    Genres,
+    Tags,
 }
 
 #[derive(Debug, Clone)]
@@ -274,7 +284,8 @@ pub struct ListQueries {
     pub tags_loaded: bool,
     /// The tag whose values the filter modal lists.
     pub tag_pick: Option<String>,
-    pub option_search: String,
+    /// The search text per picker (read it with [`ListQueries::option_search`]).
+    option_search: std::collections::HashMap<OptionList, String>,
     pub multi_genre: bool,
     pub multi_artist: bool,
     /// Text of the year fields (kept as typed).
@@ -307,7 +318,7 @@ impl Default for ListQueries {
             song_tags: vec![],
             tags_loaded: false,
             tag_pick: None,
-            option_search: String::new(),
+            option_search: Default::default(),
             multi_genre: true,
             multi_artist: true,
             year_from: String::new(),
@@ -393,12 +404,17 @@ impl ListQueries {
         self.genre_songs.search.clear();
     }
 
+    /// The search text of one picker of the filter modal.
+    pub fn option_search(&self, list: OptionList) -> &str {
+        self.option_search.get(&list).map_or("", String::as_str)
+    }
+
     /// Applies one edit of the filter modal.
     pub fn edit(&mut self, id: &ListId, edit: FilterEdit) {
         let (multi_genre, multi_artist) = (self.multi_genre, self.multi_artist);
         match edit {
-            FilterEdit::OptionSearch(t) => {
-                self.option_search = t;
+            FilterEdit::OptionSearch(list, t) => {
+                self.option_search.insert(list, t);
                 return;
             }
             FilterEdit::MultiGenre(on) => {
@@ -1048,7 +1064,7 @@ impl Listen {
             ListQueryMsg::Filter(id, edit) => {
                 let reload = !matches!(
                     edit,
-                    FilterEdit::OptionSearch(_) | FilterEdit::MultiGenre(_) | FilterEdit::MultiArtist(_)
+                    FilterEdit::OptionSearch(..) | FilterEdit::MultiGenre(_) | FilterEdit::MultiArtist(_)
                 );
                 self.list_queries.edit(&id, edit);
                 if reload {
@@ -1233,6 +1249,17 @@ async fn fetch_all_album_songs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn artist_search_does_not_filter_genres() {
+        let mut q = ListQueries::default();
+        q.edit(&ListId::Albums, FilterEdit::OptionSearch(OptionList::Artists, "rock".into()));
+        assert_eq!(q.option_search(OptionList::Artists), "rock");
+        assert_eq!(q.option_search(OptionList::Genres), "");
+        assert_eq!(q.option_search(OptionList::Tags), "");
+        q.edit(&ListId::Albums, FilterEdit::OptionSearch(OptionList::Genres, "jazz".into()));
+        assert_eq!(q.option_search(OptionList::Artists), "rock");
+    }
 
     #[test]
     fn every_list_with_query_controls_reloads() {

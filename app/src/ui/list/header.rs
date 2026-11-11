@@ -506,7 +506,7 @@ pub fn config_panel<'a>(state: &'a Listen, id: &ListId) -> Element<'a, Message> 
 // Feishin `album-list-header.tsx` / `song-list-header.tsx`; state in `app/list_query.rs`.
 
 use crate::app::list_query::{
-    Exclusive, FilterEdit, ListQueryMsg, Popup, has_collections, has_controls, is_songs,
+    Exclusive, FilterEdit, ListQueryMsg, OptionList, Popup, has_collections, has_controls, is_songs,
 };
 use crate::ui::overlay::ModalParts;
 use iced::widget::{column, text_input};
@@ -869,16 +869,18 @@ fn tri<'a>(
     .into()
 }
 
-/// A pick list with a search box: genres or artists.
+/// A pick list with its own search box (`which`: artists or genres).
 fn option_list<'a>(
     state: &'a Listen,
+    which: OptionList,
     title: &'static str,
     multi: bool,
     on_mode: impl Fn(bool) -> Message + 'a,
     rows: Vec<(String, bool, Message)>,
 ) -> Element<'a, Message> {
     let t = state.tokens;
-    let needle = state.list_queries.option_search.to_lowercase();
+    let search = state.list_queries.option_search(which);
+    let needle = search.to_lowercase();
     let id = state.list_queries.filter_list.clone().unwrap_or(ListId::Albums);
     let mut list = Column::new().spacing(2.0);
     let mut shown = 0;
@@ -903,12 +905,12 @@ fn option_list<'a>(
             segmented(state, &[("Single", false), ("Multiple", true)], multi, on_mode)
         ]
         .align_y(Alignment::Center),
-        text_input(crate::i18n::tr("Search"), &state.list_queries.option_search)
-            .font(crate::ui::font_for(&state.list_queries.option_search, crate::appearance::current_font()))
+        text_input(crate::i18n::tr("Search"), search)
+            .font(crate::ui::font_for(search, crate::appearance::current_font()))
             .size(metrics::font_sm())
             .padding(Padding::from([4.0, 8.0]))
             .style(style::input(t))
-            .on_input(move |s| query(ListQueryMsg::Filter(id.clone(), FilterEdit::OptionSearch(s)))),
+            .on_input(move |s| query(ListQueryMsg::Filter(id.clone(), FilterEdit::OptionSearch(which, s)))),
         container(scrollable(list).height(Length::Fixed(130.0))).padding(Padding::from([0.0, 4.0])),
     ]
     .spacing(metrics::space_xs())
@@ -984,7 +986,8 @@ fn tag_values<'a>(
     rows: Vec<(String, bool, Message)>,
 ) -> Element<'a, Message> {
     let t = state.tokens;
-    let needle = state.list_queries.option_search.to_lowercase();
+    let search = state.list_queries.option_search(OptionList::Tags);
+    let needle = search.to_lowercase();
     let idc = id.clone();
     let mut list = Column::new().spacing(2.0);
     for (name, on, msg) in
@@ -995,12 +998,15 @@ fn tag_values<'a>(
         );
     }
     column![
-        text_input(crate::i18n::tr("Search"), &state.list_queries.option_search)
-            .font(crate::ui::font_for(&state.list_queries.option_search, crate::appearance::current_font()))
+        text_input(crate::i18n::tr("Search"), search)
+            .font(crate::ui::font_for(search, crate::appearance::current_font()))
             .size(metrics::font_sm())
             .padding(Padding::from([4.0, 8.0]))
             .style(style::input(t))
-            .on_input(move |s| query(ListQueryMsg::Filter(idc.clone(), FilterEdit::OptionSearch(s)))),
+            .on_input(move |s| query(ListQueryMsg::Filter(
+                idc.clone(),
+                FilterEdit::OptionSearch(OptionList::Tags, s)
+            ))),
         container(scrollable(list).height(Length::Fixed(110.0))).padding(Padding::from([0.0, 4.0])),
     ]
     .spacing(metrics::space_xs())
@@ -1072,7 +1078,14 @@ pub fn filters_modal<'a>(state: &'a Listen) -> Option<ModalParts<'a>> {
         col = col.push(if locked(Exclusive::Artists) {
             off("Artists")
         } else {
-            option_list(state, "Artists", multi, move |m| e(FilterEdit::MultiArtist(m)), rows)
+            option_list(
+                state,
+                OptionList::Artists,
+                "Artists",
+                multi,
+                move |m| e(FilterEdit::MultiArtist(m)),
+                rows,
+            )
         });
     }
     if supported.contains(QueryFilters::GENRES) {
@@ -1086,7 +1099,14 @@ pub fn filters_modal<'a>(state: &'a Listen) -> Option<ModalParts<'a>> {
         col = col.push(if locked(Exclusive::Genres) {
             off("Genres")
         } else {
-            option_list(state, "Genres", multi, move |m| e(FilterEdit::MultiGenre(m)), rows)
+            option_list(
+                state,
+                OptionList::Genres,
+                "Genres",
+                multi,
+                move |m| e(FilterEdit::MultiGenre(m)),
+                rows,
+            )
         });
     }
     // iced draws placeholders itself, past `ui::label`: translate them here.
