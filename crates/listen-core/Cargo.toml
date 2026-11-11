@@ -1,6 +1,6 @@
 [package]
 name = "listen-core"
-description = "Domain types, queue, settings and themes for Listen"
+description = "Domain types, queue, settings, history memory, song identity and the DJ scene gate for Listen"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

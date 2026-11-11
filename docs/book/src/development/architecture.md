@@ -6,7 +6,7 @@ Listen is a Cargo workspace: one application crate (`app`, binary name `listen`)
 
 | Crate | What it does |
 |---|---|
-| `listen-core` | Data model (songs, albums, artists, playlists), the play queue, history, the settings structs and their defaults, the Feishin settings importer, themes, and the shared analysis types. No UI and no network code. |
+| `listen-core` | Data model (songs, albums, artists, playlists), the play queue, the settings structs and their defaults, the Feishin settings importer, themes; the listening history and its memory model (forgotten favourites, worn-out songs), exclusions and weekly stats; song identity (`versions`, `substitute`, `text::fold`); the scene and era gate for DJ picks (`scene`); the shared analysis and describe-it types, parametric EQ and the release radar. No UI and no network code. The module list is in the `lib.rs` header. |
 | `listen-source` | The `MusicSource` trait that every backend implements, a `Capabilities` bit set (folders, ratings, radio, playlist editing, lyrics and so on), query and sort types, client-side sorting and filtering, and the parser for Navidrome smart playlists (`nsp`). |
 | `listen-subsonic` | Navidrome and OpenSubsonic backend. |
 | `listen-jellyfin` | Jellyfin backend, including Quick Connect and server discovery. |
