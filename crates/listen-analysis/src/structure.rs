@@ -353,7 +353,8 @@ pub fn sections(stats: &BarStats, phrase_bars: u8, phrase_offset: u8) -> Vec<Sec
     out
 }
 
-/// Vocal-free bars at the start and at the end.
+/// Vocal-free bars at the start and at the end. The two never overlap: a song without a sung bar is all
+/// intro (`(n, 0)`); `listen_core::analysis::FlowFeatures::of` counts such a song as mixable at both ends.
 pub fn instrumental_edges(vocal: &[f32]) -> (u16, u16) {
     let is_vocal = |v: &&f32| **v >= 0.5;
     let start = vocal.iter().take_while(|v| !is_vocal(v)).count();

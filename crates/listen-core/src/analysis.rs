@@ -285,7 +285,8 @@ pub struct Features {
     pub phrase_bars: u8,
     pub phrase_offset: u8,
     pub sections: Vec<Section>,
-    /// Bars at the start / end without a lead vocal (mixable).
+    /// Bars at the start / end without a lead vocal (mixable). They never overlap: a song without a sung
+    /// bar has all of them in the intro and an outro of 0 (see [`FlowFeatures::of`]).
     pub intro_instrumental_bars: u16,
     pub outro_instrumental_bars: u16,
     /// Timbre/similarity vector (comparable only within one analyser version).
@@ -377,6 +378,14 @@ pub fn vocal_share(bars: &BarCurves) -> Option<f32> {
     Some(sung as f32 / bars.vocal.len() as f32)
 }
 
+/// Vocal-free bars at the end of a song. The analyser counts a song without any sung bar as all intro (outro
+/// 0, the counts never overlap), but such a song ends instrumental too: its whole length counts.
+fn instrumental_end_bars(f: &Features) -> u16 {
+    let nothing_sung =
+        !f.bars.vocal.is_empty() && usize::from(f.intro_instrumental_bars) >= f.bars.vocal.len();
+    if nothing_sung { f.intro_instrumental_bars } else { f.outro_instrumental_bars }
+}
+
 impl FlowFeatures {
     pub fn of(f: &Features) -> Self {
         FlowFeatures {
@@ -387,7 +396,7 @@ impl FlowFeatures {
             mood: f.mood.clone(),
             timbre: f.timbre.clone(),
             mixable_in: f.grid.is_some() && f.intro_instrumental_bars >= 8,
-            mixable_out: f.grid.is_some() && f.outro_instrumental_bars >= 8,
+            mixable_out: f.grid.is_some() && instrumental_end_bars(f) >= 8,
             vocal: vocal_share(&f.bars),
         }
     }
@@ -466,6 +475,38 @@ mod tests {
             confidence: 0.9,
             stability: 0.99,
         }
+    }
+
+    #[test]
+    fn an_instrumental_song_is_mixable_at_both_ends() {
+        let song = |vocal: Vec<u8>, intro: u16, outro: u16| Features {
+            audio_start: 0.0,
+            audio_end: 80.0,
+            grid: Some(grid(120.0, 161, 0.0)),
+            key: None,
+            lufs: -10.0,
+            lra: 0.0,
+            bars: BarCurves { vocal, ..Default::default() },
+            phrase_bars: 8,
+            phrase_offset: 0,
+            sections: vec![],
+            intro_instrumental_bars: intro,
+            outro_instrumental_bars: outro,
+            timbre: vec![],
+            mood: Mood::default(),
+            voiced: None,
+        };
+        // Nothing sung: the analyser reports (40, 0).
+        let f = FlowFeatures::of(&song(vec![10; 40], 40, 0));
+        assert!(f.mixable_in && f.mixable_out);
+        // Sung to the end: not mixable out.
+        let mut vocal = vec![10; 8];
+        vocal.extend([255; 32]);
+        let f = FlowFeatures::of(&song(vocal, 8, 0));
+        assert!(f.mixable_in && !f.mixable_out);
+        // No vocal curve: the counts as they are.
+        let f = FlowFeatures::of(&song(vec![], 0, 0));
+        assert!(!f.mixable_in && !f.mixable_out);
     }
 
     #[test]
