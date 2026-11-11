@@ -566,16 +566,35 @@ fn artist_sort(s: ArtistSort) -> &'static str {
     }
 }
 
-/// `Years=1990,1991,...` for a range (Jellyfin has no range filter), at most 200 years.
+/// Jellyfin has no year range filter: `Years=` lists every year, so a range is capped.
+const MAX_YEARS: i32 = 200;
+
+/// Next year (an open upper bound), from the clock; a day off at New Year is covered by the +1.
+fn next_year() -> i32 {
+    let secs =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    // 31 556 952 s = the mean Gregorian year.
+    1970 + i32::try_from(secs / 31_556_952).unwrap_or(0) + 1
+}
+
+/// `Years=1990,1991,...` for a range; `None` only when no bound is set. A set range always
+/// filters: an open end reaches next year (or [`MAX_YEARS`] back), a range wider than
+/// [`MAX_YEARS`] keeps its most recent years, and an empty range (min > max) matches nothing.
 fn years(min: Option<i32>, max: Option<i32>) -> Option<String> {
+    years_until(min, max, next_year())
+}
+
+fn years_until(min: Option<i32>, max: Option<i32>, next_year: i32) -> Option<String> {
     if min.is_none() && max.is_none() {
         return None;
     }
-    let (lo, hi) = (min.unwrap_or(1900), max.unwrap_or(2030));
+    let hi = max.unwrap_or(next_year);
+    let lo = min.unwrap_or(hi.saturating_sub(MAX_YEARS - 1)).max(hi.saturating_sub(MAX_YEARS - 1));
     if lo > hi {
-        return None;
+        // No year is in an empty range; Jellyfin has no year 0.
+        return Some("0".into());
     }
-    Some((lo..=hi).take(200).map(|y| y.to_string()).collect::<Vec<_>>().join(","))
+    Some((lo..=hi).map(|y| y.to_string()).collect::<Vec<_>>().join(","))
 }
 
 fn push_bool(req: &mut Request, key: &'static str, v: Option<bool>) {
@@ -1139,6 +1158,27 @@ impl MusicSource for Jellyfin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn open_year_ranges_still_filter() {
+        let list = |s: Option<String>| -> Vec<i32> {
+            s.expect("a set range filters").split(',').map(|y| y.parse().unwrap()).collect()
+        };
+        assert_eq!(years_until(None, None, 2027), None);
+        // Up to 1899: the 200 years before it, never the whole library.
+        let up_to = list(years_until(None, Some(1899), 2027));
+        assert_eq!((up_to[0], *up_to.last().unwrap(), up_to.len()), (1700, 1899, 200));
+        // From a year: up to next year.
+        let from = list(years_until(Some(2020), None, 2027));
+        assert_eq!((from[0], *from.last().unwrap()), (2020, 2027));
+        // Beyond any known year, or a reversed range: matches nothing.
+        assert_eq!(years_until(Some(2031), None, 2027).as_deref(), Some("0"));
+        assert_eq!(years_until(Some(2010), Some(2000), 2027).as_deref(), Some("0"));
+        // Too wide: the most recent 200 years, so the 1900s on are never cut.
+        let wide = list(years_until(Some(1700), None, 2027));
+        assert_eq!((wide[0], *wide.last().unwrap(), wide.len()), (1828, 2027, 200));
+        assert!(next_year() > 2025);
+    }
 
     #[test]
     fn every_offered_sort_maps_to_its_own_sort_by() {
