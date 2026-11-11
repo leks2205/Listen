@@ -159,6 +159,8 @@ pub struct EqBand {
 pub struct Playback {
     /// mpv `gapless-audio`: `weak`, `yes` or `no`.
     pub gapless: String,
+    /// No longer used: mpv has no crossfade (songs fade with `track_fade_secs`, DJ transitions mix); kept
+    /// so existing configs round-trip.
     pub crossfade_secs: f32,
     /// Songs fade in at their start and out at their end over this many
     /// seconds (0 = off). The AI DJ turns the music down/up at this speed too.
@@ -491,7 +493,8 @@ pub struct Transcode {
 }
 
 impl Transcode {
-    /// Transcoding is on and asks for something.
+    /// Same as `enabled`: transcoding is switched on. An empty format and bit rate still count, since
+    /// they mean the server's own choice (Subsonic) or MP3 (Jellyfin), and that replaces `stream_quality`.
     pub fn active(&self) -> bool {
         self.enabled
     }
@@ -651,6 +654,14 @@ mod tests {
             ["--gapless-audio=weak", "--prefetch-playlist=yes", "-v"]
         );
         assert!(parse_mpv_extra_args("  \n").is_empty());
+    }
+
+    #[test]
+    fn transcode_switched_on_is_active_even_with_nothing_set() {
+        assert!(Transcode { enabled: true, ..Default::default() }.active());
+        assert!(
+            !Transcode { enabled: false, format: "opus".into(), bitrate: 128, max_sample_rate: 0 }.active()
+        );
     }
 
     #[test]
