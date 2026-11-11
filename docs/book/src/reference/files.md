@@ -24,7 +24,7 @@ Rule of thumb: **config** is what you would want to keep, **data** is what Liste
 | `credentials.toml` | Passwords, tokens and keys, only when the system keyring is not used or not available ("File only" or no keyring). On Linux readable by your user only (permissions 0600). Delete a server in Listen to remove its entry. |
 | `themes/` | Your own themes. See [Custom themes](../appearance/custom-themes.md). |
 
-If `config.toml` cannot be read because it is damaged, Listen starts with default settings and logs a warning. Keep a copy, or use **Export settings** (see [Backup, logs and diagnostics](../more/backup.md)).
+If `config.toml` cannot be read (damaged, a typo in a hand edit, or a value only a newer Listen knows), Listen renames it to `config.toml.unreadable-<number>` in the same folder, logs an error and starts with default settings; fix the file and rename it back while Listen is closed to get your settings again. Keep a copy, or use **Export settings** (see [Backup, logs and diagnostics](../more/backup.md)).
 
 ## Data folder
 

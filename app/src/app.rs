@@ -723,6 +723,9 @@ pub struct Listen {
     pub sb: sidebar_state::SidebarState,
     /// Signed in via `--login`: never persist config or secrets.
     ephemeral: bool,
+    /// False when config.toml could neither be read nor moved aside (`load_config`): saving would replace
+    /// the user's settings with the defaults.
+    config_writable: bool,
     /// `--onboarding`: show the wizard regardless of the config.
     force_onboarding: bool,
     autoplay: bool,
@@ -1043,23 +1046,45 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
+/// Reads config.toml. A file that exists but does not load (a typo, or a value only a newer version knows)
+/// is renamed to `config.toml.unreadable-<unix time>` before the defaults are used: every save rewrites the
+/// whole file, so it must never replace the user's settings unseen. The bool is false when the file could
+/// not be moved aside either; then nothing may be saved over it.
+fn load_config(path: &std::path::Path) -> (Config, bool) {
+    let e = match Config::load(path) {
+        Ok(cfg) => return (cfg, true),
+        Err(e) => e,
+    };
+    let secs =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    let mut aside = path.as_os_str().to_owned();
+    aside.push(format!(".unreadable-{secs}"));
+    let aside = std::path::PathBuf::from(aside);
+    match std::fs::rename(path, &aside) {
+        Ok(()) => {
+            tracing::error!("{e}; kept it as {} and started with the default settings", aside.display());
+            (Config::default(), true)
+        }
+        Err(moved) => {
+            tracing::error!(
+                "{e}; could not keep it aside ({moved}), so settings changes are not saved until it is fixed"
+            );
+            (Config::default(), false)
+        }
+    }
+}
+
 impl Listen {
     pub fn boot(args: &Args) -> (Self, Task<Message>) {
         let paths = if args.demo { None } else { Paths::discover().ok() };
         // An `--ephemeral` run (tests, checks) starts from the defaults and ignores the user's settings;
         // `--login` still reads the config.
         let isolated = args.ephemeral && args.login.is_none();
-        let config = paths
+        let (config, config_writable) = paths
             .as_ref()
             .filter(|_| !isolated)
-            .and_then(|p| match Config::load(&p.config_file()) {
-                Ok(cfg) => Some(cfg),
-                Err(e) => {
-                    tracing::warn!("using default config: {e}");
-                    None
-                }
-            })
-            .unwrap_or_default();
+            .map(|p| load_config(&p.config_file()))
+            .unwrap_or_else(|| (Config::default(), true));
         // The tests render in English whatever the machine's language is.
         // `LISTEN_LANG=de` overrides the setting (used to look at a translation).
         crate::i18n::set_language(match std::env::var("LISTEN_LANG") {
@@ -1268,6 +1293,7 @@ impl Listen {
             focused: true,
             published: Published::default(),
             ephemeral: args.login.is_some() || args.ephemeral,
+            config_writable,
             force_onboarding: args.onboarding,
             autoplay: args.autoplay,
             autoplay_dj: false,
@@ -1546,7 +1572,7 @@ impl Listen {
     }
 
     fn save_config(&self) {
-        if self.ephemeral || self.demo {
+        if self.ephemeral || self.demo || !self.config_writable {
             return;
         }
         if let Some(paths) = &self.paths
@@ -4913,5 +4939,31 @@ mod forget_server_tests {
         assert!(!s.config.servers.iter().any(|x| x.id == id));
         assert!(!s.config.server_options.contains_key(&id.0));
         assert!(!s.library_cache.contains_key(&id));
+    }
+}
+
+#[cfg(test)]
+mod config_load_tests {
+    use super::*;
+    #[test]
+    fn unreadable_config_is_kept_aside_not_overwritten() {
+        let dir = std::env::temp_dir().join(format!("listen-unreadable-config-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let text = "[settings.playback]\nvolume = 33\nlevelling = \"louder\"\n";
+        std::fs::write(&path, text).unwrap();
+        let (config, writable) = load_config(&path);
+        assert!(writable);
+        assert_eq!(config, Config::default());
+        assert!(!path.exists(), "moved away before anything is saved over it");
+        let kept: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().collect();
+        assert_eq!(kept.len(), 1);
+        assert!(kept[0].file_name().to_string_lossy().starts_with("config.toml.unreadable-"));
+        assert_eq!(std::fs::read_to_string(kept[0].path()).unwrap(), text);
+        // A readable file and a missing one load as before.
+        std::fs::write(&path, "[settings.playback]\nvolume = 33\n").unwrap();
+        assert_eq!(load_config(&path).0.settings.playback.volume, 33);
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(load_config(&path), (Config::default(), true));
     }
 }
