@@ -265,9 +265,9 @@ impl Default for Playback {
     }
 }
 
-/// mpv `af` value for the equalizer, as Feishin builds it
-/// (`mpv-audio-filters.ts`): a preamp `volume` filter plus one `equalizer`
-/// per non-zero band, gains clamped to ±12 dB. Empty = pass-through.
+/// mpv `af` value for the user's filter chain, as Feishin builds it (`mpv-audio-filters.ts`): the
+/// equalizer (a preamp `volume` filter plus one `equalizer` per non-zero band, gains clamped to ±12 dB),
+/// then the compressor ([`Compressor::filter`]). Empty = pass-through.
 pub fn mpv_audio_filters(p: &Playback) -> String {
     let mut parts = Vec::new();
     if p.equalizer_enabled {
@@ -419,7 +419,7 @@ pub struct CompressorPreset {
     pub release: f32,
     /// dB, 0..=30.
     pub makeup: f32,
-    /// dB soft-knee width, 1..=10.
+    /// dB soft-knee width, 1..=8 (ffmpeg `acompressor`'s range; [`Compressor::filter`] clamps to it).
     pub knee: f32,
 }
 
@@ -563,6 +563,16 @@ mod tests {
         assert!(
             deck.starts_with(&af) && deck.contains(",@mix:") && deck.ends_with("@ts:rubberband=engine=finer")
         );
+    }
+
+    #[test]
+    fn compressor_presets_fit_the_filter_clamps() {
+        for (name, c) in COMPRESSOR_PRESETS {
+            assert!((-60.0..=0.0).contains(&c.threshold), "{name} threshold");
+            assert!((1.0..=20.0).contains(&c.ratio), "{name} ratio");
+            assert!((0.0..=30.0).contains(&c.makeup), "{name} makeup");
+            assert!((1.0..=8.0).contains(&c.knee), "{name} knee");
+        }
     }
 
     #[test]

@@ -113,7 +113,7 @@ impl std::fmt::Display for TransitionEdges {
 pub enum SkipParts {
     /// Mixes stay in the outgoing song's outro and start the incoming song at its first phrase.
     Never,
-    /// At most a few seconds (`listen_mix::plan::SHORT_SKIP_S`) on either side.
+    /// At most `listen_mix::plan::SHORT_SKIP_S` (16 s, about 8 bars at 120 BPM) on either side.
     Short,
     /// Wherever the join is clearly better (each skipped second still costs score).
     #[default]
@@ -359,8 +359,8 @@ pub fn deck_audio_filters(p: &Playback) -> String {
     deck_audio_filters_with(p, DECK_TEMPO)
 }
 
-/// mpv `af` for a DJ deck: the user's EQ ([`mpv_audio_filters`]), the live mix filters, then a
-/// permanent tempo filter `ts`. Without one, mpv adds and removes its own around 1.0×, which jumps.
+/// mpv `af` for a DJ deck: the user's filter chain (EQ and compressor, [`mpv_audio_filters`]), the live mix
+/// filters, then a permanent tempo filter `ts`. Without one, mpv adds and removes its own around 1.0×, which jumps.
 pub fn deck_audio_filters_with(p: &Playback, tempo: &str) -> String {
     let [e1, e2, e3, e4] = DECK_ECHO_TAPS;
     // Bass shelf, echo (before the passes, so a high-pass sweep thins its repeats), high-pass, low-pass.
