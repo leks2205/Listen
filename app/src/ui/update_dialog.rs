@@ -10,6 +10,16 @@ use iced::font::Weight;
 use iced::widget::{button, column, container, scrollable};
 use iced::{Element, Length, Padding};
 
+/// "Listen 1.2 is available (you have 1.1)." plus the pre-release note, translated.
+fn available_text(version: &dyn std::fmt::Display, prerelease: bool) -> String {
+    let mut s = crate::i18n::trf("Listen {} is available (you have {}).", &[version, &Version::current()]);
+    if prerelease {
+        s.push(' ');
+        s.push_str(crate::i18n::tr("This is a pre-release."));
+    }
+    s
+}
+
 /// Release notes without the Markdown noise (headings, bold, list dashes).
 pub fn plain_notes(markdown: &str) -> String {
     let mut out = Vec::new();
@@ -62,12 +72,18 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
         Phase::Done(_) => {
             label("Installed. Restart Listen to use the new version.", metrics::font_sm(), t.primary).into()
         }
-        Phase::Failed(e) => {
-            crate::ui::t_text(format!("Update failed: {e}")).size(metrics::font_sm()).color(t.error).into()
-        }
+        Phase::Failed(e) => crate::ui::verbatim(
+            crate::i18n::trf("Update failed: {}", &[e]),
+            crate::appearance::current_font(),
+        )
+        .size(metrics::font_sm())
+        .color(t.error)
+        .into(),
     };
     let notes = container(scrollable(
-        crate::ui::t_text(plain_notes(&rel.changes)).size(metrics::font_sm()).color(t.foreground),
+        crate::ui::verbatim(plain_notes(&rel.changes), crate::appearance::current_font())
+            .size(metrics::font_sm())
+            .color(t.foreground),
     ))
     .padding(metrics::space_md())
     .height(Length::Fixed(220.0))
@@ -78,16 +94,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
         ..Default::default()
     });
     let body = column![
-        label(
-            format!(
-                "Listen {} is available (you have {}).{}",
-                rel.version,
-                Version::current(),
-                if rel.prerelease { " This is a pre-release." } else { "" }
-            ),
-            metrics::font_md(),
-            t.foreground
-        ),
+        crate::ui::data_label(available_text(&rel.version, rel.prerelease), metrics::font_md(), t.foreground),
         notes,
         status,
     ]

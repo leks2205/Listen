@@ -1,4 +1,6 @@
 {
+"Listen {} is available (you have {}).": "Listen {} ist verfügbar (du hast {}).",
+"This is a pre-release.": "Dies ist eine Vorabversion.",
 "Press keys…": "Tasten drücken …",
 "The application ID for Discord rich presence (defaults to {}). Press Enter to apply.": "Die Anwendungs-ID für Discord Rich Presence (Standard: {}). Mit Enter übernehmen.",
 "Running at http://{}:{} (this computer only).": "Läuft unter http://{}:{} (nur auf diesem Computer).",
