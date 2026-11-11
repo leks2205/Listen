@@ -33,7 +33,7 @@ pub fn theme_options(state: &Listen) -> Vec<ThemeOption> {
         .loaded
         .themes
         .iter()
-        .map(|t| ThemeOption { id: t.id.clone(), name: format!("{} (custom)", t.name) });
+        .map(|t| ThemeOption { id: t.id.clone(), name: crate::i18n::trf("{} (custom)", &[&t.name]) });
     builtin.chain(custom).collect()
 }
 
@@ -188,7 +188,7 @@ struct KindChoice(FontKind);
 
 impl std::fmt::Display for KindChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(kind_name(self.0))
+        f.write_str(crate::i18n::tr(kind_name(self.0)))
     }
 }
 
@@ -197,11 +197,11 @@ struct PlaceholderChoice(ImagePlaceholder);
 
 impl std::fmt::Display for PlaceholderChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
+        f.write_str(crate::i18n::tr(match self.0 {
             ImagePlaceholder::Off => "Off",
             ImagePlaceholder::DominantColor => "Colour",
             ImagePlaceholder::ThumbHash => "ThumbHash",
-        })
+        }))
     }
 }
 

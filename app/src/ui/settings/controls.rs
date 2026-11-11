@@ -38,10 +38,10 @@ fn amount<'a>(
 
 impl std::fmt::Display for HomeFeatureStyleChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
+        f.write_str(crate::i18n::tr(match self.0 {
             HomeFeatureStyle::Single => "Single",
             HomeFeatureStyle::Multiple => "Multiple",
-        })
+        }))
     }
 }
 
@@ -148,7 +148,7 @@ pub(super) fn sidebar(state: &Listen) -> Element<'_, Message> {
         let row = row![
             grip,
             checkbox(item.visible)
-                .label(capitalise(&item.label))
+                .label(crate::i18n::tr_cow(capitalise(&item.label).into()).into_owned())
                 .on_toggle(move |v| Message::Shell(ShellMsg::SidebarVisible(i, v)))
                 .size(18)
                 .text_size(metrics::font_md()),
@@ -218,9 +218,13 @@ pub(super) fn sidebar(state: &Listen) -> Element<'_, Message> {
             state,
             "Sidebar playlist mode",
             "How each playlist is displayed in the sidebar list",
-            pick_list(PlaylistMode::ALL, Some(sb.playlist_mode), move |v| set(SidebarSetting::Mode(v)))
-                .width(200)
-                .into(),
+            pick_list(
+                PlaylistMode::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(sb.playlist_mode)),
+                move |v| set(SidebarSetting::Mode(v.0)),
+            )
+            .width(200)
+            .into(),
         ),
         line(
             state,
@@ -246,9 +250,11 @@ pub(super) fn sidebar(state: &Listen) -> Element<'_, Message> {
             state,
             "Folder view",
             "How folders are displayed in the sidebar",
-            pick_list(FolderView::ALL, Some(sb.playlist_folder_view), move |v| {
-                set(SidebarSetting::FolderView(v))
-            })
+            pick_list(
+                FolderView::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(sb.playlist_folder_view)),
+                move |v| set(SidebarSetting::FolderView(v.0)),
+            )
             .width(200)
             .into(),
         ));

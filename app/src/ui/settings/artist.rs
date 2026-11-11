@@ -38,7 +38,7 @@ fn item_row<'a>(
     };
     let name_cell: Element<'a, Message> = match enabled {
         Some(on) => checkbox(on)
-            .label(name)
+            .label(crate::i18n::tr(name))
             .on_toggle(move |v| change(on_toggle(v)))
             .size(18)
             .text_size(metrics::font_md())

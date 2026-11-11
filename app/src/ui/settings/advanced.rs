@@ -216,9 +216,11 @@ pub(super) fn history(state: &Listen) -> Element<'_, Message> {
             state,
             "Keep history for",
             "Older entries are deleted automatically. Unlimited is needed for the year review.",
-            pick_list(HistoryRetention::ALL, Some(h.retention), |r| {
-                Message::Setting(Setting::HistoryRetention(r))
-            })
+            pick_list(
+                HistoryRetention::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(h.retention)),
+                |r| Message::Setting(Setting::HistoryRetention(r.0)),
+            )
             .into(),
         ),
         line(
@@ -415,9 +417,11 @@ pub(super) fn updates(state: &Listen) -> Element<'_, Message> {
             state,
             "Release channel",
             "Stable offers full releases only; Beta also offers pre-releases.",
-            pick_list(UpdateChannel::ALL, Some(a.update_channel), |c| {
-                Message::Advanced(AdvancedMsg::Channel(c))
-            })
+            pick_list(
+                UpdateChannel::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(a.update_channel)),
+                |c| Message::Advanced(AdvancedMsg::Channel(c.0)),
+            )
             .into(),
         ),
         if cfg!(windows) {
@@ -502,9 +506,11 @@ pub(super) fn logging(state: &Listen) -> Element<'_, Message> {
             state,
             "Log level",
             format!("How much listen.log records (in {where_}). Debug helps when something doesn't play."),
-            pick_list(LogLevel::ALL, Some(state.config.settings.advanced.log_level), |l| {
-                Message::Advanced(AdvancedMsg::LogLevel(l))
-            })
+            pick_list(
+                LogLevel::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(state.config.settings.advanced.log_level)),
+                |l| Message::Advanced(AdvancedMsg::LogLevel(l.0)),
+            )
             .into(),
         ),
         line(

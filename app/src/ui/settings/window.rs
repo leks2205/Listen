@@ -32,9 +32,11 @@ pub(super) fn integrations(state: &Listen) -> Element<'_, Message> {
             state,
             "Window bar style",
             "Windows or macOS buttons in Listen's own bar, or the desktop's native frame.",
-            pick_list(WindowBarStyle::ALL, Some(w.bar_style()), |style| {
-                Message::Setting(Setting::Window(WindowSetting::BarStyle(style)))
-            })
+            pick_list(
+                WindowBarStyle::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(w.bar_style())),
+                |style| Message::Setting(Setting::Window(WindowSetting::BarStyle(style.0))),
+            )
             .into(),
         ),
         line(
