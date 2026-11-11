@@ -1,4 +1,7 @@
 {
+"hr": "Std.",
+"min": "Min.",
+"sec": "Sek.",
 "Listen {} is available (you have {}).": "Listen {} ist verfügbar (du hast {}).",
 "This is a pre-release.": "Dies ist eine Vorabversion.",
 "Press keys…": "Tasten drücken …",
