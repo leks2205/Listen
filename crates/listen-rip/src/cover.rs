@@ -52,18 +52,15 @@ pub fn itunes_pick(body: &Value, artist: &str, album: &str) -> Option<String> {
     })
 }
 
+/// The release's front cover: Cover Art Archive by release, then by release group, then iTunes.
 pub async fn fetch(http: &reqwest::Client, release: &Release) -> Option<Cover> {
     let caa = [
-        (format!("https://coverartarchive.org/release/{}/front-1200", release.id), "Cover Art Archive"),
-        (
-            format!("https://coverartarchive.org/release-group/{}/front-1200", release.release_group_id),
-            "Cover Art Archive (release group)",
-        ),
+        ("release", release.id.as_str(), "Cover Art Archive"),
+        ("release-group", release.release_group_id.as_str(), "Cover Art Archive (release group)"),
     ];
-    for (url, source) in caa {
-        if url.contains("//front") || url.contains("/release-group//") {
-            continue;
-        }
+    // A release parsed from an incomplete answer can lack either id: skip it, don't ask for "release//".
+    for (kind, id, source) in caa.into_iter().filter(|(_, id, _)| !id.is_empty()) {
+        let url = format!("https://coverartarchive.org/{kind}/{id}/front-1200");
         if let Some(bytes) = image(http, &url).await {
             return Some(Cover { bytes, source: source.into() });
         }
