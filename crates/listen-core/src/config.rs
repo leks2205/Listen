@@ -74,8 +74,8 @@ impl MusicDir {
     }
 
     /// The local file for `server_path`; `None` when no folder is set, the path lies outside
-    /// `server_prefix` or leaves the folder (`..`). Relative paths (Subsonic) map as they are;
-    /// separators may be `\`.
+    /// `server_prefix` or leaves the folder (`..`, a drive like `C:` or a root). Relative paths
+    /// (Subsonic) map as they are; separators may be `\`.
     pub fn map(&self, server_path: &str) -> Option<PathBuf> {
         let local = self.local.trim();
         if local.is_empty() {
@@ -93,11 +93,23 @@ impl MusicDir {
         } else {
             return None;
         };
-        if rest.is_empty() || rest.split('/').any(|c| c == "..") {
+        if !stays_inside(rest) {
             return None;
         }
         Some(Path::new(local).join(rest))
     }
+}
+
+/// Whether joining `rest` (`/`-separated) to a folder stays inside it: every part a plain name. On
+/// Windows `Path::join` replaces the folder when `rest` starts with a drive (`C:/x`, `D:x`), so a
+/// drive-like first part is refused on every OS, the same as `..` and a root.
+fn stays_inside(rest: &str) -> bool {
+    let first = rest.split('/').next().unwrap_or_default();
+    let drive = first.len() >= 2 && first.as_bytes()[0].is_ascii_alphabetic() && first.as_bytes()[1] == b':';
+    !rest.is_empty()
+        && !drive
+        && rest.split('/').all(|c| c != ".." && c != ".")
+        && Path::new(rest).components().all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -210,6 +222,19 @@ mod tests {
         // Nothing set: no mapping.
         assert!(MusicDir::default().is_empty());
         assert_eq!(MusicDir::default().map("a.flac"), None);
+    }
+
+    #[test]
+    fn music_dir_never_maps_outside_the_local_folder() {
+        let bare = MusicDir { local: "/mnt/m".into(), ..Default::default() };
+        for escape in ["C:/Windows/x", "C:\\x", "D:x", "c:", "../x", "a/../../x", "./x", "a/./b"] {
+            assert_eq!(bare.map(escape), None, "{escape}");
+        }
+        let m = MusicDir { server_prefix: "/music".into(), local: "/mnt/m".into() };
+        assert_eq!(m.map("/music/C:/Windows/x"), None);
+        // Colons elsewhere are names (allowed on Linux, NAS shares).
+        assert_eq!(bare.map("Artist/Album: Live/01.flac"), Some("/mnt/m/Artist/Album: Live/01.flac".into()));
+        assert_eq!(bare.map("AC:DC/01.flac"), Some("/mnt/m/AC:DC/01.flac".into()));
     }
     use super::*;
 
