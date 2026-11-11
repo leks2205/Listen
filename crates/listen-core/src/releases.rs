@@ -186,10 +186,25 @@ pub fn watch_list(subscribed: &[(String, String)], history: &[Entry], now: i64) 
             }
         }
     }
-    // The same channel twice (two spellings): keep the first, which has the most plays.
-    let mut seen = BTreeSet::new();
-    out.retain(|w| w.id.as_ref().is_none_or(|id| seen.insert(id.clone())));
-    out
+    // The same channel twice (two spellings, e.g. a subscription named "IVE (아이브)" and plays of "IVE"):
+    // one watch, with the first (most played) entry's name and plays and the flags of every duplicate.
+    let mut first: HashMap<String, usize> = HashMap::new();
+    let mut merged: Vec<Watch> = Vec::with_capacity(out.len());
+    for w in out {
+        match w.id.as_ref().and_then(|id| first.get(id)).copied() {
+            Some(i) => {
+                merged[i].subscribed |= w.subscribed;
+                merged[i].top |= w.top;
+            }
+            None => {
+                if let Some(id) = &w.id {
+                    first.insert(id.clone(), merged.len());
+                }
+                merged.push(w);
+            }
+        }
+    }
+    merged
 }
 
 impl Listed {
@@ -466,6 +481,18 @@ mod tests {
             ]
         );
         assert!(w[0].top && w[1].top && !w[2].top);
+    }
+
+    #[test]
+    fn same_channel_under_two_names_stays_subscribed() {
+        let now = 400 * 86_400;
+        let h: Vec<_> =
+            (0..4).map(|i| play(now - i, "IVE", Some("UCive"), SourceKind::YouTubeMusic)).collect();
+        let subs = [("UCive".to_string(), "IVE (아이브)".to_string())];
+        let w = watch_list(&subs, &h, now);
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert_eq!((w[0].name.as_str(), w[0].id.as_deref(), w[0].plays), ("IVE", Some("UCive"), 4));
+        assert!(w[0].subscribed && w[0].top);
     }
 
     #[test]
