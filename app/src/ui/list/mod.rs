@@ -169,7 +169,8 @@ type Piece<'a> = Rc<dyn Fn() -> Element<'a, Message> + 'a>;
 /// Only the table display type honours it.
 #[derive(Clone, Default)]
 pub struct Extras<'a> {
-    /// (height, builder): the exact height is needed to virtualize the rows.
+    /// (height, builder): the rows are virtualized from this height, so it must match what the builder
+    /// draws (an error larger than the 2-row overscan leaves rows blank at the viewport edge).
     pub lead: Option<(f32, Piece<'a>)>,
     pub tail: Option<(f32, Piece<'a>)>,
     pub groups: Rc<Vec<RowGroup>>,

@@ -168,10 +168,13 @@ pub fn comment_is_long(text: &str, width: f32) -> bool {
     estimated_text_height(text, width, 20.0) > 75.0
 }
 
+/// Height of `text` wrapped at `width` in the comment's font size (`metrics::font_md`), from
+/// `ui::text_px` (full-width CJK/Hangul) with 10 % slack for word wrapping.
 fn estimated_text_height(text: &str, width: f32, line: f32) -> f32 {
-    let per_line = (width / 7.2).max(10.0) as usize;
-    let lines: usize = text.lines().map(|l| l.chars().count().div_ceil(per_line).max(1)).sum();
-    lines as f32 * line
+    let room = (width * 0.9).max(1.0);
+    let size = crate::style::metrics::font_md();
+    let lines: f32 = text.lines().map(|l| (crate::ui::text_px(l, size) / room).ceil().max(1.0)).sum();
+    lines * line
 }
 
 /// Percent-encodes everything but unreserved characters.
@@ -333,6 +336,13 @@ mod tests {
         assert!(external_links(&a, &s).last().unwrap().url.starts_with("spotify:search:"));
         s.enabled = false;
         assert!(labels(&s).is_empty(), "the master switch hides all");
+    }
+
+    #[test]
+    fn comment_height_counts_hangul_as_full_width() {
+        let latin = comment_height(&"a".repeat(200), true, 600.0);
+        let hangul = comment_height(&"가".repeat(200), true, 600.0);
+        assert!(hangul >= 1.5 * latin, "hangul {hangul} vs latin {latin}");
     }
 
     #[test]

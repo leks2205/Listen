@@ -22,7 +22,8 @@ fn text_width(state: &Listen) -> f32 {
     (state.page_width() - 2.0 * metrics::PAGE_PADDING_X).max(200.0)
 }
 
-/// Exact height of [`lead`] (the list needs it to virtualize the rows).
+/// Height of [`lead`] (the list virtualizes its rows from it). The comment's part is an estimate when
+/// the comment is short or expanded (`format::comment_height`); only the collapsed box is exact.
 pub fn lead_height(state: &Listen, album: &Album) -> f32 {
     HEADER_H + TOOLBAR_H + comment_block_height(state, album)
 }
@@ -332,7 +333,7 @@ fn comment<'a>(state: &'a Listen, album: &'a Album) -> Option<Element<'a, Messag
     let open = state.album_page.comment_open;
     let height = format::comment_height(&text, open, w);
     let body = container(
-        crate::ui::text_in(text, crate::ui::font(Weight::Normal))
+        crate::ui::verbatim(text, crate::ui::font(Weight::Normal))
             .size(metrics::font_md())
             .color(t.foreground)
             .wrapping(iced::widget::text::Wrapping::Word)

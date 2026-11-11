@@ -470,7 +470,7 @@ fn comment<'a>(state: &'a Listen, detail: &'a PlaylistDetail) -> Option<Element<
     let open = state.playlist_page.comment_open;
     let height = format::comment_height(&text, open, w);
     let body = container(
-        crate::ui::text_in(text, crate::ui::font(Weight::Normal))
+        crate::ui::verbatim(text, crate::ui::font(Weight::Normal))
             .size(metrics::font_md())
             .color(t.foreground)
             .wrapping(iced::widget::text::Wrapping::Word)
