@@ -176,7 +176,8 @@ pub struct Filter {
     pub energy_min: Option<f32>,
     #[serde(default)]
     pub energy_max: Option<f32>,
-    /// Upper bound of the sung-bar share (0.3 ≈ instrumental).
+    /// Upper bound of the sung-bar share ([`vocal_share`]). Instrumental versions measure a median of 0.37
+    /// (all songs 0.82), so a bound for "instrumental" must sit above that; focus mode uses 0.35.
     #[serde(default)]
     pub vocal_max: Option<f32>,
     #[serde(default)]
