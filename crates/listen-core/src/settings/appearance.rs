@@ -79,7 +79,8 @@ pub struct Appearance {
     pub artist_background: bool,
     /// Blur covers of explicit songs.
     pub blur_explicit_images: bool,
-    /// Links to Last.fm, MusicBrainz, ... on album pages (Feishin `externalLinks`).
+    /// Unused, kept so old configs load: the album and artist page links are switched by
+    /// [`ExternalLinksSettings`] (`artist.external_links.enabled`, where Feishin's `externalLinks` is imported).
     pub external_links: bool,
     /// Show covers uncropped (letterboxed) instead of cropping to a square.
     pub native_cover_aspect: bool,

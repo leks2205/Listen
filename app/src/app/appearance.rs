@@ -51,7 +51,6 @@ pub enum AppearanceMsg {
     ArtistBlur(f32),
     BlurCommit,
     BlurExplicit(bool),
-    ExternalLinks(bool),
     ExplicitReady(images::Key, Option<Handle>),
     NativeAspect(bool),
     Placeholder(ImagePlaceholder),
@@ -354,7 +353,6 @@ impl Listen {
             M::AlbumBlur(v) => a.album_background_blur = v.clamp(0.0, 6.0),
             M::ArtistBlur(v) => a.artist_background_blur = v.clamp(0.0, 6.0),
             M::BlurCommit => task = self.reblur_headers(),
-            M::ExternalLinks(v) => a.external_links = v,
             M::BlurExplicit(v) => {
                 a.blur_explicit_images = v;
                 if v {
