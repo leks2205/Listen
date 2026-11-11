@@ -248,7 +248,7 @@ fn import_reports_bad_values_and_refuses_other_files() {
 #[test]
 fn cache_sizes_are_shown_and_clearing_asks_first() {
     let mut s = state();
-    assert!(has_text(&s, "Downloaded album and artist images. measuring... on disk."));
+    assert!(has_text(&s, "Downloaded album and artist images. measuring… on disk."));
     let _ = s.update(Message::Advanced(AdvancedMsg::CacheSizes(vec![
         (CacheKind::Covers, 2_500_000),
         (CacheKind::YtmAudio, 1_200_000_000),

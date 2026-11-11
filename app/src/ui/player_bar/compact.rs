@@ -42,11 +42,10 @@ fn speaker_center_x(width: f32) -> f32 {
     width - metrics::space_sm() - 3.0 * (metrics::CONTROL + metrics::space_xs()) - metrics::CONTROL / 2.0
 }
 
-/// Top edge of the speaker button in a window `window_height` px tall: the controls are centred in
-/// the part of the bar under the seek strip.
+/// Top edge of the speaker button in a window `window_height` px tall: centred in the bar height as
+/// laid out (the seek strip overlays the bar; tests/compact_layout.rs measures the real position).
 fn speaker_top(window_height: f32) -> f32 {
-    let main = metrics::PLAYER_BAR_HEIGHT - SEEK_HEIGHT;
-    window_height - metrics::PLAYER_BAR_HEIGHT + SEEK_HEIGHT + (main - metrics::CONTROL) / 2.0
+    window_height - metrics::PLAYER_BAR_HEIGHT + (metrics::PLAYER_BAR_HEIGHT - metrics::CONTROL) / 2.0
 }
 
 /// Top-left of the volume popover: 2 px above the speaker button, kept inside the window.
