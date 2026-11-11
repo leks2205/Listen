@@ -18,7 +18,6 @@ pub struct RipRequest {
     pub out_dir: PathBuf,
     /// Everything whipper prints is copied here (Listen's logs dir).
     pub output_log: PathBuf,
-    pub audio_tracks: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -285,7 +285,6 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         offset: cfg.offset,
         out_dir: rip_dir.clone(),
         output_log: cfg.log_dir.join(format!("rip-{stamp}-{}.log", disc_id.trim_end_matches('-'))),
-        audio_tracks: cfg.toc.audio_count() as u32,
     };
     let (ev_tx, mut events) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = watch::channel(false);
