@@ -9,7 +9,7 @@ This page describes how the YouTube Music source (`crates/listen-ytmusic`) works
 | Part | Implementation |
 |---|---|
 | Library, search, albums, artists, playlists, likes, history, lyrics | The `ytmapi-rs` crate (version 0.3.3, features `rustls` and `simplified-queries`), which speaks YouTube Music's InnerTube interface in the same way as the `ytmusicapi` project. Entry point: `crates/listen-ytmusic/src/lib.rs`. |
-| Audio streams | `yt-dlp` resolves a song to a direct stream URL that is handed to mpv (`ytdlp.rs`). URLs are cached until about 15 minutes before their `expire=` time. |
+| Audio streams | `yt-dlp` resolves a song to a direct stream URL that is handed to mpv (`ytdlp.rs`). It always runs with `--ignore-config` (`stream_args`), so no user or working-directory config file changes the result. URLs are cached until about 15 minutes before their `expire=` time. |
 | JavaScript runtime | yt-dlp needs Deno or Node.js to work with YouTube. Listen looks for `deno` and `node` on `PATH` and in the usual per-user locations (for example `~/.nvm` and `~/.local/bin`), because desktop launchers often do not pass the shell's `PATH`. |
 | Radio and Auto-DJ | The "watch next" list (`get_watch_playlist_from_video_id`). |
 | History | Playing a track reports it with `add_history_item`, so recommendations stay current. |

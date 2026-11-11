@@ -74,6 +74,8 @@ Audio is streamed, not saved. Listen does not download YouTube Music songs for o
 
 yt-dlp finds the audio stream of each song. It is a separate program, and it needs a JavaScript runtime (Deno or Node.js). On Windows the [first-start wizard](first-start.md) installs both; on Linux install them with your package manager (see [Installation](installation.md)).
 
+Listen runs yt-dlp without your own yt-dlp configuration files (`--ignore-config`): settings in `~/.config/yt-dlp/config` or a `yt-dlp.conf` in the current folder, such as a proxy or browser cookies, do not apply to Listen.
+
 ## Managing the connection
 
 Open **Settings → General → Servers** and press **Edit** next to the YouTube Music entry. The dialog offers:

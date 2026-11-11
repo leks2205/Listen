@@ -112,7 +112,7 @@ impl YtDlp {
     pub async fn check(&self) -> Result<String, String> {
         let mut cmd = Command::new(&self.binary);
         listen_core::platform::no_window(cmd.as_std_mut());
-        let out = cmd.arg("--version").output().await.map_err(|e| {
+        let out = cmd.args(["--ignore-config", "--version"]).output().await.map_err(|e| {
             if cfg!(windows) {
                 format!("yt-dlp not found ({e}). Settings → Advanced → Helper programs installs it.")
             } else {
@@ -188,18 +188,14 @@ impl YtDlp {
             .ok_or_else(|| "yt-dlp returned no video URL".to_string())
     }
 
-    /// Runs `yt-dlp -g -f <format>` for `video_id` (45 s timeout) and returns the first URL it
-    /// prints, `None` if it printed none. A failure is logged with the last lines of yt-dlp's
+    /// Runs yt-dlp with [`stream_args`] (no config files, `-g -f <format>`) for `video_id` (45 s
+    /// timeout) and returns the first URL it prints, `None` if it printed none. A failure is logged with the last lines of yt-dlp's
     /// output and returned as its `ERROR` line. Every stream lookup goes through here; the caller
     /// notes the [`BUDGET`](crate::budget::BUDGET) use and caches.
     async fn stream_url(&self, video_id: &str, format: &str) -> Result<Option<String>, String> {
         let mut cmd = Command::new(&self.binary);
         listen_core::platform::no_window(cmd.as_std_mut());
-        cmd.args(["-q", "--no-warnings", "--no-playlist", "-f", format, "-g"]);
-        if let Some(rt) = &self.js_runtime {
-            cmd.args(["--js-runtimes", rt]);
-        }
-        cmd.arg(format!("https://music.youtube.com/watch?v={video_id}"));
+        cmd.args(stream_args(format, video_id, self.js_runtime.as_deref()));
         cmd.kill_on_drop(true);
         let out = tokio::time::timeout(Duration::from_secs(45), cmd.output())
             .await
@@ -233,6 +229,21 @@ impl YtDlp {
         let fresh = hit.expires_at.is_some_and(|t| t > SystemTime::now() + MARGIN);
         fresh.then(|| hit.clone())
     }
+}
+
+/// The whole yt-dlp command line of a stream lookup. `--ignore-config` comes first: a user's or the
+/// working directory's `yt-dlp.conf` must not change which URL comes back (or turn `-g` into a
+/// download, add browser cookies or a proxy).
+fn stream_args(format: &str, video_id: &str, js_runtime: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> =
+        ["--ignore-config", "-q", "--no-warnings", "--no-playlist", "-f", format, "-g"]
+            .map(String::from)
+            .into();
+    if let Some(rt) = js_runtime {
+        args.extend(["--js-runtimes".to_string(), rt.to_string()]);
+    }
+    args.push(format!("https://music.youtube.com/watch?v={video_id}"));
+    args
 }
 
 /// The same stream on the backup server: `mn` names two edge nodes (`sn-primary,sn-backup`) and the
@@ -338,6 +349,19 @@ mod tests {
         assert_eq!(url_facts("https://example.com/a.mp3"), UrlFacts::default());
         let aac = UrlFacts { itag: Some("140".into()), ..Default::default() };
         assert_eq!(aac.suffix(), Some("m4a"));
+    }
+
+    #[test]
+    fn ytdlp_args_ignore_user_config() {
+        for rt in [None, Some("deno:/usr/bin/deno")] {
+            let args = stream_args(FORMAT, "abcdefghijk", rt);
+            assert_eq!(args[0], "--ignore-config");
+            assert_eq!(
+                args.last().map(String::as_str),
+                Some("https://music.youtube.com/watch?v=abcdefghijk")
+            );
+            assert_eq!(args.iter().filter(|a| a.contains("config")).count(), 1, "{args:?}");
+        }
     }
 
     #[test]
