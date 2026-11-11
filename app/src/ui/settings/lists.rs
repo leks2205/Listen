@@ -1,5 +1,5 @@
-//! General tab: what the Play buttons do and how grids select (Feishin
-//! "Play button behavior", "Grid multi-select").
+//! General tab: what the Play buttons do, how grids select, and whether lists show favourites and
+//! ratings (Feishin "Play button behavior", "Grid multi-select").
 
 use super::{line, section};
 use crate::app::library_extra::ExtraMsg;

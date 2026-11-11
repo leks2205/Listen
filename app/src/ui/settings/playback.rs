@@ -762,7 +762,7 @@ fn transcoding(state: &Listen) -> Element<'_, Message> {
 }
 
 pub(super) fn visualizer(state: &Listen) -> Element<'_, Message> {
-    let _t = state.tokens;
+    let t = state.tokens;
     let s = &state.config.settings;
     section(
         state,
@@ -781,10 +781,10 @@ pub(super) fn visualizer(state: &Listen) -> Element<'_, Message> {
                 iced::widget::button(crate::ui::label(
                     "Configure…",
                     crate::style::metrics::font_md(),
-                    _t.foreground,
+                    t.foreground,
                 ))
                 .padding(iced::Padding::from([6.0, 14.0]))
-                .style(crate::style::default_button(_t))
+                .style(crate::style::default_button(t))
                 .on_press(Message::Viz(crate::app::viz::VizMsg::Open))
                 .into(),
             ),

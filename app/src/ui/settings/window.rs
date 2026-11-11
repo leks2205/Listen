@@ -14,7 +14,6 @@ fn window_switch<'a>(value: bool, f: fn(bool) -> WindowSetting) -> Element<'a, M
 }
 
 pub(super) fn integrations(state: &Listen) -> Element<'_, Message> {
-    let _t = state.tokens;
     let s = &state.config.settings;
     let w = &s.window;
     let mut rows = vec![

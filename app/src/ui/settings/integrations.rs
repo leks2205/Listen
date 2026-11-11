@@ -1,6 +1,5 @@
-//! Scrobble options, Discord rich presence details and the remote control
-//! server (Feishin: general/scrobble-settings, window/discord-settings,
-//! window/remote-settings).
+//! Scrobble options, Last.fm, Discord rich presence details, the remote control server and the MCP
+//! server (Feishin: general/scrobble-settings, window/discord-settings, window/remote-settings).
 
 use super::{line, section, stepper, switch};
 use crate::app::integrations::{Field, IntegrationSetting as I, IntegrationsMsg};

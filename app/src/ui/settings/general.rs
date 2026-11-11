@@ -1,4 +1,5 @@
-//! General tab: servers, appearance, Feishin import.
+//! Settings sections built here: Servers, Appearance and Application (General tab), and Import from
+//! Feishin (Advanced tab).
 
 use super::appearance as rows;
 use super::{line, section, switch};
@@ -13,7 +14,6 @@ use listen_core::config::SecretStore;
 
 pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
     let t = state.tokens;
-    let _s = &state.config.settings;
     if state.demo {
         return None;
     }
@@ -204,7 +204,6 @@ pub(super) fn application(state: &Listen) -> Element<'_, Message> {
 
 pub(super) fn import_feishin(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
-    let _s = &state.config.settings;
     section(
         state,
         "Import from Feishin",
