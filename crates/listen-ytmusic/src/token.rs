@@ -483,9 +483,27 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_session_is_due_but_a_guest_is_not() {
+    fn a_guest_session_is_never_due() {
         let t = token(None);
         t.session().mark_stale();
         assert!(!t.session().due());
+        // `mark_stale` also sets the process-wide flag; leave it as the other tests expect it.
+        t.session().clear_stale();
+    }
+
+    #[test]
+    fn a_stale_profile_session_is_due_after_retry_after() {
+        let reader: Reader = Arc::new(|| Err("can't read the cookie database".to_string()));
+        let session = Session::with_reader("SAPISID=old; SID=x", Some(reader)).unwrap();
+        assert!(!session.due(), "cookies just read are not due");
+        session.mark_stale();
+        assert!(session.due(), "a signed-out answer makes the session due at once");
+        session.refresh();
+        assert_eq!(session.header().1, "old", "a failed read keeps the cookies");
+        assert!(!session.due(), "a failed read is not repeated before RETRY_AFTER");
+        session.0.fresh.lock().unwrap().tried_at -= RETRY_AFTER;
+        assert!(session.due(), "after RETRY_AFTER it is tried again");
+        session.clear_stale();
+        assert!(!session.due());
     }
 }
