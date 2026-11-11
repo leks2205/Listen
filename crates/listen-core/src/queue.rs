@@ -385,7 +385,8 @@ impl Queue {
     }
 
     /// Swaps the song of item `uid` for another version of it (focus mode's instrumental), keeping its
-    /// place and flags. False when the item is gone.
+    /// place and flags. False when the item is gone. Changes [`Queue::signature`]: the song's id, title and
+    /// artists are part of it, so views keyed on it see the swap.
     pub fn replace_song(&mut self, uid: u64, song: Song) -> bool {
         match self.items.iter_mut().find(|i| i.uid == uid) {
             Some(item) => {
@@ -771,10 +772,17 @@ impl Queue {
 
     // ---- the queue panel: change detection, rows, drag and drop ---------------
 
-    /// Cheap fingerprint of everything the queue panel shows (order, flags, position, favourites, ratings,
-    /// durations); the app rebuilds its row cache when it changes.
+    /// Cheap fingerprint of everything the queue panel, the remote and handoff show (order, flags, position,
+    /// song ids, titles and artists, favourites, ratings, durations, bridges); the app rebuilds its row cache
+    /// and republishes the queue when it changes. A song swapped under the same uid changes it too.
     pub fn signature(&self) -> u64 {
         let mix = |h: u64, v: u64| (h ^ v).wrapping_mul(0x100_0000_01b3).rotate_left(23);
+        // FNV-1a over the bytes, ended by a separator so "ab"+"c" and "a"+"bc" differ.
+        let text = |h: u64, s: &str| {
+            s.bytes()
+                .chain(std::iter::once(0xff))
+                .fold(h, |h, b| (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3))
+        };
         let mut h = mix(0xcbf2_9ce4_8422_2325, self.items.len() as u64);
         h = mix(h, self.position.map_or(u64::MAX, |p| p as u64));
         h = mix(h, u64::from(self.shuffle));
@@ -786,10 +794,16 @@ impl Queue {
                 u64::from(it.auto)
                     | u64::from(it.queued) << 1
                     | u64::from(it.song.favorite) << 2
-                    | u64::from(it.ai) << 3,
+                    | u64::from(it.ai) << 3
+                    | u64::from(it.bridge.is_some()) << 4,
             );
             h = mix(h, u64::from(it.song.rating.unwrap_or(0)));
             h = mix(h, it.song.duration.as_millis() as u64);
+            h = text(h, &it.song.id);
+            h = text(h, &it.song.title);
+            for a in &it.song.artists {
+                h = text(h, &a.name);
+            }
         }
         h
     }
@@ -1572,6 +1586,12 @@ mod tests {
         let at = q.signature();
         q.for_each_song_mut(|s| s.favorite = !s.favorite);
         assert_ne!(at, q.signature());
+        // Another version of the same length under the same uid (focus mode's instrumental) changes it too.
+        let at = q.signature();
+        let b = uid_of(&q, "b");
+        let old = q.items.iter().find(|i| i.uid == b).unwrap().song.clone();
+        q.replace_song(b, Song { duration: old.duration, ..song("b-inst") });
+        assert_ne!(at, q.signature(), "a swapped song changes the signature");
     }
 
     // ---- player filters ---------------------------------------------------------
