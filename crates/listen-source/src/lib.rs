@@ -156,6 +156,8 @@ pub struct AlbumQuery {
     pub tags: Vec<(String, Vec<String>)>,
     pub search: Option<String>,
     pub start: usize,
+    /// Page size; set it (`usize::MAX` asks for everything). 0 means the source's default, which differs:
+    /// 100 on servers and YouTube Music, everything on a local folder.
     pub limit: usize,
 }
 
@@ -205,6 +207,8 @@ pub struct SongQuery {
     pub tags: Vec<(String, Vec<String>)>,
     pub search: Option<String>,
     pub start: usize,
+    /// Page size; set it (`usize::MAX` asks for everything). 0 means the source's default, which differs:
+    /// 100 on servers and YouTube Music, everything on a local folder.
     pub limit: usize,
 }
 
@@ -244,6 +248,8 @@ pub struct ArtistQuery {
     pub genres: Vec<String>,
     pub search: Option<String>,
     pub start: usize,
+    /// Page size; set it (`usize::MAX` asks for everything). 0 means the source's default, which differs:
+    /// 100 on servers and YouTube Music, everything on a local folder.
     pub limit: usize,
 }
 
@@ -265,6 +271,8 @@ impl SongQuery {
 pub struct ListQuery {
     pub search: Option<String>,
     pub start: usize,
+    /// Page size; set it (`usize::MAX` asks for everything). 0 means the source's default, which differs:
+    /// 100 on servers and YouTube Music, everything on a local folder.
     pub limit: usize,
 }
 
@@ -484,8 +492,15 @@ pub struct NewPlaylist {
     pub public: bool,
 }
 
+/// Whether `order` holds each of `0..order.len()` exactly once.
+fn is_permutation(order: &[usize]) -> bool {
+    let mut seen = vec![false; order.len()];
+    order.iter().all(|&i| i < seen.len() && !std::mem::replace(&mut seen[i], true))
+}
+
 /// `(from, to)` moves turning `0..n` into `order` (`order[i]`: current index of the song for
 /// position `i`). Each move applies after the previous ones, as [`MusicSource::move_in_playlist`].
+/// `order` must be a permutation of `0..n`; values it cannot place are skipped.
 pub fn reorder_moves(order: &[usize]) -> Vec<(usize, usize)> {
     let mut current: Vec<usize> = (0..order.len()).collect();
     let mut moves = Vec::new();
@@ -594,6 +609,7 @@ pub trait MusicSource: Send + Sync {
         let _ = id;
         Err(SourceError::Unsupported)
     }
+    /// Songs, albums and artists matching `text`, at most `limit` of each kind (callers pass at least 1).
     async fn search(&self, text: &str, limit: usize) -> Result<SearchResults>;
     async fn home(&self) -> Result<Vec<HomeShelf>> {
         Err(SourceError::Unsupported)
@@ -670,7 +686,8 @@ pub trait MusicSource: Send + Sync {
         let _ = (id, songs);
         Err(SourceError::Unsupported)
     }
-    /// Removes entries by their position in the playlist.
+    /// Removes entries by 0-based position in the order [`Self::playlist_songs`] returns (the server's
+    /// order, not a sorted view), in any order, each at most once. A position past the end is an error.
     async fn remove_from_playlist(&self, id: &str, indices: &[usize]) -> Result<()> {
         let _ = (id, indices);
         Err(SourceError::Unsupported)
@@ -792,9 +809,15 @@ pub trait MusicSource: Send + Sync {
         }
         Ok(created)
     }
-    /// Saves a new order (`order[i]`: current index of the song for position `i`). Default: one
-    /// [`Self::move_in_playlist`] per moved song.
+    /// Saves a new order (`order[i]`: current index of the song for position `i`). `order` must be a
+    /// permutation of `0..len`, `len` being the playlist's current length; anything else is an error and
+    /// changes nothing. Default: one [`Self::move_in_playlist`] per moved song.
     async fn set_playlist_order(&self, id: &str, order: &[usize]) -> Result<()> {
+        if !is_permutation(order) {
+            return Err(SourceError::Other(
+                "the new playlist order is not a reordering of the playlist".into(),
+            ));
+        }
         for (from, to) in reorder_moves(order) {
             self.move_in_playlist(id, from, to).await?;
         }
@@ -1124,6 +1147,10 @@ mod tests {
             self.calls.lock().unwrap().push(format!("rating {id} {rating}"));
             Ok(())
         }
+        async fn move_in_playlist(&self, id: &str, from: usize, to: usize) -> Result<()> {
+            self.calls.lock().unwrap().push(format!("move {id} {from} {to}"));
+            Ok(())
+        }
         async fn stream(&self, _: &Song) -> Result<StreamSource> {
             Err(SourceError::Unsupported)
         }
@@ -1216,6 +1243,17 @@ mod tests {
         };
         let ids: Vec<String> = f.artist_radio(&artist, 10).await.unwrap().into_iter().map(|s| s.id).collect();
         assert_eq!(ids, vec!["top", "x", "y"]);
+    }
+
+    #[tokio::test]
+    async fn default_set_playlist_order_rejects_a_non_permutation() {
+        let f = Fake::default();
+        for bad in [&[0, 0][..], &[0, 2], &[1]] {
+            assert!(matches!(f.set_playlist_order("p", bad).await, Err(SourceError::Other(_))), "{bad:?}");
+        }
+        assert!(f.calls.lock().unwrap().is_empty(), "nothing moved");
+        f.set_playlist_order("p", &[1, 0]).await.unwrap();
+        assert_eq!(*f.calls.lock().unwrap(), vec!["move p 1 0"]);
     }
 
     #[tokio::test]
