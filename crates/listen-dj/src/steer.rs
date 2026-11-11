@@ -10,7 +10,10 @@ use std::path::Path;
 pub const MAX_REQUESTS: usize = 6;
 /// A typed request is cut to this many characters.
 pub const MAX_TEXT: usize = 120;
-/// The pool filters never leave fewer candidates than this (the DJ needs room to pick a flowing set).
+/// The narrowing filters (No ballads, Focus, Only favourites) only apply when they leave at least this many
+/// candidates (the DJ needs room to pick a flowing set). It is not a floor for every request: Calmer / More
+/// energy may leave as few as [`MIN_STEERED`], and More new songs keeps every new song plus three known ones.
+/// Not the same constant as `listen_mix::pool::MIN_POOL`.
 pub const MIN_POOL: usize = 8;
 
 /// Calmer / More energy keep only the songs on the requested side of the bar once at least this many are
@@ -277,10 +280,11 @@ fn median(mut v: Vec<f32>) -> Option<f32> {
     Some(v[v.len() / 2])
 }
 
-/// Keeps the candidates that fit the requests, in their order. Each filter applies only when it leaves
-/// at least [`MIN_POOL`] songs; an energy request keeps every song on its side of the bar when at least
-/// [`MIN_STEERED`] are, else the [`MIN_POOL`] that fit it best. `reference`: the energy to beat for Calmer / More energy (the replaced songs' mean, else the
-/// song playing now); without one, the pool's median. Songs without analysis never pass an energy filter
+/// Keeps the candidates that fit the requests, in their order. No ballads, Focus and Only favourites apply
+/// only when they leave at least [`MIN_POOL`] songs; More new songs keeps the new songs plus three known ones
+/// once at least half of [`MIN_POOL`] are new; an energy request keeps every song on its side of the bar
+/// when at least [`MIN_STEERED`] are, else the [`MIN_POOL`] that fit it best. `reference`: the energy to
+/// beat for Calmer / More energy (the replaced songs' mean, else the song playing now); without one, the pool's median. Songs without analysis never pass an energy filter
 /// when enough analysed ones do, and a pool without any analysed song is left alone (with or without a
 /// reference: nothing in it is measured, so there is nothing to rank by).
 pub fn filter_pool<T: Clone>(
@@ -313,7 +317,7 @@ pub fn filter_pool<T: Clone>(
                 if kept.len() >= MIN_STEERED {
                     pool = kept;
                 } else {
-                    // Too few on the right side: the best-fitting analysed songs, then the rest in order.
+                    // Nothing on the requested side: the best-fitting analysed songs, then the rest in order.
                     let mut ranked: Vec<usize> =
                         (0..pool.len()).filter(|&i| pool[i].1.energy.is_some()).collect();
                     ranked.sort_by(|&a, &b| {
@@ -321,7 +325,7 @@ pub fn filter_pool<T: Clone>(
                         if calmer { ea.total_cmp(&eb) } else { eb.total_cmp(&ea) }
                     });
                     ranked.extend((0..pool.len()).filter(|&i| pool[i].1.energy.is_none()));
-                    ranked.truncate(MIN_POOL.max(kept.len()));
+                    ranked.truncate(MIN_POOL);
                     ranked.sort_unstable();
                     pool = ranked.into_iter().map(|i| pool[i].clone()).collect();
                 }
