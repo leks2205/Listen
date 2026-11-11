@@ -71,7 +71,7 @@ pub fn song_list<'a>(
     let row_h = super::songs::ROW;
     let mut rows = Column::new().push(space().height(first as f32 * row_h));
     for (i, song) in songs.iter().enumerate().take(last).skip(first) {
-        rows = rows.push(super::songs::song_row(state, i, song, play(i)));
+        rows = rows.push(super::songs::song_row(state, i, song, play(i), state.page_width() - 2.0 * SIDE));
     }
     rows = rows.push(space().height(songs.len().saturating_sub(last) as f32 * row_h));
     let page = column![

@@ -644,7 +644,13 @@ fn song_rows<'a>(
 ) -> Element<'a, Message> {
     let mut col = Column::new();
     for (i, song) in songs.iter().enumerate().take(SECTION_ROWS) {
-        col = col.push(super::songs::song_row(state, i, song, msg(ArtistMsg::PlayAt(section, i))));
+        col = col.push(super::songs::song_row(
+            state,
+            i,
+            song,
+            msg(ArtistMsg::PlayAt(section, i)),
+            state.page_width() - 2.0 * SIDE,
+        ));
     }
     col.into()
 }

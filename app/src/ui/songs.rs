@@ -12,6 +12,10 @@ use iced::{Alignment, Element, Length, Padding};
 use listen_core::model::{Song, format_duration};
 
 pub const ROW: f32 = metrics::ROW_HEIGHT;
+/// Fixed columns of the row and its header: number, cover, duration.
+const NUM_COL: f32 = 48.0;
+const COVER_COL: f32 = 48.0;
+const TIME_COL: f32 = 80.0;
 /// Height of the column header ([`header`]).
 pub const HEADER: f32 = 40.0;
 
@@ -29,24 +33,27 @@ pub fn song_row<'a>(
     index: usize,
     song: &'a Song,
     on_press: Message,
+    width: f32,
 ) -> Element<'a, Message> {
     let t = state.tokens;
     let current = state.queue.current().is_some_and(|c| c.song.id == song.id);
     let title_color = if current { t.primary } else { t.foreground };
-    // Title and album share what's left of the page after the fixed columns (3 : 2).
-    let flexible = (state.page_width()
-        - 2.0 * 32.0
+    // Title and album share what's left of the row (`width`) after its padding, the fixed columns, the
+    // gaps and a scrollbar (3 : 2).
+    let flexible = (width
         - 2.0 * metrics::space_sm()
-        - 48.0
-        - 48.0
-        - 80.0
+        - NUM_COL
+        - COVER_COL
+        - TIME_COL
         - 4.0 * metrics::space_sm()
         - 14.0)
         .max(80.0);
     let (title_px, album_px) = (flexible * 0.6, flexible * 0.4 - metrics::space_sm());
     let content = row![
-        container(label(format!("{}", index + 1), metrics::font_md(), t.muted)).width(48).center_x(48),
-        song_cover(state, song, 48.0, metrics::radius_md()),
+        container(label(format!("{}", index + 1), metrics::font_md(), t.muted))
+            .width(NUM_COL)
+            .center_x(NUM_COL),
+        song_cover(state, song, COVER_COL, metrics::radius_md()),
         container(
             column![
                 data_label_w(
@@ -72,7 +79,7 @@ pub fn song_row<'a>(
         ))
         .width(Length::FillPortion(2))
         .clip(true),
-        container(label(format_duration(song.duration), metrics::font_md(), t.muted)).width(80),
+        container(label(format_duration(song.duration), metrics::font_md(), t.muted)).width(TIME_COL),
     ]
     .spacing(metrics::space_sm())
     .align_y(Alignment::Center);
@@ -96,11 +103,11 @@ pub fn header<'a>(state: &'a Listen) -> Element<'a, Message> {
     let h = |s: &'static str| label_w(s, metrics::font_sm(), t.muted, Weight::Medium);
     container(
         row![
-            container(h("#")).width(48).center_x(48),
-            space().width(48),
+            container(h("#")).width(NUM_COL).center_x(NUM_COL),
+            space().width(COVER_COL),
             container(h("Title")).width(Length::FillPortion(3)),
             container(h("Album")).width(Length::FillPortion(2)),
-            container(h("Time")).width(80),
+            container(h("Time")).width(TIME_COL),
         ]
         .spacing(metrics::space_sm())
         .align_y(Alignment::Center),

@@ -72,12 +72,20 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         .into()
     } else {
         let mut rows = Column::new();
+        // The page minus the list's padding, the size label (~70 px), the remove button and the gaps.
+        let row_width = state.page_width() - 2.0 * 12.0 - 70.0 - 36.0 - 2.0 * metrics::space_sm();
         for (i, song) in songs_list.iter().enumerate() {
             let size = state.offline.sizes.get(i).copied().map(format_bytes).unwrap_or_default();
             rows = rows.push(
                 row![
-                    container(songs::song_row(state, i, song, Message::Offline(OfflineMsg::Play(i))))
-                        .width(Length::Fill),
+                    container(songs::song_row(
+                        state,
+                        i,
+                        song,
+                        Message::Offline(OfflineMsg::Play(i)),
+                        row_width
+                    ))
+                    .width(Length::Fill),
                     label(size, metrics::font_sm(), t.muted),
                     crate::ui::tip::tip(
                         state,
