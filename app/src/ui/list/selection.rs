@@ -1,6 +1,6 @@
 //! Row selection of a list (clicks, Ctrl/Shift, select all, keyboard moves) and the floating selection
-//! bar, as in Feishin's `item-list-controls.ts` and `use-table-keyboard-navigation.ts`. The last added
-//! row is the anchor of Shift ranges and keyboard moves.
+//! bar, as in Feishin's `item-list-controls.ts` and `use-table-keyboard-navigation.ts`. The anchor of
+//! Shift ranges and keyboard moves is the row clicked last (Ctrl added it, or Shift ended a range at it).
 
 use crate::app::list::{ListId, ListMsg};
 use crate::app::{Listen, Message};
@@ -146,6 +146,12 @@ impl Selection {
                     let (lo, hi) = (anchor.min(index), anchor.max(index));
                     for i in lo..=hi.min(total - 1) {
                         self.add(i);
+                    }
+                    // The clicked row becomes the anchor, also when the range ran upwards or the row
+                    // was already selected.
+                    if self.contains(index) {
+                        self.order.retain(|i| *i != index);
+                        self.order.push(index);
                     }
                 }
                 None => self.set_only(index),
@@ -322,6 +328,18 @@ mod tests {
         // A plain click collapses it again.
         s.click(7, Mods::NONE, 20);
         assert_eq!(s.indices(), [7]);
+    }
+
+    #[test]
+    fn shift_click_makes_the_clicked_row_the_anchor() {
+        let mut s = sel(&[8]);
+        s.click(5, Mods::SHIFT, 20);
+        assert_eq!(s.last(), Some(5));
+        assert_eq!(s.target(Move::Down, 20, 1, 5), Some(6));
+        // A row inside the selection.
+        let mut s = sel(&[2, 3, 4, 5, 6]);
+        s.click(4, Mods::SHIFT, 20);
+        assert_eq!(s.last(), Some(4));
     }
 
     #[test]
