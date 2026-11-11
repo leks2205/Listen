@@ -15,7 +15,9 @@ pub const DECODE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Longer inputs are not analysed (30 minutes is ~320 MB of float PCM).
 pub const MAX_SECONDS: u32 = 30 * 60;
 
-/// Decoded audio, 22050 Hz stereo float.
+/// Stereo float audio. [`decode`] always gives [`SAMPLE_RATE`]; analysis expects that rate, so audio from
+/// another decoder must be resampled to it first ([`crate::spectral::analyze`] copes with any rate,
+/// bliss and the tuned thresholds do not).
 #[derive(Debug, Clone, Default)]
 pub struct Pcm {
     pub sample_rate: u32,

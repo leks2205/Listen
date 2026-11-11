@@ -5,7 +5,8 @@ use crate::decode::Pcm;
 use realfft::RealFftPlanner;
 
 pub const N_FFT: usize = 2048;
-/// 256 samples at 22050 Hz = 86 frames/s: ~12 ms beat resolution.
+/// 256 samples at 22050 Hz ([`SAMPLE_RATE`](crate::decode::SAMPLE_RATE)) = 86 frames/s: ~12 ms beat
+/// resolution. At other rates the frames follow the samples, not this time.
 pub const HOP: usize = 256;
 pub const N_MFCC: usize = 13;
 const N_MEL: usize = 40;
@@ -104,6 +105,8 @@ fn mel_filters(sr: f32, n_bins: usize) -> Vec<(usize, Vec<f32>)> {
 
 /// Computes all frame features. Cost: two real FFTs per frame (~0.1 s for a
 /// 4-minute song in release builds).
+/// Band edges follow `pcm.sample_rate`, so any rate is safe here; the rest of the analysis
+/// (bliss, the tuned thresholds) expects [`SAMPLE_RATE`](crate::decode::SAMPLE_RATE).
 pub fn analyze(pcm: &Pcm) -> Frames {
     let sr = pcm.sample_rate as f32;
     let n = pcm.left.len();
@@ -117,7 +120,8 @@ pub fn analyze(pcm: &Pcm) -> Frames {
     let (low_hi, voice_lo, voice_hi) = (bin(150.0), bin(300.0), bin(3400.0));
     // Chroma from spectral peaks only (drums and noise stay out), from
     // 100 Hz: below that, bins are wider than a semitone and kicks dominate.
-    let (chroma_lo, chroma_hi) = (bin(100.0).max(1), bin(5000.0));
+    // Peak tests read bin k + 1: below ~10 kHz sample rate 5 kHz lies past Nyquist, so stop one bin short.
+    let (chroma_lo, chroma_hi) = (bin(100.0).max(1), bin(5000.0).min(n_bins - 2));
     let fine_lo = bin(30.0).max(1);
     // Tonal centre energy from 500 Hz: above bass harmonics, in the formants.
     let tonal_from = bin(500.0) - voice_lo;
@@ -299,5 +303,26 @@ mod tests {
         let best = (0..12).max_by(|&x, &y| a.chroma[mid][x].total_cmp(&a.chroma[mid][y])).unwrap();
         assert_eq!(best, 9, "A");
         assert!((a.centroid[mid] - 440.0).abs() < 60.0, "{}", a.centroid[mid]);
+    }
+
+    /// The public API takes any `Pcm`: a low rate puts 5 kHz past Nyquist, a high one is just finer.
+    #[test]
+    fn spectral_analyze_survives_low_sample_rates() {
+        for sr in [4000, 8000, 11025, 44100, 48000] {
+            let mut s = crate::test_util::noise(sr, 2.0, 0.5, 1);
+            // A tone at Nyquist makes the top bin a spectral peak.
+            for (i, x) in s.iter_mut().enumerate() {
+                *x += if i % 2 == 0 { 0.5 } else { -0.5 };
+            }
+            let f = analyze(&Pcm { sample_rate: sr, left: s.clone(), right: s });
+            assert!(!f.is_empty(), "{sr} Hz");
+            let finite = |v: &[f32]| v.iter().all(|x| x.is_finite());
+            assert!(
+                finite(&f.power) && finite(&f.centroid) && finite(&f.flux) && finite(&f.rolloff),
+                "{sr} Hz"
+            );
+            assert!(f.chroma.iter().flatten().chain(f.fine_chroma.iter().flatten()).all(|x| x.is_finite()));
+            assert!(f.mfcc.iter().flatten().all(|x| x.is_finite()), "{sr} Hz");
+        }
     }
 }

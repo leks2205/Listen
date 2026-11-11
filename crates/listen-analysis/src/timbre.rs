@@ -20,7 +20,8 @@ pub fn loudness(pcm: &Pcm, start: f32, end: f32) -> (f32, f32) {
     (finite(lufs, -70.0).max(-70.0), finite(lra, 0.0))
 }
 
-/// bliss-audio's 23-dim feature vector, normalised to −1..1, from 22050 Hz mono.
+/// bliss-audio's 23-dim feature vector, normalised to −1..1. `mono` must be at
+/// [`SAMPLE_RATE`](crate::decode::SAMPLE_RATE) (bliss assumes it and cannot check); resample first.
 /// Empty when the audio is too short.
 pub fn bliss_vector(mono: &[f32]) -> Vec<f32> {
     bliss_audio::Song::analyze(mono).map(|a| a.as_vec()).unwrap_or_default()
