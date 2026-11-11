@@ -15,7 +15,8 @@ use std::time::Instant;
 
 // ---------------------------------------------------------------- colours
 
-/// A colour name or `#rgb` / `#rrggbb` (audioMotion uses CSS colours).
+/// A colour name or `#rgb` / `#rrggbb` (audioMotion uses CSS colours). Any other text, including a
+/// half-typed or non-ASCII one from the colour field, is white.
 pub fn parse_color(s: &str) -> Color {
     let s = s.trim().to_lowercase();
     let named = match s.as_str() {
@@ -37,6 +38,10 @@ pub fn parse_color(s: &str) -> Color {
         _ => None,
     };
     let hex = named.unwrap_or(&s).trim_start_matches('#');
+    // Hex digits only before any cut: `len()` counts bytes, so "#12345ä7" would be sliced inside the "ä".
+    if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Color::WHITE;
+    }
     let v = match hex.len() {
         3 => hex.chars().flat_map(|c| [c, c]).collect::<String>(),
         6 | 8 => hex[..6].to_string(),
@@ -1346,6 +1351,15 @@ mod tests {
         assert!(near(parse_color("a35"), Color::from_rgb8(0xaa, 0x33, 0x55)));
         assert!(near(parse_color("SteelBlue"), Color::from_rgb8(0x46, 0x82, 0xb4)));
         assert!(near(parse_color("nonsense"), Color::WHITE), "unknown colours are white, not a crash");
+    }
+
+    /// The colour field stores whatever is typed; the swatch parses it on every frame.
+    #[test]
+    fn parse_color_never_panics_on_non_ascii() {
+        assert!(near(parse_color("#12345한"), Color::WHITE));
+        assert!(near(parse_color("#12345ä7"), Color::WHITE));
+        assert!(near(parse_color("ä"), Color::WHITE));
+        assert!(near(parse_color("#aa3355ff"), Color::from_rgb8(0xaa, 0x33, 0x55)), "#rrggbbaa still parses");
     }
 
     #[test]
