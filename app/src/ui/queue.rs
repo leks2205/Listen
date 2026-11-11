@@ -536,10 +536,9 @@ pub fn summary(state: &Listen) -> String {
     if total.is_zero() { songs } else { format!("{songs} · {}", format_duration(total)) }
 }
 
-/// "Off · Shuffle · Auto-DJ · AI DJ": the play modes as clickable words, the
-/// current one highlighted. AI DJ is dimmed (with a hint) without a Gemini key.
+/// The play-mode button (names the current mode; a click moves to the next, like the player bar's)
+/// and, while a DJ is on, the Focus chip.
 pub fn mode_switcher(state: &Listen) -> Element<'_, Message> {
-    // One button naming the current play mode; each click moves to the next, like the player bar's.
     let t = state.tokens;
     let mode = state.play_mode();
     let on = mode != PlayMode::Off;
