@@ -150,7 +150,8 @@ impl Listen {
         }
         let Some(item) = self.queue.current() else { return 0.0 };
         let open = self.fullscreen_tab != super::FullscreenTab::Hidden;
-        let width = crate::ui::fullscreen::metadata::title_width(self.window_size, f.cover_size, open);
+        let width =
+            crate::ui::fullscreen::metadata::title_width(self.window_size, f.cover_size_clamped(), open);
         crate::ui::fullscreen::metadata::overflow_px(&item.song.title, width)
     }
 
@@ -436,7 +437,7 @@ impl Listen {
             self.fs.backdrop = None;
             return Task::none();
         };
-        let blur = if s.dynamic_is_image { s.image_blur } else { -1.0 };
+        let blur = if s.dynamic_is_image { s.image_blur_clamped() } else { -1.0 };
         let key = format!("{}|{blur}", self.image_key_on(&song.server_id, &image));
         if self.fs.backdrop.as_ref().is_some_and(|b| b.key == key)
             || self.fs.backdrop_pending.as_deref() == Some(key.as_str())

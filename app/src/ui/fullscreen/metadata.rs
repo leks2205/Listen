@@ -136,7 +136,7 @@ pub fn view<'a>(state: &'a Listen, song: &'a Song, width: f32, align: Horizontal
                 .width(Length::Fill)
                 .align_x(align),
         )
-        .max_height(TITLE * 1.2 * f32::from(s.title_lines))
+        .max_height(TITLE * 1.2 * f32::from(s.title_lines_clamped()))
         .clip(true)
         .into(),
     };

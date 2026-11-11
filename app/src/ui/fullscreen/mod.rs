@@ -136,7 +136,7 @@ fn image_column<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
         ItemAlignment::Center => (Horizontal::Center, Alignment::Center),
         ItemAlignment::Right => (Horizontal::Right, Alignment::End),
     };
-    let pct = f32::from(s.cover_size) / 100.0;
+    let pct = f32::from(s.cover_size_clamped()) / 100.0;
     responsive(move |size| {
         let art = art_side(size, pct);
         let cover: Element<'_, Message> = match &state.video.frame {

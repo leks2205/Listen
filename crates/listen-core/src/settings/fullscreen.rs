@@ -24,6 +24,8 @@ pub enum TitleDisplay {
     MultiLine,
 }
 
+/// The ranges below are what the settings page writes; a hand-edited or imported config may hold anything, so
+/// the player reads them through the clamping accessors (`title_lines_clamped`, ...), not the raw fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FullscreenSettings {
@@ -69,6 +71,21 @@ impl FullscreenSettings {
     pub fn overlay_alpha(&self) -> f32 {
         (f32::from(self.opacity) / 120.0).clamp(0.0, 1.0)
     }
+
+    /// `image_blur` within 0-6 rem (not a number: no blur).
+    pub fn image_blur_clamped(&self) -> f32 {
+        if self.image_blur.is_finite() { self.image_blur.clamp(0.0, 6.0) } else { 0.0 }
+    }
+
+    /// `cover_size` within 55-100 percent.
+    pub fn cover_size_clamped(&self) -> u8 {
+        self.cover_size.clamp(55, 100)
+    }
+
+    /// `title_lines` within 1-10: 0 would hide a wrapped title.
+    pub fn title_lines_clamped(&self) -> u8 {
+        self.title_lines.clamp(1, 10)
+    }
 }
 
 /// Badge ids shown under the title (`PlayerBar::info_items`), in menu order.
@@ -98,6 +115,18 @@ mod tests {
         assert!(f.dynamic_background && !f.dynamic_is_image);
         assert_eq!((f.opacity, f.cover_size, f.title_lines), (25, 75, 1));
         assert!((f.overlay_alpha() - 25.0 / 120.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn fullscreen_accessors_clamp_hand_edited_values() {
+        let f =
+            FullscreenSettings { title_lines: 0, cover_size: 250, image_blur: 40.0, ..Default::default() };
+        assert_eq!((f.title_lines_clamped(), f.cover_size_clamped(), f.image_blur_clamped()), (1, 100, 6.0));
+        let f =
+            FullscreenSettings { title_lines: 30, cover_size: 0, image_blur: f32::NAN, ..Default::default() };
+        assert_eq!((f.title_lines_clamped(), f.cover_size_clamped(), f.image_blur_clamped()), (10, 55, 0.0));
+        let d = FullscreenSettings::default();
+        assert_eq!((d.title_lines_clamped(), d.cover_size_clamped(), d.image_blur_clamped()), (1, 75, 6.0));
     }
 
     #[test]
