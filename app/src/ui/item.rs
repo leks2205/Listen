@@ -248,7 +248,7 @@ fn share_body<'a>(state: &'a Listen, s: &'a ShareState) -> Element<'a, Message> 
         .padding(Padding::from([8.0, 10.0]))
         .style(style::input(t));
     let mut col = column![
-        label(format!("Sharing: {}", s.title), metrics::font_md(), t.muted),
+        label(crate::i18n::trf("Sharing: {}", &[&s.title]), metrics::font_md(), t.muted),
         label_w("Expiration", metrics::font_md(), t.foreground, Weight::Medium),
         presets,
         row![amount, unit, plain(t, "Make default", Some(sh(ShareMsg::MakeDefault)))]

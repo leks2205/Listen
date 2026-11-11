@@ -116,7 +116,7 @@ pub fn mixes(state: &Listen) -> Element<'_, Message> {
     for (kind, count) in &state.history_view.mix_counts {
         let enabled = *count > 0;
         let detail = if enabled {
-            format!("{} • {count} songs", kind.blurb())
+            crate::i18n::trf("{} • {} songs", &[&crate::i18n::tr(kind.blurb()), count])
         } else {
             "Not enough history yet".into()
         };
@@ -157,9 +157,10 @@ pub fn mixes(state: &Listen) -> Element<'_, Message> {
     .into()
 }
 
+/// "3 h 5 min", translated (it goes into the holes of longer lines).
 fn duration_text(secs: u64) -> String {
     let (h, m) = (secs / 3600, secs % 3600 / 60);
-    if h > 0 { format!("{h} h {m} min") } else { format!("{m} min") }
+    if h > 0 { crate::i18n::trf("{} h {} min", &[&h, &m]) } else { crate::i18n::trf("{} min", &[&m]) }
 }
 
 fn tile<'a>(state: &'a Listen, value: String, name: &'static str) -> Element<'a, Message> {
@@ -196,10 +197,12 @@ fn top_list<'a>(state: &'a Listen, title: &'static str, items: &'a [Ranked]) -> 
     }
     for (i, r) in items.iter().enumerate() {
         let detail = match (r.detail.is_empty(), r.skips) {
-            (true, 0) => format!("{} plays • {}", r.plays, duration_text(r.secs)),
-            (true, n) => format!("{} plays • {} • {} skipped", r.plays, duration_text(r.secs), n),
-            (false, 0) => format!("{} • {} plays", r.detail, r.plays),
-            (false, n) => format!("{} • {} plays • {} skipped", r.detail, r.plays, n),
+            (true, 0) => crate::i18n::trf("{} plays • {}", &[&r.plays, &duration_text(r.secs)]),
+            (true, n) => {
+                crate::i18n::trf("{} plays • {} • {} skipped", &[&r.plays, &duration_text(r.secs), &n])
+            }
+            (false, 0) => crate::i18n::trf("{} • {} plays", &[&r.detail, &r.plays]),
+            (false, n) => crate::i18n::trf("{} • {} plays • {} skipped", &[&r.detail, &r.plays, &n]),
         };
         col = col.push(row![
             container(label(format!("{}", i + 1), metrics::font_md(), t.muted)).width(28),
