@@ -410,7 +410,8 @@ fn build_fixture() -> Vec<Scanned> {
         // No artist at all -> Unknown Artist.
         sc("unknown/01.wav", "Eleven", &[], Some("Nameless"), None, 1),
         // Same folder + album, one track with an explicit album artist and one
-        // without (whose track artist becomes the album artist): two groups, one id.
+        // without (whose track artist becomes the album artist): two groups, one id,
+        // so one album (the reference build kept two; the equivalence test skips them).
         sc("same/01.wav", "Twelve", &["X"], Some("Alike"), Some("X"), 1),
         sc("same/02.wav", "Thirteen", &["X"], Some("Alike"), None, 2),
     ]
@@ -419,7 +420,8 @@ fn build_fixture() -> Vec<Scanned> {
 #[test]
 fn index_build_matches_the_old_linear_lookups() {
     let server = ServerId("eq".into());
-    let files = build_fixture();
+    // The reference kept two albums under one id for "same/"; see one_folder_with_and_without_album_artist_is_one_album.
+    let files: Vec<Scanned> = build_fixture().into_iter().filter(|f| !f.rel.starts_with("same/")).collect();
     let old = reference::build(&server, files.clone());
     let new = Index::build(&server, files.clone());
 
@@ -452,16 +454,21 @@ fn index_build_matches_the_old_linear_lookups() {
     let various = new.albums.iter().filter(|e| e.album.artist_line() == "Various Artists").count();
     assert_eq!(various, 1);
     assert_eq!(new.tracks.iter().filter(|t| t.song.album_id.is_none()).count(), 1);
-    // Duplicate album id: the explicit album artist and the implied one share a
-    // folder and album name, so both groups hash to the same id. Both the old and
-    // the new build keep two entries and point both tracks at the first group's
-    // album artists.
-    let alike: Vec<_> = new.albums.iter().filter(|e| e.album.name == "Alike").collect();
-    assert_eq!(alike.len(), 2, "two groups");
-    assert_eq!(alike[0].album.id, alike[1].album.id, "one id");
-    let same: Vec<_> = new.tracks.iter().filter(|t| t.path.starts_with("/music/same")).collect();
-    assert_eq!(same.len(), 2);
-    assert_eq!(same[0].song.album_artists, same[1].song.album_artists);
+}
+
+#[tokio::test]
+async fn one_folder_with_and_without_album_artist_is_one_album() {
+    let src = folder(build_fixture());
+    let ids: Vec<&str> = src.index.albums.iter().map(|e| e.album.id.as_str()).collect();
+    assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len(), "album ids are unique");
+    let alike: Vec<_> = src.index.albums.iter().filter(|e| e.album.name == "Alike").collect();
+    assert_eq!(alike.len(), 1, "one album");
+    let album = src.album(&alike[0].album.id).await.unwrap();
+    assert_eq!(album.songs.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["Twelve", "Thirteen"]);
+    assert_eq!(album.song_count, Some(2));
+    assert!(album.songs.iter().all(|s| s.album_id.as_deref() == Some(album.id.as_str())));
+    let x = src.index.artists.iter().find(|a| a.name == "X").unwrap();
+    assert_eq!(x.album_count, Some(1));
 }
 
 /// The step-1 `sorted_songs`: same haystack filter, but `sort_by_key` (the key is

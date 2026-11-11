@@ -87,17 +87,21 @@ impl Index {
             groups.entry((album.to_lowercase(), artist, dir)).or_default().push(i);
         }
 
-        let mut album_of: HashMap<usize, String> = HashMap::new();
-        let mut album_cover: HashMap<String, Option<String>> = HashMap::new();
-        let mut entries: Vec<(Album, Vec<usize>)> = Vec::new();
+        let in_order = |idx: &mut Vec<usize>| {
+            idx.sort_by_key(|&i| {
+                (files[i].disc.unwrap_or(1), files[i].track.unwrap_or(0), files[i].rel.clone())
+            })
+        };
+        // One id names one album: groups whose ids are equal are merged. The id uses the resolved
+        // artist, so in one folder the tracks with an album artist X and those without one whose
+        // track artist is X are two groups but one album.
+        let mut merged: Vec<(String, String, Vec<usize>)> = Vec::new();
+        let mut merged_at: HashMap<String, usize> = HashMap::new();
         let mut group_list: Vec<_> = groups.into_iter().collect();
         group_list.sort_by(|a, b| a.0.cmp(&b.0));
         for ((_, _, _), mut idx) in group_list {
-            idx.sort_by_key(|&i| {
-                (files[i].disc.unwrap_or(1), files[i].track.unwrap_or(0), files[i].rel.clone())
-            });
+            in_order(&mut idx);
             let first = &files[idx[0]];
-            let album_name = first.album.clone().unwrap_or_default();
             let album_artist = match &first.album_artist {
                 Some(a) => a.clone(),
                 None => {
@@ -116,11 +120,26 @@ impl Index {
                 "al-{:016x}",
                 fnv1a(&format!(
                     "{}\u{1}{}\u{1}{}",
-                    album_name.to_lowercase(),
+                    first.album.as_deref().unwrap_or_default().to_lowercase(),
                     album_artist.to_lowercase(),
                     first.path.parent().map(|p| p.to_string_lossy()).unwrap_or_default()
                 ))
             );
+            match merged_at.get(&id) {
+                Some(&at) => merged[at].2.extend(idx),
+                None => {
+                    merged_at.insert(id.clone(), merged.len());
+                    merged.push((id, album_artist, idx));
+                }
+            }
+        }
+
+        let mut album_of: HashMap<usize, String> = HashMap::new();
+        let mut album_cover: HashMap<String, Option<String>> = HashMap::new();
+        let mut entries: Vec<(Album, Vec<usize>)> = Vec::with_capacity(merged.len());
+        for (id, album_artist, mut idx) in merged {
+            in_order(&mut idx);
+            let album_name = files[idx[0]].album.clone().unwrap_or_default();
             let cover = idx
                 .iter()
                 .find_map(|&i| files[i].folder_art.as_ref())
@@ -161,11 +180,9 @@ impl Index {
         }
 
         // Tracks, in file order; `files` index -> tracks index is the identity.
-        // The first entry with an id wins, like the linear `find` it replaces.
-        let mut entry_by_id: HashMap<String, usize> = HashMap::with_capacity(entries.len());
-        for (i, (album, _)) in entries.iter().enumerate() {
-            entry_by_id.entry(album.id.clone()).or_insert(i);
-        }
+        // Album ids are unique (merged above).
+        let entry_by_id: HashMap<String, usize> =
+            entries.iter().enumerate().map(|(i, (album, _))| (album.id.clone(), i)).collect();
         let mut tracks: Vec<Track> = Vec::with_capacity(files.len());
         for (i, f) in files.iter().enumerate() {
             let album_id = album_of.get(&i).cloned();
