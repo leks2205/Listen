@@ -59,9 +59,10 @@ async fn non_admin_gets_not_authorized() {
     }
 }
 
-/// Live: `LISTEN_ND_URL/USER/PASS` set → start a scan on the real server.
+/// Live: `LISTEN_ND_URL/USER/PASS` set and `-- --ignored` → start a scan on the real server.
 /// A non-admin account must answer "not authorized", an admin one a status.
 #[tokio::test]
+#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
 async fn live_start_scan() {
     let (Ok(url), Ok(user), Ok(pass)) =
         (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER"), std::env::var("LISTEN_ND_PASS"))

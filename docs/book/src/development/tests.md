@@ -31,7 +31,7 @@ Open the PNG files after a UI change to see what the pages look like. Only snaps
 
 ## Live tests
 
-Live tests talk to a real server or service. They skip silently unless their environment variables are set, so `cargo test --workspace` stays offline.
+Live tests talk to a real server or service. They skip silently unless their environment variables are set, so `cargo test --workspace` stays offline. The Navidrome and Jellyfin tests in `listen-subsonic` and `listen-jellyfin` are also `#[ignore]`d (run them with `-- --ignored`), so a shell that happens to export the variables does not run them. A live test that changes something on the server (a favourite) puts it back before it ends.
 
 | Variables | Test | Needs |
 |---|---|---|
@@ -46,7 +46,7 @@ Example:
 
 ```bash
 LISTEN_ND_URL=https://music.example.com LISTEN_ND_USER=alex LISTEN_ND_PASS=secret \
-    cargo test -p listen-subsonic --test live_navidrome
+    cargo test -p listen-subsonic --test live_navidrome -- --ignored
 ```
 
 Never commit credentials. Use a test account on a test server.

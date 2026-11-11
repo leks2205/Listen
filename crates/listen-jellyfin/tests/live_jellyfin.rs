@@ -1,5 +1,7 @@
-//! Live test against a real Jellyfin server. Skipped unless `LISTEN_JF_URL`,
-//! `LISTEN_JF_USER` and `LISTEN_JF_PASS` are set. Expects at least one album.
+//! Live test against a real Jellyfin server: `#[ignore]`d, run with
+//! `cargo test -p listen-jellyfin --test live_jellyfin -- --ignored` and `LISTEN_JF_URL`,
+//! `LISTEN_JF_USER`, `LISTEN_JF_PASS` set. Expects at least one album. It flips the favourite
+//! of one song and puts it back, and reports one "now playing": use a test account.
 
 use listen_core::model::ServerId;
 use listen_jellyfin::Jellyfin;
@@ -14,6 +16,7 @@ fn env() -> Option<(String, String, String)> {
 }
 
 #[tokio::test]
+#[ignore = "live server: needs LISTEN_JF_*, run with --ignored"]
 async fn browse_and_stream() {
     let Some((url, user, pass)) = env() else {
         eprintln!("LISTEN_JF_* not set; skipping");
@@ -53,10 +56,12 @@ async fn browse_and_stream() {
         println!("cover status {}", resp.status());
     }
 
-    jf.set_favorite(std::slice::from_ref(&song.id), true).await.expect("favorite");
-    let favs = jf.songs(&SongQuery { favorites_only: true, limit: 50, ..Default::default() }).await.unwrap();
-    assert!(favs.items.iter().any(|s| s.id == song.id));
-    jf.set_favorite(std::slice::from_ref(&song.id), false).await.expect("unfavorite");
+    // Flip the favourite and put it back: the server may be someone's real library.
+    let was = song.favorite;
+    jf.set_favorite(std::slice::from_ref(&song.id), !was).await.expect("flip favourite");
+    let favs = jf.songs(&SongQuery { favorites_only: true, limit: 500, ..Default::default() }).await;
+    jf.set_favorite(std::slice::from_ref(&song.id), was).await.expect("restore favourite");
+    assert_eq!(favs.unwrap().items.iter().any(|s| s.id == song.id), !was);
 
     let genres = jf.genres().await.expect("genres");
     println!("genres: {:?}", genres.iter().map(|g| &g.name).collect::<Vec<_>>());
@@ -66,8 +71,22 @@ async fn browse_and_stream() {
 }
 
 #[tokio::test]
+#[ignore = "live server: needs LISTEN_JF_*, run with --ignored"]
 async fn wrong_password_is_auth_error() {
     let Some((url, user, _)) = env() else { return };
     let r = Jellyfin::connect(ServerId("bad".into()), &url, &user, "definitely-wrong").await;
     assert!(matches!(r, Err(SourceError::Auth(_))));
+}
+
+/// Every test in this file talks to a real server (maybe someone's real library), so each is
+/// `#[ignore]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
+#[test]
+fn live_tests_run_only_when_asked() {
+    let src = include_str!("live_jellyfin.rs");
+    let marker = concat!("#[tokio", "::test]");
+    for test in src.split(marker).skip(1) {
+        let head = &test[..test.find("async fn").expect("a test function")];
+        let name = test[test.find("async fn").unwrap()..].split('(').next().unwrap_or_default();
+        assert!(head.contains("#[ignore"), "{name} must be #[ignore]");
+    }
 }

@@ -1,6 +1,7 @@
-//! Live test against a real Navidrome/OpenSubsonic server. Skipped unless
-//! `LISTEN_ND_URL`, `LISTEN_ND_USER` and `LISTEN_ND_PASS` are set.
-//! Expects at least one album with at least one song.
+//! Live test against a real Navidrome/OpenSubsonic server: `#[ignore]`d, run with
+//! `cargo test -p listen-subsonic --test live_navidrome -- --ignored` and `LISTEN_ND_URL`,
+//! `LISTEN_ND_USER`, `LISTEN_ND_PASS` set. Expects at least one album with at least one song.
+//! It flips the star of one song and puts it back: use a test account.
 
 use listen_core::model::ServerId;
 use listen_source::{AlbumQuery, AlbumSort, ListQuery, MusicSource, SongQuery, SourceError};
@@ -14,6 +15,7 @@ fn client() -> Option<Subsonic> {
 }
 
 #[tokio::test]
+#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
 async fn browse_and_stream() {
     let Some(nd) = client() else {
         eprintln!("LISTEN_ND_* not set; skipping");
@@ -54,15 +56,31 @@ async fn browse_and_stream() {
         assert!(resp.status().is_success());
     }
 
-    nd.set_favorite(std::slice::from_ref(&song.id), true).await.expect("star");
-    nd.set_favorite(std::slice::from_ref(&song.id), false).await.expect("unstar");
+    // Flip the star and put it back: the server may be someone's real library.
+    let was = song.favorite;
+    nd.set_favorite(std::slice::from_ref(&song.id), !was).await.expect("flip star");
+    nd.set_favorite(std::slice::from_ref(&song.id), was).await.expect("restore star");
 }
 
 #[tokio::test]
+#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
 async fn wrong_password_is_auth_error() {
     let (Ok(url), Ok(user)) = (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER")) else {
         return;
     };
     let nd = Subsonic::new(ServerId("bad".into()), &url, &user, "definitely-wrong").unwrap();
     assert!(matches!(nd.ping().await, Err(SourceError::Auth(_))));
+}
+
+/// Every test in this file talks to a real server (maybe someone's real library), so each is
+/// `#[ignore]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
+#[test]
+fn live_tests_run_only_when_asked() {
+    let src = include_str!("live_navidrome.rs");
+    let marker = concat!("#[tokio", "::test]");
+    for test in src.split(marker).skip(1) {
+        let head = &test[..test.find("async fn").expect("a test function")];
+        let name = test[test.find("async fn").unwrap()..].split('(').next().unwrap_or_default();
+        assert!(head.contains("#[ignore"), "{name} must be #[ignore]");
+    }
 }
