@@ -10,6 +10,10 @@ use std::sync::Mutex;
 
 const BASE: &str =
     "https://raw.githubusercontent.com/danigb/beat-this-rs/089b509247e6fdcec666511c0dcf0d5f39c21e73/models";
+/// Beat This! emits one logit per 20 ms: 50 frames/s, its mel hop of 441 samples at 22050 Hz
+/// (the crate exports no constant). [`BeatModel::track`] reads the confidence at `beat time × LOGIT_FPS`.
+const LOGIT_FPS: f32 = 50.0;
+
 /// (file name, SHA-256, size in bytes).
 const FILES: [(&str, &str, u64); 2] = [
     ("mel_spectrogram.onnx", "fdd59e65c515331308e4c8841edf99972deca646bdf6197744c2a5b7755e3de9", 270_742),
@@ -71,7 +75,7 @@ impl BeatModel {
         Self::in_dir(dir).ok_or_else(|| err("model files incomplete".into()))
     }
 
-    /// Beats and downbeats of a 22050 Hz mono signal. Loaded models are pooled process-wide
+    /// Beats and downbeats of a mono signal (Beat This! resamples to 22050 Hz itself). Loaded models are pooled process-wide
     /// (each analysis runs on a fresh thread; parsing the model costs ~0.1 s).
     pub fn track(&self, mono: &[f32], sample_rate: u32) -> Result<BeatEstimate, AnalysisError> {
         type Loaded = BeatThis<<RtenRuntime as Runtime>::Model>;
@@ -89,11 +93,16 @@ impl BeatModel {
         POOL.lock().unwrap_or_else(|p| p.into_inner()).push((self.clone(), bt));
         let a = result.map_err(|e| AnalysisError::Model(format!("Beat This!: {e}")))?;
         // Mean beat probability at the detected beats: the model's certainty.
-        let fps = 50.0;
+        let seconds = mono.len() as f32 / sample_rate.max(1) as f32;
+        debug_assert!(
+            (a.beat_logits.len() as f32 - seconds * LOGIT_FPS).abs() <= 2.0 + 0.01 * seconds * LOGIT_FPS,
+            "Beat This! gave {} logits for {seconds:.1} s: no longer {LOGIT_FPS} per second",
+            a.beat_logits.len()
+        );
         let probs: Vec<f32> = a
             .beats
             .iter()
-            .filter_map(|t| a.beat_logits.get((t * fps).round() as usize))
+            .filter_map(|t| a.beat_logits.get((t * LOGIT_FPS).round() as usize))
             .map(|l| 1.0 / (1.0 + (-l).exp()))
             .collect();
         let confidence = (!probs.is_empty()).then(|| probs.iter().sum::<f32>() / probs.len() as f32);
@@ -122,5 +131,9 @@ mod tests {
         let off = |t: f32| ((t - 1.0) / 0.5 - ((t - 1.0) / 0.5).round()).abs() * 0.5;
         let worst = est.beats.iter().map(|t| off(*t)).fold(0.0, f32::max);
         assert!(worst < 0.03, "beats off the clicks by {worst} s");
+        // Another input rate: the model resamples, its logits stay at LOGIT_FPS (debug_assert in track).
+        let doubled: Vec<f32> = pcm.mono().iter().flat_map(|&x| [x, x]).collect();
+        let est = model.track(&doubled, 2 * pcm.sample_rate).unwrap();
+        assert!(est.confidence.is_some_and(|c| c > 0.5), "{:?}", est.confidence);
     }
 }
