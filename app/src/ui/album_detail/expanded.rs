@@ -25,7 +25,7 @@ pub struct Actions<'a> {
     pub close: Message,
     /// A play button (now / next / last) for the whole album.
     pub play: Box<dyn Fn(PlayBehavior) -> Message + 'a>,
-    /// A double press of track `n`.
+    /// A press on track `n` (plays the album from it).
     pub track: Box<dyn Fn(usize) -> Message + 'a>,
 }
 
