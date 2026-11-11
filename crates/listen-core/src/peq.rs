@@ -91,6 +91,33 @@ fn biquad_db(c: &[f64; 5], freq: f64, sr: f64) -> f64 {
     10.0 * ((nr * nr + ni * ni) / (dr * dr + di * di)).log10()
 }
 
+/// Largest value of `f` between `lo` and `hi` (golden-section search on a log-frequency axis;
+/// `f` is taken as having one peak in the bracket, which holds between neighbours of a sample grid).
+fn peak_between(f: &impl Fn(f64) -> f64, lo: f64, hi: f64) -> f64 {
+    const INV_PHI: f64 = 0.618_033_988_749_894_9;
+    let (mut a, mut b) = (lo.ln(), hi.ln());
+    let mut c = b - INV_PHI * (b - a);
+    let mut d = a + INV_PHI * (b - a);
+    let (mut fc, mut fd) = (f(c.exp()), f(d.exp()));
+    let mut best = f(lo).max(f(hi)).max(fc).max(fd);
+    for _ in 0..60 {
+        if fc > fd {
+            b = d;
+            (d, fd) = (c, fc);
+            c = b - INV_PHI * (b - a);
+            fc = f(c.exp());
+            best = best.max(fc);
+        } else {
+            a = c;
+            (c, fc) = (d, fd);
+            d = a + INV_PHI * (b - a);
+            fd = f(d.exp());
+            best = best.max(fd);
+        }
+    }
+    best
+}
+
 impl Profile {
     /// The profile's response at `freq` in dB, preamp included.
     pub fn response_db(&self, freq: f64, sr: f64) -> f64 {
@@ -98,21 +125,46 @@ impl Profile {
         f64::from(self.preamp) + bands
     }
 
-    /// Largest boost of the bands alone (dB) on a 1/24-octave grid from 20 Hz to 20 kHz.
+    /// Largest boost of the bands alone (dB) from 20 Hz to 20 kHz (at most 95 % of Nyquist): the
+    /// true peak, not a grid sample. A 1/24-octave grid plus every band's own frequency is sampled,
+    /// then each local maximum is refined between its neighbours, so a narrow (high-Q) band that
+    /// falls between grid points is still measured at its full height.
     pub fn max_boost_db(&self, sr: f64) -> f64 {
-        let top = (sr / 2.0 * 0.95).min(20_000.0);
-        (0..=240)
+        let top = (sr / 2.0 * 0.95).clamp(20.0, 20_000.0);
+        let boost = |f: f64| self.response_db(f, sr) - f64::from(self.preamp);
+        let centres = self
+            .filters
+            .iter()
+            .map(|f| f64::from(f.freq))
+            .filter(|f| f.is_finite())
+            .map(|f| f.clamp(20.0, top));
+        let mut fs: Vec<f64> = (0..=240)
             .map(|i| 20.0 * 2f64.powf(f64::from(i) / 24.0))
             .take_while(|&f| f <= top)
-            .map(|f| self.response_db(f, sr) - f64::from(self.preamp))
-            .fold(0.0, f64::max)
+            .chain(centres)
+            .chain([top])
+            .collect();
+        fs.sort_by(f64::total_cmp);
+        fs.dedup();
+        let db: Vec<f64> = fs.iter().map(|&f| boost(f)).collect();
+        let mut best = db.iter().copied().fold(0.0, f64::max);
+        for i in 0..fs.len() {
+            let left = if i > 0 { db[i - 1] } else { f64::NEG_INFINITY };
+            let right = db.get(i + 1).copied().unwrap_or(f64::NEG_INFINITY);
+            if db[i] > 0.0 && db[i] >= left && db[i] >= right {
+                let (lo, hi) = (fs[i.saturating_sub(1)], fs[(i + 1).min(fs.len() - 1)]);
+                best = best.max(peak_between(&boost, lo, hi));
+            }
+        }
+        best
     }
 
-    /// The preamp actually used: the profile's, lowered further when a band boosts more than it
-    /// leaves room for, so the correction itself never clips.
+    /// The preamp actually used: the profile's (limited to -30..0 dB), lowered further when the
+    /// bands boost more than it leaves room for. No frequency from 20 Hz to 20 kHz comes out louder
+    /// than it went in, however narrow or large the boost, so the correction itself never clips.
     pub fn safe_preamp(&self, sr: f64) -> f32 {
         let need = -(self.max_boost_db(sr) as f32);
-        self.preamp.min(need).clamp(-30.0, 0.0)
+        self.preamp.clamp(-30.0, 0.0).min(need)
     }
 
     /// The same profile with [`Self::safe_preamp`] as its preamp.
@@ -408,6 +460,17 @@ Filter 7: OFF PK Fc 1422 Hz Gain 1.0 dB Q 2.38
         assert!(biquad_db(&coefficients(&hs, sr), 100.0, sr).abs() < 0.05);
     }
 
+    /// The response peak on a grid 20 times finer than the one `max_boost_db` samples, plus
+    /// every band centre: an independent check, not the function's own grid.
+    fn dense_peak(p: &Profile, sr: f64) -> f64 {
+        (0..=4800)
+            .map(|i| 20.0 * 2f64.powf(f64::from(i) / 480.0))
+            .take_while(|&f| f <= 20_000.0)
+            .chain(p.filters.iter().map(|f| f64::from(f.freq)))
+            .map(|f| p.response_db(f, sr))
+            .fold(f64::MIN, f64::max)
+    }
+
     #[test]
     fn preamp_leaves_room_for_every_boost() {
         let p = verite();
@@ -415,11 +478,47 @@ Filter 7: OFF PK Fc 1422 Hz Gain 1.0 dB Q 2.38
         assert!(boost > 0.0);
         assert!(f64::from(p.safe_preamp(48_000.0)) <= -boost + 1e-6);
         assert!(p.safe_preamp(48_000.0) <= p.preamp);
-        let s = p.with_safe_preamp(48_000.0);
-        let peak = (0..=240)
-            .map(|i| s.response_db(20.0 * 2f64.powf(f64::from(i) / 24.0), 48_000.0))
-            .fold(f64::MIN, f64::max);
-        assert!(peak <= 1e-6, "total response peaks at {peak} dB");
+        let peak = dense_peak(&p.with_safe_preamp(48_000.0), 48_000.0);
+        assert!(peak <= 1e-4, "total response peaks at {peak} dB");
+    }
+
+    #[test]
+    fn max_boost_sees_a_narrow_band_between_grid_points() {
+        // Half-way between two 1/24-octave grid points, Q 40 (mpv's ceiling).
+        let freq = (20.0 * 2f64.powf(100.5 / 24.0)) as f32;
+        let p = Profile {
+            filters: vec![Filter { kind: FilterKind::Peak, freq, gain: 12.0, q: 40.0 }],
+            ..Profile::default()
+        };
+        for sr in [44_100.0, 48_000.0, 96_000.0] {
+            assert!(p.max_boost_db(sr) > 11.9, "{sr}: {}", p.max_boost_db(sr));
+            let peak = dense_peak(&p.with_safe_preamp(sr), sr);
+            assert!(peak <= 1e-4, "{sr}: total response peaks at {peak} dB");
+        }
+        // Two narrow bands close together: their sum peaks off both centres.
+        let p = Profile {
+            filters: vec![
+                Filter { kind: FilterKind::Peak, freq: 1000.0, gain: 8.0, q: 12.0 },
+                Filter { kind: FilterKind::Peak, freq: 1030.0, gain: 8.0, q: 12.0 },
+            ],
+            ..Profile::default()
+        };
+        assert!(dense_peak(&p.with_safe_preamp(48_000.0), 48_000.0) <= 1e-4);
+    }
+
+    #[test]
+    fn the_correction_never_clips_beyond_a_30_db_boost() {
+        let band = |freq| Filter { kind: FilterKind::Peak, freq, gain: 20.0, q: 1.0 };
+        let p = Profile { filters: vec![band(1000.0), band(1100.0)], ..Profile::default() };
+        assert!(p.max_boost_db(48_000.0) > 30.0);
+        assert!(dense_peak(&p.with_safe_preamp(48_000.0), 48_000.0) <= 1e-4);
+        // The profile's own preamp stays limited to -30..0 dB when the bands need less.
+        let quiet = Profile {
+            preamp: -50.0,
+            filters: vec![Filter { gain: 3.0, ..band(1000.0) }],
+            ..Profile::default()
+        };
+        assert_eq!(quiet.safe_preamp(48_000.0), -30.0);
     }
 
     #[test]
