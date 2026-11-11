@@ -17,11 +17,11 @@
 //! heard right next to another in the listening history ([`Neighbours`]) is too when nothing else is known.
 //!
 //! A scene also has an **era** (the decade: before 1980, the 1980s, …, the 2020s), read from the tags
-//! ("2020s", "90s ballad", "1st-generation K-pop"), else the song's year, else the artist's other tagged
-//! songs, else the eras of the songs that sound closest (CLaMP 3, ≥ [`AUDIO_SAME`]). Two songs whose eras
-//! are both known must be at most one decade apart (the 2010s and the 2020s are one scene, the 1980s and
-//! the 2020s are not). When only one era is known, language and genre must both match, and the score is
-//! lower.
+//! ("2020s", "90s ballad", "1st-generation K-pop"), else the song's year, else the song's genres ("90s
+//! K-pop"), else the artist's other tagged songs, else the eras of the songs that sound closest (CLaMP 3,
+//! ≥ [`AUDIO_SAME`]). Two songs whose eras are both known must be at most one decade apart (the 2010s and
+//! the 2020s are one scene, the 1980s and the 2020s are not). When only one era is known, language and
+//! genre must both match, and the score is lower.
 //!
 //! [`Gate`] applies this to a bridge: when the two songs it joins share a scene the bridge must belong to
 //! it, when they differ it must match one of them, and a candidate whose scene is unknown is rejected
@@ -838,7 +838,8 @@ impl SceneIndex {
     }
 
     /// [`Self::profile`] with the song's release `year` where the source has one: the era comes from the
-    /// tags, else the year, else the artist's other songs, else the songs that sound closest.
+    /// tags, else the year, else the song's genres, else the artist's other songs, else the songs that
+    /// sound closest.
     pub fn profile_dated(
         &self,
         song_id: &str,
@@ -854,11 +855,13 @@ impl SceneIndex {
         }
         let tags = own.map(|o| o.0).unwrap_or_default();
         let by_artist = self.artists.get(&key).copied().unwrap_or_default();
-        let mut scene =
-            tags.or(Scene::from_genres(genres)).or(by_artist).or(Scene::from_script(title, artist));
+        let genres = Scene::from_genres(genres);
+        let mut scene = tags.or(genres).or(by_artist).or(Scene::from_script(title, artist));
+        // The era has its own order (the year beats the genres and the artist), so it is set again here.
         scene.era = tags
             .era
             .or(year.and_then(era_of_year))
+            .or(genres.era)
             .or(by_artist.era)
             .or_else(|| self.audio_eras.get(song_id).copied());
         Profile { scene, artist: key, audio: own.and_then(|o| o.1.clone()) }
@@ -1791,6 +1794,21 @@ mod tests {
         assert_eq!(idx.profile_dated("x", "Ruby", "Fin.K.L", &[], Some(2016)).scene.era, Some(2010));
         // No tag era, no artist era: the closest-sounding songs (three 1990s songs).
         assert_eq!(idx.profile("ytm:d", "Untagged era", "Nobody", &[]).scene.era, Some(1990));
+    }
+
+    #[test]
+    fn genre_decade_dates_an_untagged_song() {
+        let idx = SceneIndex::from_records([SceneRecord {
+            song_id: "ytm:z".into(),
+            title_hint: "aespa – Whiplash".into(),
+            tags_en: KPOP.into(),
+            ..Default::default()
+        }]);
+        let genres = ["90s K-pop".to_string()];
+        assert_eq!(idx.profile_dated("x", "T", "A", &genres, None).scene.era, Some(1990));
+        // The year beats the genres, the genres beat the artist.
+        assert_eq!(idx.profile_dated("x", "T", "A", &genres, Some(2004)).scene.era, Some(2000));
+        assert_eq!(idx.profile_dated("x", "T", "aespa", &genres, None).scene.era, Some(1990));
     }
 
     // ---- the session gate (heart-rate tempo picks) ----
