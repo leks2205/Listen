@@ -296,6 +296,37 @@ pub fn x_ticks(cfg: &listen_visualizer::Config, notes: bool) -> Vec<(f32, String
         .collect()
 }
 
+/// X positions (px) of the label for frequency position `pos` (0..1) on a canvas `width` px wide: once
+/// per pane (`panes`), and in each half of a pane when the spectrum is mirrored (`mirrored`).
+pub fn tick_xs(pos: f32, width: f32, layout: ChannelLayout, mirror: i8) -> Vec<f32> {
+    let spans: Vec<(f32, f32)> = if layout == ChannelLayout::DualHorizontal {
+        vec![(0.0, width / 2.0), (width / 2.0, width / 2.0)]
+    } else {
+        vec![(0.0, width)]
+    };
+    let mut out = Vec::new();
+    for (x0, w) in spans {
+        match mirror {
+            0 => out.push(x0 + pos * w),
+            // Original on the left half, reversed copy on the right.
+            m if m < 0 => out.extend([x0 + pos * w / 2.0, x0 + w - pos * w / 2.0]),
+            _ => out.extend([x0 + w / 2.0 - pos * w / 2.0, x0 + w / 2.0 + pos * w / 2.0]),
+        }
+    }
+    out
+}
+
+/// Y positions (px) of the line for `level` (0..1): over the analyzer `main_h` px tall, or for the
+/// two back-to-back panes of `DualVertical` (`area_h` split at the middle).
+pub fn tick_ys(level: f32, main_h: f32, area_h: f32, layout: ChannelLayout) -> Vec<f32> {
+    if layout == ChannelLayout::DualVertical {
+        let mid = area_h / 2.0;
+        vec![mid - level * mid, mid + level * mid]
+    } else {
+        vec![main_h - level * main_h]
+    }
+}
+
 /// Levels labelled on the Y axis as `(level 0..1, text)`.
 pub fn y_ticks(min_db: f32, max_db: f32, linear: bool, boost: f32) -> Vec<(f32, String)> {
     if linear {
@@ -655,7 +686,8 @@ impl canvas::Program<Message> for Graph<'_> {
         let s = self.settings;
         let text_color = theme.palette().text;
         let (w, full_h) = (bounds.width, bounds.height);
-        let scale_h = if s.show_scale_x || s.note_labels { 14.0 } else { 0.0 };
+        // The radial mode draws a ring: no linear frequency scale under it.
+        let scale_h = if !s.radial && (s.show_scale_x || s.note_labels) { 14.0 } else { 0.0 };
         let area_h = (full_h - scale_h).max(1.0);
         let cfg = crate::visualizer::analyzer_config(s);
         let left = Channel {
@@ -754,19 +786,20 @@ impl canvas::Program<Message> for Graph<'_> {
                 let mut label_color = text_color;
                 label_color.a = 0.45;
                 for (level, text) in y_ticks(s.min_db, s.max_db, s.linear_amplitude, s.linear_boost) {
-                    let y = main_h - level * main_h;
-                    frame.fill_rectangle(
-                        Point::new(0.0, y),
-                        Size::new(w, 1.0),
-                        Color { a: 0.1, ..text_color },
-                    );
-                    frame.fill_text(Text {
-                        content: text,
-                        position: Point::new(2.0, (y - 11.0).max(0.0)),
-                        color: label_color,
-                        size: 10.0.into(),
-                        ..Text::default()
-                    });
+                    for y in tick_ys(level, main_h, area_h, layout) {
+                        frame.fill_rectangle(
+                            Point::new(0.0, y),
+                            Size::new(w, 1.0),
+                            Color { a: 0.1, ..text_color },
+                        );
+                        frame.fill_text(Text {
+                            content: text.clone(),
+                            position: Point::new(2.0, (y - 11.0).max(0.0)),
+                            color: label_color,
+                            size: 10.0.into(),
+                            ..Text::default()
+                        });
+                    }
                 }
             }
         }
@@ -774,16 +807,18 @@ impl canvas::Program<Message> for Graph<'_> {
             let mut c = text_color;
             c.a = 0.5;
             for (pos, text) in x_ticks(&cfg, s.note_labels) {
-                frame.fill_text(Text {
-                    content: text,
-                    position: Point::new(
-                        (pos * w - 8.0).clamp(0.0, (w - 18.0).max(0.0)),
-                        full_h - scale_h + 2.0,
-                    ),
-                    color: c,
-                    size: 10.0.into(),
-                    ..Text::default()
-                });
+                for x in tick_xs(pos, w, layout, s.mirror) {
+                    frame.fill_text(Text {
+                        content: text.clone(),
+                        position: Point::new(
+                            (x - 8.0).clamp(0.0, (w - 18.0).max(0.0)),
+                            full_h - scale_h + 2.0,
+                        ),
+                        color: c,
+                        size: 10.0.into(),
+                        ..Text::default()
+                    });
+                }
             }
         }
         if s.show_fps {
@@ -1344,6 +1379,20 @@ mod tests {
 
     fn near(a: Color, b: Color) -> bool {
         (a.r - b.r).abs() < 0.01 && (a.g - b.g).abs() < 0.01 && (a.b - b.b).abs() < 0.01
+    }
+
+    #[test]
+    fn x_ticks_are_placed_in_their_pane() {
+        let w = 1000.0;
+        assert_eq!(tick_xs(0.5, w, ChannelLayout::Single, 0), [500.0]);
+        // Each half of DualHorizontal holds a whole spectrum.
+        assert_eq!(tick_xs(0.5, w, ChannelLayout::DualHorizontal, 0), [250.0, 750.0]);
+        // Mirrored: the original on the left half, reversed on the right.
+        assert_eq!(tick_xs(0.25, w, ChannelLayout::Single, -1), [125.0, 875.0]);
+        assert_eq!(tick_xs(0.25, w, ChannelLayout::Single, 1), [375.0, 625.0]);
+        // Back-to-back vertical panes meet in the middle.
+        assert_eq!(tick_ys(0.5, 400.0, 400.0, ChannelLayout::DualVertical), [100.0, 300.0]);
+        assert_eq!(tick_ys(0.5, 400.0, 400.0, ChannelLayout::Single), [200.0]);
     }
 
     #[test]
