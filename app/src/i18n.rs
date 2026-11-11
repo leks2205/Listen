@@ -303,9 +303,59 @@ pub(crate) fn translate_in(code: &str, s: &str) -> Option<String> {
     build_table(code, source(code)).map.get(s).map(|t| t.to_string())
 }
 
+/// Tests: every `.rs` file under `app/src/<dir>` as (repo-relative path, text), for checks over the
+/// sources (e.g. that every counted noun has catalog keys).
+#[cfg(test)]
+pub(crate) fn rust_sources(dir: &str) -> Vec<(String, String)> {
+    fn walk(path: &std::path::Path, out: &mut Vec<(String, String)>) {
+        let Ok(entries) = std::fs::read_dir(path) else { return };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|e| e == "rs")
+                && let Ok(text) = std::fs::read_to_string(&p)
+            {
+                let rel = p.strip_prefix(env!("CARGO_MANIFEST_DIR")).unwrap_or(&p).display().to_string();
+                out.push((rel, text));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join(dir), &mut out);
+    assert!(!out.is_empty(), "no sources under app/src/{dir}");
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `ui::plural(n, "word")` looks up "1 word" / "{} words": a noun without both keys shows its
+    /// count in English, and a joined line ("4 albums · 52 tracks") can never be translated later.
+    #[test]
+    fn every_plural_noun_has_german_keys() {
+        let de = build_table("de", source("de"));
+        let mut missing = Vec::new();
+        for (path, src) in rust_sources("").into_iter().filter(|(p, _)| !p.ends_with("i18n.rs")) {
+            for (at, _) in src.match_indices("plural(") {
+                if src[..at].ends_with("fn ") {
+                    continue;
+                }
+                let call = &src[at..src.len().min(at + 160)];
+                let Some(q) = call.find(", \"") else { continue };
+                let rest = &call[q + 3..];
+                let Some(end) = rest.find('"') else { continue };
+                let word = &rest[..end];
+                for key in [format!("1 {word}"), format!("{{}} {word}s")] {
+                    if !de.map.contains_key(key.as_str()) {
+                        missing.push(format!("{path}: {key}"));
+                    }
+                }
+            }
+        }
+        assert!(missing.is_empty(), "add to app/i18n/listen/de.json and app/i18n/de.json: {missing:#?}");
+    }
 
     #[test]
     fn the_most_specific_template_wins() {

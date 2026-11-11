@@ -1,4 +1,12 @@
 {
+"1 playlist": "1 Wiedergabeliste",
+"1 station": "1 Sender",
+"{} stations": "{} Sender",
+"1 play": "1 Wiedergabe",
+"{} plays": "{} Wiedergaben",
+"1 genre": "1 Genre",
+"{} genres": "{} Genres",
+"1 artist": "1 Interpret",
 "Singing-voice detector": "Gesangserkennung",
 "Finds where the singing is, so transitions don't talk over a sung line. A small model (2 MB) from the DJustify research project, downloaded from its authors; free for non-commercial use only (CC BY-NC 4.0). Songs analysed without it are analysed again in the background.": "Findet, wo gesungen wird, damit Übergänge nicht in eine gesungene Zeile hineinlaufen. Ein kleines Modell (2 MB) aus dem Forschungsprojekt DJustify, geladen von seinen Autoren; nur für nicht-kommerzielle Nutzung frei (CC BY-NC 4.0). Ohne es analysierte Songs werden im Hintergrund neu analysiert.",
 "Download": "Herunterladen",

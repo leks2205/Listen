@@ -518,9 +518,15 @@ pub fn tempo_key(state: &crate::app::Listen, song: &listen_core::model::Song) ->
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-/// "1 album" / "3 albums".
+/// "1 album" / "3 albums", already translated, so it can be joined into a longer line ("4 albums · 52
+/// tracks"). `word` is the English singular; the catalog needs the keys "1 <word>" and "{} <word>s"
+/// (checked for every call by `i18n::tests::every_plural_noun_has_german_keys`).
 pub fn plural(n: usize, word: &str) -> String {
-    if n == 1 { format!("1 {word}") } else { format!("{n} {word}s") }
+    if n == 1 {
+        crate::i18n::tr(&format!("1 {word}")).to_string()
+    } else {
+        crate::i18n::trf(&format!("{{}} {word}s"), &[&n])
+    }
 }
 
 /// Library-header title: Feishin's clamp(28px, …, 44px) shrinks long titles;
