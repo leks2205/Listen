@@ -22,8 +22,8 @@ use std::time::Duration;
 use url::Url;
 
 const CLIENT: &str = "Listen";
-/// Jellyfin durations are in 100 ns ticks.
-const TICKS_PER_SEC: u64 = 10_000_000;
+/// Jellyfin times are in 100 ns ticks; every conversion goes through [`ticks`].
+const NANOS_PER_TICK: u64 = 100;
 const ITEM_FIELDS: &str =
     "Genres,DateCreated,ChildCount,ParentId,Overview,AudioInfo,MediaSources,ProviderIds,People";
 
@@ -213,8 +213,15 @@ fn iso_date(s: &str) -> String {
     s.split('T').next().unwrap_or(s).to_string()
 }
 
-fn secs(ticks: Option<u64>) -> Duration {
-    Duration::from_secs(ticks.unwrap_or(0) / TICKS_PER_SEC)
+/// A Jellyfin tick count (`RunTimeTicks`, lyric `Start`) as a duration: the one conversion.
+pub(crate) fn ticks(t: u64) -> Duration {
+    Duration::from_nanos(t.saturating_mul(NANOS_PER_TICK))
+}
+
+/// A list duration (song, album, playlist): the whole seconds of the ticks, like Subsonic's
+/// `duration`; Get info shows the exact value.
+fn secs(t: Option<u64>) -> Duration {
+    Duration::from_secs(ticks(t.unwrap_or(0)).as_secs())
 }
 
 impl Jellyfin {
@@ -1115,10 +1122,7 @@ impl MusicSource for Jellyfin {
             .map(|a| {
                 a.iter()
                     .map(|l| {
-                        LyricLine::new(
-                            l["Start"].as_u64().map(|t| Duration::from_millis(t / 10_000)),
-                            l["Text"].as_str().unwrap_or_default(),
-                        )
+                        LyricLine::new(l["Start"].as_u64().map(ticks), l["Text"].as_str().unwrap_or_default())
                     })
                     .collect()
             })
@@ -1134,6 +1138,15 @@ impl MusicSource for Jellyfin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ticks_convert_once_with_100ns_units() {
+        assert_eq!(ticks(2_450_000_000), Duration::from_secs(245));
+        assert_eq!(ticks(1), Duration::from_nanos(100));
+        assert_eq!(ticks(u64::MAX), Duration::from_nanos(u64::MAX), "saturates, never panics");
+        assert_eq!(secs(Some(2_459_999_999)), Duration::from_secs(245), "lists keep whole seconds");
+        assert_eq!(secs(None), Duration::ZERO);
+    }
 
     fn get<'a>(r: &'a Request, k: &str) -> Option<&'a str> {
         r.iter().find(|(n, _)| *n == k).map(|(_, v)| v.as_str())

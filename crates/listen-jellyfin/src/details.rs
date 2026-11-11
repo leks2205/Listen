@@ -3,7 +3,6 @@
 use listen_core::model::GainInfo;
 use listen_source::ItemDetails;
 use serde_json::Value;
-use std::time::Duration;
 
 fn text(v: &Value, key: &str) -> Option<String> {
     v[key].as_str().map(str::trim).filter(|s| !s.is_empty()).map(String::from)
@@ -27,7 +26,7 @@ pub fn item(v: &Value) -> ItemDetails {
         sample_rate: audio["SampleRate"].as_u64().map(|x| x as u32),
         bit_depth: audio["BitDepth"].as_u64().map(|x| x as u32),
         channels: audio["Channels"].as_u64().map(|x| x as u32),
-        duration: v["RunTimeTicks"].as_u64().map(|t| Duration::from_micros(t / 10)),
+        duration: v["RunTimeTicks"].as_u64().map(crate::ticks),
         created: text(v, "DateCreated"),
         updated: text(v, "DateLastSaved"),
         last_played: text(&v["UserData"], "LastPlayedDate"),
@@ -93,7 +92,7 @@ mod tests {
         assert_eq!(d.path.as_deref(), Some("/music/a/b.flac"));
         assert_eq!((d.size, d.suffix.as_deref(), d.bit_rate), (Some(5000), Some("flac"), Some(880)));
         assert_eq!((d.sample_rate, d.bit_depth, d.channels), (Some(48000), Some(24), Some(2)));
-        assert_eq!(d.duration, Some(Duration::from_secs(245)));
+        assert_eq!(d.duration, Some(std::time::Duration::from_secs(245)));
         assert_eq!((d.play_count, d.last_played.as_deref()), (Some(3), Some("2025-02-02T00:00:00Z")));
         assert_eq!(d.musicbrainz_id.as_deref(), Some("t1"));
         assert_eq!(d.mbids, [("Album".to_string(), "a1".to_string())]);
