@@ -1,6 +1,6 @@
 //! Sign-in page: Navidrome (OpenSubsonic), Jellyfin, YouTube Music or a local folder.
 
-use super::{icon, label, label_w};
+use super::{data_label_w, icon, label, label_w};
 use crate::app::{Listen, LoginMsg, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
@@ -102,7 +102,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
                     ));
                     for (i, channel) in f.channels.iter().enumerate() {
                         let (color, style_primary) = if i == 0 { (iced::Color::WHITE, true) } else { (t.foreground, false) };
-                        let b = button(container(label_w(channel.label(), metrics::font_md(), color, Weight::Semibold)).center_x(Length::Fill))
+                        let b = button(container(data_label_w(channel.label(), metrics::font_md(), color, Weight::Semibold)).center_x(Length::Fill))
                             .width(Length::Fill)
                             .height(metrics::CONTROL)
                             .padding(Padding::from([9.0, 18.0]))
@@ -114,7 +114,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
                     let title = if f.busy && !f.show_cookies {
                         "Connecting…".to_string()
                     } else {
-                        format!("Sign in with {}", profile.label())
+                        crate::i18n::trf("Sign in with {}", &[&profile.label()])
                     };
                     c = c.push(
                         button(
@@ -173,7 +173,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
                     c = c.push(
                         button(
                             column![
-                                label_w(name, metrics::font_md(), t.foreground, Weight::Semibold),
+                                data_label_w(name, metrics::font_md(), t.foreground, Weight::Semibold),
                                 label(status, metrics::font_sm(), status_color)
                                     .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
                                     .width(Length::Fill),
@@ -352,7 +352,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             let status = if connected { server.kind.label() } else { "not connected" };
             let mut entry = row![
                 column![
-                    label_w(
+                    data_label_w(
                         super::ellipsize(&server.name, 40),
                         metrics::font_md(),
                         t.foreground,

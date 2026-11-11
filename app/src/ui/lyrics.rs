@@ -172,12 +172,12 @@ fn ruby_line<'a>(
     let mut r = Row::new();
     for seg in segments {
         let ruby: Element<'a, Message> = match &seg.ruby {
-            Some(reading) => ui::label_w(reading.clone(), ruby_size, faded(color, 0.85), Weight::Medium)
+            Some(reading) => ui::data_label_w(reading.clone(), ruby_size, faded(color, 0.85), Weight::Medium)
                 .line_height(LINE_HEIGHT)
                 .into(),
             None => space().height(ruby_size * LINE_HEIGHT).into(),
         };
-        let base = ui::text_in(seg.text.clone(), ui::font_for(&seg.text, font))
+        let base = ui::verbatim(seg.text.clone(), ui::font_for(&seg.text, font))
             .size(size)
             .line_height(LINE_HEIGHT)
             .color(color)
@@ -220,7 +220,7 @@ fn word_line<'a>(
             }
             _ => color,
         };
-        let base = ui::text_in(p.text, ui::font_for(p.text, font))
+        let base = ui::verbatim(p.text, ui::font_for(p.text, font))
             .size(size)
             .line_height(LINE_HEIGHT)
             .color(shade)
@@ -277,7 +277,7 @@ fn line_text<'a>(
             .into();
     }
     let shown = if line.text.is_empty() { "♪" } else { line.text.as_str() };
-    ui::text_in(shown, font)
+    ui::verbatim(shown, font)
         .size(size)
         .line_height(LINE_HEIGHT)
         .color(color)
@@ -286,8 +286,9 @@ fn line_text<'a>(
         .into()
 }
 
+/// A romaji, translation, provider or match line (lyrics data: shown untranslated).
 fn sub_text<'a>(text: String, size: f32, color: Color, align: Horizontal) -> Element<'a, Message> {
-    ui::text_in(text, ui::font(Weight::Normal))
+    ui::verbatim(text, ui::font(Weight::Normal))
         .size(sub_size(size))
         .line_height(LINE_HEIGHT)
         .color(color)
@@ -651,8 +652,13 @@ fn search_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
         let selected = s.selected == Some(i);
         let content = row![
             column![
-                label_w(ui::ellipsize(&hit.name, 56), metrics::font_md(), t.foreground, Weight::Semibold),
-                label(ui::ellipsize(&hit.artist, 56), metrics::font_sm(), t.muted),
+                ui::data_label_w(
+                    ui::ellipsize(&hit.name, 56),
+                    metrics::font_md(),
+                    t.foreground,
+                    Weight::Semibold
+                ),
+                ui::data_label(ui::ellipsize(&hit.artist, 56), metrics::font_sm(), t.muted),
                 label(
                     ui::ellipsize(&format!("{} — {} — {}", hit.source.name(), id, sync), 70),
                     metrics::font_xs(),
@@ -677,7 +683,7 @@ fn search_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
         (Some(l), _) => {
             let text: String =
                 l.lines.iter().take(60).map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
-            scrollable(ui::text_in(text, ui::font(Weight::Normal)).size(metrics::font_sm()).color(t.muted))
+            scrollable(ui::verbatim(text, ui::font(Weight::Normal)).size(metrics::font_sm()).color(t.muted))
                 .style(style::scrollbar(t))
                 .height(Length::Fixed(130.0))
                 .width(Length::Fill)
@@ -721,7 +727,7 @@ fn export_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
         }
     }
     let preview = scrollable(
-        container(ui::text_in(e.text(), Font::MONOSPACE).size(metrics::font_sm()).color(t.muted)).padding(8),
+        container(ui::verbatim(e.text(), Font::MONOSPACE).size(metrics::font_sm()).color(t.muted)).padding(8),
     )
     .style(style::scrollbar(t))
     .height(Length::Fixed(300.0))
@@ -749,7 +755,9 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
     let gloss = ui.glosses.get(word);
     let mut body = Column::new().spacing(metrics::space_sm());
     body = body.push(
-        ui::text_in(word.as_str(), ui::font_for(word, ui::font(Weight::Bold))).size(28.0).color(t.foreground),
+        ui::verbatim(word.as_str(), ui::font_for(word, ui::font(Weight::Bold)))
+            .size(28.0)
+            .color(t.foreground),
     );
     match gloss {
         Some(g) => {
@@ -759,12 +767,12 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
             }
             body = body
                 .push(
-                    ui::text_in(head, ui::font_for(&g.lemma, ui::font(Weight::Medium)))
+                    ui::verbatim(head, ui::font_for(&g.lemma, ui::font(Weight::Medium)))
                         .size(metrics::font_lg())
                         .color(t.muted),
                 )
                 .push(
-                    label(g.meaning.clone(), metrics::font_lg(), t.foreground)
+                    ui::data_label(g.meaning.clone(), metrics::font_lg(), t.foreground)
                         .wrapping(iced::widget::text::Wrapping::Word),
                 );
         }

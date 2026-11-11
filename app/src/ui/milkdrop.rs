@@ -47,7 +47,7 @@ pub fn surface(state: &Listen, controls: bool) -> Element<'_, Message> {
         .style(style::art_overlay_button(t))
         .on_press(Message::Milkdrop(MilkdropMsg::Next));
     let bar = row![
-        label(
+        crate::ui::data_label(
             crate::ui::ellipsize_px(&name, 520.0, metrics::font_sm()),
             metrics::font_sm(),
             iced::Color::WHITE

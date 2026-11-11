@@ -4,7 +4,7 @@
 //! sidebar-playlist-list,playlist-folder-tree,sidebar-collection-list}.tsx.
 
 use super::list::anchor::anchored;
-use super::{icon, label, label_w};
+use super::{data_label_w, icon, label, label_w};
 use crate::app::sidebar_state::{DragKind, Node, Scope, Section, SidebarMsg, at_path};
 use crate::app::{Listen, Message, Route};
 use crate::icons::Icon;
@@ -553,7 +553,7 @@ fn expanded(state: &Listen, width: f32, drawer: bool) -> Element<'_, Message> {
                 row![
                     icon(glyph, metrics::font_md() + 2.0, color),
                     column![
-                        label_w(
+                        data_label_w(
                             super::ellipsize(&server.name, 30),
                             metrics::font_md(),
                             color,
@@ -658,7 +658,7 @@ fn collection_rows(state: &Listen) -> Element<'_, Message> {
         let open = button(
             row![
                 icon(glyph, metrics::font_md() + 2.0, t.foreground),
-                label_w(super::ellipsize(&c.name, 28), metrics::font_md(), t.foreground, Weight::Medium),
+                data_label_w(super::ellipsize(&c.name, 28), metrics::font_md(), t.foreground, Weight::Medium),
             ]
             .spacing(metrics::space_md())
             .align_y(Alignment::Center),
@@ -829,7 +829,7 @@ fn folder_row<'a>(
                 metrics::font_md() + 2.0,
                 t.foreground
             ),
-            label_w(super::ellipsize(name, 28), metrics::font_md(), t.foreground, Weight::Medium),
+            data_label_w(super::ellipsize(name, 28), metrics::font_md(), t.foreground, Weight::Medium),
             label(format!("{leaves}"), metrics::font_xs(), t.muted),
             space::horizontal(),
             icon(
@@ -866,7 +866,7 @@ fn playlist_row<'a>(state: &Listen, p: &'a Playlist, name: &str, scope: Scope) -
     let content: Element<'_, Message> = if compact {
         row![
             icon(Icon::LuListMusic, metrics::font_md(), color),
-            label_w(super::ellipsize(name, 34), metrics::font_md(), color, Weight::Medium),
+            data_label_w(super::ellipsize(name, 34), metrics::font_md(), color, Weight::Medium),
         ]
         .spacing(metrics::space_md())
         .align_y(Alignment::Center)
@@ -881,7 +881,7 @@ fn playlist_row<'a>(state: &Listen, p: &'a Playlist, name: &str, scope: Scope) -
         row![
             super::cover(state, p.image.as_ref(), 40.0, metrics::radius_md(), Icon::LuListMusic),
             column![
-                label_w(super::ellipsize(name, 34), metrics::font_md(), color, Weight::Medium),
+                data_label_w(super::ellipsize(name, 34), metrics::font_md(), color, Weight::Medium),
                 label(sub, metrics::font_xs(), t.muted),
             ]
             .spacing(2),
