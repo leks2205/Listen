@@ -35,7 +35,10 @@ pub(super) fn sharing(state: &Listen) -> Element<'_, Message> {
                     .padding(Padding::from([6.0, 10.0]))
                     .style(style::input(t))
                     .width(80),
-                pick_list(ExpiryUnit::ALL, Some(e.unit), |u| change(SharingSetting::Unit(u))).width(120),
+                pick_list(ExpiryUnit::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(e.unit)), |u| {
+                    change(SharingSetting::Unit(u.0))
+                })
+                .width(120),
             ]
             .spacing(metrics::space_sm())
             .align_y(Alignment::Center)

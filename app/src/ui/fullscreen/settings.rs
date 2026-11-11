@@ -149,7 +149,7 @@ fn form(state: &Listen) -> Element<'_, Message> {
             r = r.push(
                 container(
                     checkbox(items.contains(&id))
-                        .label(*name)
+                        .label(crate::i18n::tr(name))
                         .on_toggle(move |v| set(FsSetting::Badge(id.clone(), v)))
                         .size(18)
                         .text_size(metrics::font_md()),

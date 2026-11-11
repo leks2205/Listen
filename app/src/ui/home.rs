@@ -655,7 +655,7 @@ pub fn section_rows(state: &Listen) -> Vec<Element<'_, Message>> {
         .map(|(i, (section, on))| {
             row![
                 checkbox(on)
-                    .label(section.setting_label())
+                    .label(crate::i18n::tr(section.setting_label()))
                     .on_toggle(move |v| Message::Home(HomeMsg::SectionVisible(section, v)))
                     .size(18)
                     .text_size(metrics::font_md()),

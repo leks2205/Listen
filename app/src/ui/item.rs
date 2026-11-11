@@ -239,7 +239,10 @@ fn share_body<'a>(state: &'a Listen, s: &'a ShareState) -> Element<'a, Message> 
         .padding(Padding::from([6.0, 10.0]))
         .style(style::input(t))
         .width(80);
-    let unit = pick_list(ExpiryUnit::ALL, Some(s.expiry.unit), |u| sh(ShareMsg::Unit(u))).width(120);
+    let unit = pick_list(ExpiryUnit::ALL.map(super::Tr), Some(super::Tr(s.expiry.unit)), |u| {
+        sh(ShareMsg::Unit(u.0))
+    })
+    .width(120);
     let description = text_input(crate::i18n::tr("Description (optional)"), &s.description)
         .font(crate::ui::font_for(&s.description, crate::appearance::current_font()))
         .on_input(|v| sh(ShareMsg::Description(v)))
@@ -295,14 +298,14 @@ fn tags_body<'a>(state: &'a Listen, s: &'a TagsState) -> Element<'a, Message> {
                 let Some(edit) = s.fields.get(&field) else { continue };
                 let input: Element<'a, Message> = if field == TagField::Lyrics {
                     text_editor(&s.lyrics)
-                        .placeholder(if edit.mixed { "(multiple values)" } else { "" })
+                        .placeholder(if edit.mixed { crate::i18n::tr("(multiple values)") } else { "" })
                         .on_action(|a| tg(TagsMsg::Lyrics(a)))
                         .font(crate::ui::font_for(&s.lyrics.text(), crate::appearance::current_font()))
                         .size(metrics::font_md())
                         .height(90)
                         .into()
                 } else {
-                    let placeholder = if edit.mixed { "(multiple values)" } else { "" };
+                    let placeholder = if edit.mixed { crate::i18n::tr("(multiple values)") } else { "" };
                     text_input(placeholder, &edit.value)
                         .font(crate::ui::font_for(&edit.value, crate::appearance::current_font()))
                         .on_input(move |v| tg(TagsMsg::Field(field, v)))
