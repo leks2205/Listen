@@ -49,8 +49,9 @@ impl AnalysisError {
     }
 }
 
-/// Cooperative cancellation shared between the scheduler and a running
-/// analysis (kills mpv, stops between stages). Cheap to clone.
+/// Cooperative cancellation shared between the scheduler and a running analysis: it kills mpv while
+/// decoding, and [`analyze_cancellable`] (so [`analyze_in_background`]) stops between stages. Plain
+/// [`analyze`] ignores it. Cheap to clone.
 #[derive(Debug, Clone, Default)]
 pub struct Cancel(Arc<(AtomicBool, Notify)>);
 
@@ -123,11 +124,25 @@ pub fn analyze(pcm: &Pcm, opts: &Opts) -> Features {
 
 /// [`analyze`] with per-stage timings.
 pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
+    analyze_stages(pcm, opts, None).expect("an analysis without a Cancel runs to the end")
+}
+
+/// [`analyze`] that stops between its stages once `cancel` is set (`None` then). A stage that already runs
+/// (e.g. the beat model) finishes first.
+pub fn analyze_cancellable(pcm: &Pcm, opts: &Opts, cancel: &Cancel) -> Option<Features> {
+    analyze_stages(pcm, opts, Some(cancel)).map(|(f, _)| f)
+}
+
+/// The stages of [`analyze`]; `None` when `cancel` is set between two of them.
+fn analyze_stages(pcm: &Pcm, opts: &Opts, cancel: Option<&Cancel>) -> Option<(Features, Timings)> {
+    let go = || if cancel.is_some_and(Cancel::is_cancelled) { None } else { Some(()) };
     let mut tm = Timings::default();
+    go()?;
     let (start, end) = tm.time("trim", || structure::trim(pcm));
     let frames = tm.time("stft", || spectral::analyze(pcm));
     let hint = opts.bpm_hint.filter(|b| (40.0..=250.0).contains(b));
 
+    go()?;
     let mono = pcm.mono();
     let estimate = tm.time("beats", || match &opts.beats {
         BeatSource::BeatThis(model) => model
@@ -136,6 +151,7 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
             .ok(),
         BeatSource::Own => None,
     });
+    go()?;
     let estimate = estimate.or_else(|| tm.time("beats-own", || beats::track_own(&frames, start, end, hint)));
     let grid = tm.time("grid", || {
         let mut grid = estimate.as_ref().and_then(|e| beats::build_grid(e, &frames, start, end));
@@ -148,8 +164,10 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
         grid
     });
 
+    go()?;
     let bounds = structure::bar_bounds(grid.as_ref(), start, end);
     let mut stats = tm.time("bars", || structure::bar_stats(&frames, &bounds));
+    go()?;
     let voiced = opts.voice.as_ref().and_then(|model| {
         tm.time("voice", || model.voiced(&mono, pcm.sample_rate))
             .inspect_err(|e| tracing::warn!("singing-voice detector failed, using the heuristic: {e}"))
@@ -161,6 +179,7 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
     let (phrase_bars, phrase_offset) = structure::phrase_lattice(&stats.novelty);
     let sections = structure::sections(&stats, phrase_bars, phrase_offset);
     let (intro, outro) = structure::instrumental_edges(&stats.vocal);
+    go()?;
     let key = tm.time("key", || {
         // Phrase starts only mean something on a real beat grid.
         let starts =
@@ -168,6 +187,7 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
         key::detect(&key::pitch_profile(&frames, start, end, &starts))
     });
     let (lufs, lra) = tm.time("loudness", || timbre::loudness(pcm, start, end));
+    go()?;
     let timbre = tm.time("timbre", || {
         let s = ((start * pcm.sample_rate as f32) as usize).min(mono.len());
         let e = ((end * pcm.sample_rate as f32) as usize).clamp(s, mono.len());
@@ -192,7 +212,7 @@ pub fn analyze_timed(pcm: &Pcm, opts: &Opts) -> (Features, Timings) {
         mood,
         voiced,
     };
-    (features, tm)
+    Some((features, tm))
 }
 
 /// Lowers the calling thread's CPU priority to nice 19 (Linux; best
@@ -229,15 +249,19 @@ pub unsafe fn limit_threads(threads: usize) {
     }
 }
 
-/// Runs [`analyze`] on a fresh nice-19 thread (a lowered thread can't raise its priority
-/// back, so pooled threads aren't used). `None` when cancelled.
+/// Runs [`analyze_cancellable`] on a fresh nice-19 thread (a lowered thread can't raise its priority
+/// back, so pooled threads aren't used). `None` when cancelled: the wait ends at once, the thread at the
+/// end of its current stage (and frees the audio).
 pub async fn analyze_in_background(pcm: Pcm, opts: Opts, cancel: &Cancel) -> Option<Features> {
     let (tx, rx) = tokio::sync::oneshot::channel();
+    let stop = cancel.clone();
     std::thread::Builder::new()
         .name("listen-analysis".into())
         .spawn(move || {
             lower_thread_priority();
-            let _ = tx.send(analyze(&pcm, &opts));
+            if let Some(f) = analyze_cancellable(&pcm, &opts, &stop) {
+                let _ = tx.send(f);
+            }
         })
         .ok()?;
     tokio::select! {
@@ -604,6 +628,26 @@ mod tests {
         let r = record(&song, file.clone(), "", "m", Err(AnalysisError::TooLong)).unwrap();
         assert_eq!((r.song_id.as_str(), &r.file), ("ytm:lYBUbBu4W08", &file));
         assert!(record(&song, file, "", "m", Err(AnalysisError::Cancelled)).is_none());
+    }
+
+    #[test]
+    fn a_cancelled_analysis_stops_between_stages() {
+        let pcm = click_track(120.0, 20.0, 0.5, 0);
+        let cancel = Cancel::default();
+        assert!(analyze_cancellable(&pcm, &Opts::default(), &cancel).is_some());
+        cancel.cancel();
+        assert!(analyze_cancellable(&pcm, &Opts::default(), &cancel).is_none());
+        // Plain `analyze` has no Cancel and always finishes.
+        assert!(analyze(&pcm, &Opts::default()).grid.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_background_analysis_gives_none() {
+        let cancel = Cancel::default();
+        cancel.cancel();
+        assert!(
+            analyze_in_background(click_track(120.0, 20.0, 0.5, 0), Opts::default(), &cancel).await.is_none()
+        );
     }
 
     #[tokio::test]
