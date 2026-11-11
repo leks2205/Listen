@@ -440,7 +440,9 @@ pub fn apply_hint(grid: &mut BeatGrid, hint: f32) {
         }
         beats.extend(grid.beats.last());
         grid.beats = beats;
-        grid.downbeat_phase *= 2;
+        // The old downbeat sits at index 2 × phase; reduced to 0..beats_per_bar (the field's contract), the
+        // first bar starts on the earliest downbeat of the same lattice instead of one bar late.
+        grid.downbeat_phase = (grid.downbeat_phase * 2) % grid.beats_per_bar.max(1);
         grid.bpm *= 2.0;
     } else if (ratio - 0.5).abs() < 0.02 {
         // Keep the downbeats: they are strong beats at half tempo.
@@ -449,6 +451,7 @@ pub fn apply_hint(grid: &mut BeatGrid, hint: f32) {
         grid.downbeat_phase = (grid.downbeat_phase / 2) % (grid.beats_per_bar.max(1));
         grid.bpm /= 2.0;
     }
+    debug_assert!(grid.downbeat_phase < grid.beats_per_bar.max(1), "downbeat_phase is 0..beats_per_bar");
 }
 
 #[cfg(test)]
@@ -523,6 +526,26 @@ mod tests {
         let before = g.beats.clone();
         refine_to_onsets(&mut g, &quiet, 22050);
         assert_eq!(g.beats, before);
+    }
+
+    #[test]
+    fn doubling_keeps_the_downbeat_phase_below_beats_per_bar() {
+        // 4/4 at 60 BPM, first downbeat on beat 3 (3.0 s).
+        let mut g = BeatGrid {
+            beats: (0..17).map(|i| i as f32).collect(),
+            downbeat_phase: 3,
+            beats_per_bar: 4,
+            bpm: 60.0,
+            confidence: 1.0,
+            stability: 1.0,
+        };
+        apply_hint(&mut g, 120.0);
+        assert!(g.downbeat_phase < 4, "{}", g.downbeat_phase);
+        let downs: Vec<f32> = g.downbeats().collect();
+        // Bars of four half-second beats from the old downbeat's lattice: 1.0, 3.0, 5.0 …
+        assert_eq!(downs.first(), Some(&1.0));
+        assert!(downs.contains(&3.0), "the old downbeat is still one: {downs:?}");
+        assert_eq!(g.bar_time(0), 1.0, "no bar is lost at the start");
     }
 
     #[test]
