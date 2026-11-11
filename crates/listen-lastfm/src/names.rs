@@ -1,7 +1,7 @@
 //! Spelling variants of a song's names. Different sources write the same song differently (YouTube Music
 //! "Ditto (Official Audio)" by "NewJeans", a tag "Ditto" by "뉴진스 (NewJeans)", album "OMG - Single"), and
 //! Last.fm counts each spelling as its own track. These helpers list the plausible spellings; the
-//! resolver asks Last.fm which one is the most common (see [`crate::resolve`]).
+//! resolver asks Last.fm which one is the most common (see [`crate::Resolver`]).
 
 /// Words that mark a bracketed part as a video/upload label rather than part of the title.
 const UPLOAD_WORDS: &[&str] = &[
@@ -30,7 +30,9 @@ const UPLOAD_WORDS: &[&str] = &[
 const FORMAT_SUFFIXES: &[&str] =
     &[" - single", " - ep", " (single)", " (ep)", " [single]", " [ep]", " - the 1st single"];
 
-fn has_hangul_or_kana(s: &str) -> bool {
+/// Hangul, kana or Han characters: a title in an East Asian script, which uploads often pair with a
+/// translated or romanised name in brackets.
+fn has_cjk(s: &str) -> bool {
     s.chars().any(|c| matches!(c as u32, 0xAC00..=0xD7A3 | 0x1100..=0x11FF | 0x3130..=0x318F | 0x3040..=0x30FF | 0x4E00..=0x9FFF))
 }
 
@@ -134,7 +136,7 @@ pub fn title_variants(title: &str) -> Vec<String> {
         push(&mut v, s);
     }
     // A translated title: "사랑 안해 (I Don't Love You)" → both halves.
-    if has_hangul_or_kana(&outer) || parts.iter().any(|p| has_hangul_or_kana(p)) {
+    if has_cjk(&outer) || parts.iter().any(|p| has_cjk(p)) {
         push(&mut v, outer);
         for p in parts.iter().filter(|p| !is_feat(p)) {
             push(&mut v, p.clone());
@@ -175,7 +177,7 @@ pub fn album_variants(album: &str) -> Vec<String> {
     }
     push(&mut v, clean_title(album));
     let (outer, parts) = brackets(album);
-    if has_hangul_or_kana(&outer) || parts.iter().any(|p| has_hangul_or_kana(p)) {
+    if has_cjk(&outer) || parts.iter().any(|p| has_cjk(p)) {
         push(&mut v, outer);
     }
     v.truncate(3);
