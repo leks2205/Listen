@@ -482,15 +482,31 @@ impl Scene {
 pub enum Fit {
     /// One scene; the score (0..1) says how close (more known and more shared is higher).
     Same(f32),
-    /// Different scenes, and why ("language", "genre", "sound").
+    /// Different scenes, and why: [`Fit::LANGUAGE`], [`Fit::GENRE`], [`Fit::ERA`] or [`Fit::SOUND`]
+    /// (produce and compare these constants, never a spelled-out string).
     Other(&'static str),
     /// Nothing comparable is known.
     Unknown,
 }
 
 impl Fit {
+    /// [`Fit::Other`]: the languages differ.
+    pub const LANGUAGE: &'static str = "language";
+    /// [`Fit::Other`]: the genre families share nothing (or one is trot and the other is not).
+    pub const GENRE: &'static str = "genre";
+    /// [`Fit::Other`]: both eras are known and more than [`ERA_SPAN`] apart.
+    pub const ERA: &'static str = "era";
+    /// [`Fit::Other`]: tags can't compare and the audio embeddings are below [`AUDIO_SAME`].
+    pub const SOUND: &'static str = "sound";
+
     pub fn is_same(self) -> bool {
         matches!(self, Fit::Same(_))
+    }
+
+    /// Another scene by what the songs are (language, genre, era). A [`Fit::SOUND`] difference is not:
+    /// the sound is a guess where tags are missing, and the listening history may still place the song.
+    fn is_known_other(self) -> bool {
+        matches!(self, Fit::Other(Fit::LANGUAGE | Fit::GENRE | Fit::ERA))
     }
 }
 
@@ -504,7 +520,7 @@ pub fn compare(a: &Scene, b: &Scene) -> Fit {
     // of a Korean song is still Korean in scene).
     if let (Some(x), Some(y)) = (a.lang, b.lang) {
         if x != y {
-            return Fit::Other("language");
+            return Fit::Other(Fit::LANGUAGE);
         }
         parts.push(1.0);
     }
@@ -513,18 +529,18 @@ pub fn compare(a: &Scene, b: &Scene) -> Fit {
         // isn't trot, and the other way round.
         let trot = |f: Families| f.0 & Families::TROT != 0;
         if trot(a.families) != trot(b.families) {
-            return Fit::Other("genre");
+            return Fit::Other(Fit::GENRE);
         }
         let o = a.families.overlap(b.families);
         if o == 0.0 {
-            return Fit::Other("genre");
+            return Fit::Other(Fit::GENRE);
         }
         parts.push(o);
     }
     if let (Some(x), Some(y)) = (a.era, b.era)
         && x.abs_diff(y) > ERA_SPAN
     {
-        return Fit::Other("era");
+        return Fit::Other(Fit::ERA);
     }
     let score = match parts.len() {
         0 => return Fit::Unknown,
@@ -899,7 +915,7 @@ pub fn fit(a: &Profile, b: &Profile, neighbours: &Neighbours) -> Fit {
         // The era is part of the scene for the same artist too: their 1980s ballad and 2020s single are
         // two scenes, so a session or a bridge never mixes an artist's decades.
         return match (a.scene.era, b.scene.era) {
-            (Some(x), Some(y)) if x.abs_diff(y) > ERA_SPAN => Fit::Other("era"),
+            (Some(x), Some(y)) if x.abs_diff(y) > ERA_SPAN => Fit::Other(Fit::ERA),
             _ => Fit::Same(1.0),
         };
     }
@@ -912,15 +928,13 @@ pub fn fit(a: &Profile, b: &Profile, neighbours: &Neighbours) -> Fit {
         // Sound refines a match: a close one scores a little higher.
         (Fit::Same(s), Some(c)) => Fit::Same(0.75 * s + 0.25 * ((c - 0.4) / 0.4).clamp(0.0, 1.0)),
         (Fit::Unknown, Some(c)) if c >= AUDIO_SAME => Fit::Same(0.5),
-        (Fit::Unknown, Some(_)) => Fit::Other("sound"),
+        (Fit::Unknown, Some(_)) => Fit::Other(Fit::SOUND),
         (f, _) => f,
     };
     // History neighbours fill an unknown, never a known other scene, and never across eras: when one
     // song's era is known the other's must be too.
     if !f.is_same()
-        && f != Fit::Other("language")
-        && f != Fit::Other("genre")
-        && f != Fit::Other("era")
+        && !f.is_known_other()
         && a.scene.era.is_some() == b.scene.era.is_some()
         && !a.artist.is_empty()
         && !b.artist.is_empty()
@@ -984,7 +998,7 @@ fn reject_of(fits: &[Fit]) -> Reject {
         fits.iter().filter_map(|f| if let Fit::Other(w) = f { Some(*w) } else { None }).collect();
     if others.is_empty() {
         Reject::UnknownScene
-    } else if others.iter().all(|w| *w == "era") {
+    } else if others.iter().all(|w| *w == Fit::ERA) {
         Reject::OtherEra
     } else {
         Reject::OtherScene
@@ -1303,7 +1317,7 @@ impl<'a> Session<'a> {
                 // The majority's scene decides; where tags can't compare, most of its songs must fit (by
                 // sound or the history) and none may be a known other scene.
                 match compare(&c.scene, &anchor.scene) {
-                    Fit::Same(s) => match fits.iter().find(|f| **f == Fit::Other("era")) {
+                    Fit::Same(s) => match fits.iter().find(|f| **f == Fit::Other(Fit::ERA)) {
                         // Within a decade of the session's middle, but far from one of its songs: lower.
                         Some(_) => Ok(0.8 * s),
                         None => Ok(s),
@@ -1449,6 +1463,16 @@ mod tests {
     }
 
     #[test]
+    fn fit_reasons_are_the_named_constants() {
+        // A misspelt reason would compile and silently change the gate: the source spells none out.
+        let literal = concat!("Oth", "er(\"");
+        assert!(!include_str!("scene.rs").contains(literal), "use Fit::LANGUAGE / GENRE / ERA / SOUND");
+        let reasons = [Fit::LANGUAGE, Fit::GENRE, Fit::ERA, Fit::SOUND];
+        assert!(reasons.iter().all(|r| reasons.iter().filter(|x| *x == r).count() == 1));
+        assert!(!Fit::Other(Fit::SOUND).is_known_other() && Fit::Other(Fit::ERA).is_known_other());
+    }
+
+    #[test]
     fn genres_and_script_are_weaker_signals() {
         let g = Scene::from_genres(&["K-Pop".into(), "Dance".into()]);
         assert_eq!((g.lang, g.families.0, g.source), (Some("ko"), Families::POP, Source::Genres));
@@ -1460,9 +1484,9 @@ mod tests {
     fn kpop_pairs_are_one_scene_and_us_rap_is_another() {
         let n = Neighbours::default();
         assert!(fit(&tags(KPOP), &tags(KPOP2), &n).is_same());
-        assert_eq!(fit(&tags(KPOP), &tags(USRAP), &n), Fit::Other("language"));
+        assert_eq!(fit(&tags(KPOP), &tags(USRAP), &n), Fit::Other(Fit::LANGUAGE));
         let ko_rap = tags("hip hop, 2010s, south korea, korean, male solo");
-        assert_eq!(fit(&tags(KPOP2), &ko_rap, &n), Fit::Other("genre"));
+        assert_eq!(fit(&tags(KPOP2), &ko_rap, &n), Fit::Other(Fit::GENRE));
     }
 
     #[test]
@@ -1506,7 +1530,7 @@ mod tests {
     fn korean_rnb_house_and_dance_records_are_not_kpop() {
         let n = Neighbours::default();
         let krnb = tags("R&B, soul, 2020s, South Korea, Korean, female solo");
-        assert_eq!(fit(&krnb, &tags(KPOP), &n), Fit::Other("genre"), "pop is near no other family");
+        assert_eq!(fit(&krnb, &tags(KPOP), &n), Fit::Other(Fit::GENRE), "pop is near no other family");
         let house = Scene::from_tags("tech house, dance, electronic, 2020s, club");
         assert_eq!(
             house.families.0,
@@ -1564,7 +1588,7 @@ mod tests {
         let near = Profile { audio: v(0.3), ..Default::default() };
         let far = Profile { audio: v(3.0), ..Default::default() };
         assert!(fit(&a, &near, &n).is_same());
-        assert_eq!(fit(&a, &far, &n), Fit::Other("sound"));
+        assert_eq!(fit(&a, &far, &n), Fit::Other(Fit::SOUND));
         let q = v(0.5).unwrap();
         assert!((Quant::decode(&q.encode()).unwrap().cos(&q) - 1.0).abs() < 1e-3);
     }
@@ -1657,8 +1681,8 @@ mod tests {
     #[test]
     fn eras_more_than_a_decade_apart_are_other_scenes() {
         let n = Neighbours::default();
-        assert_eq!(fit(&tags(KPOP80), &tags(KPOP), &n), Fit::Other("era"));
-        assert_eq!(fit(&tags(KPOP90), &tags(KPOP), &n), Fit::Other("era"));
+        assert_eq!(fit(&tags(KPOP80), &tags(KPOP), &n), Fit::Other(Fit::ERA));
+        assert_eq!(fit(&tags(KPOP90), &tags(KPOP), &n), Fit::Other(Fit::ERA));
         let next = fit(&tags(KPOP10), &tags(KPOP), &n);
         let same = fit(&tags(KPOP2.replace("2010s", "2020s").as_str()), &tags(KPOP), &n);
         assert!(next.is_same() && same.is_same());
@@ -1700,7 +1724,7 @@ mod tests {
     #[test]
     fn same_artist_from_another_decade_is_another_era() {
         let n = Neighbours::default();
-        assert_eq!(fit(&by("x", KPOP80), &by("x", KPOP), &n), Fit::Other("era"));
+        assert_eq!(fit(&by("x", KPOP80), &by("x", KPOP), &n), Fit::Other(Fit::ERA));
         assert_eq!(fit(&by("x", KPOP10), &by("x", KPOP), &n), Fit::Same(1.0), "a decade apart is one era");
         let undated = Profile { artist: "x".into(), ..Default::default() };
         assert_eq!(fit(&undated, &by("x", KPOP80), &n), Fit::Same(1.0), "an unknown era doesn't split them");
@@ -1730,7 +1754,7 @@ mod tests {
         ]));
         assert!(!fit(&old, &new, &n).is_same(), "the new song's era is known, the old one's is not");
         old.scene.era = Some(1990);
-        assert_eq!(fit(&old, &new, &n), Fit::Other("era"));
+        assert_eq!(fit(&old, &new, &n), Fit::Other(Fit::ERA));
         old.scene.era = Some(2020);
         assert!(fit(&old, &new, &n).is_same());
     }
