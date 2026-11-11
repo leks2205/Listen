@@ -320,10 +320,15 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
             }
         }
     };
+    // A Cancel or a removed disc wins even when the rip finished in the same moment: the user said
+    // stop, so nothing may be tagged or published.
+    if let Some(s) = stop {
+        return s;
+    }
     let outcome = match outcome {
         Ok(o) => o,
-        Err(RipError::Cancelled) => return stop.unwrap_or(Stage::Cancelled),
-        Err(e) => return stop.unwrap_or(Stage::Failed(e.to_string())),
+        Err(RipError::Cancelled) => return Stage::Cancelled,
+        Err(e) => return Stage::Failed(e.to_string()),
     };
     if outcome.files.is_empty() {
         return Stage::Failed("whipper produced no files".into());
