@@ -22,7 +22,7 @@ pub const CHROMIUM: f32 = 12.0;
 pub fn factor(speed: f32, scale: f32) -> f32 {
     CHROMIUM * speed / scale.max(0.5)
 }
-/// Speed is measured over this much recent input.
+/// Speed is measured over this much input before the last one.
 const WINDOW: Duration = Duration::from_millis(100);
 /// No input for this long counts as a release (when there's no stop event).
 const IDLE: Duration = Duration::from_millis(90);
@@ -58,9 +58,10 @@ impl State {
         Vector::new(clamp(dx / span), clamp(dy / span))
     }
 
-    /// Fingers lifted: start gliding with the recent speed.
+    /// Fingers lifted: start gliding at `now` with the speed of the input before the last event (a
+    /// release found by [`IDLE`] comes at least that long after it).
     fn release(&mut self, now: Instant, cursor: Option<Point>) {
-        let velocity = self.velocity(now);
+        let velocity = self.velocity(self.last_input.unwrap_or(now));
         self.samples.clear();
         self.last_input = None;
         if let Some(cursor) = cursor
@@ -254,5 +255,26 @@ where
 {
     fn from(k: Kinetic<'a, Message, Theme, Renderer>) -> Self {
         Element::new(k)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_release_keeps_recent_speed() {
+        let t0 = Instant::now();
+        let mut s = State::default();
+        // 32 px every 16 ms = 2000 px/s.
+        for i in 0..7 {
+            let t = t0 + Duration::from_millis(16 * i);
+            s.samples.push_back((t, 0.0, 32.0));
+            s.last_input = Some(t);
+        }
+        let last = s.last_input.unwrap();
+        s.release(last + IDLE, Some(Point::ORIGIN));
+        let v = s.coast.as_ref().expect("a fling").velocity.y;
+        assert!(v > 1500.0, "fling speed {v}");
     }
 }
