@@ -82,8 +82,9 @@ pub fn lyrics_fit(f: &Features, map: &VocalMap) -> bool {
     r0 >= MIN_AGREEMENT && shifted < r0 + SHIFT_MARGIN
 }
 
-/// `f` with the lyrics merged in: `bars.vocal` follows the lyrics (the audio curve only fills in
-/// weakly where they are silent) and `bars.cue` marks line ends, vocal entries and the chorus.
+/// `f` with the lyrics merged in: `bars.vocal` follows the lyrics (where they are silent the audio
+/// curve counts with `AUDIO_IN_GAPS`, currently 0: validated lyrics win) and `bars.cue` marks line
+/// ends, vocal entries and the chorus.
 /// `None` when the lyrics run past the audio or disagree with the audio vocal curve.
 pub fn with_lyrics(f: &Features, map: &VocalMap) -> Option<Features> {
     let last = map.sung.last()?.1;
