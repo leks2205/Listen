@@ -4,8 +4,7 @@
 //! mixes, ...) is shown first, its shelves page like the others.
 
 use super::{
-    album_cover, cover_on, data_label, data_label_w, ellipsize, ellipsize_px, icon, label, label_w,
-    song_cover,
+    album_cover, cover_on, data_label, data_label_w, ellipsize_px, icon, label, label_w, song_cover,
 };
 use crate::app::home::{HomeMsg, RowId, Section, SectionRow, can_next, section_list, slide_offsets};
 use crate::app::menu::MenuTarget;
@@ -327,7 +326,12 @@ fn feature_card<'a>(state: &'a Listen, album: &'a Album, width: f32) -> Element<
     let white = Color::WHITE;
     let art = (width - 48.0).clamp(80.0, 220.0);
     let content = column![
-        data_label_w(ellipsize(&album.name, (width / 8.0) as usize), metrics::font_lg(), white, Weight::Bold),
+        data_label_w(
+            ellipsize_px(&album.name, width - 24.0, metrics::font_lg()),
+            metrics::font_lg(),
+            white,
+            Weight::Bold
+        ),
         super::with_menu(
             button(album_cover(state, album, art, metrics::radius_md()))
                 .padding(0)
@@ -336,7 +340,7 @@ fn feature_card<'a>(state: &'a Listen, album: &'a Album, width: f32) -> Element<
             MenuTarget::album(album),
         ),
         data_label_w(
-            ellipsize(&album.artist_line(), (width / 7.5) as usize),
+            ellipsize_px(&album.artist_line(), width - 24.0, metrics::font_md()),
             metrics::font_md(),
             white,
             Weight::Medium
@@ -572,11 +576,11 @@ fn genre_tile<'a>(genre: &'a Genre, width: f32) -> Element<'a, Message> {
             ..Default::default()
         })
         .on_press(Message::Home(HomeMsg::PlayGenre(genre.name.clone())));
-    let chars = (width / 9.0) as usize;
     button(
         row![
             data_label_w(
-                ellipsize(&genre.name, chars.saturating_sub(5)),
+                // The play button and the paddings take 72 px.
+                ellipsize_px(&genre.name, width - 72.0, metrics::font_lg()),
                 metrics::font_lg(),
                 Color::WHITE,
                 Weight::Bold

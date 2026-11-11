@@ -247,8 +247,9 @@ impl<T: std::fmt::Display> std::fmt::Display for Tr<T> {
     }
 }
 
-/// Cuts `s` to about `max` characters with an ellipsis. iced 0.14 has no
-/// text-overflow ellipsis, so callers pass a width-derived budget.
+/// Cuts `s` to about `max` characters with an ellipsis (iced 0.14 has no text-overflow ellipsis).
+/// A character budget is wrong for Hangul/CJK, which are twice as wide: to fit a width in px, use
+/// [`ellipsize_px`].
 pub fn ellipsize(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
