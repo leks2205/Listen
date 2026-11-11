@@ -369,7 +369,9 @@ pub fn bridge_candidates(
 pub struct SceneGated {
     pub songs: Vec<Song>,
     pub records: Vec<Arc<TrackAnalysis>>,
-    /// Scene score per kept candidate (0..1), for `listen_mix::bridge::choose_scored`.
+    /// Ranking score per kept candidate, for `listen_mix::bridge::choose_scored`: the scene fit (0..1) plus
+    /// [`HEARD_BRIDGE_BONUS`] for a bridge the listener played, so up to 1.5. Don't clamp it to 0..1: that
+    /// would erase the bonus.
     pub scores: Vec<f32>,
     pub tally: listen_core::scene::Tally,
     /// The pair's scenes, for the log ("ko · pop (tags) → ko · pop (tags), one scene").

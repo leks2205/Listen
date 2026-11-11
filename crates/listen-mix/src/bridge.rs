@@ -53,8 +53,9 @@ const MIN_GAIN: f32 = 0.25;
 /// direct join (a typical acceptable pair costs ≈ 1, so that is noise); the next one gained 0.35. Any
 /// margin from 0.1 to 0.35 keeps the same 6 bridges; 0.25 is the margin a beat-matched pair needs too.
 pub const MIN_GAIN_UNMATCHED: f32 = 0.25;
-/// Weight of the scene score (0..1, `listen_core::scene::Gate::judge`) in the ranking: among bridges that
-/// fit the scene, the closest one wins unless another flows clearly better.
+/// Weight of the scene score (the fit 0..1 from `listen_core::scene::Gate::judge`, plus
+/// `listen_analysis::HEARD_BRIDGE_BONUS` for a played bridge) in the ranking: among bridges that fit the
+/// scene, the closest one wins unless another flows clearly better.
 const SCENE_WEIGHT: f32 = 0.3;
 /// Vocal level (0..1) the blend zones of a stretch must stay under (the planner's "instrumental" bar).
 const EDGE_VOCAL: f32 = 0.4;
@@ -139,8 +140,9 @@ pub fn choose(
     choose_scored(out, inn, direct_plan, candidates, &[], ctx)
 }
 
-/// [`choose`] with a scene score per candidate (`scene[i]`, 0..1, from the scene gate; empty = none): the
-/// candidates are those that fit the scene, and a closer scene lowers a candidate's cost.
+/// [`choose`] with a scene score per candidate (`scene[i]` from the scene gate: the fit 0..1, plus 0.5 for a
+/// bridge the listener played, so up to 1.5; empty = none): the candidates are those that fit the scene, and
+/// a higher score lowers a candidate's cost.
 pub fn choose_scored(
     out: &Features,
     inn: &Features,
