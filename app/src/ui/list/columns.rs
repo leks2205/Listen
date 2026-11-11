@@ -481,7 +481,7 @@ impl ListItem for Song {
                 );
                 let inner = Cx { width: text_w, card: false, ..cx.clone() };
                 let lines: Element<'a, Message> = if cx.size == RowSize::Compact {
-                    // One line: the artists follow the title on compact rows.
+                    // Compact rows: the same two lines without the gap (40 px rows).
                     iced::widget::column![title, artist_links(&inner, &self.artists, true)].into()
                 } else {
                     iced::widget::column![title, artist_links(&inner, &self.artists, true)]
