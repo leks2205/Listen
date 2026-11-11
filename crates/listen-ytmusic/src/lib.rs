@@ -64,7 +64,8 @@ struct CachedSongs {
 }
 
 /// Runs a ytmapi-rs call: `yt!(self, yt => yt.get_album(id).await)` →
-/// `Result<_, SourceError>`.
+/// `Result<_, SourceError>`. Typed queries only: raw JSON goes through `YouTubeMusic::raw_json`,
+/// because `raw_json_query` hands back YouTube's signed-out page as a success.
 macro_rules! yt {
     ($self:ident, $yt:ident => $call:expr) => {{
         let $yt = &$self.yt;
@@ -194,6 +195,12 @@ fn name_ref(name: &str) -> Vec<ArtistRef> {
 }
 
 /// Playlist ids need the `VL` prefix for browsing.
+/// Whether a raw InnerTube answer counts as signed in: every page a guest gets has the sign-in
+/// button, and no page an account gets has it.
+fn signed_in_answer(guest: bool, text: &str) -> bool {
+    guest || !token::signed_out_page(text)
+}
+
 /// Every song of Liked Music is a favourite, whether or not its row has a like button: the heart,
 /// the like/unlike toggles and the Favorited filter all read `Song::favorite`.
 fn mark_liked_music(browse_id: &str, songs: &mut [Song]) {
@@ -740,7 +747,8 @@ impl MusicSource for YouTubeMusic {
             return yt!(self, yt => yt.search_songs("music").await).map(|_| ());
         }
         let q = home::BrowseQuery { browse_id: Some(LIBRARY_PLAYLISTS.to_string()), continuation: None };
-        yt!(self, yt => yt.raw_json_query::<home::BrowseQuery>(&q).await).map(|_| ())
+        // Through raw_json: stale cookies get a 2xx answer too, YouTube's signed-out page.
+        self.raw_json(&q).await.map(|_| ())
     }
 
     fn album_sorts(&self) -> &'static [listen_source::SortOption<AlbumSort>] {
@@ -1663,7 +1671,7 @@ impl YouTubeMusic {
         let mut refreshed = false;
         loop {
             match self.yt.raw_json_query::<Q>(q).await.map_err(source_err) {
-                Ok(text) if self.guest || !token::signed_out_page(&text) => {
+                Ok(text) if signed_in_answer(self.guest, &text) => {
                     if let Some(session) = &self.session {
                         session.clear_stale();
                     }
@@ -1940,6 +1948,17 @@ mod tests {
         yt.refresh().await;
         assert!(yt.songs.lock().await.is_none() && yt.albums.lock().await.is_none());
         assert!(yt.playlist_cache.lock().await.is_empty() && yt.playlist_partial.lock().await.is_empty());
+    }
+
+    #[test]
+    fn ping_rejects_the_signed_out_page() {
+        let signed_out = r#"{"contents":{"messageRenderer":{"button":{"signInEndpoint":{}}}}}"#;
+        assert!(!signed_in_answer(false, signed_out));
+        assert!(signed_in_answer(true, signed_out), "a guest's pages always offer to sign in");
+        assert!(signed_in_answer(false, r#"{"contents":{"gridRenderer":{}}}"#));
+        // ping and every other raw request share raw_json, the one place that checks the answer.
+        let code = include_str!("lib.rs").split_once("\nmod tests {").expect("lib.rs has tests").0;
+        assert_eq!(code.matches(".raw_json_query::<").count(), 1, "raw JSON goes through raw_json");
     }
 
     #[tokio::test]
