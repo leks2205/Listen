@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 pub const YTM_PREFIX: &str = "ytm:";
 
 /// Store key of a song's records ([`TrackAnalysis::song_id`]): Navidrome's id as is, YouTube Music's
-/// videoId with [`YTM_PREFIX`] (both are 22-char base62 in one store). Other sources keep their bare id.
+/// videoId with [`YTM_PREFIX`] (Navidrome ids are 22-char base62, videoIds 11-char base64url; the prefix,
+/// not the id's shape, keeps them apart in one store). Other sources keep their bare id.
 /// Build and strip store keys only through this and [`YTM_PREFIX`]: a song id or a history entry's id
 /// without the prefix silently matches nothing in the store.
 pub fn record_key(song: &Song) -> String {
