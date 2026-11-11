@@ -167,8 +167,15 @@ fn segmented<'a, V: Copy + PartialEq + 'a>(
     r.into()
 }
 
+/// A checkbox with a UI label (an English literal). iced draws checkbox labels itself, past `ui::label`,
+/// so the text is translated here; user data (names) must not go through this helper.
 fn check<'a>(label_text: &'static str, on: bool, msg: impl Fn(bool) -> Message + 'a) -> Element<'a, Message> {
-    checkbox(on).label(label_text).size(16).text_size(metrics::font_sm()).on_toggle(msg).into()
+    checkbox(on)
+        .label(crate::i18n::tr(label_text))
+        .size(16)
+        .text_size(metrics::font_sm())
+        .on_toggle(msg)
+        .into()
 }
 
 fn small<'a>(
@@ -665,7 +672,6 @@ pub fn page_header_with<'a>(
     let search = {
         let idc = id.clone();
         let mut input = text_input(crate::i18n::tr("Search"), search_text)
-            .font(crate::ui::font_for(search_text, crate::appearance::current_font()))
             .id(search_id(id))
             .font(crate::ui::font_for(search_text, crate::appearance::current_font()))
             .size(metrics::font_md())
@@ -1079,8 +1085,9 @@ pub fn filters_modal<'a>(state: &'a Listen) -> Option<ModalParts<'a>> {
             option_list(state, "Genres", multi, move |m| e(FilterEdit::MultiGenre(m)), rows)
         });
     }
+    // iced draws placeholders itself, past `ui::label`: translate them here.
     let year_field = |placeholder: &'static str, value: &str, make: Box<dyn Fn(String) -> Message + 'a>| {
-        text_input(placeholder, value)
+        text_input(crate::i18n::tr(placeholder), value)
             .font(crate::ui::font_for(value, crate::appearance::current_font()))
             .size(metrics::font_sm())
             .padding(Padding::from([4.0, 8.0]))
