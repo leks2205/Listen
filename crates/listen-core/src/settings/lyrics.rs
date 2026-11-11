@@ -38,6 +38,8 @@ pub struct LyricsSettings {
     pub enable_auto_translation: bool,
     /// `Microsoft Azure`, `Google Cloud`, `Gemini` (the AI DJ's key) or empty.
     pub translation_api_provider: String,
+    /// Legacy: the app keeps the key in its secret store and moves a key found here there at start (and
+    /// after a Feishin import), then blanks this field. Never store a key here: config.toml is not private.
     pub translation_api_key: String,
     pub translation_target_language: String,
     /// vocab-hub address (`https://…`) for Lute word statuses (read only); empty = off.

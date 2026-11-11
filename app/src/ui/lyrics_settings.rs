@@ -296,8 +296,8 @@ pub fn rows<'a>(state: &'a Listen, mk: Mk<'a, '_>, fetch: Element<'a, Message>) 
     if !gemini {
         v.push(mk(
             "Translation API key",
-            "The key of the provider above. It is stored in Listen's config file.",
-            text_input(crate::i18n::tr("API key"), &s.translation_api_key)
+            "The key of the provider above. It is kept with your passwords (the system keyring, or a private file).",
+            text_input(crate::i18n::tr("API key"), state.translation_api_key())
                 .secure(true)
                 .on_input(|k| set(LyricsSetting::TranslationKey(k)))
                 .style(style::input(t))

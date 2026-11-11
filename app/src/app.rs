@@ -1309,6 +1309,7 @@ impl Listen {
         state.history_boot();
         state.restore_queue();
         state.dj_boot();
+        state.translation_key_boot();
         state.rip_boot();
         state.offline_boot();
         state.appearance = appearance::AppearanceState::boot(

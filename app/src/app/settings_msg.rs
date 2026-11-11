@@ -294,6 +294,9 @@ impl Listen {
             Setting::MixBridges(v) => s.mixing.bridges = v,
             Setting::MixBridgeChance(v) => s.mixing.bridge_chance_pct = v.clamp(10, 100),
             Setting::LyricsFetch(v) => s.lyrics.fetch = v,
+            Setting::Lyrics(super::lyrics_state::LyricsSetting::TranslationKey(key)) => {
+                self.set_translation_key(key)
+            }
             Setting::Lyrics(change) => change.apply(&mut s.lyrics),
             Setting::Tray(v) => s.window.tray = v,
             Setting::ExitToTray(v) => s.window.exit_to_tray = v,
@@ -313,6 +316,7 @@ impl Listen {
                             // Runtime copies of settings follow (see `reset_settings`).
                             self.substitutes.set_enabled(imported.playback.prefer_own_servers);
                             self.config.settings = imported;
+                            self.translation_key_migrate();
                             self.toast_success("Feishin settings imported.".into());
                             player_changed = true;
                         }

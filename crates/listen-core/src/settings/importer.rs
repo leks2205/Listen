@@ -3,7 +3,8 @@
 use super::*;
 
 /// Applies a Feishin settings export on top of `base`. Unknown or missing
-/// fields keep their current value; secrets (remote password) are ignored.
+/// fields keep their current value; secrets (remote password) are ignored. The lyrics translation key is
+/// taken into `lyrics.translation_api_key`, from where the app moves it into its secret store.
 pub fn import_feishin(base: &Settings, json: &str) -> Result<Settings, serde_json::Error> {
     let v: Value = serde_json::from_str(json)?;
     let mut s = base.clone();

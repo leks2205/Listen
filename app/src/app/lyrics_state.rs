@@ -17,6 +17,8 @@ pub const EXPORT_MODAL: &str = "lyrics-export";
 pub const GLOSS_MODAL: &str = "lyrics-gloss";
 pub const SETTINGS_MODAL: &str = "lyrics-settings";
 const OVERRIDES_FILE: &str = "lyrics_overrides.json";
+/// Secret-store entry of the translation provider's API key (Azure / Google Cloud, billable).
+const TRANSLATION_KEY_ENTRY: &str = "lyrics-translation-api-key";
 
 /// The result a user picked for a song, remembered across sessions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -124,6 +126,8 @@ pub struct LyricsUi {
     /// Bumped when the shown lyrics change (MPRIS publishes them).
     pub rev: u64,
     token: u64,
+    /// The translation provider's API key, as kept in the secret store (`Listen::translation_api_key`).
+    translation_key: String,
 }
 
 impl LyricsUi {
@@ -161,6 +165,7 @@ impl LyricsUi {
             viewport: None,
             rev: 0,
             token: 0,
+            translation_key: String::new(),
         }
     }
 
@@ -273,7 +278,11 @@ impl LyricsSetting {
             Self::NeteaseTranslation(v) => s.enable_netease_translation = v,
             Self::AutoTranslation(v) => s.enable_auto_translation = v,
             Self::TranslationProvider(v) => s.translation_api_provider = v,
-            Self::TranslationKey(v) => s.translation_api_key = v,
+            Self::TranslationKey(_) => {
+                unreachable!(
+                    "the translation key goes to the secret store (Listen::set_translation_key), not here"
+                )
+            }
             Self::TranslationLanguage(v) => s.translation_target_language = v,
             Self::VocabHubUrl(v) => s.vocab_hub_url = v.trim().to_string(),
             Self::DelayMs(v) => s.delay_ms = v.clamp(-10_000, 10_000),
@@ -544,7 +553,65 @@ impl Listen {
         if s.translation_api_provider == listen_lyrics::gemini::PROVIDER {
             return self.gemini_key().is_some();
         }
-        !s.translation_api_provider.is_empty() && !s.translation_api_key.trim().is_empty()
+        !s.translation_api_provider.is_empty() && !self.translation_api_key().is_empty()
+    }
+
+    /// The translation provider's API key: the secret store's copy, else one still in the settings (written
+    /// by an older version or imported from Feishin, moved by `translation_key_migrate`).
+    pub(crate) fn translation_api_key(&self) -> &str {
+        match self.lyrics_ui.translation_key.trim() {
+            "" => self.config.settings.lyrics.translation_api_key.trim(),
+            kept => kept,
+        }
+    }
+
+    /// Start-up: the key from the secret store, and a key still in config.toml moved there.
+    pub(super) fn translation_key_boot(&mut self) {
+        if self.demo {
+            return;
+        }
+        let id = listen_core::model::ServerId(TRANSLATION_KEY_ENTRY.into());
+        if let Some(key) = self.secrets.as_ref().and_then(|s| s.get(&id)) {
+            self.lyrics_ui.translation_key = key;
+        }
+        self.translation_key_migrate();
+    }
+
+    /// Moves a key found in the settings into the secret store and blanks the field, because config.toml is
+    /// not private. When the store refuses it, the field keeps the key so translation goes on working.
+    pub(super) fn translation_key_migrate(&mut self) {
+        let legacy = self.config.settings.lyrics.translation_api_key.trim().to_string();
+        if legacy.is_empty() || self.demo || self.ephemeral {
+            return;
+        }
+        let Some(secrets) = &self.secrets else { return };
+        if secrets.set(&listen_core::model::ServerId(TRANSLATION_KEY_ENTRY.into()), &legacy) {
+            self.lyrics_ui.translation_key = legacy;
+            self.config.settings.lyrics.translation_api_key.clear();
+            self.save_config();
+            tracing::info!("moved the lyrics translation API key from config.toml into the secret store");
+        } else {
+            tracing::warn!("could not store the lyrics translation API key; it stays in config.toml");
+        }
+    }
+
+    /// The key typed in the settings: kept in the secret store, never in config.toml (the caller saves the
+    /// config, which drops a key an older version left there).
+    pub(super) fn set_translation_key(&mut self, key: String) {
+        let trimmed = key.trim().to_string();
+        self.lyrics_ui.translation_key = key;
+        self.config.settings.lyrics.translation_api_key.clear();
+        if self.demo || self.ephemeral {
+            return;
+        }
+        let Some(secrets) = &self.secrets else { return };
+        let id = listen_core::model::ServerId(TRANSLATION_KEY_ENTRY.into());
+        if trimmed.is_empty() {
+            secrets.delete(&id);
+        } else if !secrets.set(&id, &trimmed) {
+            // Kept where it worked before rather than lost at the next start.
+            self.config.settings.lyrics.translation_api_key = trimmed;
+        }
     }
 
     pub(crate) fn gemini_key(&self) -> Option<String> {
@@ -666,7 +733,7 @@ impl Listen {
         let s = &self.config.settings.lyrics;
         let (provider, key, target) = (
             s.translation_api_provider.clone(),
-            s.translation_api_key.clone(),
+            self.translation_api_key().to_string(),
             s.translation_target_language.clone(),
         );
         let lines: Vec<String> = lyrics.lines.iter().map(|l| l.text.clone()).collect();
@@ -1004,6 +1071,42 @@ impl Listen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn translation_key_lives_in_the_secret_store_not_in_config_toml() {
+        let dir = std::env::temp_dir().join(format!("listen-translation-key-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.demo = false;
+        s.ephemeral = false;
+        s.paths = Some(listen_core::config::Paths {
+            config_dir: dir.clone(),
+            cache_dir: dir.join("cache"),
+            data_dir: dir.join("data"),
+        });
+        s.secrets = Some(crate::secrets::Secrets::with_store(&dir, listen_core::config::SecretStore::File));
+        // A config written by an older version holds the key.
+        s.config.settings.lyrics.translation_api_provider = "Google Cloud".into();
+        s.config.settings.lyrics.translation_api_key = "key-from-config".into();
+        s.translation_key_boot();
+        assert_eq!(s.translation_api_key(), "key-from-config", "existing users keep translating");
+        assert!(s.config.settings.lyrics.translation_api_key.is_empty());
+        let config = std::fs::read_to_string(dir.join("config.toml")).unwrap();
+        assert!(!config.contains("key-from-config"), "blanked in config.toml");
+        let stored = std::fs::read_to_string(dir.join("credentials.toml")).unwrap();
+        assert!(stored.contains("key-from-config"), "moved into the secret store");
+        // The next start reads it from there; a new key typed in the settings replaces it there.
+        s.lyrics_ui.translation_key.clear();
+        s.translation_key_boot();
+        assert_eq!(s.translation_api_key(), "key-from-config");
+        s.set_translation_key("typed-key".into());
+        assert!(s.translation_configured());
+        assert!(std::fs::read_to_string(dir.join("credentials.toml")).unwrap().contains("typed-key"));
+        assert!(s.config.settings.lyrics.translation_api_key.is_empty());
+        s.set_translation_key(String::new());
+        assert!(!s.translation_configured());
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn source_toggle_and_order() {

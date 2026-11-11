@@ -1,5 +1,7 @@
-//! Advanced tab: updates, log level and settings export / import. Secrets live in the keyring,
-//! not in `Settings`; export and import still skip any key that looks like one.
+//! Advanced tab: updates, log level and settings export / import. Secrets live in the app's secret store
+//! (keyring or its private fallback file), not in `Settings`; the exceptions are the public Last.fm API keys
+//! and the legacy `lyrics.translation_api_key` (see `settings_hold_no_secret_fields_beyond_the_known_ones`).
+//! Export and import still skip any key that looks like a secret.
 
 use super::*;
 

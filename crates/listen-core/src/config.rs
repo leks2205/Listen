@@ -1,5 +1,7 @@
 //! Persistent configuration: settings plus the configured servers.
-//! Secrets (passwords, tokens, cookies) are never stored here — see the keyring.
+//! Secrets (passwords, tokens, cookies, paid API keys) are never stored here: they live in the app's secret
+//! store (keyring, or the 0600 `credentials.toml`). The only key-like values are the public Last.fm API
+//! keys and the legacy lyrics translation key, which the app moves out at start.
 
 use crate::model::{ServerId, SourceKind};
 use crate::settings::Settings;

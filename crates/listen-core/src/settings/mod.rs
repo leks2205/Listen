@@ -286,6 +286,32 @@ mod tests {
         assert_eq!(dj.ai_dj.set_max, 5);
     }
 
+    /// A new secret-named field would be written to the world-readable config.toml: secrets belong in the
+    /// app's secret store. The known ones are public Last.fm API keys and the legacy translation key, which
+    /// the app moves into the secret store at start.
+    #[test]
+    fn settings_hold_no_secret_fields_beyond_the_known_ones() {
+        fn walk(v: &serde_json::Value, path: &str, out: &mut Vec<String>) {
+            if let serde_json::Value::Object(map) = v {
+                for (k, child) in map {
+                    let here = if path.is_empty() { k.clone() } else { format!("{path}.{k}") };
+                    if is_secret_key(k) {
+                        out.push(here.clone());
+                    }
+                    walk(child, &here, out);
+                }
+            }
+        }
+        let mut found = Vec::new();
+        walk(&serde_json::to_value(Settings::default()).unwrap(), "", &mut found);
+        found.sort();
+        assert_eq!(
+            found,
+            ["integrations.discord.lastfm_key", "integrations.lastfm.api_key", "lyrics.translation_api_key"],
+            "keep secrets in the secret store, not in Settings"
+        );
+    }
+
     /// A v0.23 default config.toml round-trips unchanged; newer settings only append lines.
     #[test]
     fn v0_23_config_round_trips_unchanged() {

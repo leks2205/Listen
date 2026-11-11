@@ -1576,7 +1576,7 @@
 "The font file has no usable family name.": "Die Schriftdatei hat keinen verwendbaren Familiennamen.",
 "The free tier is enough for normal listening. Outside the EU, UK and Switzerland, Google may use what Listen sends on the free tier (song titles and the DJ's lines) to improve its models.": "Das kostenlose Kontingent reicht für normales Hören. Außerhalb der EU, des Vereinigten Königreichs und der Schweiz darf Google das, was Listen im kostenlosen Kontingent sendet (Titel und die Texte des DJs), zur Verbesserung seiner Modelle nutzen.",
 "The jukebox failed ({}); using mpv again.": "Die Jukebox ist fehlgeschlagen ({}); es wird wieder mpv verwendet.",
-"The key of the provider above. It is stored in Listen's config file.": "Der Schlüssel des Anbieters oben. Er wird in Listens Konfigurationsdatei gespeichert.",
+"The key of the provider above. It is kept with your passwords (the system keyring, or a private file).": "Der Schlüssel des Anbieters oben. Er wird bei deinen Passwörtern aufbewahrt (im Schlüsselbund des Systems oder in einer privaten Datei).",
 "The language of the interface. It applies after a restart.": "Die Sprache der Oberfläche. Sie gilt nach einem Neustart.",
 "The language online translation translates into.": "Die Sprache, in die die Online-Übersetzung übersetzt.",
 "The language the hosts speak. Song titles stay in their own language.": "Die Sprache, die die Moderatoren sprechen. Titelnamen bleiben in ihrer Originalsprache.",

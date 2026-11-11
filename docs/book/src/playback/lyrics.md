@@ -107,7 +107,7 @@ There are three kinds of translation:
 1. **NetEase translations.** Switch on **NetEase translations** to fetch NetEase's own translation along with the lyrics and show it under each line.
 2. **Online translation with your own key.** Listen can send the lyrics to Microsoft Azure Translator or Google Cloud Translation. Set it up in **Settings → Playback → Lyrics**:
    1. Pick **Translation provider**: **Microsoft Azure** or **Google Cloud**.
-   2. Paste your API key into **Translation API key**. You need your own account with that provider; Listen has no key of its own.
+   2. Paste your API key into **Translation API key**. You need your own account with that provider; Listen has no key of its own. The key is kept with your passwords (the system keyring, or a private file), not in `config.toml`.
    3. Choose **Translation language** (31 languages, English by default).
    4. Press **TRANSLATION** in the lyrics view to translate the playing song. Turn on **Automatic translation** to translate every song's lyrics as they load.
 
