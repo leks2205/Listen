@@ -1,6 +1,10 @@
 //! What an automatic fill aims for beyond a smooth flow: a tempo (heart rate, cadence), focus, and a
-//! slot for a forgotten favourite. One [`Targets`] value goes into every automatic picker (Auto-DJ, the AI
-//! DJ candidate filter, [`crate::score::order`]); `Targets::default()` means "pick as before".
+//! slot for a forgotten favourite. Each part has its own consumer: [`TempoTarget`] goes to the
+//! heart-rate tempo picks in [`crate::tempo`] (`fit_candidates`, `tempo_fill`, `rerank_queue`),
+//! the focus functions here filter the Auto-DJ and AI DJ pools in focus mode, and
+//! [`Targets::familiar_at`] places the Auto-DJ's forgotten favourite. The flow scorer
+//! ([`crate::score::order`], [`crate::score::rank`]) takes none of them. `Targets::default()` means
+//! "pick as before".
 
 use listen_core::analysis::FlowFeatures;
 use listen_core::model::Song;
@@ -89,7 +93,8 @@ pub fn focus_pool(cands: &[(Song, Option<FlowFeatures>)], want: usize) -> Vec<us
 }
 
 /// Focus mode: the `n` least sung analysed songs of `songs` (indices, best first) — what joins an
-/// Auto-DJ fill's pool from the listening history. Songs without a vocal curve never join.
+/// Auto-DJ fill's pool from the listening history. Songs without a vocal curve never join, except
+/// versions tagged instrumental, which count as unsung even without analysis (see [`focus_cost`]).
 pub fn focus_extras(songs: &[(Song, Option<FlowFeatures>)], n: usize) -> Vec<usize> {
     let mut ranked: Vec<(usize, f32)> = songs
         .iter()
