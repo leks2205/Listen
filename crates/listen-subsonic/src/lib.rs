@@ -586,6 +586,11 @@ impl Subsonic {
 }
 
 /// Validates a Subsonic envelope and returns `key`'s payload.
+/// The songs of a `getSimilarSongs2` answer without the seed (the `similar_songs` contract), at most `count`.
+fn similar_without_seed(server: &ServerId, seed: &str, r: &types::Songs, count: usize) -> Vec<Song> {
+    r.song.iter().filter(|c| c.id != seed).take(count).map(|c| normalize::song(server, c)).collect()
+}
+
 pub fn parse_response<T: DeserializeOwned + Default>(body: Value, key: &str) -> Result<T> {
     let root =
         body.get("subsonic-response").ok_or_else(|| SourceError::Parse("not a Subsonic response".into()))?;
@@ -1163,14 +1168,15 @@ impl MusicSource for Subsonic {
     }
 
     async fn similar_songs(&self, song: &Song, count: usize) -> Result<Vec<Song>> {
+        // One more than asked, in case the server's answer contains the seed.
         let r: types::Songs = self
             .call(
                 "getSimilarSongs2",
                 "similarSongs2",
-                &[("id", song.id.clone()), ("count", count.to_string())],
+                &[("id", song.id.clone()), ("count", (count + 1).to_string())],
             )
             .await?;
-        Ok(r.song.iter().map(|c| normalize::song(&self.server_id, c)).collect())
+        Ok(similar_without_seed(&self.server_id, &song.id, &r, count))
     }
 
     async fn genres(&self) -> Result<Vec<Genre>> {
@@ -1603,6 +1609,19 @@ mod tests {
         );
         let q = AlbumQuery { sort: AlbumSort::AlbumArtist, ..Default::default() };
         assert_eq!(album_list_type(&q), vec![("type", "alphabeticalByArtist".to_string())]);
+    }
+
+    #[test]
+    fn similar_songs_never_returns_the_seed() {
+        let body = serde_json::json!({ "subsonic-response": { "status": "ok", "similarSongs2": { "song": [
+            { "id": "seed", "title": "Seed" }, { "id": "a", "title": "A" }, { "id": "b", "title": "B" }
+        ] } } });
+        let r: types::Songs = parse_response(body, "similarSongs2").unwrap();
+        let ids = |count| -> Vec<String> {
+            similar_without_seed(&ServerId("t".into()), "seed", &r, count).into_iter().map(|s| s.id).collect()
+        };
+        assert_eq!(ids(5), vec!["a", "b"]);
+        assert_eq!(ids(1), vec!["a"]);
     }
 
     #[test]

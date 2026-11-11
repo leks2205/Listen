@@ -579,6 +579,8 @@ pub trait MusicSource: Send + Sync {
     // Songs
     async fn songs(&self, query: &SongQuery) -> Result<Page<Song>>;
     async fn random_songs(&self, count: usize, genre: Option<&str>) -> Result<Vec<Song>>;
+    /// At most `count` songs similar to `song`, never `song` itself: implementations filter it out even
+    /// where the server's answer contains it, so callers that want the seed first prepend it.
     async fn similar_songs(&self, song: &Song, count: usize) -> Result<Vec<Song>> {
         let _ = (song, count);
         Err(SourceError::Unsupported)
@@ -929,11 +931,14 @@ pub trait MusicSource: Send + Sync {
         }
         Ok(songs)
     }
-    /// Songs for "Artist radio": the artist's top song, then similar ones.
+    /// Songs for "Artist radio", at most `count` (0 counts as 1). The default: the artist's top song,
+    /// then songs similar to it; overrides may return the server's own mix instead.
     async fn artist_radio(&self, artist: &Artist, count: usize) -> Result<Vec<Song>> {
         let seed = self.top_songs(artist, 1).await?.into_iter().next().ok_or(SourceError::NotFound)?;
         let mut songs = vec![seed.clone()];
-        songs.extend(self.similar_songs(&seed, count.saturating_sub(1).max(1)).await?);
+        // `similar_songs` never returns the seed; the filter keeps a source that breaks that from doubling it.
+        let similar = self.similar_songs(&seed, count.saturating_sub(1).max(1)).await?;
+        songs.extend(similar.into_iter().filter(|s| s.id != seed.id));
         songs.truncate(count.max(1));
         Ok(songs)
     }
@@ -1094,7 +1099,7 @@ mod tests {
             Ok(vec![])
         }
         async fn top_songs(&self, _: &Artist, _: usize) -> Result<Vec<Song>> {
-            Ok(vec![])
+            Ok(if self.similar.is_some() { songs(&["top"]) } else { vec![] })
         }
         async fn songs(&self, _: &SongQuery) -> Result<Page<Song>> {
             Ok(Page { items: vec![], start_index: 0, total: Some(0) })
@@ -1190,6 +1195,27 @@ mod tests {
         // Seeds that answer with nothing are not an error.
         let empty = Fake { similar: Some(|_| Ok(vec![])), ..Fake::default() };
         assert!(empty.playlist_recommendations(&playlist, 5).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn artist_radio_starts_with_the_seed_once() {
+        // A source that breaks the `similar_songs` contract and echoes the seed.
+        let f = Fake { similar: Some(|seed| Ok(songs(&[&seed.id, "x", "y"]))), ..Fake::default() };
+        let artist = Artist {
+            id: "a".into(),
+            server_id: listen_core::model::ServerId("s".into()),
+            source: SourceKind::Subsonic,
+            name: "A".into(),
+            image: None,
+            album_count: None,
+            song_count: None,
+            favorite: false,
+            rating: None,
+            biography: None,
+            similar: vec![],
+        };
+        let ids: Vec<String> = f.artist_radio(&artist, 10).await.unwrap().into_iter().map(|s| s.id).collect();
+        assert_eq!(ids, vec!["top", "x", "y"]);
     }
 
     #[tokio::test]

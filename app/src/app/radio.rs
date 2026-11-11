@@ -795,8 +795,8 @@ impl Listen {
     }
 }
 
-/// Similar songs of `song` from its source; the song itself is dropped.
-/// YouTube Music's radio starts from the song, so it comes back too.
+/// Similar songs of `song` from its source, without the song itself (the `similar_songs` contract;
+/// the `retain` guards against a source that breaks it).
 async fn related_songs(source: Arc<dyn listen_source::MusicSource>, song: Song) -> Result<Vec<Song>, String> {
     let mut songs = source.similar_songs(&song, RELATED_COUNT).await.map_err(err)?;
     songs.retain(|s| s.id != song.id);
