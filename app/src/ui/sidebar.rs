@@ -872,7 +872,8 @@ fn playlist_row<'a>(state: &Listen, p: &'a Playlist, name: &str, scope: Scope) -
         .align_y(Alignment::Center)
         .into()
     } else {
-        let mut sub = p.song_count.map(|n| format!("{n} songs")).unwrap_or_default();
+        // Translated count, then the owner's name (data): shown as it is.
+        let mut sub = p.song_count.map(|n| super::plural(n as usize, "song")).unwrap_or_default();
         if scope == Scope::Shared
             && let Some(owner) = p.owner.as_deref().filter(|o| !o.is_empty())
         {
@@ -882,7 +883,7 @@ fn playlist_row<'a>(state: &Listen, p: &'a Playlist, name: &str, scope: Scope) -
             super::cover(state, p.image.as_ref(), 40.0, metrics::radius_md(), Icon::LuListMusic),
             column![
                 data_label_w(super::ellipsize(name, 34), metrics::font_md(), color, Weight::Medium),
-                label(sub, metrics::font_xs(), t.muted),
+                super::data_label(sub, metrics::font_xs(), t.muted),
             ]
             .spacing(2),
         ]

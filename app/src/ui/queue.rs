@@ -528,11 +528,11 @@ fn more_menu<'a>(state: &'a Listen, tier: u8) -> Element<'a, Message> {
 
 // ---- header ------------------------------------------------------------------------------
 
-/// "1415 songs · 98 h" under the title.
+/// "1415 songs · 98 h" under the title, translated.
 pub fn summary(state: &Listen) -> String {
     let n = state.queue.len();
     let total: std::time::Duration = state.queue.iter().map(|i| i.song.duration).sum();
-    let songs = if n == 1 { "1 song".to_string() } else { format!("{n} songs") };
+    let songs = super::plural(n, "song");
     if total.is_zero() { songs } else { format!("{songs} · {}", format_duration(total)) }
 }
 
@@ -588,7 +588,7 @@ fn header_row(state: &Listen) -> Element<'_, Message> {
         row![
             label_w("Queue", metrics::font_xl(), t.foreground, Weight::Bold),
             space::horizontal(),
-            label(summary(state), metrics::font_sm(), t.muted),
+            super::data_label(summary(state), metrics::font_sm(), t.muted),
         ]
         .spacing(metrics::space_sm())
         .align_y(Alignment::Center),
@@ -871,7 +871,7 @@ pub fn page(state: &Listen) -> Element<'_, Message> {
         row![
             label_w("Now Playing", 36.0, t.foreground, Weight::Bold),
             space::horizontal(),
-            label(summary(state), metrics::font_md(), t.muted),
+            super::data_label(summary(state), metrics::font_md(), t.muted),
             mode_switcher(state),
         ]
         .spacing(metrics::space_md())
