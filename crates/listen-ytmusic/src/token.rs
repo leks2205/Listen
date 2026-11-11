@@ -79,6 +79,16 @@ impl fmt::Debug for SessionInner {
     }
 }
 
+/// Never prints the cookies or the SAPISID (a `{:?}` of a token must be safe to log): only sizes.
+impl fmt::Debug for Fresh {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fresh")
+            .field("cookies", &format_args!("<{} B>", self.cookies.len()))
+            .field("read_at", &self.read_at)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Clears the `refreshing` flag when a re-read ends, also if the reader panicked.
 struct RefreshDone<'a>(&'a AtomicBool);
 
@@ -88,7 +98,6 @@ impl Drop for RefreshDone<'_> {
     }
 }
 
-#[derive(Debug)]
 struct Fresh {
     cookies: String,
     sapisid: String,
@@ -461,6 +470,15 @@ mod tests {
         assert_eq!(session.header().1, "old");
         session.refresh_now().await;
         assert_eq!(session.header().1, "new");
+    }
+
+    #[test]
+    fn debug_output_never_contains_cookies() {
+        let t = token(Some("1234567890"));
+        let printed = format!("{t:?} {:?} {:#?}", t.session(), t);
+        assert!(!printed.contains("abc"), "{printed}");
+        assert!(!printed.contains("SID=x"), "{printed}");
+        assert!(printed.contains("1234567890"), "{printed}");
     }
 
     #[test]
