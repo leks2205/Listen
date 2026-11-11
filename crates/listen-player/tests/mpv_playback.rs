@@ -186,3 +186,37 @@ async fn clearing_the_next_slot_right_after_a_switch_keeps_the_new_song() {
     player.mpv().command(serde_json::json!(["quit"])).await.ok();
     std::fs::remove_dir_all(dir).ok();
 }
+
+/// A stop right after a play (its events still queued) is no "queue ended"; a natural end still is.
+#[tokio::test(flavor = "multi_thread")]
+async fn stop_right_after_play_is_no_queue_end() {
+    let Some(binary) = mpv_binary() else {
+        eprintln!("mpv not found; skipping");
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("listen-player-stop-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let long = dir.join("long.wav");
+    write_wav(&long, 5.0, 440.0);
+    let short = dir.join("short.wav");
+    write_wav(&short, 0.5, 550.0);
+
+    let opts = MpvOptions { binary, null_audio: true, ..Default::default() };
+    let (player, mut rx) = Player::spawn(&opts).await.expect("mpv starts");
+    for _ in 0..5 {
+        player.play(&Track::url(long.to_string_lossy()), None).await.unwrap();
+        player.stop().await.unwrap();
+    }
+    let mut seen = Vec::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(1500);
+    while let Ok(Some(ev)) = tokio::time::timeout_at(deadline, rx.recv()).await {
+        seen.push(ev);
+    }
+    assert!(!seen.contains(&PlayerEvent::Ended), "a stop is no 'ended': {seen:?}");
+
+    player.play(&Track::url(short.to_string_lossy()), None).await.unwrap();
+    wait_for(&mut rx, &PlayerEvent::Ended).await;
+
+    player.mpv().command(serde_json::json!(["quit"])).await.ok();
+    std::fs::remove_dir_all(dir).ok();
+}

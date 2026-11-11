@@ -47,7 +47,8 @@ pub enum PlayerEvent {
     StreamTitle(Option<String>),
     /// mpv moved on to the prefetched next track by itself.
     Advanced,
-    /// The last track finished; nothing left to play.
+    /// The last track played to its end (mpv's `end-file` reason `eof`) and mpv went idle; nothing
+    /// left to play. Never sent for [`Player::stop`], a replacing load or a failed track.
     Ended,
     /// A track failed to load or play.
     Error(String),
@@ -156,11 +157,13 @@ impl Default for AudioSettings {
 #[derive(Clone)]
 pub struct Player {
     mpv: Arc<Mpv>,
-    /// True while mpv plays something (`idle-active == false`); tells "queue ended" from
-    /// start-up idle and explicit stops.
+    /// Set by the event task when mpv leaves idle, cleared by [`Player::stop`] at call time. Only a
+    /// second filter: [`PlayerEvent::Ended`] needs the stream's own `end-file` reason `eof`, because
+    /// this flag races events still queued when `stop` runs (in either order).
     active: Arc<AtomicBool>,
-    /// Set when a track failed: mpv's own follow-up (next entry or idle) is swallowed
-    /// until the next `play`, since the app decides what plays instead.
+    /// Set when a track failed: mpv's own follow-up (next entry or idle) is swallowed until the next
+    /// `play`/`load`, since the app decides what plays instead. Those clear it at call time, so a
+    /// follow-up of the failed entry still queued then can slip through as `Advanced`.
     failed: Arc<AtomicBool>,
 }
 
@@ -439,9 +442,13 @@ async fn translate(
     failed: Arc<AtomicBool>,
 ) {
     let mut throttle = PositionThrottle::default();
+    // Why the last file ended. mpv queues `end-file` before it goes idle, and its events go out
+    // before property changes, so this is set when `idle-active=true` arrives.
+    let mut last_end: Option<String> = None;
     while let Some(event) = raw.recv().await {
         if let MpvEvent::EndFile { reason, error, playlist_entry_id } = &event {
             tracing::debug!("mpv end-file: reason={reason} error={error:?} entry={playlist_entry_id:?}");
+            last_end = Some(reason.clone());
         }
         // Seeks, pauses, loads and file changes reset the filter (not volume: fades).
         match &event {
@@ -478,10 +485,14 @@ async fn translate(
                         active.store(true, Ordering::SeqCst);
                         None
                     }
-                    Some(true) if active.swap(false, Ordering::SeqCst) && !failed.load(Ordering::SeqCst) => {
-                        Some(PlayerEvent::Ended)
+                    Some(true) => {
+                        // Only a natural end is "queue ended": `stop` and replacing loads end with
+                        // `stop`, failures with `error` (reported as `Error`).
+                        let eof = last_end.take().is_some_and(|r| r == "eof");
+                        let was_active = active.swap(false, Ordering::SeqCst);
+                        (eof && was_active && !failed.load(Ordering::SeqCst)).then_some(PlayerEvent::Ended)
                     }
-                    _ => None,
+                    None => None,
                 },
                 _ => None,
             },
@@ -581,6 +592,51 @@ mod tests {
         player.set_speed(1.5).await.unwrap();
         let devices = player.audio_devices().await.unwrap();
         assert!(devices.iter().any(|(n, _)| n == "auto"));
+    }
+
+    /// Runs `translate` over `events` (no mpv) with the flags as `Player` would leave them.
+    fn translated(events: Vec<MpvEvent>, active: bool) -> Vec<PlayerEvent> {
+        let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        for e in events {
+            raw_tx.send(e).unwrap();
+        }
+        drop(raw_tx);
+        let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+        rt.block_on(translate(raw_rx, tx, Arc::new(AtomicBool::new(active)), Arc::default()));
+        std::iter::from_fn(|| rx.try_recv().ok()).collect()
+    }
+
+    fn idle(on: bool) -> MpvEvent {
+        MpvEvent::Property { name: "idle-active".into(), value: json!(on) }
+    }
+
+    fn end(reason: &str) -> MpvEvent {
+        MpvEvent::EndFile { reason: reason.into(), error: None, playlist_entry_id: None }
+    }
+
+    #[test]
+    fn explicit_stop_never_reports_ended() {
+        // `stop()` cleared `active` while the `idle-active=false` of the load before it was still
+        // queued: the stream alone says the file was stopped.
+        let out = translated(vec![idle(false), end("stop"), idle(true)], false);
+        assert!(!out.contains(&PlayerEvent::Ended), "{out:?}");
+        // Nor after a replacing load that was then stopped.
+        let out = translated(vec![idle(false), end("stop"), end("stop"), idle(true)], true);
+        assert!(!out.contains(&PlayerEvent::Ended), "{out:?}");
+    }
+
+    #[test]
+    fn natural_end_reports_ended() {
+        assert_eq!(translated(vec![idle(false), end("eof"), idle(true)], false), [PlayerEvent::Ended]);
+        // A gapless join first (eof, mpv moves on), then the last entry ends: one Ended, at the end.
+        let pos = MpvEvent::Property { name: "playlist-pos".into(), value: json!(1) };
+        let out = translated(vec![idle(false), end("eof"), pos, end("eof"), idle(true)], false);
+        assert_eq!(out, [PlayerEvent::Advanced, PlayerEvent::Ended]);
+        // Start-up idle and a failed last track are no "queue ended".
+        assert!(translated(vec![idle(true)], false).is_empty());
+        let out = translated(vec![idle(false), end("error"), idle(true)], false);
+        assert_eq!(out, [PlayerEvent::Error("playback error".into())]);
     }
 
     #[test]
