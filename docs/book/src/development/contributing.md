@@ -23,6 +23,10 @@ details.
 - **Tracked files and commit messages carry no personal names, e-mail addresses or private host
   names**, and no attribution trailers. Notes about who reported what go in `docs/PROGRESS.md`
   (git-ignored).
+- **A stream URL never goes into a command line.** Server URLs carry the login (Subsonic `u`/`t`/`s`,
+  Jellyfin `apiKey`) and every local user can read a process's arguments. Hand URLs to mpv over IPC
+  (`loadfile`, as `listen-player` does) or as a playlist on stdin (`--playlist=-`, as
+  `listen_analysis::decode` does); local file paths may stay in argv.
 - **No snapshot test of content chosen at random** (e.g. the Recommended strip): it differs every
   run and fails the suite. Look at such a render once by hand; test the behaviour instead.
 

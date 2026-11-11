@@ -5,7 +5,7 @@ use crate::{AnalysisError, Cancel};
 use std::process::Stdio;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 /// Analysis sample rate in Hz; beat-this and bliss both expect 22050.
@@ -77,8 +77,24 @@ fn on_path(program: &str) -> bool {
 #[cfg(unix)]
 const PCM_OUT: &str = "/dev/stdout";
 
-/// The mpv command line, under `nice`/`ionice` when available so a crawl never competes with playback.
-fn command(input: &str, pcm_out: &str) -> Command {
+/// What mpv reads on stdin for `input`: a URL as a one-entry playlist, `None` for a local path (argv).
+/// A URL may carry server credentials (Subsonic `u`/`t`/`s`/`p`, Jellyfin `apiKey`) and every local user
+/// can read a command line (`/proc/<pid>/cmdline`), so URLs never go into argv.
+fn stdin_playlist(input: &str) -> std::io::Result<Option<String>> {
+    if !input.contains("://") {
+        return Ok(None);
+    }
+    // A line break would add a second playlist entry.
+    if input.contains(['\n', '\r']) {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the URL contains a line break"));
+    }
+    Ok(Some(format!("{input}\n")))
+}
+
+/// The mpv command line, under `nice`/`ionice` when available so a crawl never competes with playback,
+/// and what to write to its stdin before closing it ([`stdin_playlist`]).
+fn command(input: &str, pcm_out: &str) -> std::io::Result<(Command, Option<String>)> {
+    let playlist = stdin_playlist(input)?;
     let mut argv: Vec<String> = Vec::new();
     #[cfg(unix)]
     {
@@ -112,23 +128,37 @@ fn command(input: &str, pcm_out: &str) -> Command {
     }
     argv.push(format!("--ao-pcm-file={pcm_out}"));
     argv.push(format!("--audio-samplerate={SAMPLE_RATE}"));
-    argv.extend(["--".to_string(), input.to_string()]);
+    if playlist.is_some() {
+        argv.push("--playlist=-".into());
+    } else {
+        argv.extend(["--".to_string(), input.to_string()]);
+    }
     let mut cmd = Command::new(&argv[0]);
     cmd.args(&argv[1..])
-        .stdin(Stdio::null())
+        .stdin(if playlist.is_some() { Stdio::piped() } else { Stdio::null() })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
     cmd.creation_flags(listen_core::platform::CREATE_NO_WINDOW);
-    cmd
+    Ok((cmd, playlist))
+}
+
+/// Writes the stdin playlist and closes stdin. A write error is ignored: mpv died first, and its exit
+/// status reports why.
+async fn feed(child: &mut tokio::process::Child, playlist: Option<String>) {
+    if let (Some(playlist), Some(mut stdin)) = (playlist, child.stdin.take()) {
+        let _ = stdin.write_all(playlist.as_bytes()).await;
+    }
 }
 
 /// Starts mpv; returns its PCM stream and stderr. On Windows (no `/dev/stdout`) the PCM comes
 /// through a named pipe this process serves.
 #[cfg(unix)]
 async fn start(input: &str) -> std::io::Result<(tokio::process::Child, Box<dyn AsyncRead + Unpin + Send>)> {
-    let mut child = command(input, PCM_OUT).spawn()?;
+    let (mut cmd, playlist) = command(input, PCM_OUT)?;
+    let mut child = cmd.spawn()?;
+    feed(&mut child, playlist).await;
     let stdout = child.stdout.take().expect("piped stdout");
     Ok((child, Box::new(stdout)))
 }
@@ -141,9 +171,10 @@ async fn start(input: &str) -> std::io::Result<(tokio::process::Child, Box<dyn A
     let name =
         format!(r"\\.\pipe\listen-decode-{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed));
     let server = ServerOptions::new().first_pipe_instance(true).access_inbound(true).create(&name)?;
-    let mut cmd = command(input, &name);
+    let (mut cmd, playlist) = command(input, &name)?;
     cmd.stdout(Stdio::null());
-    let child = cmd.spawn()?;
+    let mut child = cmd.spawn()?;
+    feed(&mut child, playlist).await;
     // A failed start (bad URL) never connects; the caller's timeout and exit code report it.
     let connected = tokio::time::timeout(Duration::from_secs(30), server.connect()).await;
     match connected {
@@ -221,6 +252,45 @@ mod tests {
 
     fn mpv_available() -> bool {
         std::process::Command::new(listen_core::platform::tool("mpv")).arg("--version").output().is_ok()
+    }
+
+    /// Every local user can read a process's command line; a stream URL's query carries the login.
+    #[test]
+    fn decode_command_line_never_carries_query_secrets() {
+        let url = "https://example.com/rest/stream?u=someone&t=SECRET&s=salt&id=1";
+        let (cmd, playlist) = command(url, "/dev/stdout").unwrap();
+        let argv: Vec<String> = std::iter::once(cmd.as_std().get_program())
+            .chain(cmd.as_std().get_args())
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(argv.iter().all(|a| !a.contains("SECRET") && !a.contains("example.com")), "{argv:?}");
+        assert!(argv.iter().any(|a| a == "--playlist=-"), "{argv:?}");
+        assert_eq!(playlist, Some(format!("{url}\n")));
+        // Local paths stay in argv; a line break can't smuggle in a second entry.
+        let (cmd, playlist) = command("/music/a.flac", "/dev/stdout").unwrap();
+        assert_eq!(playlist, None);
+        assert!(cmd.as_std().get_args().any(|a| a == "/music/a.flac"));
+        assert!(command("https://example.com/a\nfile:///etc/passwd", "/dev/stdout").is_err());
+    }
+
+    /// A URL reaches mpv through the stdin playlist; served from a local listener (no real host).
+    #[tokio::test]
+    async fn decodes_a_url_read_from_stdin() {
+        if !mpv_available() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("listen-analysis-url-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tone.wav");
+        crate::test_util::write_wav(&path, SAMPLE_RATE, &crate::test_util::sine(SAMPLE_RATE, 440.0, 1.0));
+        let body = std::fs::read(&path).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        let (port, server) = crate::test_util::serve_locally(body).await;
+        let url = format!("http://127.0.0.1:{port}/rest/stream?u=someone&t=SECRET&s=salt");
+        let pcm = decode(&url, &Cancel::default()).await.unwrap();
+        server.abort();
+        assert!((pcm.duration() - 1.0).abs() < 0.01, "{}", pcm.duration());
+        assert!(pcm.left.iter().fold(0f32, |m, x| m.max(x.abs())) > 0.3);
     }
 
     #[test]

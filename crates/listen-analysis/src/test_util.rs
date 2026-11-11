@@ -85,6 +85,30 @@ pub fn chord_progression(chords: &[&[u8]], secs: f32, repeats: usize) -> Pcm {
 }
 
 /// 16-bit mono WAV.
+/// Serves `body` to every request on a loopback port (tests never contact a real host).
+pub async fn serve_locally(body: Vec<u8>) -> (u16, tokio::task::JoinHandle<()>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let body = std::sync::Arc::new(body);
+    let server = tokio::spawn(async move {
+        while let Ok((mut sock, _)) = listener.accept().await {
+            let body = body.clone();
+            tokio::spawn(async move {
+                let mut request = vec![0u8; 4096];
+                let _ = sock.read(&mut request).await;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                let _ = sock.write_all(head.as_bytes()).await;
+                let _ = sock.write_all(&body).await;
+            });
+        }
+    });
+    (port, server)
+}
+
 pub fn write_wav(path: &std::path::Path, sr: u32, samples: &[f32]) {
     let data_len = (samples.len() * 2) as u32;
     let mut b = Vec::with_capacity(44 + data_len as usize);

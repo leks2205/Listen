@@ -312,25 +312,43 @@ fn shape(v: &serde_json::Value, depth: usize, out: &mut Vec<String>) {
     }
 }
 
+/// mpv (muted) playing two seconds of the one-entry playlist on its stdin. It takes no URL: a stream URL
+/// carries the server login, and every local user can read a command line (`/proc/<pid>/cmdline`).
+fn mpv_open_command(mpv: &str) -> tokio::process::Command {
+    let mut cmd = tokio::process::Command::new(mpv);
+    listen_core::platform::no_window(cmd.as_std_mut());
+    cmd.args([
+        "--no-config",
+        "--ao=null",
+        "--no-video",
+        "--msg-level=all=warn",
+        "--end=2",
+        "--network-timeout=10",
+        "--ytdl=no",
+        "--playlist=-",
+    ])
+    .stdin(std::process::Stdio::piped())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .kill_on_drop(true);
+    cmd
+}
+
 /// Lets mpv (muted) play two seconds of `url`; the error is mpv's last message.
 async fn mpv_opens(url: &str) -> Result<(), String> {
+    use tokio::io::AsyncWriteExt;
+    // A line break would add a second playlist entry.
+    if url.contains(['\n', '\r']) {
+        return Err("the URL contains a line break".into());
+    }
     let mpv = std::env::var("LISTEN_MPV")
         .unwrap_or_else(|_| listen_core::platform::tool("mpv").to_string_lossy().into_owned());
-    let mut cmd = tokio::process::Command::new(&mpv);
-    listen_core::platform::no_window(cmd.as_std_mut());
-    let out = cmd
-        .args([
-            "--no-config",
-            "--ao=null",
-            "--no-video",
-            "--msg-level=all=warn",
-            "--end=2",
-            "--network-timeout=10",
-        ])
-        .args(["--ytdl=no", url])
-        .output()
-        .await
-        .map_err(|e| format!("can't run mpv: {e}"))?;
+    let mut child = mpv_open_command(&mpv).spawn().map_err(|e| format!("can't run mpv: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        // A write error means mpv already exited; its status below says why.
+        let _ = stdin.write_all(format!("{url}\n").as_bytes()).await;
+    }
+    let out = child.wait_with_output().await.map_err(|e| format!("can't run mpv: {e}"))?;
     if out.status.success() {
         return Ok(());
     }
@@ -1974,6 +1992,66 @@ mod tests {
         assert_eq!(t(&["20"]), None);
         assert_eq!(t(&["/music/a.flac"]), None);
         assert_eq!(t(&["https://nd.example/rest/stream?id=x"]), None);
+    }
+
+    /// The stream URL carries the server login; the mpv command line must not.
+    #[test]
+    fn mpv_check_reads_the_url_from_stdin_not_argv() {
+        let cmd = mpv_open_command("mpv");
+        let args: Vec<_> = cmd.as_std().get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        assert_eq!(args.last().map(String::as_str), Some("--playlist=-"), "{args:?}");
+        assert!(args.iter().all(|a| a.starts_with("--")), "only options, never an input: {args:?}");
+    }
+
+    /// mpv still opens a stream fed on stdin, and still fails on a 404. Loopback listener only.
+    #[tokio::test]
+    async fn mpv_check_opens_a_url_fed_on_stdin() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        if std::process::Command::new(listen_core::platform::tool("mpv")).arg("--version").output().is_err() {
+            return;
+        }
+        // Two seconds of a quiet 16-bit mono 22050 Hz tone.
+        let (sr, n) = (22050u32, 2 * 22050usize);
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + 2 * n as u32).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        for v in [16u32.to_le_bytes().to_vec(), 1u16.to_le_bytes().to_vec(), 1u16.to_le_bytes().to_vec()] {
+            wav.extend_from_slice(&v);
+        }
+        wav.extend_from_slice(&sr.to_le_bytes());
+        wav.extend_from_slice(&(2 * sr).to_le_bytes());
+        wav.extend_from_slice(&2u16.to_le_bytes());
+        wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&(2 * n as u32).to_le_bytes());
+        for i in 0..n {
+            wav.extend_from_slice(&(((i as f32 * 0.1).sin() * 3000.0) as i16).to_le_bytes());
+        }
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                let mut request = vec![0u8; 4096];
+                let n = sock.read(&mut request).await.unwrap_or(0);
+                let found = String::from_utf8_lossy(&request[..n]).starts_with("GET /rest/stream");
+                let head = if found {
+                    format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", wav.len())
+                } else {
+                    "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into()
+                };
+                let _ = sock.write_all(head.as_bytes()).await;
+                if found {
+                    let _ = sock.write_all(&wav).await;
+                }
+            }
+        });
+        let ok = mpv_opens(&format!("http://127.0.0.1:{port}/rest/stream?u=someone&t=SECRET&s=salt")).await;
+        let missing = mpv_opens(&format!("http://127.0.0.1:{port}/nothing?t=SECRET")).await;
+        server.abort();
+        assert_eq!(ok, Ok(()));
+        assert!(missing.is_err());
+        assert!(mpv_opens("http://127.0.0.1:1/a\nfile:///etc/passwd").await.is_err());
     }
 }
 
