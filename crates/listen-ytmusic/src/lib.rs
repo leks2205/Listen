@@ -118,7 +118,8 @@ pub struct YouTubeMusic {
     playlist_items: std::sync::Mutex<std::collections::HashMap<String, Vec<PlaylistEntry>>>,
     guest: bool,
     /// The last artist page fetched: the page, the albums, the top songs and the
-    /// related artists all come from the same response.
+    /// related artists all come from the same response. It also holds `subscribed` (the
+    /// user's state), so subscribing and unsubscribing forget it.
     artist_page: std::sync::Mutex<Option<(String, std::time::Instant, std::sync::Arc<artist::ArtistData>)>>,
     /// `StreamQuality` as a `u8` (see `to_u8`).
     quality: std::sync::atomic::AtomicU8,
@@ -558,6 +559,11 @@ impl YouTubeMusic {
         *self.albums.lock().await = None;
         self.playlist_cache.lock().await.clear();
         self.playlist_partial.lock().await.clear();
+        self.forget_artist_page();
+    }
+
+    /// Drops the cached artist page: the next open reads the page (and `subscribed`) again.
+    fn forget_artist_page(&self) {
         *self.artist_page.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 
@@ -1457,16 +1463,23 @@ impl MusicSource for YouTubeMusic {
                 Ok(())
             }
             ItemKind::Artist => {
-                if favorite {
-                    for id in ids {
-                        let query = favorites::subscribe(id);
-                        yt!(self, yt => yt.query::<ytmapi_rs::query::SubscribeArtistQuery>(query).await)?;
+                let sent: Result<()> = async {
+                    if favorite {
+                        for id in ids {
+                            let query = favorites::subscribe(id);
+                            yt!(self, yt => yt.query::<ytmapi_rs::query::SubscribeArtistQuery>(query).await)?;
+                        }
+                    } else {
+                        let query = favorites::unsubscribe(ids);
+                        yt!(self, yt => yt.query::<ytmapi_rs::query::UnsubscribeArtistsQuery>(query).await)?;
                     }
-                } else {
-                    let query = favorites::unsubscribe(ids);
-                    yt!(self, yt => yt.query::<ytmapi_rs::query::UnsubscribeArtistsQuery>(query).await)?;
+                    Ok(())
                 }
-                Ok(())
+                .await;
+                // The cached artist page holds `subscribed`: forget it even after a partial failure,
+                // so reopening the artist shows YouTube's state, not the one before the change.
+                self.forget_artist_page();
+                sent
             }
         }
     }
@@ -1927,6 +1940,15 @@ mod tests {
         yt.refresh().await;
         assert!(yt.songs.lock().await.is_none() && yt.albums.lock().await.is_none());
         assert!(yt.playlist_cache.lock().await.is_empty() && yt.playlist_partial.lock().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn subscribing_forgets_the_cached_artist_page() {
+        let yt = YouTubeMusic::offline_guest(ServerId("yt".into()));
+        let page = std::sync::Arc::new(artist::ArtistData { subscribed: false, ..Default::default() });
+        *yt.artist_page.lock().unwrap() = Some(("UC1".into(), std::time::Instant::now(), page));
+        yt.forget_artist_page();
+        assert!(yt.artist_page.lock().unwrap().is_none());
     }
 
     /// Every way to connect fetches music.youtube.com, so the unit tests of this crate build their
