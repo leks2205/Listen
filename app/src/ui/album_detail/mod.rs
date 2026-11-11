@@ -47,8 +47,9 @@ pub fn disc_groups(state: &Listen, album: &Album, rows: &[Song]) -> Vec<RowGroup
                 .filter(|(_, s)| disc(s) == d)
                 .all(|(i, _)| list.selection.contains(i));
             let title = match album.info.disc_titles.iter().find(|(n, _)| *n == d) {
-                Some((_, t)) => format!("Disc {d} - {t}"),
-                None => format!("Disc {d}"),
+                // Translated here: the group row shows its title as it is (it holds the disc's name).
+                Some((_, t)) => crate::i18n::trf("Disc {} - {}", &[&d, t]),
+                None => crate::i18n::trf("Disc {}", &[&d]),
             };
             RowGroup {
                 before: start,

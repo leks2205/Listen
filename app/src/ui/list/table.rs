@@ -251,6 +251,7 @@ fn group_row<'a, T: ListItem>(body: &Body<'a, T>, group: &super::RowGroup) -> El
     container(
         iced::widget::checkbox(group.checked)
             .label(group.title.clone())
+            .font(crate::ui::font_for(&group.title, crate::appearance::current_font()))
             .size(16)
             .text_size(metrics::font_sm())
             .on_toggle({

@@ -421,7 +421,7 @@ fn biography(state: &Listen) -> Option<Element<'_, Message>> {
     let mut col = Column::new()
         .spacing(metrics::space_sm())
         .max_width(1280)
-        .push(label_w(format!("About {}", detail.artist.name), 24.0, t.foreground, Weight::Bold))
+        .push(label_w(crate::i18n::trf("About {}", &[&detail.artist.name]), 24.0, t.foreground, Weight::Bold))
         .push(body);
     if long {
         col = col.push(text_link(

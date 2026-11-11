@@ -128,6 +128,8 @@ fn divider_h<'a>(t: crate::style::Tokens) -> Element<'a, Message> {
 #[derive(Debug, Clone)]
 pub struct RowGroup {
     pub before: usize,
+    /// The row's text. Checkbox rows draw it as it is (iced's checkbox label), so producers translate
+    /// its UI words themselves (`i18n::trf("Disc {}", ..)`).
     pub title: String,
     /// The checkbox state (all rows of the group are selected).
     pub checked: bool,
