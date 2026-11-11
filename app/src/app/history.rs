@@ -36,8 +36,8 @@ pub enum HistoryMsg {
 #[derive(Debug, Default)]
 pub struct HistoryView {
     pub recent: Vec<Song>,
-    /// Index into `History::entries` of each row of `recent`.
-    pub recent_idx: Vec<usize>,
+    /// The play key `(ts, song_id)` of each row of `recent`; stays right when entries move.
+    pub recent_keys: Vec<(i64, String)>,
     /// When expired entries were last dropped (unix seconds).
     pub last_prune: i64,
     pub mix: Vec<Song>,
@@ -186,7 +186,7 @@ impl Listen {
         };
         let v = &mut self.history_view;
         let recent = self.history.recent(RECENT_LIMIT);
-        v.recent_idx = recent.iter().map(|(i, _)| *i).collect();
+        v.recent_keys = recent.iter().map(|(_, e)| (e.ts, e.song_id.clone())).collect();
         v.recent = recent.into_iter().map(|(_, e)| e.to_song()).collect();
         v.stats = history::stats(entries, v.year, tz, TOP);
         if let Some(y) = v.year
@@ -204,16 +204,14 @@ impl Listen {
         };
     }
 
-    /// Removes the single play at `index` of the history.
-    pub(super) fn history_remove_entry(&mut self, index: usize) {
-        let entry = self.history.entries.get(index).cloned();
-        match self.history.remove(index) {
-            Ok(()) => {
-                if let Some(entry) = &entry {
-                    self.history_sync_removed(entry);
-                }
+    /// Removes the single play `(ts, song_id)` of the history; nothing when it is gone already.
+    pub(super) fn history_remove_entry(&mut self, ts: i64, song_id: &str) {
+        match self.history.remove_play(ts, song_id) {
+            Ok(Some(entry)) => {
+                self.history_sync_removed(&entry);
                 self.toast_success("Removed from the history.".into());
             }
+            Ok(None) => {}
             Err(e) => self.toast_error(format!("Could not update the history: {e}")),
         }
         self.refresh_history_views();
@@ -350,8 +348,9 @@ mod tests {
         s.record_play();
         s.record_play();
         s.refresh_history_views();
-        assert_eq!(s.history_view.recent_idx, vec![2, 1, 0]);
-        s.history_remove_entry(s.history_view.recent_idx[0]);
+        assert_eq!(s.history_view.recent_keys.len(), 3);
+        let (ts, song_id) = s.history_view.recent_keys[0].clone();
+        s.history_remove_entry(ts, &song_id);
         assert_eq!(s.history.entries.len(), 2);
         s.history.entries.iter_mut().for_each(|e| e.ts = 1_600_000_000);
         s.history_view.year = Some(2099);

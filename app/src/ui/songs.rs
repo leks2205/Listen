@@ -89,9 +89,9 @@ pub fn song_row<'a>(
         .padding(Padding::from([metrics::space_xs(), metrics::space_sm()]))
         .style(style::row_button(t, current))
         .on_press(on_press);
-    let target = match state.history_view.recent_idx.get(index) {
-        Some(&entry) if state.route == crate::app::Route::Recent => {
-            crate::app::menu::MenuTarget::history_item(song, entry)
+    let target = match state.history_view.recent_keys.get(index) {
+        Some(key) if state.route == crate::app::Route::Recent => {
+            crate::app::menu::MenuTarget::history_item(song, key.clone())
         }
         _ => crate::app::menu::MenuTarget::song(song),
     };

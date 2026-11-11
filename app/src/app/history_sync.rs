@@ -315,16 +315,20 @@ impl Listen {
             }
         };
         let now = history::now_secs();
-        if let Err(e) = self.history.prune(self.config.settings.history.retention.max_age_days(), now) {
-            tracing::warn!("pruning the listening history: {e}");
-        }
+        let pruned = self
+            .history
+            .prune(self.config.settings.history.retention.max_age_days(), now)
+            .unwrap_or_else(|e| {
+                tracing::warn!("pruning the listening history: {e}");
+                0
+            });
         let state = &mut self.history_view.sync;
         state.pushed_ts = out.pushed_ts;
         state.cursor = out.cursor;
         state.removed.retain(|k| !out.removed.contains(k));
         self.history_view.sync_status = Some(SyncStatus::Done { sent: out.sent, received });
         self.history_sync_save();
-        if received > 0 {
+        if received > 0 || pruned > 0 {
             self.refresh_history_views();
         }
     }

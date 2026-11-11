@@ -20,11 +20,12 @@ pub enum TargetKind {
 #[derive(Debug, Clone)]
 pub enum MenuTarget {
     /// Songs; `queue_uids` / `history_entries` are filled when they are rows of
-    /// the queue / of Recently Played (parallel to `songs`, or empty).
+    /// the queue / of Recently Played (parallel to `songs`, or empty). History rows are play keys
+    /// `(ts, song_id)`, not indices: a prune or a sync moves the entries while the menu is open.
     Songs {
         songs: Vec<Song>,
         queue_uids: Vec<u64>,
-        history_entries: Vec<usize>,
+        history_entries: Vec<(i64, String)>,
     },
     Albums(Vec<Album>),
     Artists(Vec<Artist>),
@@ -44,7 +45,7 @@ impl MenuTarget {
         MenuTarget::Songs { songs: songs.to_vec(), queue_uids: Vec::new(), history_entries: Vec::new() }
     }
 
-    pub fn history_item(song: &Song, entry: usize) -> Self {
+    pub fn history_item(song: &Song, entry: (i64, String)) -> Self {
         MenuTarget::Songs { songs: vec![song.clone()], queue_uids: Vec::new(), history_entries: vec![entry] }
     }
 

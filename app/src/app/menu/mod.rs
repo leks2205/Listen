@@ -624,11 +624,9 @@ impl Listen {
             (MenuAction::HideInPlaylist(id, on), MenuTarget::Songs { songs, .. }) => {
                 self.on_exclude(super::exclude::ExcludeMsg::HideIn(id, songs, on))
             }
-            (MenuAction::RemoveFromHistory, MenuTarget::Songs { mut history_entries, .. }) => {
-                // Highest index first: each removal shifts the ones after it.
-                history_entries.sort_unstable_by(|a, b| b.cmp(a));
-                for i in history_entries {
-                    self.history_remove_entry(i);
+            (MenuAction::RemoveFromHistory, MenuTarget::Songs { history_entries, .. }) => {
+                for (ts, song_id) in history_entries {
+                    self.history_remove_entry(ts, &song_id);
                 }
                 Task::none()
             }

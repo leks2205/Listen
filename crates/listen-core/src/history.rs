@@ -271,7 +271,9 @@ impl History {
         Ok(())
     }
 
-    /// Removes the entry at `index` of `entries` (memory changes only if the file does).
+    /// Removes the entry at `index` of `entries` (memory changes only if the file does). `index` must come
+    /// from the current `entries`: `add`, `prune` and `merge` shift them, so code that holds on to a play
+    /// (a menu, a view) uses [`History::remove_play`] instead.
     pub fn remove(&mut self, index: usize) -> std::io::Result<()> {
         if index < self.entries.len() {
             let mut left = self.entries.clone();
@@ -280,6 +282,17 @@ impl History {
             self.entries = left;
         }
         Ok(())
+    }
+
+    /// Removes the play recorded at `ts` for `song_id` (the key `merge` matches plays by on every device,
+    /// which stays right while entries move) and returns it; `None` when it is gone already.
+    pub fn remove_play(&mut self, ts: i64, song_id: &str) -> std::io::Result<Option<Entry>> {
+        let Some(index) = self.entries.iter().position(|e| e.ts == ts && e.song_id == song_id) else {
+            return Ok(None);
+        };
+        let entry = self.entries[index].clone();
+        self.remove(index)?;
+        Ok(Some(entry))
     }
 
     pub fn clear(&mut self) -> std::io::Result<()> {
@@ -367,7 +380,8 @@ impl History {
         std::fs::rename(&tmp, path)
     }
 
-    /// The latest plays (skips left out), newest first.
+    /// The latest plays (skips left out), newest first, with their index in `entries` (valid until the
+    /// next change; hold `(ts, song_id)` to act on a play later).
     pub fn recent(&self, limit: usize) -> Vec<(usize, &Entry)> {
         self.entries.iter().enumerate().rev().filter(|(_, e)| e.played()).take(limit).collect()
     }
@@ -813,6 +827,28 @@ mod tests {
         // A removal from another device reaches it too.
         h.merge(Vec::new(), &[(BASE + 300 * DAY + 9 * 3600, "2".into())]).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), format!("{kept}\n"));
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn removing_a_play_by_key_survives_a_prune_in_between() {
+        let path = temp("key");
+        let _ = std::fs::remove_file(&path);
+        let mut h = History::load(&path);
+        for d in [0, 100, 200] {
+            h.add(at(d, 9, &d.to_string())).unwrap();
+        }
+        // A view picks the newest play, then a prune drops the oldest and moves every index.
+        let (index, picked) = h.recent(1)[0];
+        let key = (picked.ts, picked.song_id.clone());
+        assert_eq!(index, 2);
+        assert_eq!(h.prune(Some(365), BASE + 400 * DAY).unwrap(), 1);
+        assert_eq!(h.remove_play(key.0, &key.1).unwrap().map(|e| e.song_id), Some("200".into()));
+        assert_eq!(
+            History::load(&path).entries.iter().map(|e| e.song_id.as_str()).collect::<Vec<_>>(),
+            ["100"]
+        );
+        assert_eq!(h.remove_play(key.0, &key.1).unwrap(), None, "a play already gone removes nothing");
         std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 
