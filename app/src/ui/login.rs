@@ -307,9 +307,16 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         };
         form = form.push(wide(submit_label, !ytm, (!f.busy).then_some(Message::Login(LoginMsg::Submit))));
     }
-    if f.kind != SourceKind::Local {
-        form =
-            form.push(label("Credentials are stored in your system keyring.", metrics::font_xs(), t.muted));
+    if f.kind != SourceKind::Local
+        && let Some(store) = state.secret_store_description()
+    {
+        // Where they really go (keyring or the private file), as on the settings page.
+        let store = crate::i18n::tr_cow(store.into()).into_owned();
+        form = form.push(label(
+            crate::i18n::trf("Passwords are kept in {}.", &[&store]),
+            metrics::font_xs(),
+            t.muted,
+        ));
     }
     if state.source.is_some() || state.adding_server {
         form = form.push(
