@@ -795,14 +795,18 @@ impl MusicSource for Subsonic {
             return Ok(Page { items, start_index: start, total: None });
         }
         let mut params = album_list_type(q);
+        let alphabetical = params.iter().any(|(k, v)| *k == "type" && v.starts_with("alphabetical"));
+        if alphabetical && q.order == SortOrder::Descending {
+            // Subsonic has no descending alphabetical list: reverse the WHOLE list, then page it
+            // (reversing each page would run every page backwards, not the list).
+            let mut all = self.full_album_list(params, q.start).await?;
+            all.reverse();
+            return Ok(clientside::page(&all, q.start, q.limit));
+        }
         params.push(("size", limit.to_string()));
         params.push(("offset", start.to_string()));
         let list: types::AlbumList = self.call("getAlbumList2", "albumList2", &params).await?;
-        let mut items: Vec<Album> = list.album.iter().map(|a| normalize::album(&self.server_id, a)).collect();
-        if q.order == SortOrder::Descending && matches!(q.sort, AlbumSort::Name | AlbumSort::Artist) {
-            // Subsonic has no descending alphabetical list; reverse the page.
-            items.reverse();
-        }
+        let items: Vec<Album> = list.album.iter().map(|a| normalize::album(&self.server_id, a)).collect();
         Ok(Page { items, start_index: start, total: None })
     }
 

@@ -150,3 +150,25 @@ async fn not_favourited_fails_on_plain_subsonic_instead_of_listing_everything() 
         AlbumQuery { sort: AlbumSort::Name, order: SortOrder::Ascending, limit: 10, ..Default::default() };
     assert_eq!(s.albums(&q).await.unwrap().items.len(), 10);
 }
+
+async fn names(s: &Subsonic, sort: AlbumSort, start: usize) -> Vec<String> {
+    let q = AlbumQuery { sort, order: SortOrder::Descending, start, limit: 100, ..Default::default() };
+    s.albums(&q).await.unwrap().items.into_iter().map(|a| a.name).collect()
+}
+
+#[tokio::test]
+async fn descending_name_is_globally_descending_across_pages() {
+    let (s, _) = client().await;
+    let mut all = names(&s, AlbumSort::Name, 0).await;
+    all.extend(names(&s, AlbumSort::Name, all.len()).await);
+    assert_eq!(all.len(), ALBUMS);
+    assert_eq!(all.first().map(String::as_str), Some("Album 149"));
+    assert!(all.windows(2).all(|w| w[0] > w[1]), "descending over both pages");
+}
+
+#[tokio::test]
+async fn descending_album_artist_is_reversed_on_plain_subsonic() {
+    let (s, _) = client().await;
+    let first = names(&s, AlbumSort::AlbumArtist, 0).await;
+    assert_eq!(first.first().map(String::as_str), Some("Album 149"));
+}
