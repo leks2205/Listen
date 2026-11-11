@@ -132,7 +132,7 @@ fn app_menu_entries<'a>(state: &Listen) -> Vec<(Element<'a, Message>, f32)> {
                 Some(Icon::LuServer),
                 "Manage servers",
                 false,
-                Some(then(Message::Navigate(Route::Settings))),
+                Some(then(Message::Shell(crate::app::settings_shell::ShellMsg::ManageServers))),
             ),
             ITEM,
         );

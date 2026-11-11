@@ -526,10 +526,7 @@ impl Listen {
             }
             Cmd::Go(route) => self.navigate(route),
             Cmd::Server(id) => self.update(Message::SwitchServer(id)),
-            Cmd::ManageServers => {
-                self.config.settings.settings_tab = listen_core::settings::SettingsTab::General;
-                self.navigate(Route::Settings)
-            }
+            Cmd::ManageServers => self.on_shell(super::settings_shell::ShellMsg::ManageServers),
             Cmd::CreatePlaylist => {
                 self.on_playlist_page(super::playlists::PlaylistPageMsg::Create(Vec::new()))
             }

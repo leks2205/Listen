@@ -11,6 +11,8 @@ use std::path::PathBuf;
 #[derive(Debug, Clone)]
 pub enum ShellMsg {
     Tab(SettingsTab),
+    /// Settings on the General tab, where the server list is (app menu and palette "Manage servers").
+    ManageServers,
     Search(String),
     /// "Reset to default": opens the confirm dialog.
     ResetAsk,
@@ -65,6 +67,11 @@ impl Listen {
             ShellMsg::Tab(tab) => {
                 s.settings_tab = tab;
                 self.settings_search.clear();
+            }
+            ShellMsg::ManageServers => {
+                s.settings_tab = SettingsTab::General;
+                self.settings_search.clear();
+                return self.navigate(super::Route::Settings);
             }
             ShellMsg::Search(text) => {
                 self.settings_search = text;
@@ -202,6 +209,15 @@ mod reset_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manage_servers_opens_the_general_tab() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        s.config.settings.settings_tab = SettingsTab::Playback;
+        let _ = s.update(Message::Shell(ShellMsg::ManageServers));
+        assert_eq!(s.config.settings.settings_tab, SettingsTab::General);
+        assert_eq!(s.route, super::super::Route::Settings);
+    }
 
     #[test]
     fn relaunch_keeps_the_arguments_and_prefers_the_appimage() {
