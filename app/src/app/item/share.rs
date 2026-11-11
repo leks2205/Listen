@@ -39,7 +39,8 @@ pub struct ShareState {
 }
 
 impl ShareState {
-    /// When the share expires: `Ok(None)` for the server's default.
+    /// When the share expires: `Ok(None)` for the server's default. A typed 0 is refused here; the date
+    /// itself comes from `ShareExpiration::expires_at` (capped, never panics), the one rule core and app share.
     pub fn expires_at(&self, now: SystemTime) -> Result<Option<SystemTime>, String> {
         if self.expiry.use_server_default {
             return Ok(None);
@@ -49,7 +50,7 @@ impl ShareState {
         if amount == 0 {
             return Err("The expiry must be in the future.".into());
         }
-        Ok(Some(listen_core::settings::add(now, amount, self.expiry.unit)))
+        Ok(ShareExpiration { amount, ..self.expiry }.expires_at(now))
     }
 }
 
@@ -261,6 +262,14 @@ mod tests {
         assert_eq!(state(server, "").expires_at(now), Ok(None));
         assert!(state(week, "0").expires_at(now).is_err());
         assert!(state(week, "").expires_at(now).is_err());
+    }
+
+    #[test]
+    fn the_largest_typed_expiry_renders_without_panicking() {
+        let now = SystemTime::now();
+        let year = ShareExpiration { use_server_default: false, amount: 1, unit: ExpiryUnit::Year };
+        let at = state(year, "99999").expires_at(now).unwrap().unwrap();
+        assert_eq!(at, now + listen_core::settings::MAX_SHARE_EXPIRY);
     }
 
     #[test]
