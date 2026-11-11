@@ -173,7 +173,8 @@ impl ArtistSettings {
             .collect()
     }
 
-    /// Whether the group with this setting id is hidden.
+    /// Whether the group with this grouping key (`"ep"`, the middle column of [`RELEASE_TYPES`], not the
+    /// setting id `"releaseTypeEp"`) is hidden; an unknown key is shown.
     pub fn release_type_hidden(&self, key: &str) -> bool {
         release_type_id(key).is_some_and(|id| self.release_types.iter().any(|i| i.id == id && !i.enabled))
     }
@@ -237,6 +238,8 @@ mod tests {
         assert!(!p.contains(&"live"));
         s.release_types.push(SortableItem { id: "releaseTypeLive".into(), enabled: false });
         assert!(s.release_type_hidden("live"));
+        // A setting id is not a grouping key: unknown, so shown.
+        assert!(!s.release_type_hidden("releaseTypeLive"));
         assert!(!s.release_type_hidden("album"));
         assert_eq!(release_type_id("ep"), Some("releaseTypeEp"));
     }
