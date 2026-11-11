@@ -269,7 +269,7 @@ fn cacheable_error(err: &lofty::error::LoftyError) -> bool {
     !matches!(err.kind(), lofty::error::ErrorKind::Io(_))
 }
 
-fn read_file(root: &Path, path: &Path) -> Result<Scanned, lofty::error::LoftyError> {
+pub(crate) fn read_file(root: &Path, path: &Path) -> Result<Scanned, lofty::error::LoftyError> {
     let modified = std::fs::metadata(path).and_then(|m| m.modified()).ok();
     read_file_with(root, path, modified)
 }
@@ -323,20 +323,29 @@ fn read_file_with(
             .map(|g| g.trim().to_string())
             .filter(|g| !g.is_empty())
             .collect();
-        s.bpm = tag
-            .get_string(&ItemKey::Bpm)
-            .and_then(|b| b.trim().parse::<f32>().ok())
-            .map(|b| b.round() as u32);
-        let gain = |k: ItemKey| tag.get_string(&k).and_then(parse_db);
-        s.gain = GainInfo {
-            track_gain: gain(ItemKey::ReplayGainTrackGain),
-            track_peak: tag.get_string(&ItemKey::ReplayGainTrackPeak).and_then(|v| v.trim().parse().ok()),
-            album_gain: gain(ItemKey::ReplayGainAlbumGain),
-            album_peak: tag.get_string(&ItemKey::ReplayGainAlbumPeak).and_then(|v| v.trim().parse().ok()),
-        };
+        s.bpm = bpm_of(tag);
+        s.gain = gain_of(tag);
         s.embedded_art = !tag.pictures().is_empty();
     }
     Ok(s)
+}
+
+/// The BPM tag, rounded. The one parser for the scan and "Get info" (`details`).
+pub(crate) fn bpm_of(tag: &lofty::tag::Tag) -> Option<u32> {
+    tag.get_string(&ItemKey::Bpm).and_then(|b| b.trim().parse::<f32>().ok()).map(|b| b.round() as u32)
+}
+
+/// The ReplayGain tags. The one parser for the scan (what playback applies) and "Get info"
+/// (`details`), so the dialog shows what the player uses.
+pub(crate) fn gain_of(tag: &lofty::tag::Tag) -> GainInfo {
+    let gain = |k: ItemKey| tag.get_string(&k).and_then(parse_db);
+    let peak = |k: ItemKey| tag.get_string(&k).and_then(|v| v.trim().parse().ok());
+    GainInfo {
+        track_gain: gain(ItemKey::ReplayGainTrackGain),
+        track_peak: peak(ItemKey::ReplayGainTrackPeak),
+        album_gain: gain(ItemKey::ReplayGainAlbumGain),
+        album_peak: peak(ItemKey::ReplayGainAlbumPeak),
+    }
 }
 
 /// "-6.48 dB" -> -6.48

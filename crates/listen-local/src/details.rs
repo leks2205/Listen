@@ -1,6 +1,5 @@
 //! The "Get info" data of a local file: file facts plus the tags `lofty` reads.
 
-use listen_core::model::GainInfo;
 use listen_source::ItemDetails;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::tag::{Accessor, ItemKey};
@@ -31,15 +30,9 @@ pub fn song(path: &Path) -> Result<ItemDetails, String> {
     if let Some(tag) = tagged.primary_tag().or_else(|| tagged.first_tag()) {
         d.title = tag.title().map(|t| t.trim().to_string()).unwrap_or_default();
         d.comment = tag.comment().map(|c| c.trim().to_string()).filter(|c| !c.is_empty());
-        d.bpm = first(tag, ItemKey::Bpm).and_then(|b| b.parse::<f32>().ok()).map(|b| b.round() as u32);
-        let db = |k: ItemKey| first(tag, k).and_then(|v| v.trim_end_matches("dB").trim().parse::<f32>().ok());
-        let peak = |k: ItemKey| first(tag, k).and_then(|v| v.parse::<f32>().ok());
-        d.gain = GainInfo {
-            track_gain: db(ItemKey::ReplayGainTrackGain),
-            track_peak: peak(ItemKey::ReplayGainTrackPeak),
-            album_gain: db(ItemKey::ReplayGainAlbumGain),
-            album_peak: peak(ItemKey::ReplayGainAlbumPeak),
-        };
+        // The scan's own parsers, so this shows the values playback uses.
+        d.bpm = crate::scan::bpm_of(tag);
+        d.gain = crate::scan::gain_of(tag);
         d.has_lyrics = Some(first(tag, ItemKey::Lyrics).is_some());
         d.compilation =
             first(tag, ItemKey::FlagCompilation).map(|v| v == "1" || v.eq_ignore_ascii_case("true"));
@@ -74,6 +67,32 @@ pub fn song(path: &Path) -> Result<ItemDetails, String> {
 mod tests {
     use super::*;
     use crate::tags::{CoverEdit, TagEdit, TagField, fixtures, write};
+
+    #[test]
+    fn details_and_scan_read_the_same_replaygain() {
+        let (dir, path) = fixtures::temp_file("rg.mp3", &fixtures::mp3());
+        let title = TagEdit {
+            fields: [(TagField::Title, "Hi".to_string())].into_iter().collect(),
+            cover: CoverEdit::Keep,
+        };
+        write(&path, &title).unwrap();
+        let mut file = lofty::read_from_path(&path).unwrap();
+        let tag = file.primary_tag_mut().unwrap();
+        for (key, value) in [
+            (ItemKey::ReplayGainTrackGain, "-6.48 db"),
+            (ItemKey::ReplayGainTrackPeak, " 0.98 "),
+            (ItemKey::ReplayGainAlbumGain, "+1.5 dB"),
+            (ItemKey::ReplayGainAlbumPeak, "1.0"),
+        ] {
+            tag.insert_text(key, value.to_string());
+        }
+        file.save_to_path(&path, lofty::config::WriteOptions::default()).unwrap();
+        let shown = song(&path).unwrap();
+        let scanned = crate::scan::read_file(&dir, &path).unwrap();
+        assert_eq!(shown.gain, scanned.gain);
+        assert_eq!(shown.gain.track_gain, Some(-6.48), "lower-case db");
+        fixtures::cleanup(&dir);
+    }
 
     #[test]
     fn reads_file_facts_and_tags_of_a_generated_mp3() {
