@@ -418,7 +418,8 @@ impl Scene {
                 s.families.0 |= Families::POP;
             }
         }
-        // The explicit language tag (or the first one named) wins; "K-pop" in English is still Korean pop.
+        // The first language named wins (describe-it tags name the scene label first), so "K-pop, English"
+        // is still Korean pop. A later explicit language word does not override it.
         s.lang = langs.first().copied();
         s.era = s.era.or(generation);
         if s.lang.is_some() || s.instrumental || !s.families.is_empty() {
@@ -1439,6 +1440,12 @@ mod tests {
         assert_eq!(lang_of("south american"), None, "several languages");
         assert_eq!(lang_of("american hip hop"), Some("en"));
         assert_eq!(lang_of("south korean ballad"), Some("ko"));
+    }
+
+    #[test]
+    fn first_named_language_wins() {
+        assert_eq!(Scene::from_tags("K-pop, dance-pop, English").lang, Some("ko"));
+        assert_eq!(Scene::from_tags("English, K-pop").lang, Some("en"));
     }
 
     #[test]
