@@ -342,11 +342,12 @@ pub fn remove_actions(entries: &[(&str, &str)]) -> Vec<Value> {
 }
 
 /// The action moving the entry `set_video_id` before the entry `before`
-/// (`None`: to the end of the playlist).
+/// (`None`: to the end of the playlist). The entry it goes before is its successor,
+/// `movedSetVideoIdSuccessor`, as in ytmusicapi's `edit_playlist(moveItem=(a, b))`.
 pub fn move_action(set_video_id: &str, before: Option<&str>) -> Value {
     let mut a = json!({"action": "ACTION_MOVE_VIDEO_BEFORE", "setVideoId": set_video_id});
     if let Some(before) = before {
-        a["movedSetVideoId"] = json!(before);
+        a["movedSetVideoIdSuccessor"] = json!(before);
     }
     a
 }
@@ -402,10 +403,11 @@ mod tests {
     }
 
     #[test]
-    fn a_move_goes_before_another_entry_or_to_the_end() {
+    fn move_names_its_successor_like_ytmusicapi() {
+        // ytmusicapi (mixins/playlists.py, edit_playlist): action["movedSetVideoIdSuccessor"] = moveItem[1].
         assert_eq!(
             move_action("SV3", Some("SV1")),
-            json!({"action": "ACTION_MOVE_VIDEO_BEFORE", "setVideoId": "SV3", "movedSetVideoId": "SV1"})
+            json!({"action": "ACTION_MOVE_VIDEO_BEFORE", "setVideoId": "SV3", "movedSetVideoIdSuccessor": "SV1"})
         );
         assert_eq!(
             move_action("SV3", None),
