@@ -3,8 +3,8 @@
 //! mixes out of it again. That record is the "bridge"; here it is an already analysed song of the pair's
 //! scene (usually a sung song: the app's scene gate decides which songs may bridge), and only a short
 //! stretch of it plays ([`BRIDGE_BARS`] or [`SHORT_BRIDGE_BARS`] bars, at most [`MAX_BRIDGE_S`]): blend in,
-//! the bridge alone for a few bars, blend out. The stretch has no lead vocal where it blends
-//! (`EDGE_VOCAL`); in between it may be sung.
+//! the bridge alone for a few bars, blend out. The stretch has no lead vocal (`EDGE_VOCAL`) in its first 4
+//! and last 8 bars, where it blends; in between it may be sung.
 //!
 //! - [`gap`] says whether a pair is far enough apart to want a bridge.
 //! - [`choose`] picks the bridge song and the stretch ([`BridgeCut`]) so that both legs, current → bridge
@@ -304,8 +304,9 @@ pub fn find_cut(f: &Features) -> Option<(BridgeCut, f32)> {
             continue;
         }
         let vocal = |b: usize| s.vocal(b);
-        // It is mixed in over its first bars (short blends) and out over its last 8; in between a vocal
-        // hook may play alone.
+        // It is mixed out over its last 8 bars and in over its first bars; the edge-in window is the short way
+        // in (4 bars, `INTO_SHORT`). A full stretch's way in may blend over 8 (`INTO`): the planner shortens
+        // that blend around vocals. In between a vocal hook may play alone.
         let edge_in = mean(s0, 4, &vocal);
         let edge_out = mean(s0 + bars - 8, 8, &vocal);
         let all = mean(s0, bars, &vocal);
