@@ -112,7 +112,7 @@ pub fn order_queue(
     flow: impl Fn(&Song) -> Option<FlowFeatures>,
     ctx: &FlowCtx,
 ) -> QueueOrder {
-    let start = queue.current_position().map_or(0, |p| p + 1);
+    let start = queue.len() - queue.upcoming();
     let manual = queue.up_next_range();
     let anchor = queue.current().map(|i| (i.uid, i.song.clone(), flow(&i.song)));
     type Row = (u64, Song, Option<FlowFeatures>);

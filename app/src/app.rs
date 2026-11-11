@@ -2548,6 +2548,15 @@ impl Listen {
 
     /// Plays the queue's current item from its start, replacing what mpv plays: a running mix is
     /// cancelled and only this item's stream is resolved (the next one is prefetched later).
+    /// Starts playback after songs were added while nothing played: the current song of a queue that
+    /// had not started, or the first song added after the queue ran past its end.
+    fn start_added(&mut self) -> Task<Message> {
+        if self.queue.current().is_none() {
+            self.queue.advance();
+        }
+        self.start_current()
+    }
+
     fn start_current(&mut self) -> Task<Message> {
         // A mix in progress stops; the new song plays on the active deck.
         let cancel = self.mix_cancel("another song was started");
@@ -3386,7 +3395,8 @@ impl Listen {
                     return task;
                 }
                 if self.queue.current().is_none() {
-                    return Task::none();
+                    // The queue ran past its end and songs were added since: play goes on with them.
+                    return if self.queue.peek_next().is_some() { self.start_added() } else { Task::none() };
                 }
                 if let Some(at) = self.restored.take() {
                     let task = self.start_current();

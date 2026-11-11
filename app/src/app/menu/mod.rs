@@ -838,7 +838,7 @@ impl Listen {
                     (n, true) => format!("{n} songs play next."),
                     (n, false) => format!("{n} songs added to the queue."),
                 });
-                if was_idle { self.start_current() } else { self.refresh_next() }
+                if was_idle { self.start_added() } else { self.refresh_next() }
             }
             MenuAction::InsertBefore(uid) => self.queue_insert_before(uid, songs),
             MenuAction::StartRadio => {

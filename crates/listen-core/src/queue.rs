@@ -149,11 +149,17 @@ pub struct Queue {
     items: Vec<QueueItem>,
     /// Play order as indices into `items`; identity unless shuffled.
     order: Vec<usize>,
-    /// Position in `order` of the current track.
+    /// Position in `order` of the current track. `None`: nothing started yet, or (`ended_after` set)
+    /// playback ran past the last track.
     position: Option<usize>,
     pub repeat: Repeat,
     shuffle: bool,
     next_uid: u64,
+    /// Playback ran past the end of the queue (`position` is `None`): the uid of the song that played
+    /// last, or 0 once that one is removed and nothing is before it. Only songs after it in play order
+    /// are still to come, so songs added later play next instead of the finished queue from the top.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ended_after: Option<u64>,
 }
 
 /// The queue as saved between runs, with how far the current song had played (seconds).
@@ -236,11 +242,35 @@ impl Queue {
         self.next_position().map(|p| &self.items[self.order[p]])
     }
 
-    /// Number of tracks after the current one (used by Auto-DJ).
+    /// Number of tracks still to come (used by Auto-DJ and the AI DJ): after the current one, none in a
+    /// queue that ran past its end (only songs added since), all of a queue that has not started.
     pub fn upcoming(&self) -> usize {
-        match self.position {
-            Some(p) => self.order.len() - p - 1,
-            None => self.order.len(),
+        self.order.len().saturating_sub(self.next_start())
+    }
+
+    /// Play-order position of the first track still to come: after the current one, after the song that
+    /// played last when the queue ran past its end, else 0.
+    fn next_start(&self) -> usize {
+        self.position.or_else(|| self.ended_pos()).map_or(0, |p| p + 1)
+    }
+
+    /// Play-order position of the song that played last, while the queue has run past its end.
+    fn ended_pos(&self) -> Option<usize> {
+        let uid = self.ended_after.filter(|_| self.position.is_none())?;
+        self.order.iter().position(|&i| self.items[i].uid == uid)
+    }
+
+    /// Ran past the last track: nothing is current and only songs added from now on are still to come.
+    fn end_after(&mut self, p: usize) {
+        self.ended_after = Some(self.items[self.order[p]].uid);
+        self.position = None;
+    }
+
+    /// After songs were added: a queue that never started starts at its first song. A queue that ran
+    /// past its end stays stopped; its next song is the first one added (see `next_position`).
+    fn start_if_fresh(&mut self) {
+        if self.position.is_none() && self.ended_after.is_none() && !self.order.is_empty() {
+            self.position = Some(0);
         }
     }
 
@@ -249,6 +279,7 @@ impl Queue {
         self.items.clear();
         self.order.clear();
         self.position = None;
+        self.ended_after = None;
         self.push(songs, false);
         if self.items.is_empty() {
             return;
@@ -262,13 +293,11 @@ impl Queue {
 
     /// Inserts songs right after the current track.
     pub fn add_next(&mut self, songs: Vec<Song>) {
-        let at = self.position.map_or(0, |p| p + 1);
+        let at = self.next_start();
         let new = self.push(songs, false);
         self.order.truncate(self.order.len() - new.len());
         self.order.splice(at..at, new);
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
-        }
+        self.start_if_fresh();
     }
 
     /// "Add to queue": after the current song and the songs queued before
@@ -280,19 +309,18 @@ impl Queue {
 
     /// "Play next": right after the current song, at the top of the manual queue.
     pub fn enqueue_next(&mut self, songs: Vec<Song>) {
-        let at = self.position.map_or(0, |p| p + 1);
+        let at = self.next_start();
         self.insert_queued(at, songs);
     }
 
     /// Songs waiting in the manual queue (after the current one).
     pub fn manual_len(&self) -> usize {
-        let start = self.position.map_or(0, |p| p + 1);
-        self.manual_end() - start
+        self.manual_end() - self.next_start()
     }
 
     /// Play-order position just past the manual queue.
     fn manual_end(&self) -> usize {
-        let start = self.position.map_or(0, |p| p + 1);
+        let start = self.next_start();
         start
             + self.order[start.min(self.order.len())..].iter().take_while(|&&i| self.items[i].queued).count()
     }
@@ -305,17 +333,13 @@ impl Queue {
         self.order.truncate(self.order.len() - new.len());
         let at = at.min(self.order.len());
         self.order.splice(at..at, new);
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
-        }
+        self.start_if_fresh();
     }
 
     /// Appends songs at the end of the queue.
     pub fn add_last(&mut self, songs: Vec<Song>, auto: bool) {
         self.push(songs, auto);
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
-        }
+        self.start_if_fresh();
     }
 
     /// Appends songs the AI DJ picked.
@@ -324,9 +348,7 @@ impl Queue {
         for i in new {
             self.items[i].ai = true;
         }
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
-        }
+        self.start_if_fresh();
     }
 
     /// Appends songs a DJ picked, each with its reason (`ai` when the AI DJ picked it, also for a request). Returns their uids.
@@ -339,9 +361,7 @@ impl Queue {
             self.items[i].why = Some(why);
             uids.push(self.items[i].uid);
         }
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
-        }
+        self.start_if_fresh();
         uids
     }
 
@@ -381,25 +401,40 @@ impl Queue {
         }
     }
 
-    /// Advances to the next track (the automatic "track ended" path).
+    /// Advances to the next track (the automatic "track ended" path). Past the last track the queue has
+    /// ended; after that it advances to the first song added since, if any.
     pub fn advance(&mut self) -> Option<&QueueItem> {
-        self.position = self.next_position();
+        match (self.position, self.next_position()) {
+            (_, Some(next)) => {
+                self.position = Some(next);
+                self.ended_after = None;
+            }
+            (Some(p), None) => self.end_after(p),
+            (None, None) => {}
+        }
         self.current()
     }
 
     /// User pressed "next": repeat-one does not pin the track here (like
     /// Feishin it advances, but stays on the last track instead of wrapping).
+    /// After the queue ran past its end it moves to the first song added since.
     pub fn skip_next(&mut self) -> Option<&QueueItem> {
-        let p = self.position?;
-        self.position = if p + 1 < self.order.len() {
-            Some(p + 1)
-        } else if self.repeat == Repeat::All {
-            Some(0)
-        } else if self.repeat == Repeat::One {
-            Some(p)
-        } else {
-            None
+        let Some(p) = self.position else {
+            if let Some(next) = self.next_position() {
+                self.position = Some(next);
+                self.ended_after = None;
+            }
+            return self.current();
         };
+        if p + 1 < self.order.len() {
+            self.position = Some(p + 1);
+        } else if self.repeat == Repeat::All {
+            self.position = Some(0);
+        } else if self.repeat == Repeat::One {
+            self.position = Some(p);
+        } else {
+            self.end_after(p);
+        }
         self.current()
     }
 
@@ -493,6 +528,7 @@ impl Queue {
     pub fn jump_to(&mut self, uid: u64) -> Option<&QueueItem> {
         let p = self.order.iter().position(|&i| self.items[i].uid == uid)?;
         self.position = Some(p);
+        self.ended_after = None;
         self.current()
     }
 
@@ -503,12 +539,19 @@ impl Queue {
             return;
         };
         let pos = self.order.iter().position(|&i| i == idx).expect("order covers items");
+        if self.ended_after == Some(uid) {
+            // The end mark moves to the song before it, so the songs after it stay the ones to come.
+            self.ended_after = Some(pos.checked_sub(1).map_or(0, |p| self.items[self.order[p]].uid));
+        }
         self.items.remove(idx);
         self.order.remove(pos);
         for i in &mut self.order {
             if *i > idx {
                 *i -= 1;
             }
+        }
+        if self.order.is_empty() {
+            self.ended_after = None;
         }
         self.position = match self.position {
             _ if self.order.is_empty() => None,
@@ -533,21 +576,27 @@ impl Queue {
         self.items.clear();
         self.order.clear();
         self.position = None;
+        self.ended_after = None;
     }
 
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
         let current = self.position.map(|p| self.order[p]);
-        let start = self.position.map_or(0, |p| p + 1);
+        // The playing song, or the one that played last in a queue that ran past its end.
+        let anchor = self.position.or_else(|| self.ended_pos()).map(|p| self.order[p]);
+        let start = self.next_start();
         let manual: Vec<usize> = self.order[start..self.manual_end()].to_vec();
-        if self.shuffle {
-            self.reshuffle_keeping(current);
+        if self.shuffle && current.is_none() && anchor.is_some() {
+            // A finished queue stays finished: only the songs added since are shuffled.
+            self.order[start..].shuffle(&mut rand::rng());
+        } else if self.shuffle {
+            self.reshuffle_keeping(anchor);
         } else {
             self.order = (0..self.items.len()).collect();
         }
         // The manual queue still plays next, in the order it was queued.
         self.order.retain(|i| !manual.contains(i));
-        let at = current.and_then(|c| self.order.iter().position(|&i| i == c)).map_or(0, |p| p + 1);
+        let at = anchor.and_then(|c| self.order.iter().position(|&i| i == c)).map_or(0, |p| p + 1);
         self.order.splice(at..at, manual);
         self.position = current.and_then(|c| self.order.iter().position(|&i| i == c));
     }
@@ -637,8 +686,9 @@ impl Queue {
     /// keep their places.
     pub fn shuffle_all(&mut self) {
         let current = self.position.map(|p| self.order[p]);
-        let cur = self.position.unwrap_or(0);
-        let (before, after) = if self.position.is_some() { (cur, cur + 1) } else { (0, 0) };
+        // A queue that ran past its end keeps the song that played last as the dividing line.
+        let anchor = self.position.or_else(|| self.ended_pos());
+        let (before, after) = anchor.map_or((0, 0), |p| (p, p + 1));
         let manual_end = self.manual_end().max(after);
         let mut rng = rand::rng();
         self.order[..before].shuffle(&mut rng);
@@ -648,7 +698,11 @@ impl Queue {
     }
 
     fn next_position(&self) -> Option<usize> {
-        let p = self.position?;
+        let Some(p) = self.position else {
+            // A finished queue goes on with the first song added since; it never wraps around.
+            let start = self.next_start();
+            return (self.ended_after.is_some() && start < self.order.len()).then_some(start);
+        };
         match self.repeat {
             Repeat::One => Some(p),
             _ if p + 1 < self.order.len() => Some(p + 1),
@@ -697,7 +751,7 @@ impl Queue {
     /// Play-order range `start..end` of the "Up Next" block: the songs added
     /// with "Play next" / "Add to queue" that wait right after the current one.
     pub fn up_next_range(&self) -> std::ops::Range<usize> {
-        let start = self.position.map_or(0, |p| p + 1).min(self.order.len());
+        let start = self.next_start().min(self.order.len());
         start..self.manual_end().max(start)
     }
 
@@ -738,7 +792,7 @@ impl Queue {
     /// Whether items just inserted at `at` (item indices `taken`, already in `order`) land inside the other
     /// items' Up Next run: on one of its rows, not after its end.
     fn joins_run(&self, at: usize, taken: &[usize]) -> bool {
-        let start = self.position.map_or(0, |p| p + 1);
+        let start = self.next_start();
         if at < start {
             return false;
         }
@@ -760,8 +814,8 @@ impl Queue {
         let new = self.push(songs, false);
         self.order.truncate(self.order.len() - new.len());
         self.order.splice(at..at, new.iter().copied());
-        if self.position.is_none() && !self.order.is_empty() {
-            self.position = Some(0);
+        if self.position.is_none() {
+            self.start_if_fresh();
         } else if let Some(p) = self.position
             && at <= p
         {
@@ -902,6 +956,61 @@ mod tests {
         q.enqueue(vec![song("m")]);
         q.add_last(vec![song("auto")], true);
         assert_eq!(ids(&q)[6..], ["m", "c", "auto"]);
+    }
+
+    #[test]
+    fn adding_after_the_queue_ran_out_starts_the_new_song() {
+        let mut q = abc();
+        q.jump_to(3);
+        assert!(q.skip_next().is_none());
+        assert_eq!(q.upcoming(), 0, "a finished queue has nothing to come");
+        assert!(q.peek_next().is_none());
+        let uids = q.add_picked(vec![(song("d"), Why::new(Picker::AutoDj, WhyCode::Random))]);
+        assert_eq!(cur(&q), None, "adding does not start playback by itself");
+        assert_eq!(q.upcoming(), 1);
+        assert_eq!(q.peek_next().map(|i| i.uid), uids.first().copied());
+        assert_eq!(q.advance().map(|i| i.song.id.as_str()), Some("d"));
+        // Next after the end: the same, and the end of a played-out queue by `advance` too.
+        let mut q = abc();
+        q.advance();
+        q.advance();
+        assert!(q.advance().is_none());
+        assert_eq!(q.upcoming(), 0);
+        q.enqueue(vec![song("x")]);
+        q.add_last(vec![song("y")], true);
+        assert_eq!(ids(&q), ["a", "b", "c", "x", "y"]);
+        assert_eq!(q.skip_next().map(|i| i.song.id.as_str()), Some("x"));
+        assert!(q.is_consistent());
+    }
+
+    #[test]
+    fn inserting_at_the_end_after_the_queue_ran_out_starts_the_drop() {
+        let mut q = abc();
+        q.jump_to(3);
+        q.skip_next();
+        q.insert_at(q.len(), vec![song("d")]);
+        assert_eq!(q.upcoming(), 1);
+        assert_eq!(q.advance().map(|i| i.song.id.as_str()), Some("d"));
+        // Removing the song that played last keeps the end where it was.
+        let mut q = abc();
+        q.jump_to(3);
+        q.skip_next();
+        q.remove(3);
+        assert_eq!(q.upcoming(), 0);
+        q.add_next(vec![song("n")]);
+        assert_eq!(q.skip_next().map(|i| i.song.id.as_str()), Some("n"));
+        // Shuffle on and off in between keeps the end.
+        let mut q = abc();
+        q.jump_to(3);
+        q.skip_next();
+        q.toggle_shuffle();
+        assert_eq!(q.upcoming(), 0);
+        q.toggle_shuffle();
+        assert_eq!(q.upcoming(), 0);
+        // Starting the queue again clears the end.
+        q.jump_to(1);
+        assert_eq!(q.upcoming(), 2);
+        assert!(q.is_consistent());
     }
 
     #[test]

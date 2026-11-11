@@ -273,7 +273,7 @@ impl Listen {
         if !self.ai_dj_on() {
             return Task::none();
         }
-        let start = self.queue.current_position().map_or(0, |p| p + 1);
+        let start = self.queue.len() - self.queue.upcoming();
         let keep_next = self.mix.phase != super::mix::Phase::Idle;
         let gone: Vec<(u64, Song)> = self
             .queue
@@ -403,7 +403,7 @@ impl Listen {
         let auto: Vec<(u64, Song)> = self
             .queue
             .iter()
-            .skip(self.queue.current_position().map_or(0, |p| p + 1))
+            .skip(self.queue.len() - self.queue.upcoming())
             .filter(|i| i.auto)
             .map(|i| (i.uid, i.song.clone()))
             .collect();

@@ -428,7 +428,7 @@ impl Listen {
         } else {
             format!("{n} songs added to the queue.")
         });
-        if was_idle { self.start_current() } else { self.refresh_next() }
+        if was_idle { self.start_added() } else { self.refresh_next() }
     }
 
     // ---- replacing the queue, with a confirmation --------------------------------

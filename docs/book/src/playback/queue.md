@@ -148,6 +148,8 @@ The queue distinguishes three kinds of songs:
 
 Dragging a row into the Up Next block adds it to the block; dragging it elsewhere takes it out. A marker row "AI DJ break" shows where the AI DJ will speak.
 
+When the queue has played out (you pressed Next on its last song, or the last song could not be played), the songs you add afterwards are what comes next: adding them while nothing plays starts the first of them, and Play or Next later also continues with them, not with the old queue from the top. The Auto-DJ and the AI DJ treat such a queue as empty.
+
 ### Player filters
 
 **Settings → Playback → Player filters** keeps unwanted songs out of the queue. Press **Add rule**, then choose a field (title, artist, genre, year, play count, rating and others), an operator (for example **contains**, **is**, **starts with**, **matches regex**) and a value. A song that matches an active rule is left out when you play or queue it, and Listen says how many were kept out. Songs the Auto-DJ and AI DJ add are not filtered by these rules (use **Snooze** or **Not interested** for that, below). Each rule has an on/off switch.
