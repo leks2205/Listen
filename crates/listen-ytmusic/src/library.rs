@@ -142,18 +142,24 @@ pub fn add_options(json: &Value) -> Vec<AddOption> {
     out
 }
 
-/// The other version of a watched song: the music video of a song, the
-/// song of a music video (`counterpart` of the first queue entry in a `next` answer).
-pub fn counterpart_id(json: &Value) -> Option<String> {
-    fn find(v: &Value) -> Option<String> {
+/// Where a queue entry keeps the other version of itself (the music video of a song, the song of
+/// a music video).
+const COUNTERPART: &str = "/counterpart/0/counterpartRenderer/playlistPanelVideoRenderer";
+
+/// The first queue entry of a `next` answer and its counterpart, read by structure: a
+/// `playlistPanelVideoWrapperRenderer` (primary + counterpart) or a bare `playlistPanelVideoRenderer`.
+/// serde_json maps iterate in key order (`counterpart` before `primaryRenderer`), so the first match
+/// of a whole-tree key search would be the counterpart, not the entry asked for.
+fn first_entry(json: &Value) -> Option<(&Value, Option<&Value>)> {
+    fn find(v: &Value) -> Option<(&Value, Option<&Value>)> {
         match v {
             Value::Object(m) => {
-                if let Some(id) = m
-                    .get("counterpart")
-                    .and_then(|c| c.pointer("/0/counterpartRenderer/playlistPanelVideoRenderer/videoId"))
-                    .and_then(Value::as_str)
-                {
-                    return Some(id.to_string());
+                if let Some(w) = m.get("playlistPanelVideoWrapperRenderer") {
+                    let primary = w.pointer("/primaryRenderer/playlistPanelVideoRenderer")?;
+                    return Some((primary, w.pointer(COUNTERPART)));
+                }
+                if let Some(p) = m.get("playlistPanelVideoRenderer") {
+                    return Some((p, p.pointer(COUNTERPART)));
                 }
                 m.values().find_map(find)
             }
@@ -161,40 +167,27 @@ pub fn counterpart_id(json: &Value) -> Option<String> {
             _ => None,
         }
     }
-    find(json)
+    find(json.pointer("/contents").unwrap_or(json))
 }
 
 /// `musicVideoType` of the first queue entry of a `next` answer
 /// (`MUSIC_VIDEO_TYPE_ATV` = the song's art track, `_OMV` = an official music video).
 pub fn video_type(json: &Value) -> Option<String> {
-    fn find(v: &Value) -> Option<String> {
-        match v {
-            Value::Object(m) => {
-                if let Some(t) = m.get("musicVideoType").and_then(Value::as_str) {
-                    return Some(t.to_string());
-                }
-                m.values().find_map(find)
-            }
-            Value::Array(a) => a.iter().find_map(find),
-            _ => None,
-        }
-    }
-    let first = json.pointer("/contents").unwrap_or(json);
-    find(first)
+    first_entry(json).and_then(|(primary, _)| entry_type(primary)).map(str::to_string)
 }
 
-/// The id whose stream is a real video: the music-video counterpart of an art track, or
-/// `id` itself. `None` when the song only has the art track.
+/// The id whose stream is a real video: `id` itself when the first queue entry (the song asked
+/// for) is a video, else its counterpart unless that is an art track. `None` when the song only
+/// has the art track.
 pub fn music_video_id(json: &Value, id: &str) -> Option<String> {
-    if let Some(c) = counterpart_id(json) {
-        return Some(c);
+    let (primary, counterpart) = first_entry(json)?;
+    if entry_is_video(primary) {
+        return Some(id.to_string());
     }
-    match video_type(json).as_deref() {
-        Some("MUSIC_VIDEO_TYPE_OMV" | "MUSIC_VIDEO_TYPE_UGC" | "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC") => {
-            Some(id.to_string())
-        }
-        _ => None,
-    }
+    counterpart
+        .filter(|c| entry_type(c) != Some("MUSIC_VIDEO_TYPE_ATV"))
+        .and_then(|c| c.get("videoId")?.as_str())
+        .map(str::to_string)
 }
 
 /// One entry of a radio / watch queue, already turned into the song where the entry was a video.
@@ -273,13 +266,13 @@ pub fn radio_entries(json: &Value) -> Vec<RadioEntry> {
             Value::Object(m) => {
                 if let Some(w) = m.get("playlistPanelVideoWrapperRenderer") {
                     if let Some(p) = w.pointer("/primaryRenderer/playlistPanelVideoRenderer") {
-                        let c = w.pointer("/counterpart/0/counterpartRenderer/playlistPanelVideoRenderer");
+                        let c = w.pointer(COUNTERPART);
                         out.extend(pick(p, c));
                     }
                     return;
                 }
                 if let Some(p) = m.get("playlistPanelVideoRenderer") {
-                    let c = p.pointer("/counterpart/0/counterpartRenderer/playlistPanelVideoRenderer");
+                    let c = p.pointer(COUNTERPART);
                     out.extend(pick(p, c));
                     return;
                 }
@@ -525,22 +518,50 @@ mod tests {
         assert_eq!(got[1].album, None, "a video without a song stays as it is");
     }
 
+    /// A queue entry with its type where YouTube puts it.
+    fn panel(id: &str, kind: &str) -> Value {
+        json!({"videoId": id, "navigationEndpoint": {"watchEndpoint": {"watchEndpointMusicSupportedConfigs":
+            {"watchEndpointMusicConfig": {"musicVideoType": kind}}}}})
+    }
+
+    fn wrapper(primary: Value, counterpart: Value) -> Value {
+        json!({"playlistPanelVideoWrapperRenderer": {"primaryRenderer": {"playlistPanelVideoRenderer": primary},
+            "counterpart": [{"counterpartRenderer": {"playlistPanelVideoRenderer": counterpart}}]}})
+    }
+
+    const ATV: &str = "MUSIC_VIDEO_TYPE_ATV";
+    const OMV: &str = "MUSIC_VIDEO_TYPE_OMV";
+
     #[test]
-    fn counterpart_of_a_song() {
-        let answer = json!({"contents": {"x": [{"playlistPanelVideoRenderer": {"videoId": "SONG",
-            "counterpart": [{"counterpartRenderer": {"playlistPanelVideoRenderer": {"videoId": "VIDEO"}}}]}}]}});
-        assert_eq!(counterpart_id(&answer).as_deref(), Some("VIDEO"));
-        assert_eq!(counterpart_id(&json!({"contents": []})), None);
+    fn a_music_video_seed_plays_its_own_video() {
+        let answer = json!({"contents": {"queue": [wrapper(panel("MV", OMV), panel("SONG", ATV))]}});
+        assert_eq!(music_video_id(&answer, "MV").as_deref(), Some("MV"));
+        assert_eq!(video_type(&answer).as_deref(), Some(OMV));
+    }
+
+    #[test]
+    fn an_art_track_plays_its_counterpart_video() {
+        let answer = json!({"contents": {"queue": [wrapper(panel("SONG", ATV), panel("MV", OMV))]}});
+        assert_eq!(music_video_id(&answer, "SONG").as_deref(), Some("MV"));
+        assert_eq!(video_type(&answer).as_deref(), Some(ATV));
+        let mut bare = panel("SONG", ATV);
+        bare["counterpart"] =
+            json!([{"counterpartRenderer": {"playlistPanelVideoRenderer": panel("MV", OMV)}}]);
+        let answer = json!({"contents": [{"playlistPanelVideoRenderer": bare}]});
+        assert_eq!(music_video_id(&answer, "SONG").as_deref(), Some("MV"));
+        // A later entry's video never stands in for the first one's.
+        let answer = json!({"contents": [{"playlistPanelVideoRenderer": panel("A", ATV)},
+            wrapper(panel("B", ATV), panel("MV2", OMV))]});
+        assert_eq!(music_video_id(&answer, "A"), None);
     }
 
     #[test]
     fn art_track_without_counterpart_has_no_video() {
-        let art = json!({"contents": [{"playlistPanelVideoRenderer": {"videoId": "A",
-            "musicVideoType": "MUSIC_VIDEO_TYPE_ATV"}}]});
+        let art = json!({"contents": [{"playlistPanelVideoRenderer": panel("A", ATV)}]});
         assert_eq!(music_video_id(&art, "A"), None);
-        let omv = json!({"contents": [{"playlistPanelVideoRenderer": {"videoId": "V",
-            "musicVideoType": "MUSIC_VIDEO_TYPE_OMV"}}]});
+        let omv = json!({"contents": [{"playlistPanelVideoRenderer": panel("V", OMV)}]});
         assert_eq!(music_video_id(&omv, "V").as_deref(), Some("V"));
+        assert_eq!(music_video_id(&json!({"contents": []}), "V"), None);
     }
 
     #[test]

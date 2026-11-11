@@ -1573,7 +1573,8 @@ impl MusicSource for YouTubeMusic {
         if self.guest {
             return Ok(None);
         }
-        // A song's own video id is only the cover art; its music video is the counterpart.
+        // An art track's own video is only the cover; its music video is the counterpart. A music
+        // video plays itself (see `library::music_video_id`).
         let q = library::RawPost::new(
             "next",
             serde_json::json!({"videoId": song.id, "isAudioOnly": true, "enablePersistentPlaylistPanel": true}),
