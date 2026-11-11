@@ -365,7 +365,7 @@ pub fn view<'a, T: ListItem>(body: &Body<'a, T>) -> Element<'a, Message> {
         }
         let before: Vec<(usize, f32)> = groups.iter().map(|g| (g.before, g.height())).collect();
         let parts = plan(count, row_h, &before, top, body.size.height, row_h * OVERSCAN as f32);
-        rows = rows.push(rows_block(body, &shape, parts, &groups, true));
+        rows = rows.push(rows_block(body, &shape, parts, &groups));
         if let Some((_, build)) = &extras.tail {
             rows = rows.push(build());
         }
@@ -394,7 +394,7 @@ pub fn view<'a, T: ListItem>(body: &Body<'a, T>) -> Element<'a, Message> {
         parts.push(Part::Space(count.saturating_sub(last) as f32 * row_h));
         parts
     };
-    let rows = rows_block(body, &shape, parts, &groups, false);
+    let rows = rows_block(body, &shape, parts, &groups);
     let id = body.id.clone();
     let list = scrollable(rows)
         .id(body.id.scroll_id())
@@ -420,10 +420,8 @@ fn rows_block<'a, T: ListItem>(
     shape: &Shape,
     parts: Vec<Part>,
     groups: &Rc<Vec<RowGroup>>,
-    inline: bool,
 ) -> Element<'a, Message> {
     let t = body.state.tokens;
-    let _ = inline;
     let loading: Element<'a, Message> =
         container(crate::ui::label("Loading…", metrics::font_md(), t.muted)).padding(12).into();
     if !shape.split {

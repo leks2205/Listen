@@ -6,7 +6,7 @@ use crate::app::list::{ListId, ListMsg};
 use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
-use crate::ui::{icon, label, label_w};
+use crate::ui::{icon, label_w};
 use iced::font::Weight;
 use iced::widget::{button, container, row};
 use iced::{Alignment, Element, Length, Padding};
@@ -252,8 +252,6 @@ pub fn bar<'a>(state: &'a Listen, id: &ListId, selected: usize) -> Option<Elemen
         },
         ..Default::default()
     });
-    let hint = label("Ctrl+click toggles · Shift+click selects a range", metrics::font_xs(), t.muted);
-    let _ = hint;
     Some(
         container(bar)
             .width(Length::Fill)
