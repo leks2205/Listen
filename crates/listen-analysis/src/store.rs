@@ -1,8 +1,8 @@
 //! Analysis records shared between machines through a synced folder (Nextcloud):
 //! `<dir>/v1/<machine-id>/NNNNNN.jsonl`, one [`TrackAnalysis`] JSON per line. Each machine appends only to
 //! its own directory and rotated chunks are immutable, so no file has two writers. Readers skip torn tails,
-//! re-read shrunk files and read "conflicted copy" files; merging is deterministic
-//! ([`TrackAnalysis::better_than`]).
+//! re-read shrunk files and read "conflicted copy" files; the writer never appends to a chunk that ends in
+//! a torn line (it starts the next one). Merging is deterministic ([`TrackAnalysis::better_than`]).
 
 use listen_core::analysis::{FileId, MIN_COMPATIBLE_VERSION, TrackAnalysis};
 use sha2::{Digest, Sha256};
@@ -88,7 +88,9 @@ impl ShardStore {
             writer.number = n;
             writer.bytes = text.len() as u64;
             writer.records = records;
-            if writer.bytes >= ROTATE_BYTES || records >= ROTATE_RECORDS {
+            // A torn last line (a crash or a full disk mid-write) would swallow the next record: start a new chunk.
+            let torn = text.last().is_some_and(|&b| b != b'\n');
+            if torn || writer.bytes >= ROTATE_BYTES || records >= ROTATE_RECORDS {
                 writer = Writer { number: n + 1, bytes: 0, records: 0, ..writer };
             }
         }
@@ -531,6 +533,26 @@ mod tests {
         }
         let b = ShardStore::open(&dir.0, "m-2").unwrap();
         assert_eq!(b.len(), 3);
+    }
+
+    #[test]
+    fn a_torn_own_chunk_is_closed_not_appended_to() {
+        let dir = TempDir::new("torn-own");
+        let own = dir.0.join("v1/m-1");
+        fs::create_dir_all(&own).unwrap();
+        let line = |r: &TrackAnalysis| serde_json::to_string(r).unwrap() + "\n";
+        let (full, second) = (line(&rec("s1", "m-1", 5, true)), line(&rec("s2", "m-1", 6, true)));
+        fs::write(own.join("000001.jsonl"), format!("{full}{}", &second[..20])).unwrap();
+        {
+            let mut a = ShardStore::open(&dir.0, "m-1").unwrap();
+            assert_eq!(a.writer.number, 2, "the torn chunk is closed");
+            a.append(rec("s3", "m-1", 7, true)).unwrap();
+            a.flush().unwrap();
+        }
+        assert!(own.join("000002.jsonl").exists());
+        let b = ShardStore::open(&dir.0, "m-2").unwrap();
+        assert!(b.lookup("s1", &file()).is_some());
+        assert!(b.lookup("s3", &file()).is_some(), "the new record isn't glued onto the torn line");
     }
 
     #[test]
