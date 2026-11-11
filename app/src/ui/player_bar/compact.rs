@@ -7,36 +7,51 @@ use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
 use crate::ui::tip::{Position, tip};
-use crate::ui::{icon, label, song_cover, song_links, with_menu};
+use crate::ui::{ellipsize_px, icon, label, song_cover, song_links, with_menu};
 use iced::widget::{button, column, container, mouse_area, row, slider, space};
 use iced::{Alignment, Element, Length, Padding, Point, Size};
 
-/// Four 36 px buttons (speaker, previous, play, next), three 4 px gaps, 8 px padding each side.
-const RIGHT_WIDTH: f32 = 4.0 * metrics::CONTROL + 3.0 * metrics::SPACE_XS + 2.0 * metrics::SPACE_SM;
-/// Width of the text column, from the bar's `width`.
-fn text_width(width: f32) -> f32 {
-    (width - metrics::space_md() - metrics::PLAYER_ART - metrics::space_md() - RIGHT_WIDTH).max(0.0)
+/// Width of the controls on the right: four buttons (speaker, previous, play, next) `space_xs` apart
+/// with `space_sm` padding each side. Live metrics, as in `view`'s layout (themes can override them).
+fn right_width() -> f32 {
+    4.0 * metrics::CONTROL + 3.0 * metrics::space_xs() + 2.0 * metrics::space_sm()
 }
 
-/// Size of the volume popover (slider + number).
-pub const POPOVER: Size = Size::new(144.0, 24.0);
+/// Width of the text column, from the bar's `width`.
+fn text_width(width: f32) -> f32 {
+    (width - metrics::space_md() - metrics::PLAYER_ART - metrics::space_md() - right_width()).max(0.0)
+}
 
 /// Height of the seek bar's strip.
 const SEEK_HEIGHT: f32 = 14.0;
 
 /// Width of the horizontal slider track.
 const SLIDER_WIDTH: f32 = 100.0;
+/// Width of the volume text next to the slider (clipped and ellipsized: "Muted", a DLNA device).
+const VALUE_W: f32 = 40.0;
+/// Gap between the slider and the volume text.
+const POPOVER_GAP: f32 = 6.0;
+/// Padding left and right inside the popover.
+const POPOVER_PAD: f32 = 8.0;
 
-/// Horizontal centre of the speaker icon in a bar `width` px wide.
+/// Size of the volume popover: padding, slider, gap and the volume text.
+pub const POPOVER: Size = Size::new(2.0 * POPOVER_PAD + SLIDER_WIDTH + POPOVER_GAP + VALUE_W, 24.0);
+
+/// Horizontal centre of the speaker icon (the first of the right controls) in a bar `width` px wide.
 fn speaker_center_x(width: f32) -> f32 {
     width - metrics::space_sm() - 3.0 * (metrics::CONTROL + metrics::space_xs()) - metrics::CONTROL / 2.0
 }
 
-/// Top-left of the volume popover: above the speaker icon, kept inside the window.
+/// Top edge of the speaker button in a window `window_height` px tall: the controls are centred in
+/// the part of the bar under the seek strip.
+fn speaker_top(window_height: f32) -> f32 {
+    let main = metrics::PLAYER_BAR_HEIGHT - SEEK_HEIGHT;
+    window_height - metrics::PLAYER_BAR_HEIGHT + SEEK_HEIGHT + (main - metrics::CONTROL) / 2.0
+}
+
+/// Top-left of the volume popover: 2 px above the speaker button, kept inside the window.
 pub fn popover_position(window: Size) -> Point {
-    // The speaker button is vertically centred in the bar.
-    let speaker_top =
-        window.height - metrics::PLAYER_BAR_HEIGHT + (metrics::PLAYER_BAR_HEIGHT - metrics::CONTROL) / 2.0;
+    let speaker_top = speaker_top(window.height);
     let x = (speaker_center_x(window.width) - POPOVER.width / 2.0)
         .min(window.width - POPOVER.width - 4.0)
         .max(4.0);
@@ -51,13 +66,14 @@ pub fn popover_panel(state: &Listen) -> Element<'_, Message> {
         .width(SLIDER_WIDTH)
         .height(14)
         .style(style::bar_slider(t));
-    let body = row![bar, container(label(super::volume_text(state), metrics::font_xs(), t.muted)).width(26)]
-        .spacing(6)
+    let value = ellipsize_px(&super::volume_text(state), VALUE_W, metrics::font_xs());
+    let body = row![bar, container(label(value, metrics::font_xs(), t.muted)).width(VALUE_W).clip(true)]
+        .spacing(POPOVER_GAP)
         .align_y(Alignment::Center);
     let boxed = container(super::wheel_volume(body))
         .width(POPOVER.width)
         .height(POPOVER.height)
-        .padding(Padding::from([0.0, 8.0]))
+        .padding(Padding::from([0.0, POPOVER_PAD]))
         .center_y(POPOVER.height)
         .style(move |_| container::Style {
             background: Some(iced::Background::Color(t.background_alt)),
@@ -202,4 +218,25 @@ fn seek_bar(state: &Listen) -> Element<'_, Message> {
     )
     .padding(Padding::from([0.0, metrics::space_md()]))
     .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn popover_sits_just_above_the_speaker() {
+        let window = Size::new(700.0, 1000.0);
+        // Bar from y = 910, seek strip to 924, controls centred in the 76 px under it.
+        let top = 924.0 + (76.0 - metrics::CONTROL) / 2.0;
+        assert_eq!(speaker_top(window.height), top);
+        assert_eq!(popover_position(window).y + POPOVER.height + 2.0, top);
+    }
+
+    #[test]
+    fn the_speaker_is_the_first_of_the_right_controls() {
+        let width = 700.0;
+        let first = width - right_width() + metrics::space_sm() + metrics::CONTROL / 2.0;
+        assert!((speaker_center_x(width) - first).abs() < 0.01);
+    }
 }
