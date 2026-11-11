@@ -15,8 +15,11 @@ use listen_core::model::Album;
 const CARD: f32 = 150.0;
 const GAP: f32 = 16.0;
 
+/// A group heading. `text` is the English catalog key: it is translated first and then uppercased,
+/// because the catalog has no uppercase keys ("MOOD" would stay English).
 fn heading<'a>(state: &Listen, text: &str) -> Element<'a, Message> {
-    label_w(text.to_uppercase(), metrics::font_sm(), state.tokens.foreground, Weight::Semibold).into()
+    let text = crate::i18n::tr(text).to_uppercase();
+    data_label_w(text, metrics::font_sm(), state.tokens.foreground, Weight::Semibold).into()
 }
 
 /// A rounded chip; a button when it leads somewhere. `text` is shown as it is (a genre, mood or label

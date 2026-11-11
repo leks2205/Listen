@@ -165,8 +165,10 @@ pub fn panel(state: &Listen) -> Element<'_, Message> {
         if i > 0 {
             crumbs = crumbs.push(icon(Icon::LuChevronRight, metrics::font_sm(), t.muted));
         }
+        // Translate the English title before uppercasing it: the catalog is keyed by the mixed-case text.
+        let title = crate::i18n::tr(page.title()).to_uppercase();
         crumbs = crumbs.push(
-            button(label_w(page.title().to_uppercase(), metrics::font_xs(), t.foreground, Weight::Semibold))
+            button(super::data_label_w(title, metrics::font_xs(), t.foreground, Weight::Semibold))
                 .padding(Padding::from([2.0, 6.0]))
                 .style(style::icon_button(t, i + 1 == p.pages.len()))
                 .on_press(Message::Palette(PaletteMsg::Crumb(i))),

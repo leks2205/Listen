@@ -291,14 +291,15 @@ fn genres(state: &Listen) -> Option<Element<'_, Message>> {
     }
     let linked = state.artist_caps().contains(Capabilities::GENRES);
     let mut chips = Row::new().spacing(metrics::space_sm());
-    let title = if names.len() == 1 { "GENRE" } else { "GENRES" };
+    // Translate the mixed-case key, then uppercase: the catalog has no "GENRE" key.
+    let title = crate::i18n::tr(if names.len() == 1 { "Genre" } else { "Genres" }).to_uppercase();
     for name in names {
         let b = button(super::data_label(name.clone(), metrics::font_md(), t.foreground))
             .padding(Padding::from([5.0, 12.0]))
             .style(style::default_button(t));
         chips = chips.push(if linked { b.on_press(Message::Navigate(Route::Genre(name))) } else { b });
     }
-    Some(column![small_title(state, title.into()), chips.wrap()].spacing(metrics::space_xs()).into())
+    Some(column![small_title(state, title), chips.wrap()].spacing(metrics::space_xs()).into())
 }
 
 fn links(state: &Listen) -> Option<Element<'_, Message>> {
