@@ -258,7 +258,7 @@ fn font_rows(state: &Listen) -> Vec<Element<'_, Message>> {
         FontKind::System => {
             let names = state.appearance.system_fonts.clone();
             let control: Element<'_, Message> = if names.is_empty() {
-                label("Looking for fonts...", metrics::font_md(), t.muted).into()
+                label("Looking for fonts…", metrics::font_md(), t.muted).into()
             } else {
                 pick_list(names, Some(a.font.clone()), |n| Message::Appearance(A::FontFamily(n)))
                     .width(260)

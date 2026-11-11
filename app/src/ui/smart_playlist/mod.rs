@@ -54,7 +54,7 @@ fn text_field<'a>(
 fn body<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Message> {
     let t = state.tokens;
     if e.loading {
-        return label("Loading the rules...", metrics::font_md(), t.muted).into();
+        return label("Loading the rules…", metrics::font_md(), t.muted).into();
     }
     let flag = |name: &'static str, on: bool, f: fn(bool) -> SmartMsg| {
         checkbox(on)
@@ -98,7 +98,7 @@ pub fn panel(state: &Listen) -> Element<'_, Message> {
         .style(style::default_button(t))
         .on_press(Message::Overlay(OverlayMsg::CloseModal));
     let save_label = if e.saving {
-        "Saving..."
+        "Saving…"
     } else if e.id.is_some() {
         "Save"
     } else {

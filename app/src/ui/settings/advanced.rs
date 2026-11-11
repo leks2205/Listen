@@ -391,7 +391,7 @@ pub(super) fn updates(state: &Listen) -> Element<'_, Message> {
     let a = &state.config.settings.advanced;
     let u = &state.adv.update;
     let status = match (&u.available, &u.status) {
-        _ if u.checking => "Checking...".to_string(),
+        _ if u.checking => "Checking…".to_string(),
         (_, Some(s)) => s.clone(),
         _ => format!("You run Listen {}.", Version::current()),
     };
@@ -402,7 +402,7 @@ pub(super) fn updates(state: &Listen) -> Element<'_, Message> {
             status,
             small(
                 state,
-                if u.checking { "Checking..." } else { "Check now" },
+                if u.checking { "Checking…" } else { "Check now" },
                 (!u.checking).then_some(Message::Update(UpdateMsg::CheckNow)),
             ),
         ),
@@ -519,7 +519,7 @@ pub(super) fn logging(state: &Listen) -> Element<'_, Message> {
              tokens and URL credentials are removed first.",
             small(
                 state,
-                if state.adv.diagnostics_busy { "Working..." } else { "Export" },
+                if state.adv.diagnostics_busy { "Working…" } else { "Export" },
                 (!state.adv.diagnostics_busy).then_some(Message::Advanced(AdvancedMsg::ExportDiagnostics)),
             ),
         ),

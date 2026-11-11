@@ -58,7 +58,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
     };
     let status: Element<'_, Message> = match &u.phase {
         Phase::Idle => label(how, metrics::font_sm(), t.muted).into(),
-        Phase::Installing => label("Downloading and verifying...", metrics::font_sm(), t.primary).into(),
+        Phase::Installing => label("Downloading and verifying…", metrics::font_sm(), t.primary).into(),
         Phase::Done(_) => {
             label("Installed. Restart Listen to use the new version.", metrics::font_sm(), t.primary).into()
         }
@@ -94,7 +94,7 @@ pub fn modal(state: &Listen) -> Option<ModalParts<'_>> {
     .spacing(metrics::space_md());
     let can_install = !matches!(mode, InstallMode::Unsupported(_));
     let actions = match &u.phase {
-        Phase::Installing => vec![button_for("Installing...", None, true)],
+        Phase::Installing => vec![button_for("Installing…", None, true)],
         Phase::Done(_) => vec![
             button_for("Later", Some(UpdateMsg::Dismiss), false),
             button_for("Restart now", Some(UpdateMsg::Restart), true),
