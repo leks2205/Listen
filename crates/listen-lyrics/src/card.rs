@@ -318,14 +318,15 @@ async fn get_json(http: &reqwest::Client, url: &str) -> Result<Value, String> {
 
 /// The song's credits from MusicBrainz (empty when no recording with credits is found).
 pub async fn credits(http: &reqwest::Client, song: &SongInfo) -> Result<Credits, String> {
-    let ids = match song.recording_mbid.clone().filter(|m| !m.is_empty()) {
-        Some(id) => vec![id],
-        None => pick_recordings(&get_json(http, &search_url(song)).await?, song),
+    // `searched`: a search request just went out (an empty MBID counts as none).
+    let (ids, searched) = match song.recording_mbid.clone().filter(|m| !m.is_empty()) {
+        Some(id) => (vec![id], false),
+        None => (pick_recordings(&get_json(http, &search_url(song)).await?, song), true),
     };
     let mut first = Credits::default();
     for (i, id) in ids.iter().take(MAX_LOOKUPS).enumerate() {
-        if i > 0 || song.recording_mbid.is_none() {
-            // MusicBrainz allows one request per second.
+        if i > 0 || searched {
+            // MusicBrainz allows one request per second: wait after every request of this card.
             tokio::time::sleep(Duration::from_millis(1100)).await;
         }
         let c = parse_credits(&get_json(http, &lookup_url(id)).await?);
