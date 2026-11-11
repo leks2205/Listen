@@ -790,13 +790,8 @@ fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_,
     let hub = !state.config.settings.lyrics.vocab_hub_url.trim().is_empty();
     if hub && let Some(words) = &ui.vocab {
         let lemma = gloss.map(|g| g.lemma.as_str());
-        let k = match Knowledge::from_status(
-            words.status(word, lemma),
-            listen_lyrics::vocab::DEFAULT_KNOWN_MIN,
-        ) {
-            Knowledge::New => state.learn_word_class(words, word, lemma),
-            k => k,
-        };
+        // The same class the word is coloured with (`word_pieces`).
+        let k = state.learn_word_class(words, word, lemma);
         let known = matches!(k, Knowledge::Known | Knowledge::Ignored);
         let text = match k {
             Knowledge::Known => crate::i18n::tr("In Lute: known").to_string(),
