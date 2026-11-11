@@ -33,7 +33,9 @@ pub fn partial_date(s: &str) -> String {
             None => s.to_string(),
         },
         [y, m, d] if y.len() == 4 => {
-            match (num(m).filter(|m| (1..=12).contains(m)), num(&d[..d.len().min(2)])) {
+            // Date tags are free text: take the day by chars, a byte slice panics inside a multi-byte char.
+            let day: String = d.chars().take(2).collect();
+            match (num(m).filter(|m| (1..=12).contains(m)), num(&day)) {
                 (Some(m), Some(d)) => format!("{} {d}, {y}", &MONTHS[m as usize - 1][..3]),
                 _ => s.to_string(),
             }
@@ -246,6 +248,14 @@ mod tests {
         assert_eq!(partial_date("2001-03"), "March 2001");
         assert_eq!(partial_date("2001-03-12"), "Mar 12, 2001");
         assert_eq!(partial_date("soon"), "soon");
+    }
+
+    #[test]
+    fn partial_date_never_panics_on_non_ascii() {
+        assert_eq!(partial_date("2001-03-1ä"), "2001-03-1ä");
+        assert_eq!(partial_date("2001-03-ä1"), "2001-03-ä1");
+        assert_eq!(partial_date("2001-03-12ä"), "Mar 12, 2001");
+        assert_eq!(partial_date("2001-ä-12"), "2001-ä-12");
     }
 
     #[test]
