@@ -1,14 +1,11 @@
-//! Resolves a real YouTube Music stream with yt-dlp. Opt-in: `LISTEN_YTM_LIVE=1`
-//! (network + yt-dlp + a JS runtime required).
+//! Resolves a real YouTube Music stream with yt-dlp. Live (network + yt-dlp + a JS runtime):
+//! `cargo test -p listen-ytmusic --test live_ytdlp -- --ignored`.
 
 use listen_ytmusic::ytdlp::YtDlp;
 
 #[tokio::test]
+#[ignore = "live: needs network, yt-dlp and a JavaScript runtime"]
 async fn resolves_audio_url() {
-    if std::env::var("LISTEN_YTM_LIVE").is_err() {
-        eprintln!("LISTEN_YTM_LIVE not set; skipping");
-        return;
-    }
     let ytdlp = YtDlp::new();
     println!("yt-dlp: {:?}", ytdlp.check().await);
     let r = ytdlp.resolve("dQw4w9WgXcQ").await.expect("stream url");
@@ -22,12 +19,10 @@ async fn resolves_audio_url() {
 /// Checks that ytmapi-rs still understands YouTube Music's responses. Uses a
 /// consent-only cookie (EU visitors are otherwise redirected to a consent page).
 #[tokio::test]
+#[ignore = "live: needs network"]
 async fn innertube_parsing_still_works() {
     use listen_core::model::ServerId;
     use listen_source::MusicSource;
-    if std::env::var("LISTEN_YTM_LIVE").is_err() {
-        return;
-    }
     let cookie = std::env::var("LISTEN_YTM_COOKIE").unwrap_or_else(|_| "SOCS=CAI; SAPISID=anonymous;".into());
     let ytm = listen_ytmusic::YouTubeMusic::connect(ServerId("t".into()), &cookie).await.expect("connect");
     let found = ytm.search("Kai Rosenkranz Gothic", 10).await.expect("search");
@@ -46,12 +41,10 @@ async fn innertube_parsing_still_works() {
 
 /// The home feed parser against the real `FEmusic_home` response (guest feed).
 #[tokio::test]
+#[ignore = "live: needs network"]
 async fn home_feed_parses() {
     use listen_core::model::ServerId;
     use listen_source::MusicSource;
-    if std::env::var("LISTEN_YTM_LIVE").is_err() {
-        return;
-    }
     let yt = listen_ytmusic::YouTubeMusic::connect(ServerId("t".into()), "").await.expect("guest");
     let shelves = yt.home().await.expect("home feed");
     for s in &shelves {

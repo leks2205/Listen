@@ -67,4 +67,4 @@ Requests are either urgent (`Urgency::Now`: playback, the current and next queue
 YouTube changes its interfaces often. When playback fails, update `yt-dlp` first. When library pages fail, a newer `ytmapi-rs` is usually needed. Two helpers:
 
 - `listen --check-youtube-music` signs in through the browser session and prints channels, counts and whether every playlist and album opens. It prints counts only, never cookies.
-- `LISTEN_YTM_LIVE=1 cargo test -p listen-ytmusic --test live_ytdlp` runs an opt-in live check. See [Tests](tests.md).
+- `cargo test -p listen-ytmusic --test live_ytdlp -- --ignored` runs the live check. See [Tests](tests.md).

@@ -101,11 +101,8 @@ async fn feed_images(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "live: needs network (YouTube Music guest session)"]
 async fn youtube_music_pages() {
-    if std::env::var("LISTEN_YTM_LIVE").is_err() {
-        eprintln!("LISTEN_YTM_LIVE not set; skipping");
-        return;
-    }
     let yt = listen_ytmusic::YouTubeMusic::connect(ServerId("ytm".into()), listen_ytmusic::GUEST_COOKIE)
         .await
         .expect("guest connect");

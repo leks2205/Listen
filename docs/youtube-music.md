@@ -68,4 +68,4 @@ Requirements on Fedora: `sudo dnf install yt-dlp nodejs` (or Deno).
 ## Risks
 Unofficial API use: YouTube changes break it every few weeks. Update yt-dlp (`sudo dnf upgrade yt-dlp`) first when
 playback fails; library errors usually need a new `ytmapi-rs`. Opt-in live checks:
-`LISTEN_YTM_LIVE=1 cargo test -p listen-ytmusic --test live_ytdlp`.
+`cargo test -p listen-ytmusic --test live_ytdlp -- --ignored`.

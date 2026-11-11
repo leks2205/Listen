@@ -31,15 +31,16 @@ Open the PNG files after a UI change to see what the pages look like. Only snaps
 
 ## Live tests
 
-Live tests talk to a real server or service. They skip silently unless their environment variables are set, so `cargo test --workspace` stays offline. The Navidrome and Jellyfin tests in `listen-subsonic` and `listen-jellyfin` are also `#[ignore]`d (run them with `-- --ignored`), so a shell that happens to export the variables does not run them. A live test that changes something on the server (a favourite) puts it back before it ends.
+Live tests talk to a real server, service or device. Every one of them is `#[ignore = "live: …"]`, so `cargo test --workspace` stays offline and lists them as ignored instead of counting them as passed; run one with `-- --ignored`. The server tests also read the address and login from environment variables (and skip when those are missing). A live test that changes something on the server (a favourite) puts it back before it ends.
 
 | Variables | Test | Needs |
 |---|---|---|
 | `LISTEN_ND_URL`, `LISTEN_ND_USER`, `LISTEN_ND_PASS` | `listen-subsonic/tests/live_navidrome.rs`, `app/tests/live_pages.rs` | A Navidrome or OpenSubsonic server with at least one album |
 | `LISTEN_JF_URL`, `LISTEN_JF_USER`, `LISTEN_JF_PASS` | `listen-jellyfin/tests/live_jellyfin.rs` | A Jellyfin server with at least one album |
-| `LISTEN_LYRICS_LIVE=1` | `listen-lyrics/tests/live_lrclib.rs` | Internet access (looks up a well-known song on lrclib.net) |
-| `LISTEN_VIZ_LIVE=1` | `listen-visualizer/tests/live_capture.rs` | Linux with PipeWire and mpv |
-| `LISTEN_YTM_LIVE=1` | `listen-ytmusic/tests/live_ytdlp.rs` | Internet, `yt-dlp` and a JavaScript runtime. `LISTEN_YTM_COOKIE` can supply a cookie header; the default is a guest cookie. |
+| none | `listen-lyrics/tests/live_lrclib.rs` | Internet access (looks up a well-known song on lrclib.net) |
+| none | `listen-visualizer/tests/live_capture.rs` | Linux with PipeWire and mpv |
+| `LISTEN_YTM_COOKIE` (optional) | `listen-ytmusic/tests/live_ytdlp.rs`, `app/tests/live_pages.rs` (`youtube_music_pages`) | Internet, `yt-dlp` and a JavaScript runtime. `LISTEN_YTM_COOKIE` can supply a cookie header; the default is a guest cookie. |
+| none | `listen-analysis` `voice::tests::downloads_the_pinned_weights` | Internet access (downloads the singing-voice weights) |
 | `LISTEN_TEST_URL=<stream URL>` | `listen-ytmusic/src/audio.rs`, run with `-- --ignored download_url` | A stream URL you resolved yourself |
 
 Example:

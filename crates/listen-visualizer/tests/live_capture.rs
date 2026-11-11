@@ -1,13 +1,11 @@
 #![cfg(target_os = "linux")]
-//! Opt-in (`LISTEN_VIZ_LIVE=1`, needs PipeWire + mpv): plays a quiet test tone
-//! through an mpv stream named "Listen" and checks the analyzer sees it.
+//! Live (needs PipeWire + mpv): `cargo test -p listen-visualizer --test live_capture -- --ignored`.
+//! Plays a quiet test tone through an mpv stream named "Listen" and checks the analyzer sees it.
 use listen_visualizer::{Analyzer, Config, capture};
 
 #[tokio::test]
+#[ignore = "live: needs PipeWire and mpv"]
 async fn captures_listens_own_stream() {
-    if std::env::var("LISTEN_VIZ_LIVE").is_err() {
-        return;
-    }
     let mut mpv = tokio::process::Command::new("mpv")
         .args(["--no-config", "--no-video", "--volume=4", "--audio-client-name=Listen"])
         .arg("av://lavfi:sine=frequency=1000:duration=3")
@@ -39,12 +37,10 @@ async fn captures_listens_own_stream() {
     assert!(peak > 0.1, "tone visible in the spectrum");
 }
 
-/// Opt-in: two decks ("Listen" 1 kHz, "Listen B" 5 kHz) are each captured and tagged with their index.
+/// Live: two decks ("Listen" 1 kHz, "Listen B" 5 kHz) are each captured and tagged with their index.
 #[tokio::test]
+#[ignore = "live: needs PipeWire and mpv"]
 async fn captures_both_decks() {
-    if std::env::var("LISTEN_VIZ_LIVE").is_err() {
-        return;
-    }
     let deck = |name: &str, hz: u32| {
         tokio::process::Command::new("mpv")
             .args(["--no-config", "--no-video", "--volume=4", &format!("--audio-client-name={name}")])

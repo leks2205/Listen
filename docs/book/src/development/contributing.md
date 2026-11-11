@@ -27,6 +27,9 @@ details.
   Jellyfin `apiKey`) and every local user can read a process's arguments. Hand URLs to mpv over IPC
   (`loadfile`, as `listen-player` does) or as a playlist on stdin (`--playlist=-`, as
   `listen_analysis::decode` does); local file paths may stay in argv.
+- **Tests that need the network, a real device or a running service are `#[ignore = "live: …"]`**
+  (run them with `-- --ignored`). An early `return` when an environment variable is missing makes
+  them pass without testing anything, and nobody sees that they never ran.
 - **No snapshot test of content chosen at random** (e.g. the Recommended strip): it differs every
   run and fails the suite. Look at such a render once by hand; test the behaviour instead.
 

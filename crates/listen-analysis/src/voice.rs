@@ -844,12 +844,10 @@ mod tests {
         }
     }
 
-    /// The pinned download (only with `LISTEN_SVD_DOWNLOAD=1`: it fetches 2 MB from GitHub).
+    /// The pinned download (live: it fetches 2 MB from GitHub; run with `-- --ignored`).
     #[tokio::test]
+    #[ignore = "live: downloads the weights from GitHub"]
     async fn downloads_the_pinned_weights() {
-        if std::env::var_os("LISTEN_SVD_DOWNLOAD").is_none() {
-            return;
-        }
         let dir = std::env::temp_dir().join(format!("listen-svd-{}", std::process::id()));
         let model = VoiceModel::download(&dir).await.unwrap();
         assert_eq!(VoiceModel::in_dir(&dir), Some(model));
