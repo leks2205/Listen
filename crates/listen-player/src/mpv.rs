@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStderr, Command};
 use tokio::sync::{Mutex, mpsc, oneshot};
 
 #[derive(Debug, thiserror::Error)]
@@ -154,12 +154,27 @@ impl Mpv {
             .args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
+            // Piped only because it is drained below: an unread pipe fills up and blocks mpv.
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(MpvError::Spawn)?;
 
-        let (reader, writer) = connect(&socket, &mut child).await?;
+        let (stderr_tail, stderr_task) = drain_stderr(child.stderr.take().expect("stderr is piped"));
+        let (reader, writer) = match connect(&socket, &mut child).await {
+            Ok(io) => io,
+            Err(MpvError::Connect(e)) => {
+                if matches!(child.try_wait(), Ok(Some(_))) {
+                    // mpv is gone, so its stderr ends too: wait for the last lines.
+                    let _ = tokio::time::timeout(Duration::from_secs(1), stderr_task).await;
+                }
+                let said = lock_tail(&stderr_tail).iter().cloned().collect::<Vec<_>>().join(" | ");
+                let e =
+                    if said.is_empty() { e } else { std::io::Error::other(format!("{e}; mpv said: {said}")) };
+                return Err(MpvError::Connect(e));
+            }
+            Err(e) => return Err(e),
+        };
         let pending: Pending = Arc::default();
         let (events_tx, events_rx) = mpsc::unbounded_channel();
         tokio::spawn(read_loop(reader, pending.clone(), events_tx));
@@ -339,6 +354,44 @@ fn ipc_path() -> PathBuf {
 type Reader = Box<dyn tokio::io::AsyncRead + Send + Unpin>;
 type Writer = Box<dyn tokio::io::AsyncWrite + Send + Unpin>;
 
+/// The last lines mpv (or a library it loaded) wrote to stderr; they explain a failed start.
+type StderrTail = Arc<std::sync::Mutex<std::collections::VecDeque<String>>>;
+
+/// Lines kept in a [`StderrTail`], and the most characters kept of each.
+const STDERR_TAIL_LINES: usize = 5;
+const STDERR_LINE_CHARS: usize = 200;
+
+fn lock_tail(tail: &StderrTail) -> std::sync::MutexGuard<'_, std::collections::VecDeque<String>> {
+    tail.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Reads mpv's stderr until it closes, logging each line. It must be read: `--terminal=no` keeps
+/// mpv's own messages off it, but user extra parameters can turn them back on and audio libraries
+/// (ALSA, PipeWire) write there regardless, and a full pipe blocks the writing thread inside mpv.
+fn drain_stderr(stderr: ChildStderr) -> (StderrTail, tokio::task::JoinHandle<()>) {
+    let tail = StderrTail::default();
+    let keep = tail.clone();
+    let task = tokio::spawn(async move {
+        let mut reader = BufReader::new(stderr);
+        let mut buf = Vec::new();
+        while matches!(reader.read_until(b'\n', &mut buf).await, Ok(n) if n > 0) {
+            let line: String =
+                String::from_utf8_lossy(&buf).trim_end().chars().take(STDERR_LINE_CHARS).collect();
+            buf.clear();
+            if line.is_empty() {
+                continue;
+            }
+            tracing::debug!("mpv stderr: {line}");
+            let mut tail = lock_tail(&keep);
+            if tail.len() == STDERR_TAIL_LINES {
+                tail.pop_front();
+            }
+            tail.push_back(line);
+        }
+    });
+    (tail, task)
+}
+
 /// mpv creates the socket asynchronously after start; retry for a while, but give up at once when
 /// the process is gone (bad extra parameter, wrong binary): its socket will never appear.
 async fn connect(path: &std::path::Path, child: &mut Child) -> Result<(Reader, Writer), MpvError> {
@@ -479,6 +532,42 @@ mod tests {
             }
             Ok(_) => panic!("mpv accepted an unknown option"),
         }
+    }
+
+    /// A stand-in "mpv" that writes `stderr` (shell) and exits 3, instead of opening its socket.
+    #[cfg(unix)]
+    async fn spawn_script(name: &str, stderr: &str) -> MpvError {
+        use std::os::unix::fs::PermissionsExt;
+        let path = std::env::temp_dir().join(format!("listen-player-{}-{name}.sh", std::process::id()));
+        std::fs::write(&path, format!("#!/bin/sh\n{stderr}\nexit 3\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let opts = MpvOptions { binary: path.clone(), null_audio: true, ..Default::default() };
+        let mut tries = 0;
+        let err = loop {
+            match Mpv::spawn(&opts).await {
+                // "Text file busy": another test's fork still held the script open for writing.
+                Err(MpvError::Spawn(e)) if e.raw_os_error() == Some(26) && tries < 20 => tries += 1,
+                Err(e) => break e,
+                Ok(_) => panic!("the script opened no socket"),
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        let _ = std::fs::remove_file(&path);
+        err
+    }
+
+    /// 256 KiB on stderr is four times the pipe buffer: the script only gets to exit when it is read.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn mpv_stderr_is_drained() {
+        let started = std::time::Instant::now();
+        let err =
+            spawn_script("drain", "yes 'ALSA lib: device gone' | head -c 262144 >&2\necho 'last words' >&2")
+                .await;
+        assert!(started.elapsed() < Duration::from_secs(5), "took {:?}: {err}", started.elapsed());
+        let msg = err.to_string();
+        assert!(msg.contains("exited at start") && msg.ends_with("last words"), "{msg}");
+        assert!(msg.len() < 2000, "only the last lines are quoted: {} chars", msg.len());
     }
 
     #[tokio::test]
