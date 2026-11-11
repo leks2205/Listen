@@ -147,7 +147,8 @@ pub struct BridgeCut {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Queue {
     items: Vec<QueueItem>,
-    /// Play order as indices into `items`; identity unless shuffled.
+    /// Play order as indices into `items`: the order songs were added in, changed by inserts, moves
+    /// and shuffle. It is the only record of where the user and the DJs put each song.
     order: Vec<usize>,
     /// Position in `order` of the current track. `None`: nothing started yet, or (`ended_after` set)
     /// playback ran past the last track.
@@ -160,6 +161,10 @@ pub struct Queue {
     /// are still to come, so songs added later play next instead of the finished queue from the top.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ended_after: Option<u64>,
+    /// While shuffled: the play order from before shuffle was turned on, as uids, so turning it off
+    /// restores the user's own order (empty: the order songs were added in).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    unshuffled: Vec<u64>,
 }
 
 /// The queue as saved between runs, with how far the current song had played (seconds).
@@ -280,6 +285,7 @@ impl Queue {
         self.order.clear();
         self.position = None;
         self.ended_after = None;
+        self.unshuffled.clear();
         self.push(songs, false);
         if self.items.is_empty() {
             return;
@@ -577,28 +583,73 @@ impl Queue {
         self.order.clear();
         self.position = None;
         self.ended_after = None;
+        self.unshuffled.clear();
     }
 
+    /// Shuffle on: the songs after the playing one are shuffled. Shuffle off: the order from before
+    /// shuffling comes back, without the songs removed since and with the songs added since after it.
+    /// Either way the manual queue still plays next, and a pending DJ bridge stays right before the song
+    /// it leads into.
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
         let current = self.position.map(|p| self.order[p]);
         // The playing song, or the one that played last in a queue that ran past its end.
         let anchor = self.position.or_else(|| self.ended_pos()).map(|p| self.order[p]);
         let start = self.next_start();
-        let manual: Vec<usize> = self.order[start..self.manual_end()].to_vec();
+        let kept: Vec<usize> = self.order[start..self.kept_end(anchor, start)].to_vec();
+        if self.shuffle {
+            self.unshuffled = self.order.iter().map(|&i| self.items[i].uid).collect();
+        }
         if self.shuffle && current.is_none() && anchor.is_some() {
             // A finished queue stays finished: only the songs added since are shuffled.
             self.order[start..].shuffle(&mut rand::rng());
         } else if self.shuffle {
             self.reshuffle_keeping(anchor);
         } else {
-            self.order = (0..self.items.len()).collect();
+            self.order = self.unshuffled_order();
+            self.unshuffled.clear();
         }
         // The manual queue still plays next, in the order it was queued.
-        self.order.retain(|i| !manual.contains(i));
+        self.order.retain(|i| !kept.contains(i));
         let at = anchor.and_then(|c| self.order.iter().position(|&i| i == c)).map_or(0, |p| p + 1);
-        self.order.splice(at..at, manual);
+        self.order.splice(at..at, kept);
         self.position = current.and_then(|c| self.order.iter().position(|&i| i == c));
+    }
+
+    /// Play-order end of the songs that keep their place right after `anchor` (an item index) when shuffle
+    /// is toggled: the manual queue, and a DJ bridge together with the song it leads into.
+    fn kept_end(&self, anchor: Option<usize>, start: usize) -> usize {
+        let mut leads_in = anchor.is_some_and(|a| self.items[a].bridge.is_some());
+        let mut end = start;
+        while let Some(&i) = self.order.get(end) {
+            let it = &self.items[i];
+            if !(it.queued || it.bridge.is_some() || leads_in) {
+                break;
+            }
+            leads_in = it.bridge.is_some();
+            end += 1;
+        }
+        end
+    }
+
+    /// The play order saved when shuffle was turned on (item indices), without the songs removed since,
+    /// followed by the songs added since in their current order. Without a saved order (a queue saved by
+    /// an older version): the order the songs were added in.
+    fn unshuffled_order(&self) -> Vec<usize> {
+        if self.unshuffled.is_empty() {
+            return (0..self.items.len()).collect();
+        }
+        let index: std::collections::HashMap<u64, usize> =
+            self.items.iter().enumerate().map(|(i, it)| (it.uid, i)).collect();
+        let mut seen = vec![false; self.items.len()];
+        let mut order: Vec<usize> = Vec::with_capacity(self.items.len());
+        for i in self.unshuffled.iter().filter_map(|uid| index.get(uid).copied()) {
+            if !std::mem::replace(&mut seen[i], true) {
+                order.push(i);
+            }
+        }
+        order.extend(self.order.iter().copied().filter(|&i| !seen[i]));
+        order
     }
 
     /// Where each of `uids` sits in the play order, ascending.
@@ -1056,6 +1107,53 @@ mod tests {
         q.toggle_shuffle();
         assert_eq!(cur(&q), Some("5"));
         assert_eq!(ids(&q)[0], "0");
+    }
+
+    #[test]
+    fn unshuffle_restores_the_order_from_before_shuffle_including_drags() {
+        let mut q = abc();
+        let c = uid_of(&q, "c");
+        q.move_uids(&[c], 1);
+        assert_eq!(ids(&q), ["a", "c", "b"]);
+        q.toggle_shuffle();
+        q.toggle_shuffle();
+        assert_eq!(ids(&q), ["a", "c", "b"], "the drag survives a shuffle on and off");
+        // Songs removed while shuffled stay removed, songs added while shuffled follow at the end.
+        q.add_last(vec![song("d"), song("e")], true);
+        q.toggle_shuffle();
+        q.add_last(vec![song("f")], true);
+        q.remove(uid_of(&q, "b"));
+        q.toggle_shuffle();
+        assert_eq!(ids(&q), ["a", "c", "d", "e", "f"]);
+        assert_eq!(cur(&q), Some("a"));
+        // The saved order survives a restart.
+        q.toggle_shuffle();
+        let json = serde_json::to_string(&q).unwrap();
+        let mut back: Queue = serde_json::from_str(&json).unwrap();
+        back.toggle_shuffle();
+        assert_eq!(ids(&back), ["a", "c", "d", "e", "f"]);
+        assert!(back.is_consistent());
+    }
+
+    #[test]
+    fn a_pending_bridge_stays_right_after_the_current_song_across_shuffle() {
+        let cut = BridgeCut { start_s: 10.0, end_s: 40.0, start_bar: 4, bars: 16 };
+        for _ in 0..10 {
+            let mut q = Queue::new();
+            q.set((0..12).map(|i| song(&i.to_string())).collect(), 0);
+            q.insert_bridge(song("x"), cut, false).unwrap();
+            assert_eq!(ids(&q)[..3], ["0", "x", "1"]);
+            q.toggle_shuffle();
+            assert_eq!(ids(&q)[..3], ["0", "x", "1"], "shuffle on keeps the bridge before its song");
+            q.toggle_shuffle();
+            assert_eq!(ids(&q)[..3], ["0", "x", "1"], "shuffle off too");
+            // While the bridge plays, the song it leads into stays next.
+            q.advance();
+            assert_eq!(cur(&q), Some("x"));
+            q.toggle_shuffle();
+            assert_eq!(q.peek_next().map(|i| i.song.id.as_str()), Some("1"));
+            assert!(q.is_consistent());
+        }
     }
 
     #[test]

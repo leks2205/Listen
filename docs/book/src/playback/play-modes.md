@@ -15,7 +15,7 @@ The modes exclude each other. If several settings were on together (for example 
 | Mode | What happens |
 |---|---|
 | **Off** | The queue plays in order and stops at its end. |
-| **Shuffle** | The play order of the queue is shuffled. The playing song keeps playing, and songs in the Up Next block still come first, in the order you queued them. Switching away from Shuffle restores the original order. |
+| **Shuffle** | The play order of the queue is shuffled. The playing song keeps playing, and songs in the Up Next block still come first, in the order you queued them. Switching away from Shuffle restores the order from before shuffling, including songs you moved; songs added meanwhile follow after it. A DJ bridge always stays right before the song it leads into. |
 | **Auto-DJ** | When few songs are left, Listen appends similar songs to the queue. |
 | **AI DJ** | Gemini picks sets of songs and talks between them. Needs your own Gemini API key. |
 
