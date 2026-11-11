@@ -433,6 +433,9 @@ impl Lists {
     }
 }
 
+/// The "Items per page" stepper's step and minimum: a page never holds fewer rows than one step.
+pub const ITEMS_PER_PAGE_STEP: u32 = 25;
+
 /// Settings of the table / grid edited from the config popover.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfigEdit {
@@ -1345,7 +1348,7 @@ impl Listen {
             | ConfigEdit::GroupFavoriteRating(_)
             | ConfigEdit::GroupVertical(_) => {}
             ConfigEdit::Pagination(p) => c.pagination = p,
-            ConfigEdit::ItemsPerPage(n) => c.items_per_page = n,
+            ConfigEdit::ItemsPerPage(n) => c.items_per_page = n.max(ITEMS_PER_PAGE_STEP),
             ConfigEdit::Reset => *c = kind.default_config(),
         });
         self.save_config();
@@ -1528,5 +1531,20 @@ impl Listen {
         Task::perform(async move { source.album(&id).await.map(|a| a.songs).map_err(err) }, move |r| {
             Message::List(ListMsg::DetailLoaded(key.clone(), r))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn items_per_page_never_drops_below_one_step() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ephemeral: true, ..crate::Args::default() });
+        let id = ListId::Songs;
+        let _ = s.edit_config(&id, ConfigEdit::ItemsPerPage(0));
+        assert_eq!(s.config.settings.lists.config(id.kind()).items_per_page, ITEMS_PER_PAGE_STEP);
+        let _ = s.edit_config(&id, ConfigEdit::ItemsPerPage(ITEMS_PER_PAGE_STEP * 2));
+        assert_eq!(s.config.settings.lists.config(id.kind()).items_per_page, ITEMS_PER_PAGE_STEP * 2);
     }
 }

@@ -5,7 +5,7 @@ use super::Body;
 use super::anchor::anchored;
 use super::columns::{ListItem, sized};
 use super::table::Shape;
-use crate::app::list::{ConfigEdit, HPart, ListId, ListMsg};
+use crate::app::list::{ConfigEdit, HPart, ITEMS_PER_PAGE_STEP, ListId, ListMsg};
 use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
@@ -204,10 +204,12 @@ fn align_icon(a: Align) -> Icon {
     }
 }
 
-fn stepper<'a>(state: &Listen, value: String, down: Message, up: Message) -> Element<'a, Message> {
+/// `−`, the value, `+`; `down: None` disables `−` (the value is at its minimum).
+fn stepper<'a>(state: &Listen, value: String, down: Option<Message>, up: Message) -> Element<'a, Message> {
     let t = state.tokens;
+    let minus = if down.is_some() { t.foreground } else { t.muted };
     row![
-        small(state, label("−", metrics::font_md(), t.foreground).into(), false, Some(down)),
+        small(state, label("−", metrics::font_md(), minus).into(), false, down),
         container(label(value, metrics::font_sm(), t.foreground)).width(36).center_x(36),
         small(state, label("+", metrics::font_md(), t.foreground).into(), false, Some(up)),
     ]
@@ -359,7 +361,7 @@ pub fn config_panel<'a>(state: &'a Listen, id: &ListId) -> Element<'a, Message> 
                 stepper(
                     state,
                     format!("{:?}", config.grid.gap).to_lowercase(),
-                    cfg(ConfigEdit::Gap(config.grid.gap.smaller())),
+                    Some(cfg(ConfigEdit::Gap(config.grid.gap.smaller()))),
                     cfg(ConfigEdit::Gap(config.grid.gap.larger())),
                 ),
             ]
@@ -375,7 +377,7 @@ pub fn config_panel<'a>(state: &'a Listen, id: &ListId) -> Element<'a, Message> 
                 stepper(
                     state,
                     config.grid.items_per_row.to_string(),
-                    cfg(ConfigEdit::ItemsPerRow(config.grid.items_per_row.saturating_sub(1))),
+                    Some(cfg(ConfigEdit::ItemsPerRow(config.grid.items_per_row.saturating_sub(1)))),
                     cfg(ConfigEdit::ItemsPerRow(config.grid.items_per_row + 1)),
                 ),
             ]
@@ -465,8 +467,10 @@ pub fn config_panel<'a>(state: &'a Listen, id: &ListId) -> Element<'a, Message> 
                 stepper(
                     state,
                     config.items_per_page.to_string(),
-                    cfg(ConfigEdit::ItemsPerPage(config.items_per_page.saturating_sub(25))),
-                    cfg(ConfigEdit::ItemsPerPage(config.items_per_page + 25)),
+                    (config.items_per_page > ITEMS_PER_PAGE_STEP).then(|| {
+                        cfg(ConfigEdit::ItemsPerPage(config.items_per_page - ITEMS_PER_PAGE_STEP))
+                    }),
+                    cfg(ConfigEdit::ItemsPerPage(config.items_per_page + ITEMS_PER_PAGE_STEP)),
                 ),
             ]
             .align_y(Alignment::Center),
