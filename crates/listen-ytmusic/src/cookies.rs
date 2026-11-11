@@ -11,7 +11,8 @@ pub(crate) struct Cookie {
     pub domain: String,
     pub name: String,
     pub value: String,
-    /// Unix seconds; `None` for session cookies.
+    /// Unix seconds; `None` for session cookies. Readers convert their browser's unit (Chromium:
+    /// microseconds since 1601, Firefox schema 16+: milliseconds).
     pub expires: Option<f64>,
 }
 

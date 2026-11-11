@@ -364,8 +364,15 @@ fn youtube_host(host: &str) -> bool {
     h == "youtube.com" || h == "music.youtube.com"
 }
 
+/// Firefox 142 (cookie database schema 16) stores `expiry` in milliseconds, older schemas in seconds
+/// (yt-dlp's `cookies.py` reads it the same way).
+const FIREFOX_MS_EXPIRY_SCHEMA: i64 = 16;
+
 fn read_firefox(db: &Path) -> Result<Vec<Cookie>, String> {
     let (conn, _dir) = open_copy(db)?;
+    let schema: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap_or(0);
+    // `Cookie::expires` is Unix seconds: read as seconds, a millisecond expiry never runs out.
+    let per_second = if schema >= FIREFOX_MS_EXPIRY_SCHEMA { 1000.0 } else { 1.0 };
     let mut stmt = conn
         .prepare("SELECT host, name, value, expiry FROM moz_cookies WHERE host LIKE '%youtube.com'")
         .map_err(|e| format!("unexpected Firefox cookie database: {e}"))?;
@@ -375,7 +382,7 @@ fn read_firefox(db: &Path) -> Result<Vec<Cookie>, String> {
                 domain: r.get(0)?,
                 name: r.get(1)?,
                 value: r.get(2)?,
-                expires: r.get::<_, Option<i64>>(3)?.filter(|e| *e > 0).map(|e| e as f64),
+                expires: r.get::<_, Option<i64>>(3)?.filter(|e| *e > 0).map(|e| e as f64 / per_second),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -733,6 +740,42 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].label(), "Firefox");
         assert_eq!(found[0].youtube_header().unwrap(), "SAPISID=ff-sid; SOCS=CAI");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A Firefox profile whose `cookies.sqlite` has schema `version` and one SAPISID expiring at `expiry`.
+    fn fake_firefox_profile(root: &Path, version: i64, expiry: i64) -> Profile {
+        let profile = root.join("x.default-release");
+        std::fs::create_dir_all(&profile).unwrap();
+        let conn = rusqlite::Connection::open(profile.join("cookies.sqlite")).unwrap();
+        conn.execute_batch(&format!(
+            "PRAGMA user_version = {version};
+             CREATE TABLE moz_cookies(host TEXT, name TEXT, value TEXT, expiry INTEGER);
+             INSERT INTO moz_cookies VALUES('.youtube.com','SAPISID','ff-sid',{expiry});"
+        ))
+        .unwrap();
+        drop(conn);
+        firefox_profiles(root).remove(0)
+    }
+
+    #[test]
+    fn firefox_schema_16_expiry_is_milliseconds() {
+        // 2023 in ms; read as seconds it would be tens of thousands of years ahead.
+        let expired_ms = 1_700_000_000_000i64;
+        let root = temp_home("ff16-out");
+        let err = fake_firefox_profile(&root, 16, expired_ms).youtube_header().unwrap_err();
+        assert!(err.contains("isn't signed in"), "{err}");
+        let _ = std::fs::remove_dir_all(&root);
+
+        let root = temp_home("ff16-ok");
+        let header = fake_firefox_profile(&root, 16, 4_102_444_800_000).youtube_header().unwrap();
+        assert_eq!(header, "SAPISID=ff-sid");
+        let _ = std::fs::remove_dir_all(&root);
+
+        // Before schema 16 the same column is seconds.
+        let root = temp_home("ff15-ok");
+        let header = fake_firefox_profile(&root, 15, 4_102_444_800).youtube_header().unwrap();
+        assert_eq!(header, "SAPISID=ff-sid");
         let _ = std::fs::remove_dir_all(&root);
     }
 
