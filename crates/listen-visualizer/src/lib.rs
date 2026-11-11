@@ -2,15 +2,20 @@
 //!
 //! * [`Analyzer`]: FFT → log-spaced dB bands with smoothing and falling peaks
 //!   (audioMotion-analyzer defaults: 20 Hz–22 kHz, −85…−25 dB, smoothing 0.6).
-//! * [`capture`]: Listen's own playback streams only (Linux: `pw-record` on mpv's node,
-//!   pre-volume), one recorder and watchdog per deck.
+//! * [`capture`]: on Linux Listen's own playback streams only (`pw-record` on each mpv deck's node,
+//!   pre-volume, one recorder and watchdog per deck); on Windows a WASAPI loopback of the default
+//!   output device, i.e. everything that plays there, other programs included.
 
 mod analyzer;
 pub use analyzer::*;
 
 pub mod capture {
-    //! Audio capture of Listen's own output. Each deck has its own `pw-record` node
-    //! ([`recorder_name`]) whose watchdog accepts links only from that deck's stream.
+    //! Audio capture for the visualizer. The entry points keep their PipeWire names on every
+    //! platform ([`pipewire`], [`pipewire_many`]), but only Linux captures per deck:
+    //! - Linux: each deck has its own `pw-record` node ([`recorder_name`]) whose watchdog accepts
+    //!   links only from that deck's stream; the microphone is never recorded.
+    //! - Windows: a WASAPI loopback of the default output device (never an input device). It hears
+    //!   every program playing there, and all of it arrives as deck 0.
     #[cfg(target_os = "linux")]
     use tokio::io::AsyncReadExt;
     #[cfg(target_os = "linux")]
