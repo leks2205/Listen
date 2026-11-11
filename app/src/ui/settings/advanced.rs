@@ -306,8 +306,7 @@ pub(super) fn hidden_songs(state: &Listen) -> Element<'_, Message> {
     let mut items: Vec<(String, String, Message)> = Vec::new();
     for (key, s) in set.snoozed.iter().filter(|(_, s)| s.until > now) {
         let (title, artist) = state.exclude_name(key);
-        let days = ((s.until - now) as f64 / 86_400.0).ceil() as i64;
-        let what = crate::i18n::trf("Snoozed, {} days left", &[&days]);
+        let what = snooze_text(s.until - now);
         items.push((song_line(&title, &artist), what, Message::Exclude(ExcludeMsg::Unsnooze(key.clone()))));
     }
     for key in set.not_interested.iter().filter(|(_, m)| m.on).map(|(k, _)| k) {
@@ -565,4 +564,25 @@ pub(super) fn cache(state: &Listen) -> Element<'_, Message> {
         .into(),
     ));
     section(state, "Cache", rows)
+}
+
+/// "Snoozed, 3 days left" for `left` seconds of snooze (a started day counts), translated.
+fn snooze_text(left: i64) -> String {
+    let days = (left as f64 / 86_400.0).ceil() as i64;
+    if days == 1 {
+        crate::i18n::tr("Snoozed, 1 day left").to_string()
+    } else {
+        crate::i18n::trf("Snoozed, {} days left", &[&days])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_song_snoozed_for_less_than_a_day_says_1_day() {
+        assert_eq!(snooze_text(3600), "Snoozed, 1 day left");
+        assert_eq!(snooze_text(86_400 + 1), "Snoozed, 2 days left");
+    }
 }
