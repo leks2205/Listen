@@ -10,7 +10,7 @@ pub const BAR: f64 = 2.0;
 /// Click onsets above this absolute level count (clicks peak at 0.8).
 pub const CLICK_THRESHOLD: f32 = 0.25;
 
-/// Interleaved stereo f32.
+/// Stereo f32, one vector per channel (planar); see `deinterleave` for interleaved input.
 pub struct Stereo {
     pub l: Vec<f32>,
     pub r: Vec<f32>,

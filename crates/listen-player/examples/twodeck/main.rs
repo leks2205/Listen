@@ -18,6 +18,7 @@
 mod rec;
 mod signal;
 
+use listen_core::settings::{DECK_BASS, DECK_HIGHPASS, DECK_LOWPASS, DECK_MIX_LABEL};
 use listen_player::{MpvOptions, Player, PlayerEvent, PtsSample, Track};
 use rec::{Recorder, Recording};
 use signal::{BAR, BEAT, RATE, Stereo, fit, onsets, stats};
@@ -26,7 +27,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tokio::time::sleep;
 
-/// The mix filters of `listen_core::settings::deck_audio_filters`, without a tempo filter.
+/// The S0b-era mix stage: bass shelf, high- and low-pass only. Not the current production graph
+/// (no echo stage, no tempo filter); `production()` builds that one.
 const MIX: &str = "@mix:lavfi=[bass@lo=g=0:f=120:w=0.7,highpass@hp=f=10,lowpass@lp=f=20000]";
 
 /// The chain the app uses on a deck (no user EQ).
@@ -556,49 +558,49 @@ async fn exp_afcmd(ctx: &Ctx, trials: usize) {
     for _ in 0..trials {
         sleep(Duration::from_millis(800)).await;
         let t = Instant::now();
-        p.af_command("mix", "f", "500", "lowpass@lp").await.unwrap();
+        p.af_command(DECK_MIX_LABEL, "f", "500", DECK_LOWPASS).await.unwrap();
         sends.push((t, Instant::now()));
         sleep(Duration::from_millis(800)).await;
-        p.af_command("mix", "f", "20000", "lowpass@lp").await.unwrap();
+        p.af_command(DECK_MIX_LABEL, "f", "20000", DECK_LOWPASS).await.unwrap();
     }
     // Clicks on the 80 Hz tone (left). Each case: setup commands, then a ramp of
     // (target, command, values) sent 25 ms apart, then a reset.
     type Case<'a> = (&'a str, Vec<(&'a str, &'a str, String)>, Vec<(&'a str, &'a str, String)>);
     let steps = |n: usize, from: f64, to: f64| (1..=n).map(move |i| from + (to - from) * i as f64 / n as f64);
     let cases: Vec<Case> = vec![
-        ("bass g 0 → -24 dB at once", vec![], vec![("bass@lo", "g", "-24".into())]),
+        ("bass g 0 → -24 dB at once", vec![], vec![(DECK_BASS, "g", "-24".into())]),
         (
             "bass g 0 → -24 dB in 12 steps (300 ms)",
             vec![],
-            steps(12, 0.0, -24.0).map(|g| ("bass@lo", "g", format!("{g}"))).collect(),
+            steps(12, 0.0, -24.0).map(|g| (DECK_BASS, "g", format!("{g}"))).collect(),
         ),
         (
             "highpass 200 Hz, mix 0 → 1 at once",
-            vec![("highpass@hp", "mix", "0".into()), ("highpass@hp", "f", "200".into())],
-            vec![("highpass@hp", "mix", "1".into())],
+            vec![(DECK_HIGHPASS, "mix", "0".into()), (DECK_HIGHPASS, "f", "200".into())],
+            vec![(DECK_HIGHPASS, "mix", "1".into())],
         ),
         (
             "highpass 200 Hz, mix 0 → 1 in 8 steps (200 ms)",
-            vec![("highpass@hp", "mix", "0".into()), ("highpass@hp", "f", "200".into())],
-            steps(8, 0.0, 1.0).map(|m| ("highpass@hp", "mix", format!("{m}"))).collect(),
+            vec![(DECK_HIGHPASS, "mix", "0".into()), (DECK_HIGHPASS, "f", "200".into())],
+            steps(8, 0.0, 1.0).map(|m| (DECK_HIGHPASS, "mix", format!("{m}"))).collect(),
         ),
         (
             "highpass 10 Hz, mix 0 → 1 at once",
-            vec![("highpass@hp", "mix", "0".into()), ("highpass@hp", "f", "10".into())],
-            vec![("highpass@hp", "mix", "1".into())],
+            vec![(DECK_HIGHPASS, "mix", "0".into()), (DECK_HIGHPASS, "f", "10".into())],
+            vec![(DECK_HIGHPASS, "mix", "1".into())],
         ),
         (
             "highpass mix 1, f 10 → 200 Hz in 16 steps (400 ms)",
-            vec![("highpass@hp", "f", "10".into()), ("highpass@hp", "mix", "1".into())],
+            vec![(DECK_HIGHPASS, "f", "10".into()), (DECK_HIGHPASS, "mix", "1".into())],
             steps(16, 10f64.ln(), 200f64.ln())
-                .map(|f| ("highpass@hp", "f", format!("{:.1}", f.exp())))
+                .map(|f| (DECK_HIGHPASS, "f", format!("{:.1}", f.exp())))
                 .collect(),
         ),
     ];
     let mut events = Vec::new();
     for (label, setup, ramp) in &cases {
         for (target, cmd, arg) in setup {
-            p.af_command("mix", cmd, arg, target).await.unwrap();
+            p.af_command(DECK_MIX_LABEL, cmd, arg, target).await.unwrap();
         }
         sleep(Duration::from_millis(800)).await;
         let t = Instant::now();
@@ -606,13 +608,13 @@ async fn exp_afcmd(ctx: &Ctx, trials: usize) {
             if i > 0 {
                 sleep(Duration::from_millis(25)).await;
             }
-            p.af_command("mix", cmd, arg, target).await.unwrap();
+            p.af_command(DECK_MIX_LABEL, cmd, arg, target).await.unwrap();
         }
         events.push((*label, t, ramp.len()));
         sleep(Duration::from_millis(800)).await;
-        p.af_command("mix", "g", "0", "bass@lo").await.unwrap();
-        p.af_command("mix", "f", "10", "highpass@hp").await.unwrap();
-        p.af_command("mix", "mix", "1", "highpass@hp").await.unwrap();
+        p.af_command(DECK_MIX_LABEL, "g", "0", DECK_BASS).await.unwrap();
+        p.af_command(DECK_MIX_LABEL, "f", "10", DECK_HIGHPASS).await.unwrap();
+        p.af_command(DECK_MIX_LABEL, "mix", "1", DECK_HIGHPASS).await.unwrap();
     }
     sleep(Duration::from_millis(800)).await;
     let rec = ctx.finish(rec, "rec_afcmd");
