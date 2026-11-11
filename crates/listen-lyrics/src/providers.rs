@@ -210,13 +210,12 @@ pub mod genius {
                 hits.iter()
                     .map(|h| &h["result"])
                     .map(|r| {
-                        SearchHit::new(
-                            Source::Genius,
-                            s(&r["url"]),
-                            s(&r["artist_names"]),
-                            s(&r["full_title"]),
-                            None,
-                        )
+                        // `title` is the song's name; `full_title` is "<title> by <artists>", which
+                        // would rank as a looser match and show the artist twice in the match line.
+                        let name = Some(s(&r["title"]))
+                            .filter(|t| !t.is_empty())
+                            .unwrap_or_else(|| s(&r["full_title"]));
+                        SearchHit::new(Source::Genius, s(&r["url"]), s(&r["artist_names"]), name, None)
                     })
                     .collect()
             })
@@ -520,11 +519,25 @@ mod tests {
     fn genius_search_fixture() {
         let body = r#"{"meta":{"status":200},"response":{"sections":[{"type":"song","hits":[
             {"type":"song","result":{"url":"https://genius.com/Rick-astley-never-gonna-give-you-up-lyrics",
-             "artist_names":"Rick Astley","full_title":"Never Gonna Give You Up by Rick Astley"}}]}]}}"#;
+             "artist_names":"Rick Astley","title":"Never Gonna Give You Up",
+             "full_title":"Never Gonna Give You Up by Rick Astley"}},
+            {"type":"song","result":{"url":"https://genius.com/x","artist_names":"A","full_title":"Old by A"}}]}]}}"#;
         let hits = genius::parse_search(body);
-        assert_eq!(hits.len(), 1);
+        assert_eq!(hits.len(), 2);
         assert_eq!(hits[0].id, "https://genius.com/Rick-astley-never-gonna-give-you-up-lyrics");
         assert_eq!(hits[0].artist, "Rick Astley");
+        assert_eq!(hits[0].name, "Never Gonna Give You Up", "the title, not \"… by Rick Astley\"");
+        assert_eq!(hits[0].matched(), "Never Gonna Give You Up — Rick Astley");
+        assert_eq!(hits[1].name, "Old by A", "no title: the full title");
+    }
+
+    #[test]
+    fn genius_hits_rank_as_exact_matches() {
+        let body = r#"{"response":{"sections":[{"hits":[{"result":{"url":"https://genius.com/y",
+            "artist_names":"IU","title":"Love wins all","full_title":"Love wins all by IU"}}]}]}}"#;
+        let q = Query { name: "Love wins all".into(), artist: "IU".into(), ..Query::default() };
+        let hits = rank::order(&q, genius::parse_search(body));
+        assert_eq!(hits[0].score, 0.0);
     }
 
     #[test]
