@@ -79,6 +79,9 @@ pub enum Item {
         /// The id of this entry in the playlist it was listed in (what
         /// removing and moving it address); `None` outside playlists.
         set_video_id: Option<String>,
+        /// The like status from the row's menu (`Some(true)` = liked); `None` where the item has
+        /// no like button (tiles), so the like status is unknown.
+        liked: Option<bool>,
     },
 }
 
@@ -145,6 +148,7 @@ pub(crate) fn two_row(r: &Value) -> Option<Item> {
             thumbs,
             duration: String::new(),
             set_video_id: None,
+            liked: None,
         });
     }
     let id = r.pointer("/navigationEndpoint/browseEndpoint/browseId").and_then(Value::as_str)?.to_string();
@@ -285,7 +289,23 @@ pub(crate) fn list_item(r: &Value) -> Option<Item> {
         thumbs: thumbs(r, "/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails"),
         duration: text(r, "/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text"),
         set_video_id: set_video_id(r),
+        liked: like_status(r),
     })
+}
+
+/// `LIKE`, `INDIFFERENT`, … from the row's menu (ytmusicapi reads the same
+/// `menu/menuRenderer/topLevelButtons/0/likeButtonRenderer/likeStatus`).
+pub(crate) fn like_status(r: &Value) -> Option<bool> {
+    fn find(v: &Value) -> Option<&str> {
+        match v {
+            Value::Object(m) => {
+                m.get("likeStatus").and_then(Value::as_str).or_else(|| m.values().find_map(find))
+            }
+            Value::Array(a) => a.iter().find_map(find),
+            _ => None,
+        }
+    }
+    find(r.get("menu")?).map(|s| s == "LIKE")
 }
 /// A browse request for song lists (library songs, playlists incl. Liked
 /// Music), or one of its continuations.
@@ -529,6 +549,26 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
+    }
+
+    #[test]
+    fn library_rows_carry_their_like_status() {
+        let row = |id: &str, status: &str| {
+            json!({
+                "playlistItemData": {"videoId": id},
+                "flexColumns": [{"musicResponsiveListItemFlexColumnRenderer": {"text": {"runs": [{"text": "Title"}]}}}],
+                "menu": {"menuRenderer": {"topLevelButtons": [{"likeButtonRenderer": {"likeStatus": status}}]}}
+            })
+        };
+        let liked = |r: &Value| match list_item(r) {
+            Some(Item::Song { liked, .. }) => liked,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(liked(&row("a", "LIKE")), Some(true));
+        assert_eq!(liked(&row("b", "INDIFFERENT")), Some(false));
+        let mut bare = row("c", "LIKE");
+        bare.as_object_mut().unwrap().remove("menu");
+        assert_eq!(liked(&bare), None);
     }
 
     #[test]

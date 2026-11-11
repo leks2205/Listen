@@ -3,7 +3,7 @@
 //! artist channels use a `musicVisualHeaderRenderer` instead. This reads both,
 //! tolerantly, from the raw response.
 
-use crate::home::{Item, Named, list_item, page_type, runs, text, thumbs, two_row};
+use crate::home::{Item, Named, like_status, list_item, page_type, runs, text, thumbs, two_row};
 use serde_json::Value;
 use ytmapi_rs::common::Thumbnail;
 
@@ -232,20 +232,6 @@ pub fn parse(json: &Value) -> Result<ArtistData, String> {
 
 fn runs_of<'a>(v: &'a Value, ptr: &str) -> &'a [Value] {
     runs(v, ptr)
-}
-
-/// `LIKE`, `INDIFFERENT`, … from the row's menu.
-fn like_status(r: &Value) -> Option<bool> {
-    fn find(v: &Value) -> Option<&str> {
-        match v {
-            Value::Object(m) => {
-                m.get("likeStatus").and_then(Value::as_str).or_else(|| m.values().find_map(find))
-            }
-            Value::Array(a) => a.iter().find_map(find),
-            _ => None,
-        }
-    }
-    find(r.get("menu")?).map(|s| s == "LIKE")
 }
 
 #[cfg(test)]

@@ -40,7 +40,8 @@ pub fn library_query(q: &SongQuery) -> SongQuery {
     let own = matches!(q.sort, SongSort::RecentlyAdded | SongSort::Id);
     let liked_only = q.favorite_filter() == Some(true);
     SongQuery {
-        // The liked list was chosen by the caller; its songs need no second check.
+        // The liked list was chosen by the caller; its songs need no second check. Library songs
+        // carry their row's like status, so Favorited = No drops the liked ones.
         favorites_only: false,
         favorite: if liked_only { None } else { q.favorite },
         sort: if own { SongSort::Id } else { q.sort },
@@ -135,5 +136,14 @@ mod tests {
         // The liked list is already the favourites: no second check on the flag.
         let q = SongQuery { favorites_only: true, ..Default::default() };
         assert_eq!(songs_in(songs, &q).len(), 3);
+    }
+
+    #[test]
+    fn favorited_no_excludes_liked_songs() {
+        let mut songs = vec![song("a", "One", "X", 300), song("b", "Two", "Y", 100)];
+        songs[0].favorite = true;
+        let q = SongQuery { favorite: Some(false), ..Default::default() };
+        let ids: Vec<_> = songs_in(songs, &q).iter().map(|s| s.id.clone()).collect();
+        assert_eq!(ids, ["b"]);
     }
 }

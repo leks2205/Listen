@@ -193,6 +193,14 @@ fn name_ref(name: &str) -> Vec<ArtistRef> {
 }
 
 /// Playlist ids need the `VL` prefix for browsing.
+/// Every song of Liked Music is a favourite, whether or not its row has a like button: the heart,
+/// the like/unlike toggles and the Favorited filter all read `Song::favorite`.
+fn mark_liked_music(browse_id: &str, songs: &mut [Song]) {
+    if browse_id == LIKED_PLAYLIST {
+        songs.iter_mut().for_each(|s| s.favorite = true);
+    }
+}
+
 fn playlist_browse_id(id: &str) -> String {
     if id.starts_with("VL") || id == UPLOADS_PLAYLIST { id.to_string() } else { format!("VL{id}") }
 }
@@ -1582,10 +1590,13 @@ impl MusicSource for YouTubeMusic {
 }
 
 impl YouTubeMusic {
+    /// A song row as a [`Song`]. `favorite` comes from the row's like button; rows without one
+    /// (tiles) leave it false, and [`mark_liked_music`] marks every song of Liked Music.
     fn item_song(&self, item: home::Item) -> Option<Song> {
-        let home::Item::Song { video_id, title, artists, album, thumbs, duration, .. } = item else {
+        let home::Item::Song { video_id, title, artists, album, thumbs, duration, liked, .. } = item else {
             return None;
         };
+        let like = liked.map(|l| if l { LikeStatus::Liked } else { LikeStatus::Indifferent });
         let refs: Vec<ArtistRef> =
             artists.iter().map(|n| ArtistRef { id: n.id.clone(), name: n.name.clone() }).collect();
         let album = album.and_then(|a| Some(ParsedSongAlbum { name: a.name, id: AlbumID::from_raw(a.id?) }));
@@ -1596,7 +1607,7 @@ impl YouTubeMusic {
             album.as_ref(),
             &duration,
             &thumbs,
-            None,
+            like.as_ref(),
             &Explicit::NotExplicit,
         ))
     }
@@ -1746,7 +1757,9 @@ impl YouTubeMusic {
                 raw.len()
             );
         }
-        Ok((page.into_iter().filter_map(|i| self.item_song(i)).collect(), next))
+        let mut songs: Vec<Song> = page.into_iter().filter_map(|i| self.item_song(i)).collect();
+        mark_liked_music(browse_id, &mut songs);
+        Ok((songs, next))
     }
 
     /// Whether a playlist read now may be cached (not right after an edit).
@@ -1880,6 +1893,17 @@ mod tests {
         assert_eq!(playlist_subtitle("12 songs"), (None, Some(12)));
         assert_eq!(playlist_subtitle("Playlist • Alex • 42 tracks"), (Some("Alex".into()), Some(42)));
         assert_eq!(playlist_subtitle(""), (None, None));
+    }
+
+    #[test]
+    fn liked_music_rows_are_favorites() {
+        let song = |id: &str| Song::new(id, ServerId("yt".into()), SourceKind::YouTubeMusic, "t");
+        let mut liked = vec![song("a"), song("b")];
+        mark_liked_music(&playlist_browse_id("LM"), &mut liked);
+        assert!(liked.iter().all(|s| s.favorite));
+        let mut other = vec![song("c")];
+        mark_liked_music(&playlist_browse_id("PL1"), &mut other);
+        assert!(!other[0].favorite);
     }
 
     #[tokio::test]
