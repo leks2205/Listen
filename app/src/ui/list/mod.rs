@@ -385,14 +385,18 @@ fn pagination_bar<'a>(
                 if total == 0 {
                     "No items".to_string()
                 } else {
-                    format!("{}–{} of {total}{more}", start + 1, end)
+                    crate::i18n::trf("{}–{} of {}{}", &[&(start + 1), &end, &total, &more])
                 },
                 metrics::font_sm(),
                 t.muted
             ),
             space::horizontal(),
             nav(Icon::LuChevronLeft, page.saturating_sub(1), page > 0, "Previous page"),
-            label(format!("Page {} of {pages}{more}", page + 1), metrics::font_sm(), t.foreground),
+            label(
+                crate::i18n::trf("Page {} of {}{}", &[&(page + 1), &pages, &more]),
+                metrics::font_sm(),
+                t.foreground
+            ),
             nav(Icon::LuChevronRight, page + 1, page + 1 < pages || !done, "Next page"),
         ]
         .spacing(metrics::space_sm())
