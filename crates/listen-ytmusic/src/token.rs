@@ -188,7 +188,8 @@ pub struct CookieToken {
 }
 
 impl CookieToken {
-    /// `cookies`: a `Cookie` header containing `SAPISID`.
+    /// `cookies`: a `Cookie` header containing `SAPISID`. Fetches music.youtube.com once for the
+    /// client version, even for the guest cookie.
     pub async fn new(cookies: &str, page_id: Option<String>) -> Result<Self, String> {
         let cookies = cookies.trim().trim_end_matches(';').to_string();
         let session = Session::new(&cookies, None)?;
@@ -204,6 +205,15 @@ impl CookieToken {
             .map_err(|e| e.to_string())??;
         let session = Session::new(&header, Some(profile))?;
         Ok(Self { client_version: client_version(&header).await, session, page_id })
+    }
+
+    /// A token built without any request (the date-based client version), for unit tests: they
+    /// never reach a real host, and [`CookieToken::new`] fetches music.youtube.com.
+    #[cfg(test)]
+    pub(crate) fn offline(cookies: &str) -> Result<Self, String> {
+        let cookies = cookies.trim().trim_end_matches(';').to_string();
+        let session = Session::new(&cookies, None)?;
+        Ok(Self { client_version: fallback_version(), session, page_id: None })
     }
 
     /// The cookies in use, to ask for them to be read again (see [`Session::mark_stale`]).
@@ -238,7 +248,12 @@ async fn client_version(cookies: &str) -> String {
             let (_, rest) = html.split_once("INNERTUBE_CLIENT_VERSION\":\"")?;
             rest.split_once('"').map(|(v, _)| v.to_string())
         })
-        .unwrap_or_else(|| format!("1.{}.01.00", today()))
+        .unwrap_or_else(fallback_version)
+}
+
+/// ytmusicapi's date-based client version.
+fn fallback_version() -> String {
+    format!("1.{}.01.00", today())
 }
 
 /// Today's UTC date as `YYYYMMDD`.

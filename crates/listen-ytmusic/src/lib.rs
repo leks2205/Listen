@@ -279,7 +279,7 @@ impl YouTubeMusic {
     }
 
     /// Signs in with a `Cookie` header, acting as the brand-account channel
-    /// `page_id` if given.
+    /// `page_id` if given. Sends one request to music.youtube.com (the client version), also for a guest.
     pub async fn connect_cookies(
         server_id: ServerId,
         cookie: &str,
@@ -300,6 +300,14 @@ impl YouTubeMusic {
         let page_id = profile.page_id.clone();
         let token = token::CookieToken::from_profile(profile, page_id).await.map_err(SourceError::Auth)?;
         Self::with_token(server_id, token, guest)
+    }
+
+    /// A guest built without any request, for unit tests: they never reach a real host, and
+    /// [`YouTubeMusic::connect`] fetches music.youtube.com even for a guest.
+    #[cfg(test)]
+    fn offline_guest(server_id: ServerId) -> Self {
+        let token = token::CookieToken::offline(GUEST_COOKIE).expect("the guest cookie has a SAPISID");
+        Self::with_token(server_id, token, true).expect("the client builds without a request")
     }
 
     fn with_token(server_id: ServerId, token: token::CookieToken, guest: bool) -> Result<Self> {
@@ -1908,9 +1916,7 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_forgets_the_library_caches() {
-        // A guest session needs no network to be built.
-        let yt =
-            YouTubeMusic::connect(ServerId("yt".into()), "").await.expect("a guest session builds offline");
+        let yt = YouTubeMusic::offline_guest(ServerId("yt".into()));
         *yt.songs.lock().await = Some(CachedSongs {
             at: Instant::now(),
             list: std::sync::Arc::new(clientside::SongList::new(vec![])),
@@ -1921,6 +1927,44 @@ mod tests {
         yt.refresh().await;
         assert!(yt.songs.lock().await.is_none() && yt.albums.lock().await.is_none());
         assert!(yt.playlist_cache.lock().await.is_empty() && yt.playlist_partial.lock().await.is_empty());
+    }
+
+    /// Every way to connect fetches music.youtube.com, so the unit tests of this crate build their
+    /// source with `offline_guest` (live tests live in tests/ and are opt-in).
+    #[test]
+    fn unit_tests_never_reach_a_real_host() {
+        let calls = [
+            ["YouTubeMusic", "::connect"].concat(),
+            ["CookieToken", "::new("].concat(),
+            ["CookieToken", "::from_profile("].concat(),
+            ["channels", "::list("].concat(),
+            [".get(", "YTM)"].concat(),
+        ];
+        let sources = [
+            ("artist.rs", include_str!("artist.rs")),
+            ("audio.rs", include_str!("audio.rs")),
+            ("browser.rs", include_str!("browser.rs")),
+            ("budget.rs", include_str!("budget.rs")),
+            ("channels.rs", include_str!("channels.rs")),
+            ("cookies.rs", include_str!("cookies.rs")),
+            ("favorites.rs", include_str!("favorites.rs")),
+            ("home.rs", include_str!("home.rs")),
+            ("lib.rs", include_str!("lib.rs")),
+            ("library.rs", include_str!("library.rs")),
+            ("loudness.rs", include_str!("loudness.rs")),
+            ("query.rs", include_str!("query.rs")),
+            ("token.rs", include_str!("token.rs")),
+            ("ytdlp.rs", include_str!("ytdlp.rs")),
+        ];
+        for (file, src) in sources {
+            let Some((_, tests)) = src.split_once("\nmod tests {") else { continue };
+            for call in &calls {
+                assert!(
+                    !tests.contains(call.as_str()),
+                    "{file}: a unit test calls {call}, which reaches the network"
+                );
+            }
+        }
     }
 
     #[test]
