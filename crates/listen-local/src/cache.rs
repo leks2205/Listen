@@ -18,8 +18,14 @@ const SCHEMA: &str = "rel,mtime,len,title,artists,album,album_artist,track,disc,
 /// hostile counts must not turn into a large allocation before the entries fail.
 const MAX_PREALLOC: usize = 65_536;
 /// Longest plausible track duration (about 115 days); also keeps the sum in
-/// `Index::build` far away from `Duration`'s overflow panic.
+/// `Index::build` far away from `Duration`'s overflow panic. The decoder rejects
+/// longer values, so the scan applies [`plausible_duration`] before they are used or cached.
 const MAX_DURATION_SECS: u64 = 10_000_000;
+
+/// `d`, or zero (unknown) when a corrupt header claims more than [`MAX_DURATION_SECS`].
+pub(crate) fn plausible_duration(d: Duration) -> Duration {
+    if d.as_secs() > MAX_DURATION_SECS { Duration::ZERO } else { d }
+}
 
 /// An exact modification time: seconds since the epoch plus nanoseconds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +77,11 @@ pub(crate) struct ScanCache {
 impl ScanCache {
     pub(crate) fn load(path: &Path) -> Option<Self> {
         let data = std::fs::read(path).ok()?;
-        Self::decode(&data)
+        let cache = Self::decode(&data);
+        if cache.is_none() {
+            tracing::debug!("scan cache {} is unreadable; the folder is scanned again", path.display());
+        }
+        cache
     }
 
     fn decode(data: &[u8]) -> Option<Self> {
@@ -321,8 +331,10 @@ fn put_scanned(out: &mut Vec<u8>, s: &Scanned) {
     put_opt_f32(out, s.gain.track_peak);
     put_opt_f32(out, s.gain.album_gain);
     put_opt_f32(out, s.gain.album_peak);
-    put_u64(out, s.duration.as_secs());
-    put_u32(out, s.duration.subsec_nanos());
+    // Whatever is written must decode again: an out-of-range duration would make the whole file unreadable.
+    let duration = plausible_duration(s.duration);
+    put_u64(out, duration.as_secs());
+    put_u32(out, duration.subsec_nanos());
     put_bool(out, s.embedded_art);
 }
 
@@ -598,6 +610,24 @@ mod tests {
         put_u32(&mut body, nanos);
         put_u8(&mut body, 0); // embedded_art
         body
+    }
+
+    #[test]
+    fn an_entry_the_decoder_rejects_is_never_encoded() {
+        let long = Duration::from_secs(MAX_DURATION_SECS + 1);
+        let scanned = vec![Scanned {
+            rel: "a.wav".into(),
+            modified: Some(UNIX_EPOCH + Duration::from_secs(1_700_000_000)),
+            duration: long,
+            ..Default::default()
+        }];
+        let mut cache =
+            ScanCache::decode(&encode(&scanned, &[(0, 1)], &[])).expect("what is written decodes");
+        let entry = cache.remove("a.wav").unwrap().scanned.unwrap();
+        assert_eq!(entry.duration, Duration::ZERO);
+        assert_eq!(plausible_duration(long), Duration::ZERO);
+        let max = Duration::new(MAX_DURATION_SECS, 999_999_999);
+        assert_eq!(plausible_duration(max), max);
     }
 
     #[test]

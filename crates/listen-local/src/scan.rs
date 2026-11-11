@@ -292,7 +292,7 @@ fn read_file_with(
         bit_rate: props.audio_bitrate(),
         sample_rate: props.sample_rate(),
         bit_depth: props.bit_depth().map(u32::from),
-        duration: props.duration(),
+        duration: crate::cache::plausible_duration(props.duration()),
         ..Default::default()
     };
     if let Some(tag) = tag {
