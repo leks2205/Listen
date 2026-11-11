@@ -97,12 +97,15 @@ pub fn clean_title(title: &str) -> String {
             out = out.replace(&format!("{o}{p}{c}"), "");
         }
     }
-    // "Artist - Title (Official Video)" style uploads: a trailing " | M/V" or " MV".
+    // "Artist - Title (Official Video)" style uploads: a trailing " | M/V" or " MV". At most one
+    // tail goes, the longest that fits: the shorter ones are suffixes of the longer ("Song | MV"
+    // also ends in " mv"), so cutting every match would eat the title. The tails are ASCII, so the
+    // byte length cut from `out` equals the one matched in `lower`.
     let lower = out.to_lowercase();
-    for tail in [" | mv", " | m/v", " m/v", " mv", " official mv"] {
-        if lower.ends_with(tail) {
-            out.truncate(out.len() - tail.len());
-        }
+    if let Some(tail) =
+        [" official mv", " | m/v", " | mv", " m/v", " mv"].into_iter().find(|t| lower.ends_with(t))
+    {
+        out.truncate(out.len() - tail.len());
     }
     let c = collapse(&out);
     if c.is_empty() { collapse(title) } else { c }
@@ -193,6 +196,16 @@ mod tests {
         // A title that is only a label stays as it is (never empty).
         assert_eq!(clean_title("(Official Audio)"), "(Official Audio)");
         assert_eq!(clean_title("Lemonade"), "Lemonade");
+    }
+
+    #[test]
+    fn clean_title_strips_one_trailing_video_label() {
+        assert_eq!(clean_title("Song | MV"), "Song");
+        assert_eq!(clean_title("Song | M/V"), "Song");
+        assert_eq!(clean_title("Song M/V"), "Song");
+        assert_eq!(clean_title("Song MV"), "Song");
+        assert_eq!(clean_title("Song Official MV"), "Song");
+        assert_eq!(title_variants("Next Level | MV"), ["Next Level | MV", "Next Level"]);
     }
 
     #[test]
