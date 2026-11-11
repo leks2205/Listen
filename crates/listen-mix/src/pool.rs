@@ -47,8 +47,9 @@ pub struct PoolGate {
 }
 
 impl PoolGate {
-    /// The log line: "AI DJ pool: 23 kept, 17 rejected (other scene 9, other era 6, unknown 2), 4 from
-    /// the store [session scene ko · pop · 1980s (tags), 2 of 2 songs]". `None` without an active gate.
+    /// The log line: "AI DJ pool: 23 kept, 17 rejected (other scene 9, other era 6, unknown 2, no
+    /// language 0), 4 from the store (1 heard) [session scene ko · pop · 1980s (tags), 2 of 2 songs]";
+    /// "other scene" includes the weak matches. `None` without an active gate.
     pub fn note(&self, who: &str) -> Option<String> {
         let session = self.session.as_ref()?;
         let r = &self.rejected;
@@ -274,7 +275,12 @@ mod tests {
         assert_eq!((r.other_era, r.unknown_scene), (3, 1), "{r:?}");
         assert!(r.other_scene + r.no_language >= 3, "house, R&B and trot: {r:?}");
         let note = g.note("AI DJ").unwrap();
-        assert!(note.starts_with("AI DJ pool: 2 kept, 7 rejected (other scene"), "{note}");
+        let (scene, language) = (r.other_scene + r.weak, r.no_language);
+        let prefix = format!("AI DJ pool: 2 kept, 7 rejected (other scene {scene}, other era 3, unknown 1, ");
+        assert!(
+            note.starts_with(&format!("{prefix}no language {language}), 2 from the store (1 heard)")),
+            "{note}"
+        );
         assert!(note.contains("1980s"), "{note}");
     }
 

@@ -116,7 +116,8 @@ pub fn octave_match(from_bpm: f32, to_bpm: f32) -> (f32, f32) {
 }
 
 /// Tempo cost of mixing `a` bpm into `b` bpm: linear up to a 6 % gap (=1.0),
-/// quadratic beyond (a 12 % gap costs 4), capped at 4.
+/// quadratic beyond (a 12 % gap costs 4), capped at 4, plus `OCTAVE_PENALTY` (0.15) for a
+/// half/double-time match, so at most 4.15.
 pub fn tempo_cost(a: f32, b: f32) -> f32 {
     let (k, lr) = octave_match(a, b);
     let x = lr.abs() / TEMPO_UNIT;
@@ -413,6 +414,8 @@ mod tests {
         assert!((tempo_cost(120.0, 120.0 * 1.06f32.powi(2)) - 4.0).abs() < 0.05);
         // Half / double time: only the small octave penalty.
         assert!((tempo_cost(120.0, 240.0) - OCTAVE_PENALTY).abs() < 1e-4);
+        // The cap applies before the octave penalty: a far half-time clash costs 4.15 at most.
+        assert!((tempo_cost(100.0, 300.0) - (4.0 + OCTAVE_PENALTY)).abs() < 1e-4);
         assert!((tempo_cost(140.0, 70.0) - OCTAVE_PENALTY).abs() < 1e-4);
         assert!(tempo_cost(120.0, 61.0) < 0.5);
         let (k, lr) = octave_match(64.0, 128.0);
