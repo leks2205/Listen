@@ -57,13 +57,14 @@ fn input<'a>(
         .into()
 }
 
-/// A plain choice for the boolean and order pick lists.
+/// A plain choice for the boolean and order pick lists: the stored value, shown translated (compare
+/// the value, never the shown text).
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Choice(&'static str);
 
 impl fmt::Display for Choice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0)
+        f.write_str(crate::i18n::tr(self.0))
     }
 }
 
@@ -186,8 +187,8 @@ pub fn group<'a>(state: &'a Listen, e: &'a Editor, g: &'a QGroup, path: Vec<usiz
     let t = state.tokens;
     let root = path.is_empty();
     let kind_path = path.clone();
-    let kind = pick_list(GroupKind::BOTH, Some(g.kind), move |k| {
-        msg(SmartMsg::Group(kind_path.clone(), GroupEdit::Kind(k)))
+    let kind = pick_list(GroupKind::BOTH.map(crate::ui::Tr), Some(crate::ui::Tr(g.kind)), move |k| {
+        msg(SmartMsg::Group(kind_path.clone(), GroupEdit::Kind(k.0)))
     })
     .text_size(metrics::font_sm())
     .width(150);

@@ -830,7 +830,7 @@ mod modal {
     use iced::{Alignment, Padding};
     use serde_json::json;
 
-    /// A pick-list entry: the stored value and the text shown.
+    /// A pick-list entry: the stored value and the text shown (translated by whoever builds it).
     #[derive(Debug, Clone, PartialEq)]
     pub struct Choice(pub String, pub String);
 
@@ -959,14 +959,15 @@ mod modal {
         )
     }
 
+    /// (value, label) options with UI labels, translated here (the pick list draws them as they are).
     fn pairs<const N: usize>(items: [(&str, &str); N]) -> Vec<(String, String)> {
-        items.into_iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+        items.into_iter().map(|(a, b)| (a.to_string(), crate::i18n::tr(b).to_string())).collect()
     }
 
     fn gradient_options(s: &listen_core::settings::Visualizer, none: bool) -> Vec<(String, String)> {
         let mut v = Vec::new();
         if none {
-            v.push((String::new(), "Same as gradient".to_string()));
+            v.push((String::new(), crate::i18n::tr("Same as gradient").to_string()));
         }
         for name in builtin_gradients() {
             let mut label = name.to_string();
@@ -1069,12 +1070,13 @@ mod modal {
                                 .width(160),
                             pick_list(
                                 vec![
-                                    Choice("v".into(), "Vertical".into()),
-                                    Choice("h".into(), "Horizontal".into())
+                                    Choice("v".into(), crate::i18n::tr("Vertical").into()),
+                                    Choice("h".into(), crate::i18n::tr("Horizontal").into())
                                 ],
                                 Some(Choice(
                                     if horizontal { "h" } else { "v" }.into(),
-                                    if horizontal { "Horizontal" } else { "Vertical" }.into()
+                                    crate::i18n::tr(if horizontal { "Horizontal" } else { "Vertical" })
+                                        .into()
                                 )),
                                 move |c: Choice| Message::Viz(VizMsg::GradientHorizontal(i, c.0 == "h")),
                             ),
@@ -1116,7 +1118,7 @@ mod modal {
             state,
             "Mode",
             "mode",
-            MODES.iter().map(|(m, l)| (m.to_string(), l.to_string())).collect(),
+            MODES.iter().map(|(m, l)| (m.to_string(), crate::i18n::tr(l).to_string())).collect(),
             &s.mode.to_string(),
             true,
         ));

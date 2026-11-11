@@ -247,10 +247,10 @@ struct SliderChoice(SliderType);
 
 impl std::fmt::Display for SliderChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
+        f.write_str(crate::i18n::tr(match self.0 {
             SliderType::Slider => "Slider",
             SliderType::Waveform => "Waveform",
-        })
+        }))
     }
 }
 
@@ -259,11 +259,11 @@ struct AlignChoice(WaveformAlign);
 
 impl std::fmt::Display for AlignChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
+        f.write_str(crate::i18n::tr(match self.0 {
             WaveformAlign::Top => "Top",
             WaveformAlign::Center => "Center",
             WaveformAlign::Bottom => "Bottom",
-        })
+        }))
     }
 }
 
