@@ -7,7 +7,7 @@ use listen_core::model::Song;
 use serde::{Deserialize, Serialize};
 
 /// Aim song tempos at `bpm` (± `tol` BPM). With `half_double`, half and double time count as a match
-/// (85 BPM fits 170).
+/// (85 BPM fits 170, 140 fits 70), judged at the faster pulse: a double-time song is never halved.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct TempoTarget {
     pub bpm: f32,
@@ -17,15 +17,15 @@ pub struct TempoTarget {
 }
 
 impl TempoTarget {
-    /// Distance in BPM from `song_bpm` to the target, using half/double time when allowed.
+    /// Distance in BPM from `song_bpm` to the target, half/double time counted when allowed, measured
+    /// at the faster pulse ([`crate::tempo::fit_distance`]: 130 is 10 off a 70 target, not "65, 5 off").
     pub fn distance(&self, song_bpm: f32) -> f32 {
-        let d = |b: f32| (b - self.bpm).abs();
-        if self.half_double { d(song_bpm).min(d(song_bpm * 2.0)).min(d(song_bpm / 2.0)) } else { d(song_bpm) }
+        crate::tempo::fit_distance(self, song_bpm)
     }
 
-    /// The song's tempo is within the tolerance.
+    /// The song's tempo is within the tolerance ([`crate::tempo::fits`]).
     pub fn fits(&self, song_bpm: f32) -> bool {
-        self.distance(song_bpm) <= self.tol
+        crate::tempo::fits(self, song_bpm)
     }
 }
 
@@ -121,6 +121,16 @@ mod tests {
         assert!(!strict.fits(85.0));
         let low = TempoTarget { bpm: 75.0, tol: 5.0, half_double: true };
         assert!(low.fits(150.0) && low.fits(78.0));
+    }
+
+    #[test]
+    fn tempo_target_fits_agrees_with_tempo_fits() {
+        let t = crate::tempo::target(70.0);
+        for b in [61.0, 62.0, 78.0, 79.0, 128.0, 130.0, 131.0, 132.0, 148.0, 149.0, 31.0, 39.0, 40.0] {
+            assert_eq!(t.fits(b), crate::tempo::fits(&t, b), "{b}");
+            assert_eq!(t.distance(b), crate::tempo::fit_distance(&t, b), "{b}");
+        }
+        assert!(!t.fits(130.0), "a 130 BPM song is 10 off 140, never halved to 65");
     }
 
     #[test]

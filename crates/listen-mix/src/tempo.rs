@@ -2,10 +2,12 @@
 //! steps per minute) into a [`TempoTarget`], smooth it, decide when the queue is worth re-ranking, and pick
 //! or re-rank songs by how well their tempo fits. Half and double time count (85 BPM fits 170).
 //!
-//! The fit is judged at the faster of the two pulses ([`fit_distance`], [`fits`]): a 70 BPM target fits
-//! 62–78, 132–148 and 31–39 BPM ([`TOLERANCE`]), so a 130 BPM song (10 off 140) does not fit 70. A re-rank
-//! ([`rerank_queue`]) keeps only half that window ([`KEEP_TOLERANCE`]: 66–74, 136–144 and 33–37 at 70), so
-//! the queue stays inside the fit while the target drifts up to [`RERANK_STEP`] between re-ranks.
+//! The fit is judged at the faster of the two pulses ([`fit_distance`], [`fits`], also behind
+//! `TempoTarget::distance` and `fits`): the song is compared with the target, twice the target and half the
+//! target, never halved itself, so a 70 BPM target fits 62–78, 132–148 and 31–39 BPM ([`TOLERANCE`]) and a
+//! 130 BPM song (10 off 140) does not fit 70. A re-rank ([`rerank_queue`]) keeps only half that window
+//! ([`KEEP_TOLERANCE`]: 66–74, 136–144 and 33–37 at 70), so the queue stays inside the fit while the target
+//! drifts up to [`RERANK_STEP`] between re-ranks.
 //!
 //! Evidence note: music does not measurably change heart rate during exercise (Terry et al. 2020);
 //! matching step cadence has better support. This is "music that fits my effort", not training guidance.
@@ -567,7 +569,7 @@ mod tests {
         let t = target(70.0);
         // The songs of the bug report: 130 and 128 BPM do not fit 70 (they are 10 and 12 off 140).
         assert!(!fits(&t, 130.0) && !fits(&t, 128.0));
-        assert!(t.fits(130.0), "TempoTarget::distance halves 130 to 65 and lets it in");
+        assert!(!t.fits(130.0), "the method on TempoTarget judges the same way");
         for b in [62.0, 78.0, 132.0, 148.0, 31.0, 39.0] {
             assert!(fits(&t, b), "{b}");
         }
