@@ -14,6 +14,8 @@ const NETEASE_LYRICS: &str = "https://music.163.com/api/song/lyric";
 const GENIUS_SEARCH: &str = "https://genius.com/api/search/song";
 const SIMPMUSIC: &str = "https://api-lyrics.simpmusic.org/v1";
 
+/// A lyrics provider. The explicit discriminants are positions in [`Source::ALL`] (the request gate
+/// indexes by them): a new provider gets the next number and goes at the end of `ALL`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Source {
     NetEase = 0,

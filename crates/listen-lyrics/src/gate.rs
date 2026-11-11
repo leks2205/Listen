@@ -17,8 +17,9 @@ impl Source {
     }
 }
 
-static LAST: [Mutex<Option<Instant>>; 4] =
-    [Mutex::new(None), Mutex::new(None), Mutex::new(None), Mutex::new(None)];
+/// The last slot handed out per provider, indexed by `Source as usize` (the discriminants are the
+/// positions in [`Source::ALL`]; `source_discriminants_index_all` pins that).
+static LAST: [Mutex<Option<Instant>>; Source::ALL.len()] = [const { Mutex::new(None) }; Source::ALL.len()];
 
 /// When a request made at `now` may go out, given the last slot handed out.
 pub fn next_slot(last: Option<Instant>, interval: Duration, now: Instant) -> Instant {
@@ -59,6 +60,13 @@ mod tests {
         // Long after the last request: no wait.
         let later = now + Duration::from_secs(10);
         assert_eq!(next_slot(Some(third), gap, later), later);
+    }
+
+    #[test]
+    fn source_discriminants_index_all() {
+        for (i, s) in Source::ALL.into_iter().enumerate() {
+            assert_eq!(s as usize, i, "{s:?}: LAST is indexed by the discriminant");
+        }
     }
 
     #[test]
