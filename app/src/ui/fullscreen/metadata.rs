@@ -19,11 +19,11 @@ pub const TITLE_ID: &str = "fs-title-marquee";
 const MARQUEE_SPEED: f32 = 45.0;
 const MARQUEE_REST: f32 = 2.0;
 
-/// The width the title gets under the cover: the cover's width, at least 240.
+/// The width the title gets under the cover: the cover's width, at least 240 (what `image_column`
+/// passes to [`view`]; the marquee starts from this number).
 pub fn title_width(window: iced::Size, cover_pct: u8, panel_open: bool) -> f32 {
-    let w = if panel_open { (window.width - 48.0) / 2.0 } else { window.width };
-    let art = (w * f32::from(cover_pct) / 100.0).min((window.height - 190.0).max(0.0)).max(120.0).min(w);
-    art.max(240.0).min(w)
+    let size = super::image_column_size(window, panel_open);
+    super::art_side(size, f32::from(cover_pct) / 100.0).max(240.0).min(size.width)
 }
 
 /// How far the title is cut off in `width` px (0: it fits, no marquee).

@@ -35,6 +35,26 @@ pub const TABS: [(FullscreenTab, Icon, &str); 5] = [
     (FullscreenTab::About, Icon::LuInfo, "About"),
 ];
 
+/// Padding of the full-screen content and the gap between the image column and the panel.
+const PAD: Padding = Padding { top: 8.0, right: 32.0, bottom: 24.0, left: 16.0 };
+const COLUMN_GAP: f32 = 48.0;
+/// Room under the cover for title, artists, album and badges.
+const INFO_H: f32 = 190.0;
+
+/// Size of the image column (and of the panel beside it) in a `window`, as [`view`] lays it out:
+/// minus the paddings, the top bar and, with a panel open, the gap and the panel's half.
+pub fn image_column_size(window: iced::Size, panel_open: bool) -> iced::Size {
+    let w = window.width - PAD.left - PAD.right;
+    let w = if panel_open { (w - COLUMN_GAP) / 2.0 } else { w };
+    let h = window.height - PAD.top - PAD.bottom - metrics::CONTROL - metrics::space_md();
+    iced::Size::new(w.max(0.0), h.max(0.0))
+}
+
+/// The cover's side in an image column of `size`: `pct` of the width, leaving [`INFO_H`] below it.
+pub fn art_side(size: iced::Size, pct: f32) -> f32 {
+    (size.width * pct).min((size.height - INFO_H).max(0.0)).max(120.0).min(size.width)
+}
+
 pub fn view(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let panel_open = state.fullscreen_tab != FullscreenTab::Hidden;
@@ -46,18 +66,18 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         Some(item) if panel_open && state.video_showing() => video_stack(state, &item.song),
         Some(item) if panel_open => row![
             container(image_column(state, &item.song)).width(Length::FillPortion(1)).height(Length::Fill),
-            container(panel(state, state.window_size.width * 0.5 - 64.0))
+            container(panel(state, image_column_size(state.window_size, true).width))
                 .width(Length::FillPortion(1))
                 .height(Length::Fill),
         ]
-        .spacing(48)
+        .spacing(COLUMN_GAP)
         .into(),
         Some(item) => {
             container(image_column(state, &item.song)).width(Length::Fill).height(Length::Fill).into()
         }
     };
     let content = container(column![top_bar(state), body].spacing(metrics::space_md()))
-        .padding(Padding { top: 8.0, right: 32.0, bottom: 24.0, left: 16.0 })
+        .padding(PAD)
         .width(Length::Fill)
         .height(Length::Fill);
     stack![background::view(state), content].width(Length::Fill).height(Length::Fill).into()
@@ -118,11 +138,10 @@ fn image_column<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
     };
     let pct = f32::from(s.cover_size) / 100.0;
     responsive(move |size| {
-        // Room under the cover for title, artists, album and badges.
-        let art = (size.width * pct).min((size.height - 190.0).max(0.0)).max(120.0).min(size.width);
+        let art = art_side(size, pct);
         let cover: Element<'_, Message> = match &state.video.frame {
             Some(frame) if state.video.on => {
-                let (w, h) = video_box(size.width, size.height - 190.0);
+                let (w, h) = video_box(size.width, size.height - INFO_H);
                 iced::widget::image(frame.clone())
                     .width(Length::Fixed(w))
                     .height(Length::Fixed(h))
@@ -171,10 +190,11 @@ fn cover<'a>(state: &Listen, song: &Song, art: f32) -> Element<'a, Message> {
 }
 
 /// The open panel's content; `queue_width` is the room the queue list gets.
-fn panel(state: &Listen, queue_width: f32) -> Element<'_, Message> {
+/// The open tab's panel, `width` px wide.
+fn panel(state: &Listen, width: f32) -> Element<'_, Message> {
     match state.fullscreen_tab {
-        FullscreenTab::Queue => super::queue::list(state, queue_width),
-        FullscreenTab::Related => related::view(state),
+        FullscreenTab::Queue => super::queue::list(state, width),
+        FullscreenTab::Related => related::view(state, width),
         FullscreenTab::Lyrics => lyrics::lyrics(state),
         FullscreenTab::Visualizer => visualizer_panel(state),
         FullscreenTab::About => about::view(state),
@@ -232,7 +252,7 @@ fn video_stack<'a>(state: &'a Listen, song: &'a Song) -> Element<'a, Message> {
                 container(lyrics::lyrics(state)).width(Length::FillPortion(1)).height(Length::Fill),
                 container(visualizer_panel(state)).width(Length::FillPortion(1)).height(Length::Fill),
             ]
-            .spacing(48)
+            .spacing(COLUMN_GAP)
             .into()
         } else {
             panel(state, size.width)
@@ -318,4 +338,17 @@ pub fn visualizer_overlay(state: &Listen) -> Element<'_, Message> {
         );
     }
     layers.width(Length::Fill).height(Length::Fill).into()
+}
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+
+    #[test]
+    fn image_column_size_subtracts_what_the_view_lays_out() {
+        let window = iced::Size::new(1600.0, 900.0);
+        let top = metrics::CONTROL + metrics::space_md();
+        assert_eq!(image_column_size(window, false), iced::Size::new(1552.0, 868.0 - top));
+        assert_eq!(image_column_size(window, true).width, (1552.0 - 48.0) / 2.0);
+    }
 }

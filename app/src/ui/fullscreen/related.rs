@@ -12,7 +12,8 @@ use listen_core::model::format_duration;
 
 const ROW: f32 = 52.0;
 
-pub fn view(state: &Listen) -> Element<'_, Message> {
+/// The list of related songs in a panel `width` px wide.
+pub fn view(state: &Listen, width: f32) -> Element<'_, Message> {
     let t = state.tokens;
     let current = state.queue.current().map(|i| i.song.id.as_str());
     let fresh = state.fs.related_for.as_deref() == current && current.is_some();
@@ -21,7 +22,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             if state.fs.related_loading { "Looking for similar songs…" } else { "No similar songs yet." };
         return container(label(text, metrics::font_lg(), t.muted)).center(Length::Fill).into();
     }
-    let width = (state.window_size.width * 0.5 - 64.0).max(200.0);
+    let width = width.max(200.0);
     let mut list = Column::new().spacing(2).width(Length::Fill);
     for (i, song) in state.fs.related.iter().enumerate() {
         let text_w = (width - ROW - 70.0 - 2.0 * metrics::space_md()).max(0.0);

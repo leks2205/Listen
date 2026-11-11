@@ -75,7 +75,9 @@ pub fn mobile(state: &Listen) -> iced::Element<'_, Message> {
     .align_y(Alignment::Center);
 
     let main: iced::Element<'_, Message> = match state.mobile_panel {
-        Some(FullscreenTab::Queue) => crate::ui::queue::list(state, state.window_size.width - 32.0),
+        Some(FullscreenTab::Queue) => {
+            crate::ui::queue::list(state, state.window_size.width - 2.0 * metrics::space_lg())
+        }
         Some(FullscreenTab::Lyrics) => lyrics(state),
         _ => responsive(move |size| {
             let art = (size.width - 16.0).min(size.height - 90.0).max(60.0);
