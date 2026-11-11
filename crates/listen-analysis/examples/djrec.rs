@@ -5,18 +5,19 @@
 //! djrec check <rec.wav> <recording start, unix s> <listen.log> [actions.txt]
 //! ```
 //!
-//! `check` scans the sink recording (16-bit WAV from `pw-record`) around every blend
-//! in the log (`mix blend: starts in … s, lasts … s`), against the 10 s before it:
+//! `check` scans the sink recording (16-bit stereo WAV from `pw-record`, 48 kHz in `tools/dj-e2e.sh`;
+//! the rate is read from the file, other layouts stop it) around every blend in the log
+//! (`mix blend: starts in … s, lasts … s`, written by `app/src/app/mix.rs`), against the 10 s before it:
 //! - **gaps**: 50 ms windows more than 30 dB quieter;
-//! - **bumps**: the blend more than 3 dB louder (RMS over a beat);
+//! - **bumps**: the blend more than 3 dB louder (RMS over 0.5 s, a beat at 120 BPM);
 //! - **flams**: hi-hat onsets doubled 8–100 ms apart (misaligned beats).
 //!
 //! `actions.txt` (`<unix s> <MPRIS method>` per line) adds gap/bump checks after each
 //! press. Log times map to the recording via its start time (~50 ms accuracy).
+//! A log without a single blend line fails the check: a reworded log line must not pass as
+//! "no blends, nothing wrong".
 
 use std::path::Path;
-
-const RATE: f64 = 48000.0;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,6 +52,11 @@ fn locks(log: &str) {
         .map(f64::abs)
         .collect();
     v.sort_by(f64::total_cmp);
+    if v.is_empty() {
+        eprintln!(
+            "no `mix phase error … ms (locked)` lines: did the log wording in app/src/app/mix.rs change?"
+        );
+    }
     println!(
         "phase |error| after lock-in, {} readings: median {:.2} ms, p95 {:.2} ms, max {:.2} ms",
         v.len(),
@@ -60,21 +66,33 @@ fn locks(log: &str) {
     );
 }
 
-/// Mono samples of a 16-bit stereo WAV (the data chunk is read to the end:
-/// a killed `pw-record` leaves the sizes unset).
-fn read_wav(path: &Path) -> Vec<f32> {
+/// Sample rate and mono samples of a 16-bit stereo WAV (the data chunk is read to the end:
+/// a killed `pw-record` leaves the sizes unset). Any other layout stops here, before it
+/// silently scales every time and level.
+fn read_wav(path: &Path) -> (f64, Vec<f32>) {
     let bytes = std::fs::read(path).expect("read wav");
+    let mut fmt = None;
     let mut i = 12;
     while i + 8 <= bytes.len() {
         let id = &bytes[i..i + 4];
         let len = u32::from_le_bytes(bytes[i + 4..i + 8].try_into().unwrap()) as usize;
+        if id == b"fmt " && i + 24 <= bytes.len() {
+            let u16_at = |o: usize| u16::from_le_bytes([bytes[i + 8 + o], bytes[i + 9 + o]]);
+            let rate = u32::from_le_bytes(bytes[i + 12..i + 16].try_into().unwrap());
+            fmt = Some((u16_at(2), rate, u16_at(14)));
+        }
         if id == b"data" {
             i += 8;
             break;
         }
         i += 8 + len;
     }
-    bytes[i.min(bytes.len())..]
+    let (channels, rate, bits) = fmt.expect("the WAV has no fmt chunk");
+    assert!(
+        channels == 2 && bits == 16 && rate > 0,
+        "djrec needs a 16-bit stereo WAV (pw-record --channels 2 --format s16), got {channels} ch, {bits} bit, {rate} Hz"
+    );
+    let samples = bytes[i.min(bytes.len())..]
         .as_chunks::<4>()
         .0
         .iter()
@@ -83,7 +101,8 @@ fn read_wav(path: &Path) -> Vec<f32> {
             let r = i16::from_le_bytes([c[2], c[3]]) as f32;
             (l + r) / 65536.0
         })
-        .collect()
+        .collect();
+    (f64::from(rate), samples)
 }
 
 /// Seconds since the epoch of a log line's `2024-01-02T03:04:05.123456Z`.
@@ -120,15 +139,15 @@ fn rms_db(x: &[f32]) -> f64 {
 
 /// Hi-hat onsets (s): energy of the twice-differentiated signal in 2 ms
 /// frames, rising 6 dB over the previous 30 ms and above a floor.
-fn hat_onsets(x: &[f32], floor_db: f64) -> Vec<f64> {
+fn hat_onsets(x: &[f32], rate: f64, floor_db: f64) -> Vec<f64> {
     let hp: Vec<f32> = x.windows(3).map(|w| w[2] - 2.0 * w[1] + w[0]).collect();
-    let frame = 96;
+    let frame = (0.002 * rate).round().max(1.0) as usize;
     let e: Vec<f64> = hp.chunks(frame).map(rms_db).collect();
     let mut out: Vec<f64> = Vec::new();
     for i in 15..e.len() {
         let before = e[i - 15..i - 1].iter().copied().fold(f64::MIN, f64::max);
         if e[i] > floor_db && e[i] > before + 6.0 && e[i] >= e[i - 1] {
-            let t = (i * frame) as f64 / RATE;
+            let t = (i * frame) as f64 / rate;
             if out.last().is_none_or(|&p| t - p > 0.006) {
                 out.push(t);
             }
@@ -148,8 +167,8 @@ struct Window {
 }
 
 fn check(wav: &Path, start: f64, log: &str, actions: Option<&Path>) {
-    let x = read_wav(wav);
-    let total = x.len() as f64 / RATE;
+    let (rate, x) = read_wav(wav);
+    let total = x.len() as f64 / rate;
     let text = std::fs::read_to_string(log).expect("read log");
     let mut windows = Vec::new();
     let mut what = String::new();
@@ -172,7 +191,14 @@ fn check(wav: &Path, start: f64, log: &str, actions: Option<&Path>) {
         }
     }
     println!("recording {total:.0} s, {} blends in the log", windows.len());
-    let at = |t: f64| ((t.max(0.0) * RATE) as usize).min(x.len());
+    if windows.is_empty() {
+        eprintln!(
+            "no `mix blend: starts in … s, lasts … s` lines in {log}: no mix ran, or the log wording in \
+             app/src/app/mix.rs changed"
+        );
+        std::process::exit(1);
+    }
+    let at = |t: f64| ((t.max(0.0) * rate) as usize).min(x.len());
     let (mut bad_gap, mut bad_bump, mut bad_flam) = (0, 0, 0);
     for w in &windows {
         let (a, b) = (w.from, w.from + w.secs);
@@ -183,12 +209,12 @@ fn check(wav: &Path, start: f64, log: &str, actions: Option<&Path>) {
         let before = &x[at(a - 10.0)..at(a)];
         let level = rms_db(before);
         let blend = &x[at(a)..at(b)];
-        let gap = blend.chunks((0.05 * RATE) as usize).map(rms_db).fold(f64::MAX, f64::min);
-        let beat = (0.5 * RATE) as usize;
-        let bump = blend.chunks(beat).map(rms_db).fold(f64::MIN, f64::max) - level;
+        let gap = blend.chunks((0.05 * rate) as usize).map(rms_db).fold(f64::MAX, f64::min);
+        let half_second = (0.5 * rate) as usize;
+        let bump = blend.chunks(half_second).map(rms_db).fold(f64::MIN, f64::max) - level;
         let floor = level - 30.0;
-        let fl_before = flams(&hat_onsets(before, floor)) as f64 / 10.0;
-        let fl_blend = flams(&hat_onsets(blend, floor)) as f64 / w.secs.max(0.1);
+        let fl_before = flams(&hat_onsets(before, rate, floor)) as f64 / 10.0;
+        let fl_blend = flams(&hat_onsets(blend, rate, floor)) as f64 / w.secs.max(0.1);
         let gap_bad = gap < level - 30.0;
         let bump_bad = bump > 3.0;
         // A plain fade isn't beat-matched: its flams are expected.
@@ -226,8 +252,8 @@ fn check(wav: &Path, start: f64, log: &str, actions: Option<&Path>) {
         }
         let level = rms_db(&x[at(reference - 10.0)..at(reference)]);
         let after = &x[at(t + 1.0)..at(t + 8.0)];
-        let gap = after.chunks((0.05 * RATE) as usize).map(rms_db).fold(f64::MAX, f64::min) - level;
-        let bump = after.chunks((0.5 * RATE) as usize).map(rms_db).fold(f64::MIN, f64::max) - level;
+        let gap = after.chunks((0.05 * rate) as usize).map(rms_db).fold(f64::MAX, f64::min) - level;
+        let bump = after.chunks((0.5 * rate) as usize).map(rms_db).fold(f64::MIN, f64::max) - level;
         println!(
             "  after {what:<6} at {t:>6.1} s: quietest 50 ms {gap:>+5.1} dB{}, loudest beat {bump:>+4.1} dB{}",
             if gap < -30.0 { " GAP" } else { "" },

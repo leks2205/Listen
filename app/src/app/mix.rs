@@ -478,6 +478,7 @@ impl Listen {
             self.mix.skip = Some((cur.uid, next.uid));
             return Task::none();
         }
+        // Parsed by crates/listen-analysis/examples/djrec.rs (tools/dj-e2e.sh): keep the wording.
         tracing::info!(
             "mix “{}” → “{}”: {:?} at {:.1}s → {:.1}s, blend {:.1}s ({})",
             cur.song.title,
@@ -1171,6 +1172,7 @@ impl Listen {
                         } else {
                             -now.duration_since(blend_at).as_secs_f64()
                         };
+                        // Parsed by crates/listen-analysis/examples/djrec.rs (tools/dj-e2e.sh): keep the wording.
                         tracing::info!("mix blend: starts in {starts_in:.2} s, lasts {:.1} s", plan.blend_s);
                     }
                 }
@@ -1268,6 +1270,7 @@ impl Listen {
         let over = LOCK_SETTLE_S.max(1.4 * interval);
         self.mix.nudge = (-err_secs / over).clamp(-max, max);
         let locked = since_start >= LOCKED_AFTER_S;
+        // Parsed by crates/listen-analysis/examples/djrec.rs (tools/dj-e2e.sh): keep the wording.
         tracing::debug!(
             "mix phase error {:+.2} ms{} → nudge {:+.2} %",
             err_secs * 1000.0,
