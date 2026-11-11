@@ -699,17 +699,21 @@ impl Queue {
         self.follow(current);
     }
 
-    /// "Move to next": the items join the top of the manual queue, right after
-    /// the current track, like "Play next". The current track itself stays.
+    /// "Move to next": the items join the top of the manual queue, like "Play next": right after the
+    /// current track, or after the song that played last when the queue ran past its end. That track
+    /// itself stays.
     pub fn move_to_next(&mut self, uids: &[u64]) {
         let current = self.position.map(|p| self.order[p]);
+        let anchor = self.position.or_else(|| self.ended_pos()).map(|p| self.order[p]);
         let picked: Vec<usize> =
-            self.positions_of(uids).into_iter().filter(|&p| Some(self.order[p]) != current).collect();
+            self.positions_of(uids).into_iter().filter(|&p| Some(self.order[p]) != anchor).collect();
         let taken = self.take_picked(&picked);
         for &i in &taken {
             self.items[i].queued = true;
         }
-        let at = self.position.map_or(0, |p| p + 1);
+        // `next_start`, not `position + 1`: with no current track (ran past the end) the songs must
+        // still land after the end mark, or they would count as played.
+        let at = self.next_start();
         self.order.splice(at..at, taken);
         self.follow(current);
     }
@@ -1425,6 +1429,25 @@ mod tests {
         q.move_to_next(&[a]);
         assert_eq!(ids(&q), ["d", "e", "a", "x", "y", "b", "c", "z"]);
         assert_eq!(cur(&q), Some("e"));
+    }
+
+    #[test]
+    fn move_to_next_after_the_queue_ran_out_lands_after_the_end_mark() {
+        let mut q = abc();
+        q.advance();
+        q.advance();
+        assert!(q.advance().is_none(), "ran past the end");
+        q.enqueue(vec![song("x"), song("y")]);
+        let (b, y, c) = (uid_of(&q, "b"), uid_of(&q, "y"), uid_of(&q, "c"));
+        q.move_to_next(&[y, b]);
+        assert_eq!(ids(&q), ["a", "c", "b", "y", "x"], "after c, the song that played last");
+        assert_eq!(cur(&q), None);
+        assert_eq!(q.upcoming(), 3, "the moved songs are still to come");
+        // The song that played last stays where it is, like the current track.
+        q.move_to_next(&[c]);
+        assert_eq!(ids(&q), ["a", "c", "b", "y", "x"]);
+        assert_eq!(q.advance().map(|i| i.song.id.as_str()), Some("b"));
+        assert!(q.is_consistent());
     }
 
     #[test]

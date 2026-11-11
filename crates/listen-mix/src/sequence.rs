@@ -151,7 +151,8 @@ pub fn order_queue(
     for uid in bridges {
         queue.remove(uid);
     }
-    // Up Next: each goes right after the playing song, last first, so they end up in order.
+    // Up Next: each goes to the top of the upcoming part (after the playing song, or after the end
+    // mark of a queue that ran out), last first, so they end up in order.
     for uid in up_uids.iter().rev() {
         queue.move_to_next(&[*uid]);
     }
@@ -356,6 +357,26 @@ mod tests {
         let mut short = Queue::new();
         short.set(mk(&[100, 120]), 1);
         assert_eq!(order_queue(&mut short, flow_of, &FlowCtx::default()), QueueOrder::Nothing);
+    }
+
+    #[test]
+    fn order_queue_after_the_queue_ran_out_keeps_up_next_after_the_end() {
+        let bpm = |s: &Song| -> f32 { s.title[1..].parse().unwrap() };
+        let mk = |b: &[u32]| -> Vec<Song> {
+            b.iter().map(|x| song(&format!("t{x}"), &format!("A{x}"), None, None)).collect()
+        };
+        let mut q = Queue::new();
+        q.set(mk(&[100, 110]), 1);
+        assert!(q.advance().is_none(), "ran past the end");
+        q.enqueue_next(mk(&[120, 112, 116]));
+        assert_eq!(q.upcoming(), 3);
+        let flow_of = |s: &Song| Some(flow(Some(bpm(s)), Some(key(8, true)), 0.5));
+        let r = order_queue(&mut q, flow_of, &FlowCtx::default());
+        assert!(matches!(r, QueueOrder::Ordered { .. }), "{r:?}");
+        let titles: Vec<String> = q.iter().map(|i| i.song.title.clone()).collect();
+        assert_eq!(&titles[..2], ["t100", "t110"], "played songs stay first: {titles:?}");
+        assert_eq!(q.upcoming(), 3, "Up Next is still to come");
+        assert!(q.iter().skip(2).all(|i| i.queued));
     }
 
     #[test]
