@@ -189,7 +189,8 @@ fn header<'a>(state: &'a Listen, artist: &'a Artist) -> Element<'a, Message> {
         .spacing(metrics::space_sm())
         .push(label_w("ARTIST", metrics::font_md(), t.foreground, Weight::Semibold))
         .push(super::header_title(&artist.name, t.foreground))
-        .push(label(facts(artist, albums).join(" · "), metrics::font_md(), t.muted))
+        // Each fact is translated where it is built; the joined line is no catalog key.
+        .push(crate::ui::data_label(facts(artist, albums).join(" · "), metrics::font_md(), t.muted))
         .push(actions);
     if page.more_open {
         info = info.push(

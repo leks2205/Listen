@@ -538,12 +538,13 @@ pub fn bio_text(spans: &[BioSpan]) -> String {
 }
 
 /// "3 hr 20 min" / "45 min".
+/// "3 hr 20 min", translated (it is joined into the artist facts line).
 pub fn total_time(d: Duration) -> String {
     let mins = d.as_secs() / 60;
     match (mins / 60, mins % 60) {
-        (0, m) => format!("{m} min"),
-        (h, 0) => format!("{h} hr"),
-        (h, m) => format!("{h} hr {m} min"),
+        (0, m) => crate::i18n::trf("{} min", &[&m]),
+        (h, 0) => crate::i18n::trf("{} hr", &[&h]),
+        (h, m) => crate::i18n::trf("{} hr {} min", &[&h, &m]),
     }
 }
 
