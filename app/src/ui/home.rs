@@ -223,8 +223,12 @@ fn slide_window<'a>(
         .into()
 }
 
-/// Height of the single feature.
+/// Height of the single feature (its backdrop and the slide animation's window).
 const FEATURE_H: f32 = 248.0;
+/// The single feature's cover side, the room for the arrows on each side and the backdrop's padding.
+const FEATURE_COVER: f32 = 200.0;
+const ARROW_ROOM: f32 = 40.0;
+const FEATURE_PAD: f32 = 24.0;
 
 /// The dark gradient over a blurred cover (Feishin: art at .8 under the dominant colour at .7).
 fn backdrop<'a>(
@@ -297,11 +301,16 @@ fn feature_single<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Messag
         listen_core::settings::PlayBehavior::Now => Message::PlayAlbum(album.id.clone()),
         other => Message::PlayAlbumWith(Box::new(album.clone()), other),
     });
-    // Page width minus the arrows' room, the cover and the gaps.
-    let text_w = (state.page_width() - 80.0 - 200.0 - metrics::space_md() * 2.0 - 48.0).max(120.0);
+    // Page width minus the arrows' room, the cover, the gaps and the backdrop's padding.
+    let text_w = (state.page_width()
+        - 2.0 * ARROW_ROOM
+        - FEATURE_COVER
+        - metrics::space_md() * 2.0
+        - 2.0 * FEATURE_PAD)
+        .max(120.0);
     let content = row![
         super::with_menu(
-            button(album_cover(state, album, 200.0, metrics::radius_md()))
+            button(album_cover(state, album, FEATURE_COVER, metrics::radius_md()))
                 .padding(0)
                 .style(style::bare_button(state.tokens))
                 .on_press(Message::OpenAlbum(album.id.clone())),
@@ -319,7 +328,13 @@ fn feature_single<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Messag
     .spacing(metrics::space_md())
     .align_y(Alignment::End);
     // Room for the arrows left and right of the content.
-    backdrop(state, album, container(content).padding(Padding::from([0.0, 40.0])).into(), 248.0, 24.0)
+    backdrop(
+        state,
+        album,
+        container(content).padding(Padding::from([0.0, ARROW_ROOM])).into(),
+        FEATURE_H,
+        FEATURE_PAD,
+    )
 }
 
 fn feature_card<'a>(state: &'a Listen, album: &'a Album, width: f32) -> Element<'a, Message> {
