@@ -122,13 +122,15 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    /// Gains at `t`, held before the first and after the last point; empty = outgoing only.
+    /// Gains at `t`, held before the first and after the last point (a NaN `t` holds the first); empty =
+    /// outgoing only.
     pub fn gains_at(&self, t: f64) -> (f32, f32) {
         let p = &self.points;
         let (Some(first), Some(last)) = (p.first(), p.last()) else {
             return (1.0, 0.0);
         };
-        if t <= first.0 {
+        // NaN fails both bounds checks and would underflow the index below: hold the first point.
+        if t.is_nan() || t <= first.0 {
             return (first.1, first.2);
         }
         if t >= last.0 {
@@ -214,10 +216,11 @@ impl TransitionPlan {
     }
 
     /// Incoming deck speed `blend_wall_s` wall seconds after the mix point, until the outgoing stops
-    /// (then `in_settle` takes over).
+    /// (then `in_settle` takes over). A NaN time gives the starting speed.
     pub fn in_speed_at(&self, blend_wall_s: f64) -> f64 {
         if let (Some(&(w0, v0)), Some(&(w1, v1))) = (self.in_curve.first(), self.in_curve.last()) {
-            if blend_wall_s <= w0 {
+            // NaN fails both bounds checks and would underflow the index below: hold the first point.
+            if blend_wall_s.is_nan() || blend_wall_s <= w0 {
                 return v0;
             }
             if blend_wall_s >= w1 {
@@ -228,7 +231,10 @@ impl TransitionPlan {
             return va + (vb - va) * (blend_wall_s - wa) / (wb - wa).max(1e-9);
         }
         match self.in_glide {
-            Some(r) if r.secs > 0.0 => r.from + (r.to - r.from) * (blend_wall_s / r.secs).clamp(0.0, 1.0),
+            Some(r) if r.secs > 0.0 => {
+                let x = if blend_wall_s.is_nan() { 0.0 } else { (blend_wall_s / r.secs).clamp(0.0, 1.0) };
+                r.from + (r.to - r.from) * x
+            }
             Some(r) => r.to,
             None => self.in_speed,
         }
@@ -1703,6 +1709,18 @@ mod tests {
         let order: Vec<usize> = all.iter().map(|c| c.3).collect();
         // Best score, then the later mix-out, then the longer blend; full ties keep the order found.
         assert_eq!(order, vec![3, 2, 4, 1, 0]);
+    }
+
+    #[test]
+    fn a_nan_time_holds_the_first_point() {
+        let e = Envelope { points: vec![(0.0, 1.0, 0.0), (4.0, 0.0, 1.0)] };
+        assert_eq!(e.gains_at(f64::NAN), (1.0, 0.0));
+        let mut p = TransitionPlan::gapless(100.0, "x");
+        p.in_curve = vec![(0.0, 1.0), (2.0, 1.02)];
+        assert_eq!(p.in_speed_at(f64::NAN), 1.0);
+        p.in_curve.clear();
+        p.in_glide = Some(SpeedRamp { from: 0.98, to: 1.0, start_out_s: 0.0, secs: 4.0 });
+        assert_eq!(p.in_speed_at(f64::NAN), 0.98);
     }
 
     #[test]
