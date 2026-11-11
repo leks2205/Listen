@@ -484,6 +484,14 @@ struct Pending {
     timestamp: i64,
 }
 
+/// The plays Last.fm still takes at `now` (younger than [`MAX_AGE_S`], with an hour's margin for the
+/// time a batch spends in flight).
+fn fresh(mut queue: Vec<Pending>, now: i64) -> Vec<Pending> {
+    let oldest = now - MAX_AGE_S + 3600;
+    queue.retain(|p| p.timestamp >= oldest);
+    queue
+}
+
 /// Now playing and scrobbles for one signed-in user. Plays wait in `dir/lastfm-queue.json` until Last.fm
 /// accepted them.
 pub struct Scrobbler {
@@ -537,14 +545,18 @@ impl Scrobbler {
         self.send(queue).await
     }
 
-    /// Plays waiting to be sent.
+    /// Plays waiting to be sent (plays too old for Last.fm are not counted: they are never sent).
     pub fn waiting(&self) -> usize {
-        self.load().len()
+        fresh(self.load(), now_s()).len()
     }
 
-    async fn send(&self, mut queue: Vec<Pending>) -> Result<usize, Error> {
-        let oldest = now_s() - MAX_AGE_S + 3600;
-        queue.retain(|p| p.timestamp >= oldest);
+    async fn send(&self, queue: Vec<Pending>) -> Result<usize, Error> {
+        let before = queue.len();
+        let mut queue = fresh(queue, now_s());
+        if queue.len() != before {
+            // Expired plays leave the file now, or `waiting` would count them forever.
+            self.save(&queue);
+        }
         let mut sent = 0;
         while !queue.is_empty() {
             let n = queue.len().min(50);
@@ -627,8 +639,8 @@ mod tests {
         assert_eq!(c.signature(&params), want);
     }
 
-    #[test]
-    fn the_queue_survives_and_old_plays_are_dropped() {
+    #[tokio::test]
+    async fn the_queue_survives_and_old_plays_are_dropped() {
         let dir = std::env::temp_dir().join(format!("listen-lastfm-test-{}", std::process::id()));
         let s = Scrobbler::new(
             Creds { api_key: "k".into(), secret: "s".into() },
@@ -642,10 +654,18 @@ mod tests {
             duration_s: Some(200),
             artist_line: "A".into(),
         };
-        s.save(&[Pending { track: t.clone(), timestamp: 1 }, Pending { track: t, timestamp: now_s() }]);
-        assert_eq!(s.waiting(), 2);
+        s.save(&[
+            Pending { track: t.clone(), timestamp: 1 },
+            Pending { track: t.clone(), timestamp: now_s() },
+        ]);
+        assert_eq!(s.load().len(), 2, "the queue file keeps both");
+        assert_eq!(s.waiting(), 1, "a play older than 14 days is not waiting: it will never be sent");
         s.save(&[]);
         assert_eq!(s.waiting(), 0);
+        // Only expired plays: flushing sends nothing (no network) and clears the file.
+        s.save(&[Pending { track: t, timestamp: 1 }]);
+        assert_eq!(s.flush().await.unwrap(), 0);
+        assert!(s.load().is_empty(), "expired plays leave the queue file");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
