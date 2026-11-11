@@ -177,19 +177,36 @@ pub(crate) fn compose<'a>(s: Cow<'a, str>) -> Cow<'a, str> {
     if s.chars().any(|c| matches!(c, '\u{1100}'..='\u{11FF}')) { Cow::Owned(s.nfc().collect()) } else { s }
 }
 
+// Two kinds of text reach the screen, and they take different helpers:
+// - UI text (an English literal from this crate): `t_text`, `text_in`, `label`, `label_w`. They look the
+//   whole string up in the translation table (`i18n::tr_cow`), keyed by its exact English text: translate
+//   BEFORE `to_uppercase`/`ellipsize`/joining, and build sentences with holes with `i18n::trf`.
+// - User data (titles, artists, album/playlist/server/genre names, lyrics, server messages): `verbatim`,
+//   `data_label`, `data_label_w`. They never translate, so a song called "Home" stays "Home" in German.
+// iced widgets that draw their own text (checkbox labels, `text_input` placeholders, `pick_list` options)
+// skip both: give them `i18n::tr(..)` text, or wrap pick_list options in [`Tr`].
+
 /// Translated plain text (no font change); for the few widgets that skip [`text_in`].
+/// UI text only: never pass user data (see the note above).
 pub fn t_text<'a>(content: impl text::IntoFragment<'a>) -> Text<'a> {
     text(crate::i18n::tr_cow(content.into_fragment()))
 }
 
-/// Text in `font` (switched to a script's own font where Inter has no glyphs).
+/// Translated UI text in `font` (switched to a script's own font where Inter has no glyphs). The
+/// lookup key is the exact English text; user data goes through [`verbatim`] instead.
 pub fn text_in<'a>(content: impl text::IntoFragment<'a>, base: Font) -> Text<'a> {
-    let content = compose(crate::i18n::tr_cow(content.into_fragment()));
+    verbatim(crate::i18n::tr_cow(content.into_fragment()), base)
+}
+
+/// User data (a title, a name, a lyric line) in `font`, untranslated: Hangul composed and a script's own
+/// font where Inter has no glyphs, like [`text_in`] but without the translation lookup.
+pub fn verbatim<'a>(content: impl text::IntoFragment<'a>, base: Font) -> Text<'a> {
+    let content = compose(content.into_fragment());
     let f = font_for(&content, base);
     text(content).font(f)
 }
 
-/// Single-line text in Inter at `size` px.
+/// Single-line translated UI text in Inter at `size` px (see [`text_in`]; user data: [`data_label`]).
 pub fn label<'a>(content: impl text::IntoFragment<'a>, size: f32, color: Color) -> Text<'a> {
     label_w(content, size, color, Weight::Normal)
 }
@@ -202,6 +219,32 @@ pub fn label_w<'a>(
     weight: Weight,
 ) -> Text<'a> {
     text_in(content, font(weight)).size(size).color(color).wrapping(Wrapping::None)
+}
+
+/// Single-line user data (a title, a name) in Inter at `size` px, never translated.
+pub fn data_label<'a>(content: impl text::IntoFragment<'a>, size: f32, color: Color) -> Text<'a> {
+    data_label_w(content, size, color, Weight::Normal)
+}
+
+/// Like [`data_label`] with an explicit weight.
+pub fn data_label_w<'a>(
+    content: impl text::IntoFragment<'a>,
+    size: f32,
+    color: Color,
+    weight: Weight,
+) -> Text<'a> {
+    verbatim(content, font(weight)).size(size).color(color).wrapping(Wrapping::None)
+}
+
+/// A `pick_list` option shown translated: iced draws an option's `Display` as it is, so options whose
+/// `Display` is an English label go in as `Tr(option)` (`pick_list(X::ALL.map(Tr), Some(Tr(cur)), |c| ..c.0..)`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tr<T>(pub T);
+
+impl<T: std::fmt::Display> std::fmt::Display for Tr<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&crate::i18n::tr_cow(self.0.to_string().into()))
+    }
 }
 
 /// Cuts `s` to about `max` characters with an ellipsis. iced 0.14 has no
@@ -481,7 +524,8 @@ pub fn plural(n: usize, word: &str) -> String {
 }
 
 /// Library-header title: Feishin's clamp(28px, …, 44px) shrinks long titles;
-/// the text wraps instead of overflowing.
+/// the text wraps instead of overflowing. `title` is user data (an album, artist or playlist name)
+/// and is shown untranslated; a fixed UI title must be passed through `i18n::tr` first.
 pub fn header_title<'a>(title: &str, color: Color) -> Element<'a, Message> {
     let len = title.chars().count();
     let size = match len {
@@ -490,7 +534,7 @@ pub fn header_title<'a>(title: &str, color: Color) -> Element<'a, Message> {
         31..=45 => 32.0,
         _ => 28.0,
     };
-    text_in(title.to_string(), font(Weight::ExtraBold))
+    verbatim(title.to_string(), font(Weight::ExtraBold))
         .size(size)
         .color(color)
         .line_height(1.2)
@@ -505,9 +549,10 @@ pub fn fit_title_size(title: &str, width: f32, max: f32, min: f32) -> f32 {
     if em <= 0.0 { max } else { (width / em).clamp(min, max) }
 }
 
+/// [`header_title`] sized to fit `width`; `title` is user data, shown untranslated.
 pub fn header_title_fit<'a>(title: &str, color: Color, width: f32) -> Element<'a, Message> {
     let size = fit_title_size(title, width, 44.0, 24.0);
-    text_in(title.to_string(), font(Weight::Black))
+    verbatim(title.to_string(), font(Weight::Black))
         .size(size)
         .color(color)
         .line_height(1.2)

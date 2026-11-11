@@ -49,7 +49,7 @@ pub fn song_list<'a>(
         cover(state, image, 250.0, metrics::radius_md(), Icon::LuListMusic),
         column![
             label_w(kind, metrics::font_md(), t.foreground, Weight::Semibold),
-            super::header_title(title, t.foreground),
+            super::header_title(crate::i18n::tr(title), t.foreground),
             label(meta, metrics::font_md(), t.muted).wrapping(iced::widget::text::Wrapping::Word),
             play_btn,
         ]
