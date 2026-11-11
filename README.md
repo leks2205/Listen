@@ -305,6 +305,7 @@ installer and `packaging/build-rpm.sh` the RPM and tarball.
 | `crates/listen-analysis`, `listen-mix` | Audio analysis and the DJ transition engine |
 | `crates/listen-dj` | The AI DJ (Gemini text and speech) |
 | `crates/listen-lyrics`, `listen-visualizer`, `listen-dlna`, `listen-offline`, `listen-rip` | Lyrics, visualizer, casting, downloads, CD ripping |
+| `crates/listen-lastfm` | Last.fm sign-in, scrobbling with an offline queue, name spelling |
 | `docs/` | Notes on themes, YouTube Music, DJ transitions and CD ripping |
 
 Bug reports and pull requests are welcome. Please run `cargo fmt`, `cargo clippy --workspace --all-targets` and the

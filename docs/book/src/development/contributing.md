@@ -17,9 +17,10 @@ details.
 
 - **Never remove or rename a settings field.** Old `config.toml` files must load and round-trip
   (`v0_23_config_round_trips_unchanged`); keep an unused field and document it as unused.
-- **The shared crates are also built by another app pinned to a commit** (`listen-core`, `listen-mix`,
-  `listen-dj`, `listen-player`, `listen-ytmusic`, `listen-analysis`): don't rename or remove their
-  public items; add the new one and keep the old one working.
+- **The crates under `crates/` are also built by another app pinned to a commit** — every one except
+  `listen-rip` and `listen-visualizer` (the desktop-only CD ripper and visualizer): don't rename or
+  remove their public items; add the new one and keep the old one working. A crate that becomes
+  desktop-only, or a new shared one, updates this list.
 - **Tracked files and commit messages carry no personal names, e-mail addresses or private host
   names**, and no attribution trailers. Notes about who reported what go in `docs/PROGRESS.md`
   (git-ignored).
