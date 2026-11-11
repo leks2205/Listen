@@ -53,7 +53,6 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     .align_y(Alignment::Center);
 
     let search = text_input(crate::i18n::tr("Search"), &radio.search)
-        .font(crate::ui::font_for(&radio.search, crate::appearance::current_font()))
         .font(super::font_for(&radio.search, crate::appearance::current_font()))
         .size(metrics::font_md())
         .padding(Padding::from([6.0, 10.0]))

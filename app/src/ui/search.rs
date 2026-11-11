@@ -37,7 +37,6 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let input = row![
         icon(Icon::LuSearch, metrics::font_lg(), t.muted),
         text_input(crate::i18n::tr(placeholder), &s.query)
-            .font(crate::ui::font_for(&s.query, crate::appearance::current_font()))
             .id(iced::widget::Id::new(super::sidebar::SEARCH_ID))
             .font(super::font_for(&s.query, crate::appearance::current_font()))
             .size(metrics::font_lg())

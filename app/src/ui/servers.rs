@@ -192,9 +192,8 @@ fn field<'a>(
     on: fn(String) -> S,
     secure: bool,
 ) -> Element<'a, Message> {
-    text_input(placeholder, value)
+    text_input(crate::i18n::tr(placeholder), value)
         .font(crate::ui::font_for(value, crate::appearance::current_font()))
-        .font(crate::appearance::current_font())
         .size(metrics::font_md())
         .padding(Padding::from([9.0, 12.0]))
         .style(style::input(t))
@@ -215,7 +214,7 @@ pub fn edit_modal(state: &Listen) -> Option<ModalParts<'_>> {
     let t = state.tokens;
     let form: &EditForm = state.servers.edit.as_ref()?;
     let mut body: Column<'_, Message> =
-        column![captioned(t, "Name", field(t, "name", &form.name, S::EditName, false))]
+        column![captioned(t, "Name", field(t, "Name", &form.name, S::EditName, false))]
             .spacing(metrics::space_md())
             .width(Length::Fill);
     match form.kind {
