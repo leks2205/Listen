@@ -610,7 +610,9 @@ pub trait MusicSource: Send + Sync {
     /// Songs that fit a playlist, for the "Recommended" strip under its rows
     /// ([`Capabilities::PLAYLIST_RECOMMENDATIONS`]). `songs` are the rows the page shows (the
     /// playlist's own songs); anything among them is left out. The default seeds the source's own
-    /// similarity with a few of them and picks at random, so asking again reshuffles.
+    /// similarity with a few of them and picks at random, so asking again reshuffles. It errs with
+    /// `Unsupported`, or with the first seed's error when every seed's similarity request failed (the
+    /// app shows that with a Retry button); a seed that fails while another answers is just skipped.
     async fn playlist_recommendations(&self, songs: &[Song], limit: usize) -> Result<Vec<Song>> {
         if !self.capabilities().contains(Capabilities::PLAYLIST_RECOMMENDATIONS) {
             return Err(SourceError::Unsupported);
@@ -629,9 +631,19 @@ pub trait MusicSource: Send + Sync {
         seeds.shuffle(&mut rand::rng());
         let have: std::collections::HashSet<&str> = songs.iter().map(|s| s.id.as_str()).collect();
         let mut pool: Vec<Song> = Vec::new();
+        let mut first_error = None;
+        let mut answered = false;
         for seed in seeds {
             // One similarity request per seed, and only until there are enough candidates.
-            for song in self.similar_songs(seed, limit * 3).await.unwrap_or_default() {
+            let similar = match self.similar_songs(seed, limit * 3).await {
+                Ok(similar) => similar,
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                    continue;
+                }
+            };
+            answered = true;
+            for song in similar {
                 if have.contains(song.id.as_str()) || pool.iter().any(|p| p.id == song.id) {
                     continue;
                 }
@@ -640,6 +652,9 @@ pub trait MusicSource: Send + Sync {
             if pool.len() >= limit * 2 {
                 break;
             }
+        }
+        if let (false, Some(e)) = (answered, first_error) {
+            return Err(e);
         }
         pool.shuffle(&mut rand::rng());
         pool.truncate(limit);
@@ -1025,10 +1040,22 @@ mod tests {
     use listen_core::model::ImageRef;
     use std::sync::Mutex;
 
-    /// Implements only the required methods; records what `set_favorite` / `set_rating` got.
+    /// Implements only the required methods; records what `set_favorite` / `set_rating` got. With
+    /// `similar` set it also answers `similar_songs` and claims playlist recommendations.
     #[derive(Default)]
     struct Fake {
         calls: Mutex<Vec<String>>,
+        similar: Option<SimilarFn>,
+    }
+
+    type SimilarFn = fn(&Song) -> Result<Vec<Song>>;
+
+    fn song(id: &str) -> Song {
+        Song::new(id, listen_core::model::ServerId("s".into()), SourceKind::Subsonic, id)
+    }
+
+    fn songs(ids: &[&str]) -> Vec<Song> {
+        ids.iter().map(|id| song(id)).collect()
     }
 
     #[async_trait]
@@ -1037,10 +1064,18 @@ mod tests {
             SourceKind::Subsonic
         }
         fn capabilities(&self) -> Capabilities {
-            Capabilities::empty()
+            if self.similar.is_some() {
+                Capabilities::PLAYLIST_RECOMMENDATIONS
+            } else {
+                Capabilities::empty()
+            }
         }
         async fn ping(&self) -> Result<()> {
             Ok(())
+        }
+        async fn similar_songs(&self, song: &Song, _: usize) -> Result<Vec<Song>> {
+            self.calls.lock().unwrap().push(format!("similar {}", song.id));
+            self.similar.ok_or(SourceError::Unsupported)?(song)
         }
         async fn albums(&self, _: &AlbumQuery) -> Result<Page<Album>> {
             Ok(Page { items: vec![], start_index: 0, total: Some(0) })
@@ -1133,6 +1168,28 @@ mod tests {
             f.upload_playlist_image("p", &[], "image/png").await,
             Err(SourceError::Unsupported)
         ));
+    }
+
+    #[tokio::test]
+    async fn recommendations_report_the_error_when_every_seed_fails() {
+        let playlist = songs(&["a", "b", "c", "d", "e", "f"]);
+        let down = Fake { similar: Some(|_| Err(SourceError::Network("down".into()))), ..Fake::default() };
+        assert!(matches!(down.playlist_recommendations(&playlist, 5).await, Err(SourceError::Network(_))));
+        assert_eq!(down.calls.lock().unwrap().len(), RECOMMENDATION_SEEDS, "every seed was asked");
+        // One seed failing while another answers still gives recommendations.
+        let flaky = Fake {
+            similar: Some(|s| {
+                if s.id == "f" { Err(SourceError::Network("down".into())) } else { Ok(songs(&["x", "y"])) }
+            }),
+            ..Fake::default()
+        };
+        let mut got: Vec<String> =
+            flaky.playlist_recommendations(&playlist, 5).await.unwrap().into_iter().map(|s| s.id).collect();
+        got.sort();
+        assert_eq!(got, vec!["x", "y"]);
+        // Seeds that answer with nothing are not an error.
+        let empty = Fake { similar: Some(|_| Ok(vec![])), ..Fake::default() };
+        assert!(empty.playlist_recommendations(&playlist, 5).await.unwrap().is_empty());
     }
 
     #[tokio::test]

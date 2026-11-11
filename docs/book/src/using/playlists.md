@@ -72,7 +72,7 @@ Below the last song of a playlist, Listen offers five **Recommended** songs that
 - the **+** at its right adds it to this playlist in one click; the row disappears and a message confirms it,
 - the ↻ button next to **Recommended** asks for another five.
 
-The strip is cached per playlist for ten minutes, so scrolling up and down or coming back to the page does not ask the server again; **Refresh** in the toolbar, or the ↻ button, asks again. Local folders have no server-side similarity, so they show no strip, and neither does an empty playlist.
+The strip is cached per playlist for ten minutes, so scrolling up and down or coming back to the page does not ask the server again; **Refresh** in the toolbar, or the ↻ button, asks again. If the server could not be asked for any of the seed songs (it is offline, for example), the strip says so and offers **Retry** instead of disappearing. Local folders have no server-side similarity, so they show no strip, and neither does an empty playlist.
 
 ## Editing a playlist
 
