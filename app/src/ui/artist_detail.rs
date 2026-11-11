@@ -293,7 +293,7 @@ fn genres(state: &Listen) -> Option<Element<'_, Message>> {
     let mut chips = Row::new().spacing(metrics::space_sm());
     let title = if names.len() == 1 { "GENRE" } else { "GENRES" };
     for name in names {
-        let b = button(label(name.clone(), metrics::font_md(), t.foreground))
+        let b = button(super::data_label(name.clone(), metrics::font_md(), t.foreground))
             .padding(Padding::from([5.0, 12.0]))
             .style(style::default_button(t));
         chips = chips.push(if linked { b.on_press(Message::Navigate(Route::Genre(name))) } else { b });
@@ -443,7 +443,7 @@ fn album_card<'a>(state: &Listen, album: &Album, card: f32, chars: usize) -> Ele
                 .on_press(Message::OpenAlbum(album.id.clone())),
             crate::app::menu::MenuTarget::album(album)
         ),
-        label_w(ellipsize(&album.name, chars), metrics::font_md(), t.foreground, Weight::Medium),
+        super::data_label_w(ellipsize(&album.name, chars), metrics::font_md(), t.foreground, Weight::Medium),
         label(album.year.map(|y| y.to_string()).unwrap_or_default(), metrics::font_sm(), t.muted),
     ]
     .spacing(metrics::space_xs())
@@ -588,9 +588,17 @@ fn similar(state: &Listen) -> Option<Element<'_, Message>> {
             None => img,
         };
         r = r.push(
-            column![top, label_w(ellipsize(c.name, chars), metrics::font_md(), t.foreground, Weight::Medium)]
-                .spacing(metrics::space_xs())
-                .width(layout.card),
+            column![
+                top,
+                super::data_label_w(
+                    ellipsize(c.name, chars),
+                    metrics::font_md(),
+                    t.foreground,
+                    Weight::Medium
+                )
+            ]
+            .spacing(metrics::space_xs())
+            .width(layout.card),
         );
     }
     let arrows: Element<'_, Message> = if pages > 1 {
@@ -788,7 +796,7 @@ pub fn sub_page<'a>(state: &'a Listen, id: &str, view: ArtistView) -> Element<'a
     let back = button(
         row![
             icon(Icon::LuChevronLeft, metrics::font_md(), t.primary),
-            label_w(name.clone(), metrics::font_md(), t.primary, Weight::Semibold)
+            super::data_label_w(name.clone(), metrics::font_md(), t.primary, Weight::Semibold)
         ]
         .spacing(metrics::space_xs())
         .align_y(Alignment::Center),

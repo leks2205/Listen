@@ -203,7 +203,7 @@ fn tree_rows<'a>(
                 crate::ui::tip::Position::Right,
             )
         };
-        let name = button(label(
+        let name = button(super::data_label(
             ellipsize(&e.name, 28usize.saturating_sub(depth * 2).max(10)),
             metrics::font_md(),
             t.foreground,
@@ -306,7 +306,12 @@ fn subfolders<'a>(state: &'a Listen, folder: &'a listen_core::model::Folder) -> 
                 button(
                     row![
                         icon(Icon::RiFolder3Line, metrics::font_lg(), t.muted),
-                        label_w(ellipsize(&entry.name, 80), metrics::font_md(), t.foreground, Weight::Medium),
+                        super::data_label_w(
+                            ellipsize(&entry.name, 80),
+                            metrics::font_md(),
+                            t.foreground,
+                            Weight::Medium
+                        ),
                     ]
                     .spacing(metrics::space_md())
                     .align_y(Alignment::Center),

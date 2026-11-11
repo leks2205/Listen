@@ -110,14 +110,24 @@ pub fn panel(state: &Listen) -> Element<'_, Message> {
                     }
                     _ => None,
                 };
-                let mut text = column![label_w(
-                    ellipsize(&item.label, 70),
-                    metrics::font_md(),
-                    t.foreground,
-                    Weight::Medium
-                )];
+                // Results and server names are user data (shown as they are); commands are UI text.
+                let data = matches!(
+                    item.cmd,
+                    Cmd::Album(_) | Cmd::Artist(_) | Cmd::Song(_) | Cmd::Playlist(_) | Cmd::Server(_)
+                );
+                let (title, sub) = (ellipsize(&item.label, 70), ellipsize(&item.sub, 80));
+                let title = if data {
+                    super::data_label_w(title, metrics::font_md(), t.foreground, Weight::Medium)
+                } else {
+                    label_w(title, metrics::font_md(), t.foreground, Weight::Medium)
+                };
+                let mut text = column![title];
                 if !item.sub.is_empty() {
-                    text = text.push(label(ellipsize(&item.sub, 80), metrics::font_sm(), t.muted));
+                    text = text.push(if data {
+                        super::data_label(sub, metrics::font_sm(), t.muted)
+                    } else {
+                        label(sub, metrics::font_sm(), t.muted)
+                    });
                 }
                 let mut content = row![].spacing(metrics::space_md()).align_y(Alignment::Center);
                 if let Some(l) = lead {

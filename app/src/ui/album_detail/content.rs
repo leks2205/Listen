@@ -6,7 +6,7 @@ use crate::app::album_page::{AlbumPageMsg as P, Carousel};
 use crate::app::{Listen, Message, Route};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
-use crate::ui::{album_cover, ellipsize, icon, label, label_w, with_menu};
+use crate::ui::{album_cover, data_label, data_label_w, ellipsize, icon, label_w, with_menu};
 use iced::font::Weight;
 use iced::widget::{Column, Row, button, column, container, space};
 use iced::{Alignment, Element, Padding};
@@ -19,10 +19,11 @@ fn heading<'a>(state: &Listen, text: &str) -> Element<'a, Message> {
     label_w(text.to_uppercase(), metrics::font_sm(), state.tokens.foreground, Weight::Semibold).into()
 }
 
-/// A rounded chip; a button when it leads somewhere.
+/// A rounded chip; a button when it leads somewhere. `text` is shown as it is (a genre, mood or label
+/// from the tags): UI words are translated before they get here.
 fn pill<'a>(state: &Listen, text: String, to: Option<Message>) -> Element<'a, Message> {
     let t = state.tokens;
-    let body = label(text, metrics::font_md(), t.foreground);
+    let body = data_label(text, metrics::font_md(), t.foreground);
     let style = move |_: &iced::Theme, status: button::Status| button::Style {
         background: Some(iced::Background::Color(if matches!(status, button::Status::Hovered) {
             style::alpha(t.foreground, 0.16)
@@ -70,7 +71,7 @@ fn metadata<'a>(state: &Listen, album: &'a Album) -> Vec<Element<'a, Message>> {
 
     let mut tags: Vec<String> = Vec::new();
     if let Some(kind) = &album.release_type {
-        tags.push(format::release_type_label(kind));
+        tags.push(crate::i18n::tr(&format::release_type_label(kind)).to_string());
     }
     for (name, values) in &info.tags {
         if matches!(name.to_lowercase().as_str(), "releasecountry" | "releasestatus") {
@@ -78,7 +79,7 @@ fn metadata<'a>(state: &Listen, album: &'a Album) -> Vec<Element<'a, Message>> {
         }
     }
     if info.explicit {
-        tags.push("Explicit".into());
+        tags.push(crate::i18n::tr("Explicit").to_string());
     }
     out.extend(group(state, "Tags", tags.into_iter().map(|t| pill(state, t, None)).collect()));
     out.extend(group(
@@ -114,8 +115,8 @@ fn card<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Message> {
     );
     column![
         cover,
-        label_w(ellipsize(&album.name, 20), metrics::font_md(), t.foreground, Weight::Medium),
-        label(ellipsize(&album.artist_line(), 22), metrics::font_sm(), t.muted),
+        data_label_w(ellipsize(&album.name, 20), metrics::font_md(), t.foreground, Weight::Medium),
+        data_label(ellipsize(&album.artist_line(), 22), metrics::font_sm(), t.muted),
     ]
     .spacing(2)
     .width(CARD)
@@ -172,7 +173,7 @@ pub fn tail<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Message> {
     if !album.info.record_labels.is_empty() {
         let year = format::release_year(album).map(|y| format!(" {y}")).unwrap_or_default();
         for l in &album.info.record_labels {
-            col = col.push(label(format!("℗{year} {l}"), metrics::font_sm(), t.muted));
+            col = col.push(data_label(format!("℗{year} {l}"), metrics::font_sm(), t.muted));
         }
     }
     for (i, c) in state.album_page.carousels.iter().enumerate() {

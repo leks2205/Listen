@@ -7,7 +7,7 @@ use crate::app::Message;
 use crate::app::menu::{MenuTarget, TargetKind};
 use crate::icons::Icon;
 use crate::style::metrics;
-use crate::ui::{cover_on, label, label_w};
+use crate::ui::{cover_on, data_label, data_label_w};
 use iced::font::Weight;
 use iced::widget::{column, container, row};
 use iced::{Alignment, Element, Length, Padding};
@@ -69,8 +69,9 @@ pub fn preview(target: &MenuTarget) -> Preview {
     };
     let first = target.first_name();
     // Feishin: the first item's name, with "+N more" under it for several.
+    // The subtitle is shown untranslated (it is usually an artist), so the count is translated here.
     let (title, subtitle) = if n > 1 {
-        (first, Some(format!("+{} more", n - 1)))
+        (first, Some(crate::i18n::trf("+{} more", &[&(n - 1)])))
     } else {
         (first, artist.filter(|a| !a.is_empty()))
     };
@@ -96,14 +97,14 @@ pub fn view<'a>(state: &'a Listen, target: &MenuTarget) -> Element<'a, Message> 
         crate::ui::art((90, 90, 110), 36.0, 4.0, p.glyph)
     };
     let width = boxed_width() - 8.0 - 2.0 * metrics::space_md() - 36.0 - metrics::space_md();
-    let mut text = column![label_w(
+    let mut text = column![data_label_w(
         crate::ui::ellipsize_px(&p.title, width, metrics::font_sm()),
         metrics::font_sm(),
         t.foreground,
         Weight::Semibold
     )];
     if let Some(sub) = &p.subtitle {
-        text = text.push(label(
+        text = text.push(data_label(
             crate::ui::ellipsize_px(sub, width, metrics::font_xs()),
             metrics::font_xs(),
             t.muted,

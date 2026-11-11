@@ -45,7 +45,8 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     if !state.offline.failed.is_empty() {
         let mut failed = Column::new().spacing(2);
         for (title, reason) in &state.offline.failed {
-            failed = failed.push(label(format!("✗ {title}: {reason}"), metrics::font_sm(), t.error));
+            failed =
+                failed.push(super::data_label(format!("✗ {title}: {reason}"), metrics::font_sm(), t.error));
         }
         head = head.push(failed).push(
             button(label("Dismiss errors", metrics::font_sm(), t.foreground))

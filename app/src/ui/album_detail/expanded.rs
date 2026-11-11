@@ -44,8 +44,12 @@ pub fn expanded<'a>(
             button(
                 row![
                     container(label(number, metrics::font_sm(), t.muted)).width(48),
-                    container(label(ellipsize(&s.title, 60), metrics::font_md(), t.foreground))
-                        .width(Length::Fill),
+                    container(crate::ui::data_label(
+                        ellipsize(&s.title, 60),
+                        metrics::font_md(),
+                        t.foreground
+                    ))
+                    .width(Length::Fill),
                     label(format_duration(s.duration), metrics::font_sm(), t.muted),
                 ]
                 .spacing(metrics::space_sm())
@@ -95,12 +99,12 @@ pub fn expanded<'a>(
     );
     let info = column![
         row![
-            label_w(ellipsize(&album.name, 60), 22.0, t.foreground, Weight::Bold),
+            crate::ui::data_label_w(ellipsize(&album.name, 60), 22.0, t.foreground, Weight::Bold),
             space::horizontal(),
             close
         ]
         .align_y(Alignment::Center),
-        label(album.artist_line(), metrics::font_md(), t.muted),
+        crate::ui::data_label(album.artist_line(), metrics::font_md(), t.muted),
         container(scrollable(tracks).style(style::scrollbar(t))).height(list_h),
         Row::new()
             .spacing(metrics::space_sm())

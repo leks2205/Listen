@@ -1,7 +1,7 @@
 //! The pages that replace the main page inside the menu: the playlist picker,
 //! the rename field and the delete confirmation.
 
-use super::items::{act, plain};
+use super::items::{act, plain, plain_data};
 use super::{ITEM, LIST_MAX};
 use crate::app::menu::{MenuAction, MenuMsg, MenuTarget};
 use crate::app::playlists::PlaylistPageMsg;
@@ -92,7 +92,7 @@ pub fn playlists<'a>(state: &'a Listen, p: Picker<'a>) -> (Element<'a, Message>,
         }
         Some(Err(e)) => {
             col = col.push(
-                container(label(crate::ui::ellipsize(e, 60), metrics::font_sm(), t.error))
+                container(crate::ui::data_label(crate::ui::ellipsize(e, 60), metrics::font_sm(), t.error))
                     .padding(metrics::space_md()),
             );
             col = col.push(plain(
@@ -123,7 +123,7 @@ pub fn playlists<'a>(state: &'a Listen, p: Picker<'a>) -> (Element<'a, Message>,
                         (format!("{name} ✓"), None)
                     };
                     let recent = i == 0 && p.recent == Some(pl.id.as_str());
-                    rows = rows.push(plain(
+                    rows = rows.push(plain_data(
                         state,
                         if recent { Icon::LuStar } else { Icon::LuListMusic },
                         title,
@@ -174,9 +174,9 @@ pub fn rename<'a>(state: &'a Listen, name: &'a str) -> (Element<'a, Message>, f3
 pub fn confirm_delete<'a>(state: &'a Listen, target: &'a MenuTarget) -> (Element<'a, Message>, f32) {
     let t = state.tokens;
     let name = crate::ui::ellipsize(&target.first_name(), 30);
+    let question = crate::i18n::trf("Delete “{}”? This can't be undone.", &[&name]);
     let col = column![
-        container(label(format!("Delete “{name}”? This can't be undone."), metrics::font_sm(), t.muted))
-            .padding(metrics::space_md()),
+        container(label(question, metrics::font_sm(), t.muted)).padding(metrics::space_md()),
         plain(state, Icon::LuX, "Delete".into(), Some(act(MenuAction::Delete))),
         plain(state, Icon::LuChevronLeft, "Cancel".into(), Some(Message::Menu(MenuMsg::Close))),
     ];

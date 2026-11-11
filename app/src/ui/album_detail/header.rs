@@ -222,11 +222,8 @@ fn header<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Message> {
         Some(Message::Navigate(Route::Albums)),
     ));
     if let Some(version) = &album.info.version {
-        type_row = type_row.push(label("•", metrics::font_md(), t.muted)).push(label(
-            version.clone(),
-            metrics::font_md(),
-            t.foreground,
-        ));
+        let version = crate::ui::data_label(version.clone(), metrics::font_md(), t.foreground);
+        type_row = type_row.push(label("•", metrics::font_md(), t.muted)).push(version);
     }
 
     let mut meta = Row::new().spacing(metrics::space_sm()).align_y(Alignment::Center);

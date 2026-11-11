@@ -65,17 +65,36 @@ pub fn entry_row<'a>(state: &Listen, entry: &Entry, focused: bool, wiring: Wirin
     mouse_area(button).on_enter(wiring.hover).into()
 }
 
-/// A plain row (not an `Entry`): for the pages that list playlists.
+/// A plain row (not an `Entry`) with a UI text (translated): for the pages that list playlists.
 pub fn plain<'a>(state: &Listen, glyph: Icon, title: String, msg: Option<Message>) -> Element<'a, Message> {
+    plain_row(state, glyph, msg, move |color| label_w(title, metrics::font_md(), color, Weight::Medium))
+}
+
+/// A plain row named by user data (a playlist name), shown untranslated.
+pub fn plain_data<'a>(
+    state: &Listen,
+    glyph: Icon,
+    name: String,
+    msg: Option<Message>,
+) -> Element<'a, Message> {
+    plain_row(state, glyph, msg, move |color| {
+        crate::ui::data_label_w(name, metrics::font_md(), color, Weight::Medium)
+    })
+}
+
+fn plain_row<'a>(
+    state: &Listen,
+    glyph: Icon,
+    msg: Option<Message>,
+    text: impl FnOnce(iced::Color) -> iced::widget::Text<'a>,
+) -> Element<'a, Message> {
     let t = state.tokens;
     let color = if msg.is_some() { t.foreground } else { t.muted };
     button(
         container(
             row![
                 icon(glyph, metrics::font_lg(), color),
-                container(label_w(title, metrics::font_md(), color, Weight::Medium))
-                    .width(Length::Fill)
-                    .clip(true)
+                container(text(color)).width(Length::Fill).clip(true)
             ]
             .spacing(metrics::space_md())
             .align_y(Alignment::Center),

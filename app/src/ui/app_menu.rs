@@ -20,12 +20,37 @@ fn then(msg: Message) -> Message {
     Message::Sidebar(SidebarMsg::Then(Box::new(msg)))
 }
 
+/// A menu row with a UI text (translated).
 fn item<'a>(
     state: &Listen,
     glyph: Option<Icon>,
     text: impl Into<String>,
     active: bool,
     msg: Option<Message>,
+) -> Element<'a, Message> {
+    let text = text.into();
+    menu_row(state, glyph, active, msg, move |color| label_w(text, metrics::font_md(), color, Weight::Medium))
+}
+
+/// A menu row named by user data (a server or collection name), shown untranslated.
+fn data_item<'a>(
+    state: &Listen,
+    glyph: Option<Icon>,
+    name: String,
+    active: bool,
+    msg: Option<Message>,
+) -> Element<'a, Message> {
+    menu_row(state, glyph, active, msg, move |color| {
+        super::data_label_w(name, metrics::font_md(), color, Weight::Medium)
+    })
+}
+
+fn menu_row<'a>(
+    state: &Listen,
+    glyph: Option<Icon>,
+    active: bool,
+    msg: Option<Message>,
+    text: impl FnOnce(iced::Color) -> iced::widget::Text<'a>,
 ) -> Element<'a, Message> {
     let t = state.tokens;
     let color = if msg.is_none() {
@@ -39,7 +64,7 @@ fn item<'a>(
     if let Some(glyph) = glyph {
         content = content.push(icon(glyph, metrics::font_lg(), color));
     }
-    content = content.push(label_w(text.into(), metrics::font_md(), color, Weight::Medium));
+    content = content.push(text(color));
     button(container(content).center_y(Length::Fill))
         .width(Length::Fill)
         .height(ITEM)
@@ -90,7 +115,7 @@ fn app_menu_entries<'a>(state: &Listen) -> Vec<(Element<'a, Message>, f32)> {
                 _ => Icon::LuServer,
             };
             add(
-                item(
+                data_item(
                     state,
                     Some(glyph),
                     super::ellipsize(&server.name, 28),
@@ -276,7 +301,7 @@ fn rail_collections<'a>(state: &Listen) -> (Element<'a, Message>, f32) {
             CollectionList::Albums => Icon::RiAlbumLine,
             CollectionList::Songs => Icon::RiMusic2Line,
         };
-        col = col.push(item(
+        col = col.push(data_item(
             state,
             Some(glyph),
             super::ellipsize(&c.name, 28),
