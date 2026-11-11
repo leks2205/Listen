@@ -244,6 +244,10 @@ const LANGS: [(&str, &str); 40] = [
     ("germany", "de"),
 ];
 
+/// Regions sung in several languages: a label naming one names no language (and "american" in
+/// "South American" is not English).
+const MIXED_REGIONS: [&str; 1] = ["south america"];
+
 /// Words of a tag (lower case; "dance-pop" → "dance", "pop").
 fn words(tag: &str) -> Vec<&str> {
     tag.split(|c: char| !(c.is_alphanumeric() || c == '&')).filter(|w| !w.is_empty()).collect()
@@ -353,6 +357,15 @@ fn lang_of(tag: &str) -> Option<&'static str> {
     let t = tag.trim();
     if let Some((_, l)) = LANGS.iter().find(|(k, _)| *k == t) {
         return Some(l);
+    }
+    // Place names of several words are read as phrases before single words, longest first: a country
+    // adjective can be part of another region's name ("Latin American" is Latin America, not "american").
+    let phrase = LANGS.iter().filter(|(k, _)| k.contains(' ') && t.contains(k)).max_by_key(|(k, _)| k.len());
+    if let Some((_, l)) = phrase {
+        return Some(l);
+    }
+    if MIXED_REGIONS.iter().any(|r| t.contains(r)) {
+        return None;
     }
     // "80s Korean rock", "5th-generation K-pop", "Korean hip hop": a language word inside a scene label.
     let w = words(t);
@@ -1415,6 +1428,17 @@ mod tests {
         );
         assert_eq!(Scene::from_tags(SAMBA).families.0, Families::LATIN);
         assert!(!Scene::from_tags("unknown, unknown").is_known());
+    }
+
+    #[test]
+    fn latin_american_is_not_english() {
+        let s = Scene::from_tags("Latin pop, reggaeton, 2020s, Latin American, Spanish");
+        assert_eq!(s.lang, Some("es"));
+        assert_eq!(Scene::from_tags("Latin pop, Latin American").lang, Some("es"));
+        assert_eq!(Scene::from_tags("Latin pop, South American, Spanish").lang, Some("es"));
+        assert_eq!(lang_of("south american"), None, "several languages");
+        assert_eq!(lang_of("american hip hop"), Some("en"));
+        assert_eq!(lang_of("south korean ballad"), Some("ko"));
     }
 
     #[test]
