@@ -604,8 +604,9 @@ pub fn clip_note(note: &str) -> String {
         return note;
     }
     let cut: String = note.chars().take(NOTE_MAX - 1).collect();
+    // `rfind` gives a byte offset; the half-a-note rule counts characters (Hangul is 3 bytes each).
     let cut = match cut.rfind(' ') {
-        Some(i) if i > NOTE_MAX / 2 => &cut[..i],
+        Some(i) if cut[..i].chars().count() > NOTE_MAX / 2 => &cut[..i],
         _ => cut.as_str(),
     };
     format!("{}…", cut.trim_end_matches([',', ';', ':', '.', ' ', '-']))
@@ -632,6 +633,18 @@ mod tests {
             genres: vec![genre.into()],
             ..Song::new(title.to_lowercase(), ServerId("s".into()), SourceKind::Subsonic, title)
         }
+    }
+
+    #[test]
+    fn clip_note_counts_characters_not_bytes_for_hangul() {
+        // The last space sits after 20 characters (60 bytes): backing up to it would drop most of the note.
+        let note = format!("{} {}", "가".repeat(20), "하".repeat(80));
+        let clipped = clip_note(&note);
+        assert_eq!(clipped.chars().count(), NOTE_MAX, "{clipped}");
+        assert!(clipped.ends_with('…'));
+        // A space late in the note is still a word boundary to cut at.
+        let note = format!("{} {}", "가".repeat(60), "하".repeat(40));
+        assert_eq!(clip_note(&note), format!("{}…", "가".repeat(60)));
     }
 
     #[test]
