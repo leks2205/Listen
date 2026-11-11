@@ -2,7 +2,7 @@
 //! remote stream that needs headers (googlevideo), with Range support. Each stream lives under
 //! an unguessable token; only the stream's own headers are passed on, never cookies.
 
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -22,11 +22,18 @@ struct Entry {
     mime: String,
 }
 
+/// How many registered streams stay reachable: the current song and the one before it (a
+/// renderer may still read or re-range the previous track at a track change).
+const KEEP: usize = 2;
+
+/// Token and entry, oldest first.
+type Routes = Arc<Mutex<VecDeque<(String, Entry)>>>;
+
 /// The running server. Dropping it stops it.
 #[derive(Debug)]
 pub struct Proxy {
     addr: SocketAddr,
-    routes: Arc<Mutex<HashMap<String, Entry>>>,
+    routes: Routes,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -78,7 +85,7 @@ impl Proxy {
     pub async fn start(bind: SocketAddr) -> std::io::Result<Proxy> {
         let listener = TcpListener::bind(bind).await?;
         let addr = listener.local_addr()?;
-        let routes: Arc<Mutex<HashMap<String, Entry>>> = Arc::default();
+        let routes: Routes = Arc::default();
         let shared = routes.clone();
         let task = tokio::spawn(async move {
             loop {
@@ -99,7 +106,7 @@ impl Proxy {
     }
 
     /// Serves `source` and returns its URL; `name` only gives the URL a file extension (some
-    /// renderers sniff by it).
+    /// renderers sniff by it). The oldest stream is dropped so that [`KEEP`] stay reachable.
     pub fn register(&self, source: Source, name: &str) -> String {
         let token: String = rand::random::<[u8; 16]>().iter().map(|b| format!("{b:02x}")).collect();
         let ext = name.rsplit_once('.').map(|(_, e)| e).filter(|e| e.len() <= 5 && !e.contains('/'));
@@ -109,11 +116,10 @@ impl Proxy {
             None => token.clone(),
         };
         let mut routes = self.routes.lock().unwrap_or_else(|e| e.into_inner());
-        // Only the current and the previous song stay reachable.
-        if routes.len() >= 4 {
-            routes.clear();
+        while routes.len() >= KEEP {
+            routes.pop_front();
         }
-        routes.insert(token, Entry { source, mime });
+        routes.push_back((token, Entry { source, mime }));
         let host = match self.addr.ip() {
             IpAddr::V6(a) => format!("[{a}]"),
             a => a.to_string(),
@@ -182,7 +188,7 @@ fn dlna_headers(mime: &str, len: Option<u64>, extra: &mut Vec<(&'static str, Str
     }
 }
 
-async fn serve(mut stream: TcpStream, routes: Arc<Mutex<HashMap<String, Entry>>>) -> std::io::Result<()> {
+async fn serve(mut stream: TcpStream, routes: Routes) -> std::io::Result<()> {
     let req = read_request(&mut stream).await?;
     let head_only = req.method == "HEAD";
     if req.method != "GET" && !head_only {
@@ -193,7 +199,10 @@ async fn serve(mut stream: TcpStream, routes: Arc<Mutex<HashMap<String, Entry>>>
         .strip_prefix("/s/")
         .map(|p| p.split(['?', '#']).next().unwrap_or(p))
         .map(|p| p.split('.').next().unwrap_or(p).to_string());
-    let entry = token.and_then(|t| routes.lock().unwrap_or_else(|e| e.into_inner()).get(&t).cloned());
+    let entry = token.and_then(|t| {
+        let routes = routes.lock().unwrap_or_else(|e| e.into_inner());
+        routes.iter().find(|(k, _)| *k == t).map(|(_, e)| e.clone())
+    });
     let Some(entry) = entry else {
         return respond(&mut stream, "404 Not Found", &[("Content-Length", "0".into())]).await;
     };

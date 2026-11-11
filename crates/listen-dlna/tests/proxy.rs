@@ -146,3 +146,15 @@ async fn proxies_a_remote_stream_with_its_headers_and_ranges() {
     let cookie = http.get(&url).header("Cookie", "SID=abc").send().await.unwrap();
     assert_eq!(cookie.status(), 200);
 }
+
+#[tokio::test]
+async fn register_keeps_the_previous_song_reachable() {
+    let p = proxy().await;
+    let urls: Vec<String> = (0..5)
+        .map(|i| p.register(Source::File { path: temp_file(&sample(100), &format!("s{i}.mp3")) }, "s.mp3"))
+        .collect();
+    let http = reqwest::Client::new();
+    assert_eq!(http.get(&urls[4]).send().await.unwrap().status(), 200, "current song");
+    assert_eq!(http.get(&urls[3]).send().await.unwrap().status(), 200, "previous song");
+    assert_eq!(http.get(&urls[2]).send().await.unwrap().status(), 404, "older songs are gone");
+}
