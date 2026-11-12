@@ -13,8 +13,8 @@ use unicode_normalization::UnicodeNormalization;
 /// folds to the same key as the composed one: `"Cafe\u{301}"` gives `"café"`, conjoining jamo give
 /// Hangul syllables. Keys of NFC text are unchanged by this.
 ///
-/// It does not remove accents or bracketed extras; `versions::song_key`, `substitute` and
-/// `releases::release_key` do that themselves before folding.
+/// It does not remove accents or bracketed extras: `versions::song_key` and `releases::release_key`
+/// cut bracketed extras before folding, `substitute` also folds accents first (`plain`).
 pub fn fold(s: &str) -> String {
     s.nfc().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
