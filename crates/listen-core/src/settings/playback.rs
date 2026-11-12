@@ -167,9 +167,10 @@ pub struct Playback {
     pub track_fade_secs: f32,
     pub replay_gain: ReplayGain,
     pub replay_gain_preamp_db: f32,
-    /// `true` = PREVENT clipping (Feishin's meaning). mpv's own `replaygain-clip=yes` means the
-    /// opposite (allow clipping), so `listen_player::AudioSettings` sends it inverted.
-    pub replay_gain_clip: bool,
+    /// `true` = lower the gain so the peak never exceeds full scale. Config key `replay_gain_clip`
+    /// (Feishin's name); `listen_player::AudioSettings::properties` sends it to mpv inverted.
+    #[serde(rename = "replay_gain_clip")]
+    pub replay_gain_prevent_clipping: bool,
     pub audio_device: String,
     pub mpv_extra_args: Vec<String>,
     pub fade_on_pause: bool,
@@ -231,7 +232,7 @@ impl Default for Playback {
             track_fade_secs: 1.5,
             replay_gain: ReplayGain::No,
             replay_gain_preamp_db: 0.0,
-            replay_gain_clip: true,
+            replay_gain_prevent_clipping: true,
             audio_device: "auto".into(),
             mpv_extra_args: vec![],
             fade_on_pause: true,

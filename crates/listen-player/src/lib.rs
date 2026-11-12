@@ -89,8 +89,9 @@ pub struct AudioSettings {
     /// `no`, `track` or `album`.
     pub replay_gain: String,
     pub replay_gain_preamp_db: f32,
-    /// `true` = prevent clipping (the setting's meaning); sent to mpv inverted as `replaygain-clip`.
-    pub replay_gain_clip: bool,
+    /// `true` = lower the gain so the peak never exceeds full scale. Polarity rule: mpv's
+    /// `replaygain-clip=yes` ALLOWS clipping, so [`AudioSettings::properties`] sends this inverted.
+    pub replay_gain_prevent_clipping: bool,
     /// mpv `audio-device` (`auto` for the default).
     pub audio_device: String,
     /// Full `af` filter chain (EQ etc.); empty for none.
@@ -116,8 +117,7 @@ impl AudioSettings {
             ("gapless-audio", json!(self.gapless)),
             ("replaygain", json!(self.replay_gain)),
             ("replaygain-preamp", json!(self.replay_gain_preamp_db)),
-            // mpv: replaygain-clip=yes ALLOWS clipping; ours is "prevent clipping".
-            ("replaygain-clip", json!(!self.replay_gain_clip)),
+            ("replaygain-clip", json!(!self.replay_gain_prevent_clipping)),
             ("replaygain-fallback", json!(self.replay_gain_fallback_db)),
             ("audio-device", json!(self.audio_device)),
             ("audio-exclusive", json!(self.audio_exclusive)),
@@ -141,7 +141,7 @@ impl Default for AudioSettings {
             gapless: "weak".into(),
             replay_gain: "no".into(),
             replay_gain_preamp_db: 0.0,
-            replay_gain_clip: true,
+            replay_gain_prevent_clipping: true,
             audio_device: "auto".into(),
             audio_filters: String::new(),
             pitch_correction: true,
@@ -558,6 +558,16 @@ mod tests {
         assert_eq!(p["audio-pitch-correction"], json!(false));
         assert_eq!(p["af"], json!("volume=-3dB"));
         assert!(!p.contains_key("speed"), "the speed belongs to the DJ transitions or the player config");
+    }
+
+    #[test]
+    fn preventing_clipping_sends_mpv_replaygain_clip_no() {
+        let clip = |prevent| {
+            let s = AudioSettings { replay_gain_prevent_clipping: prevent, ..Default::default() };
+            s.properties().into_iter().find(|(k, _)| *k == "replaygain-clip").map(|(_, v)| v)
+        };
+        assert_eq!(clip(true), Some(json!(false)), "mpv replaygain-clip=yes allows clipping");
+        assert_eq!(clip(false), Some(json!(true)));
     }
 
     #[test]

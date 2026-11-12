@@ -52,7 +52,7 @@ pub enum AudioMsg {
     MpvPath(String),
     MpvArgs(text_editor::Action),
     ReplayGainPreamp(f32),
-    ReplayGainClip(bool),
+    ReplayGainPreventClipping(bool),
     ReplayGainFallback(f32),
     Exclusive(bool),
     /// Typing the sample rate; `SampleRateSubmit` applies it.
@@ -211,7 +211,7 @@ impl Listen {
             }
             .into(),
             replay_gain_preamp_db: s.replay_gain_preamp_db,
-            replay_gain_clip: s.replay_gain_clip,
+            replay_gain_prevent_clipping: s.replay_gain_prevent_clipping,
             replay_gain_fallback_db: s.replay_gain_fallback_db,
             audio_device: s.audio_device.clone(),
             audio_filters: if levelling {
@@ -392,8 +392,8 @@ impl Listen {
                 self.config.settings.playback.replay_gain_preamp_db = v.clamp(-15.0, 15.0);
                 apply = true;
             }
-            ReplayGainClip(v) => {
-                self.config.settings.playback.replay_gain_clip = v;
+            ReplayGainPreventClipping(v) => {
+                self.config.settings.playback.replay_gain_prevent_clipping = v;
                 apply = true;
             }
             ReplayGainFallback(v) => {

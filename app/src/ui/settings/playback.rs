@@ -282,7 +282,7 @@ fn replay_gain(state: &Listen) -> Element<'_, Message> {
                 state,
                 "Prevent clipping",
                 "Lower the gain so that the peak never exceeds full scale.",
-                audio_switch(p.replay_gain_clip, AudioMsg::ReplayGainClip),
+                audio_switch(p.replay_gain_prevent_clipping, AudioMsg::ReplayGainPreventClipping),
             ),
             line(
                 state,

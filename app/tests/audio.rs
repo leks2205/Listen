@@ -188,13 +188,16 @@ fn playback_tab_rows_change_the_settings() {
     let mut s = state();
     audio(&mut s, AudioMsg::ReplayGainPreamp(3.0));
     audio(&mut s, AudioMsg::ReplayGainFallback(-6.0));
-    audio(&mut s, AudioMsg::ReplayGainClip(false));
+    audio(&mut s, AudioMsg::ReplayGainPreventClipping(false));
     audio(&mut s, AudioMsg::Exclusive(true));
     audio(&mut s, AudioMsg::SampleRateInput("4800a0".into()));
     audio(&mut s, AudioMsg::SampleRateSubmit);
     audio(&mut s, AudioMsg::MpvPath("/opt/mpv/bin/mpv".into()));
     let p = &s.config.settings.playback;
-    assert_eq!((p.replay_gain_preamp_db, p.replay_gain_fallback_db, p.replay_gain_clip), (3.0, -6.0, false));
+    assert_eq!(
+        (p.replay_gain_preamp_db, p.replay_gain_fallback_db, p.replay_gain_prevent_clipping),
+        (3.0, -6.0, false)
+    );
     assert!(p.audio_exclusive);
     assert_eq!(p.sample_rate_hz, 48_000);
     assert_eq!(p.mpv_path, "/opt/mpv/bin/mpv");
