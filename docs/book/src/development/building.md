@@ -81,7 +81,7 @@ Windows builds are produced on Linux. `.cargo/config.toml` already sets the link
 cargo build --release --target x86_64-pc-windows-gnu -p listen
 ```
 
-The result is `target/x86_64-pc-windows-gnu/release/listen.exe`. To build the installer, see [Packaging and releases](packaging.md). On Windows the app finds mpv, yt-dlp and Deno through its helper-program settings; the installer fetches them with `winget` on first start.
+The result is `target/x86_64-pc-windows-gnu/release/listen.exe`. To build the installer, see [Packaging and releases](packaging.md). On Windows the app looks for mpv, yt-dlp and Deno next to `listen.exe`, on `PATH` and in `%LOCALAPPDATA%\Listen\bin`; the first-start wizard and **Settings → Advanced → Updates → Helper programs** install missing ones with `winget`. The installer bundles none of them.
 
 ## Contributing
 

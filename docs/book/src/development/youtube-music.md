@@ -14,7 +14,7 @@ This page describes how the YouTube Music source (`crates/listen-ytmusic`) works
 | Radio and Auto-DJ | The "watch next" list (`get_watch_playlist_from_video_id`). |
 | History | Playing a track reports it with `add_history_item`, so recommendations stay current. |
 
-Helper program paths can be overridden with `LISTEN_YTDLP` for development, and are set in **Settings -> Advanced -> Helper programs** for users.
+The yt-dlp program can be overridden with `LISTEN_YTDLP` for development. On Windows, users install and update yt-dlp and Deno with `winget` from **Settings → Advanced → Updates → Helper programs** or the first-start wizard; there is no path setting for them.
 
 ## Sign-in
 
