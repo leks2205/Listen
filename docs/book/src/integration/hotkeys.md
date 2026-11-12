@@ -36,7 +36,7 @@ Notes:
 | List: play next | Play the selected rows after the current song | none | No |
 | List: play now | Replace the queue with the selected rows and play | none | No |
 | List: show playing song | Scroll the list to the playing song | `Ctrl+L` | No |
-| Local search | Focus the search field in the sidebar | `Ctrl+F` | No |
+| Local search | Put the cursor in the box of the search page (when that page is open) | `Ctrl+F` | No |
 | Navigate to home | Go to the Home page | none | No |
 | Next track | Skip to the next song | none | Yes |
 | Next album | Skip to the first song of the next album | none | Yes |
