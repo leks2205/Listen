@@ -52,7 +52,7 @@ Listen has two small servers, both off by default. Turn on only what you use.
 
 | Feature | Address | Protection |
 |---|---|---|
-| **Remote control** (phone page and Feishin-compatible remote) | Port 4333, by default on every network interface | Optional user name and password. **With both empty, anyone on your network can control Listen.** Set a password or change the address to `127.0.0.1`. |
+| **Remote control** (phone page and Feishin-compatible remote) | Port 4333. Other devices can connect only when a user name **and** a password are set; without both the page is only offered on this computer (`127.0.0.1`), whatever the address setting says. | HTTP basic authentication with that user name and password, over plain HTTP, so use it only on a network you trust. |
 | **MCP server** (AI assistants such as Claude Code or Claude Desktop) | `http://127.0.0.1:4334/mcp`, this computer only unless you switch on **Allow other computers** | A secret token that every request must carry. Anything holding the token can control Listen fully, including settings, your playlists on your servers and your Gemini quota. **New token** disconnects all clients. |
 
 Neither server returns passwords, cookies, API keys or the token itself. See [Remote control](../integration/remote.md) and [MCP server](../integration/mcp.md). Neither should be exposed to the internet.
