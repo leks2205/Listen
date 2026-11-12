@@ -108,7 +108,7 @@ fn download_and_install_never_installs_in_demo_mode() {
     let mut s = state();
     let _ = s.update(checked(true, RELEASES));
     assert!(s.adv.update.available.is_some(), "an update is offered");
-    // A test build's button is disabled (the exe is under `target/`), so send its message directly.
+    // A test build's button is disabled (the exe is in a cargo target dir), so send its message directly.
     let _ = s.update(Message::Update(UpdateMsg::Install));
     assert_eq!(s.adv.update.phase, Phase::Idle, "demo mode never installs");
 }

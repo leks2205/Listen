@@ -396,10 +396,24 @@ pub enum InstallMode {
     Unsupported(String),
 }
 
+/// The first line of the `CACHEDIR.TAG` cargo writes at the root of every target dir, whatever
+/// `CARGO_TARGET_DIR` names it (the line is the cache-directory standard's, so also check for "cargo").
+const CARGO_CACHEDIR_TAG: &str = "Signature: 8a477f597d28d172789f06886806bc55";
+
+/// A dev or test build: `exe` lives in a cargo target dir, recognised by cargo's `CACHEDIR.TAG` in one
+/// of its folders (any target dir name), or by a folder named `target` (the default name).
+pub fn in_cargo_target_dir(exe: &Path) -> bool {
+    exe.components().any(|c| c.as_os_str() == "target")
+        || exe.ancestors().skip(1).any(|dir| {
+            std::fs::read_to_string(dir.join("CACHEDIR.TAG"))
+                .is_ok_and(|tag| tag.starts_with(CARGO_CACHEDIR_TAG) && tag.contains("cargo"))
+        })
+}
+
 /// How the program at `exe` is installed.
 pub fn classify_exe(exe: &Path, home: Option<&Path>) -> InstallMode {
     if cfg!(windows) {
-        if exe.components().any(|c| c.as_os_str() == "target") {
+        if in_cargo_target_dir(exe) {
             return InstallMode::Unsupported(
                 "This is a development build; update it with git and cargo.".into(),
             );
@@ -414,7 +428,7 @@ pub fn classify_exe(exe: &Path, home: Option<&Path>) -> InstallMode {
     }
     let exe =
         exe.to_str().map(|s| PathBuf::from(s.trim_end_matches(" (deleted)"))).unwrap_or(exe.to_path_buf());
-    if exe.components().any(|c| c.as_os_str() == "target") {
+    if in_cargo_target_dir(&exe) {
         return InstallMode::Unsupported("This is a development build; update it with git and cargo.".into());
     }
     if exe.starts_with("/usr/") {
@@ -1050,6 +1064,37 @@ mod tests {
             InstallMode::Unsupported(_)
         ));
         assert!(matches!(classify_exe(Path::new("/opt/listen"), Some(home)), InstallMode::Unsupported(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_build_in_any_cargo_target_dir_is_a_development_build() {
+        let home = scratch("cargo-target");
+        let exe = home.join("builds-B/debug/deps/listen-0123");
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        assert_eq!(
+            classify_exe(&exe, Some(&home)),
+            InstallMode::Local(exe.clone()),
+            "no tag: a user's binary"
+        );
+        let tag = home.join("builds-B/CACHEDIR.TAG");
+        std::fs::write(&tag, "Signature: 8a477f597d28d172789f06886806bc55\n# Made by another tool.\n")
+            .unwrap();
+        assert_eq!(
+            classify_exe(&exe, Some(&home)),
+            InstallMode::Local(exe.clone()),
+            "another tool's cache tag"
+        );
+        std::fs::write(
+            &tag,
+            "Signature: 8a477f597d28d172789f06886806bc55\n# This file is a cache directory tag created by cargo.\n",
+        )
+        .unwrap();
+        assert!(in_cargo_target_dir(&exe));
+        assert!(
+            matches!(classify_exe(&exe, Some(&home)), InstallMode::Unsupported(m) if m.contains("development build"))
+        );
+        let _ = std::fs::remove_dir_all(home);
     }
 
     #[test]
