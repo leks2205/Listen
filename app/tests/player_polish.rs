@@ -107,7 +107,8 @@ fn bar_gives_up_skip_buttons_before_the_cover_and_never_the_volume() {
         }
     }
     assert!(seen[0] && seen[1], "the skip buttons go first: {seen:?}");
-    // At 770 px the cover survives the first squeeze step (with or without skip buttons).
+    // At 770 px the cover survives with skip buttons or without them, unless the bar already reached the
+    // last squeeze stage.
     let (l770, ..) = player_bar::layout(&s, 770.0);
     s.config.settings.player_bar.skip_buttons = false;
     let (l770_noskip, ..) = player_bar::layout(&s, 770.0);
@@ -182,9 +183,8 @@ fn long_fullscreen_title_scrolls_and_short_one_does_not() {
     songs[0].title = "An extraordinarily long song title that certainly cannot fit under the cover".into();
     s.queue.set(songs, 0);
     assert!(s.title_overflow() > 0.0);
-    // The tick turns into a scroll task (not an empty one) while it overflows.
-    let task = s.update(Message::Fullscreen(FullscreenMsg::Marquee));
-    drop(task);
+    // A marquee tick while the title overflows (its scroll task is opaque: only the render is checked).
+    let _ = s.update(Message::Fullscreen(FullscreenMsg::Marquee));
     render("player-polish-fullscreen-marquee", &s);
 }
 
@@ -244,7 +244,7 @@ fn furigana_snapshot_and_setting() {
 // ---- toasts ----------------------------------------------------------------------
 
 #[test]
-fn toasts_get_feishin_titles_and_hover_holds_them() {
+fn toasts_get_feishin_titles_and_hover_marks_them() {
     let mut s = state(900.0, 600.0);
     s.toast_success("Saved".into());
     s.toast_error("Something broke".into());

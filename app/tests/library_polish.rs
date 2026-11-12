@@ -131,7 +131,7 @@ fn the_play_row_of_the_context_menu_follows_the_play_button_behavior() {
 }
 
 #[test]
-fn the_play_row_runs_the_default_when_clicked() {
+fn the_play_row_has_the_default_as_its_primary_action() {
     use listen::app::menu::{MenuMsg, MenuTarget};
     let mut s = page(Route::Home);
     let songs = listen::demo::album_songs(0);
@@ -278,7 +278,7 @@ fn a_new_query_closes_the_expanded_panel() {
 }
 
 #[test]
-fn the_panel_play_buttons_follow_their_behavior() {
+fn the_panel_add_last_button_appends_the_album() {
     let mut s = page(Route::Albums);
     list(&mut s, ListMsg::Expand(ListId::Albums, 0));
     let before = s.queue.iter().count();
