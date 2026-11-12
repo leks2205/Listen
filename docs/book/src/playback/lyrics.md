@@ -113,7 +113,7 @@ There are three kinds of translation:
 
 3. **Gemini (the AI DJ's key).** Pick **Gemini** as **Translation provider**. It needs no key of its own: it uses the Gemini key you set up for the [AI DJ](../dj/ai-dj.md) and its text model. Only lines with non-Latin letters are sent, numbered, so the translation always lands under the right line and whole English lines (common in K-pop) stay as they are, with no translation under them. English words inside a Korean line are kept. There is no romanisation. Each song's translation is cached per language, so opening the song again needs no request; new lyrics for the song (another version) are translated afresh.
 
-The whole text of the lyrics goes to the provider you chose in one request, with your key, and nothing else. The key is stored in Listen's configuration file, so treat that file as private (see [Privacy and security](../more/privacy.md)). The provider may charge for usage under your account.
+With Microsoft Azure and Google Cloud the whole text of the lyrics goes to the provider in one request, with your key, and nothing else; Gemini gets only the lines described above. The key is kept in the system keyring (or Listen's private secret file), not in `config.toml` (see [Privacy and security](../more/privacy.md)). The provider may charge for usage under your account.
 
 ## Word meanings (Korean)
 
