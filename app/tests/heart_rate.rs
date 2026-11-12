@@ -28,7 +28,8 @@ fn sample(bpm: u16) -> Message {
     hr(HeartRateMsg::Source(HrEvent::Sample(bpm)))
 }
 
-/// Demo state in Off mode with an empty history and the first album queued, the first song playing.
+/// Demo state in Off mode with an empty history and only the first song of the first album queued (and
+/// playing).
 fn rig() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, ..Args::default() });
     s.history.entries.clear();
@@ -372,7 +373,7 @@ fn settings() -> iced::Settings {
     }
 }
 
-/// Clicks `selector` in the current view and feeds the messages back.
+/// Clicks the widget with the id `id` in the current view and feeds the messages back.
 fn click(s: &mut Listen, id: &'static str) {
     let messages: Vec<Message> = {
         let _gpu = gpu();
