@@ -39,10 +39,28 @@ details.
   the Recommended strip): two runs can't be compared by eye. Look at it once by hand; test the
   behaviour instead.
 
+## Where shared helpers live
+
+Look here before writing a helper; the tests in `app/src/source_rules.rs` fail on some copies.
+
+| Helper | Where | Use it for |
+|---|---|---|
+| `Song::new`, `Album::new` | `crates/listen-core/src/model.rs` | every song or album outside a source mapper (tests too); set the rest on top |
+| `text::fold` | `crates/listen-core/src/text.rs` | comparing names: lower case, letters and digits only |
+| `USER_AGENT`, `USER_AGENT_WITH_CONTACT` | `crates/listen-core/src/lib.rs` | every reqwest client; the second one for MusicBrainz |
+| `Listen::listen_server`, `ListenServer` | `app/src/app/history_sync.rs` | every listen-server feature: address, token, URLs |
+| `bind`, `serve`, `read_head`, `respond` | `app/src/remote/mod.rs` | every local HTTP server (remote control, MCP) |
+| `tray_menu::menu`, `TrayCmd` | `app/src/tray_menu.rs` | tray entries, on Linux and Windows |
+| `Continuation`, `next_token`, `song_page` | `crates/listen-ytmusic/src/home.rs` | parsing YouTube Music pages and their next-page tokens |
+| `YtDlp::stream_url` | `crates/listen-ytmusic/src/ytdlp.rs` | every yt-dlp stream lookup, audio or video |
+| `listen_lastfm::Client` | `crates/listen-lastfm/src/lib.rs` | every Last.fm API call (add a method there) |
+| `gpu()`, `iced_settings()`, `save_png()` | `app/tests/common/mod.rs` | simulator tests: GPU check, iced settings, snapshots |
+
 ## Traps that already cost a bug
 
 - `mix::Phase`: with DJ transitions on, `Planned` holds for most of every song. `phase != Idle`
-  means "a plan exists"; use `Phase::blending()` / `Phase::decks_busy()` for "two decks in use".
+  means "a plan exists"; use `Phase::blending()` / `Phase::decks_busy()` for "two decks in use" and
+  `Listen::fade_active` for "the 30 ms fade clock must run".
 - `Playback::playing` is mpv's "not paused" and is true while mpv idles with nothing loaded; use
   `playing_here()` for "a song plays here".
 - `Player::af_command` values are lost whenever mpv rebuilds the filter graph (seek, new file,

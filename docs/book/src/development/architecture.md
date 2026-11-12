@@ -1,6 +1,6 @@
 # Architecture
 
-Listen is a Cargo workspace: one application crate (`app`, binary name `listen`) and a set of library crates under `crates/`. This page explains what each part does and how data flows through the app.
+Listen is a Cargo workspace: one application crate (`app`, binary name `listen`) and a set of library crates under `crates/`. This page explains what each part does and how data flows through the app. Before writing a helper, check [Where shared helpers live](contributing.md#where-shared-helpers-live).
 
 ## Workspace crates
 
@@ -17,7 +17,7 @@ Listen is a Cargo workspace: one application crate (`app`, binary name `listen`)
 | `listen-mix` | DJ transition logic without DSP or mpv: scoring how well two songs follow each other, ordering DJ picks, and planning where and how to mix. |
 | `listen-dj` | The AI DJ: prompts, personas, the Gemini text and speech client, request quota. |
 | `listen-lyrics` | Lyrics providers, LRC parsing, ranking, translation and romanisation helpers. |
-| `listen-lastfm` | Last.fm: the desktop sign-in, now playing and scrobbles (kept in an on-disk queue, so plays made offline arrive later), and the most common spelling of a song's artist, title and album, so the same song from two sources counts as one. |
+| `listen-lastfm` | Last.fm: the desktop sign-in, now playing and scrobbles (kept in an on-disk queue, so plays made offline arrive later), album covers, and the most common spelling of a song's artist, title and album, so the same song from two sources counts as one. |
 | `listen-visualizer` | Audio capture and spectrum analysis for the visualizer. |
 | `listen-dlna` | UPnP/DLNA casting: discovery, SOAP control and a streaming proxy. |
 | `listen-offline` | Downloaded songs. |
@@ -80,7 +80,7 @@ On the app side, `app/src/app/analysis.rs` owns the job queue (the play queue fi
 
 ## MCP and remote servers
 
-Both servers run on the tokio runtime, in the same process, and never touch the state directly.
+Both servers run on the tokio runtime, in the same process, and never touch the state directly. They share the socket, accept loop and request reading in `app/src/remote/mod.rs` (`bind`, `serve`, `read_head`).
 
 - `app/src/mcp/` is the MCP server (Streamable HTTP, bearer token). It answers `initialize`, `ping` and `tools/list` itself. A `tools/call` becomes a `Call` with a one-shot reply channel and is sent through a channel to the app. `app/src/app/mcp.rs` turns that channel into a subscription, executes the tool inside `update` (so it sees the same state as the UI) and answers through the reply channel. Tools that ask a server run as tasks and answer when they finish.
 - `app/src/remote/` is the remote control server: HTTP plus WebSocket on one port, an embedded phone page and Feishin's message format. The app publishes a snapshot of the player (`Shared`) for clients to read; commands from clients arrive through a channel that `app/src/app/integrations.rs` exposes as a subscription.
