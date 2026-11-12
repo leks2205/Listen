@@ -1,6 +1,11 @@
 //! The merged listening history: this computer's plays go up to listen-server, the other devices'
 //! come down into the local file. A removed play is removed everywhere; Delete all and the retention
 //! limit stay on this computer. Wire format and rules: `docs/history-sync.md`.
+//!
+//! This module also owns the listen-server connection that every listen-server feature uses (history,
+//! exclusions, flow weights, release radar, Describe it, handoff): [`ListenServer`] from
+//! [`Listen::listen_server`] (address from the `history.sync_server` setting, token from the keyring)
+//! and [`SYNC_TIMEOUT`]. A new listen-server feature starts from that accessor.
 
 use super::history::HistoryMsg;
 use super::{Listen, Message};
