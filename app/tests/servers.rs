@@ -86,7 +86,7 @@ fn discovered_servers_are_listed_and_fill_the_sign_in_form() {
     let messages = click_text(&mut s, "Use");
     assert!(messages.iter().any(|m| matches!(m, Message::Servers(ServersMsg::UseDiscovered(_)))));
     assert_eq!(s.login.kind, SourceKind::Jellyfin);
-    assert!(s.login.url.starts_with("http://192.168.1.2"));
+    assert_eq!(s.login.url, "http://192.168.1.20:8096");
 }
 
 #[test]

@@ -252,7 +252,7 @@ async fn http_routes_and_basic_auth() {
     assert!(status.contains("200"), "{status}");
     assert!(body.contains("<title>Listen Remote</title>") && body.contains("new WebSocket"));
     // The page needs nothing from the internet.
-    assert!(!body.contains("https://") && !body.contains("http://cdn"));
+    assert!(!body.contains("https://") && !body.contains("http://"));
     let (_, body) = http(s.addr, "/credentials", Some(&good)).await;
     assert!(body.ends_with(&good), "the page signs its socket in with the header it was served with");
     assert!(http(s.addr, "/manifest.json", Some(&good)).await.1.contains("\"Listen Remote\""));

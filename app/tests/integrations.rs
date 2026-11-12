@@ -229,7 +229,10 @@ fn a_phone_controls_the_running_app() {
         assert_eq!(state["volume"], json!(70));
         assert_eq!(state["repeat"], json!("none"));
         let text = state.to_string();
-        assert!(!text.contains("pw") || !text.contains("alex"), "no login in the state");
+        assert!(
+            !text.contains("alex") && !text.contains("\"pw\"") && !text.contains(&basic("alex", "pw")),
+            "no login in the state: {text}"
+        );
         let (e, queue) = event(&mut c).await;
         assert_eq!(e, "queue-state");
         let items = queue["items"].as_array().unwrap();

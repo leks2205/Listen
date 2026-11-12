@@ -165,7 +165,7 @@ fn remove_asks_first_and_drops_the_songs() {
     let _ = s.update(Message::Overlay(OverlayMsg::Confirmed));
     let _ = s.update(Message::PlaylistPage(P::Removed("nd-pl-road".into(), vec![2], Ok(()))));
     assert_eq!(s.library.playlist.as_ref().unwrap().songs.len(), 9);
-    assert!(!titles(&s).contains(&gone) || titles(&s).iter().filter(|t| **t == gone).count() == 0);
+    assert!(!titles(&s).contains(&gone));
 }
 
 #[test]
