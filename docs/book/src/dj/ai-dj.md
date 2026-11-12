@@ -74,7 +74,7 @@ All options are in **Settings → Playback → AI DJ**.
 | **Voice model** | Flash-Lite TTS (fast) | 2 models | See below. |
 | **Songs per set** | up to 5 | 2 to 8 | The DJ picks 2 up to this many songs between its breaks. |
 | **Talk after** | every set | 1 to 5 | Talk after every set, or only after every 2nd, 3rd and so on. Saves speech quota. The DJ keeps picking songs in the sets in between. |
-| **Spoken breaks per day** | 15 | 0 to 50 | The most breaks Listen asks to be spoken per day. After that the lines are shown as text. |
+| **Spoken breaks** | | | Shows how many breaks were voiced today. Listen sets no limit of its own; only Google's quota pauses speech (for an hour). |
 | **Voice volume** | 0 dB | -12 to +12 dB | Loudness of the voice relative to the default level, which suits music with ReplayGain. |
 | **Location** | empty | | Where the show airs, for example `Kiel`. The hosts mention it now and then. Empty means no home town. |
 | **Pronunciation** | empty | | How the voice should say the place name if it gets it wrong. |
@@ -143,8 +143,8 @@ The key is kept in the system keyring. The environment variable `LISTEN_GEMINI_A
 |---|---|
 | Switching on says to add a key | Paste the key into **Gemini API key** and press **Save**. |
 | "the Gemini API key was rejected" | The key is wrong, restricted or deleted. Create a new one and save it. |
-| Status line says "Didn't work" with a quota message | You hit Google's limit. Wait, lower **Spoken breaks per day**, set **Talk after** to a higher number or try again tomorrow. |
-| Lines appear as text and nothing is spoken | The daily speech quota or **Spoken breaks per day** is used up, or you are casting over DLNA. |
+| Status line says "Didn't work" with a quota message | You hit Google's limit. Wait, set **Talk after** to a higher number or try again tomorrow. |
+| Lines appear as text and nothing is spoken | Google reported the daily speech quota as used up (Listen tries again after an hour), or you are casting over DLNA. |
 | Songs repeat or feel off | Start the DJ from a song that fits the mood you want. The seed decides the mood. |
 | "AI DJ unavailable; similar songs fill in" | A network or Google error. The Auto-DJ keeps the music going and the DJ retries later. |
 | Place name sounds wrong | Fill **Pronunciation** and test with **Preview**. |
