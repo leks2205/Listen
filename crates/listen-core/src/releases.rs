@@ -6,6 +6,7 @@
 
 use crate::history::{Entry, PlayStatus};
 use crate::model::SourceKind;
+use crate::text::without_brackets;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -91,16 +92,7 @@ pub struct Radar {
 /// edition words, folded to letters and digits.
 pub fn release_key(title: &str) -> String {
     let lower = title.to_lowercase();
-    let mut base = String::new();
-    let mut depth = 0usize;
-    for c in lower.chars() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            _ if depth == 0 => base.push(c),
-            _ => {}
-        }
-    }
+    let mut base = without_brackets(&lower);
     for cut in [" - ", " – ", " — "] {
         if let Some(i) = base.find(cut) {
             base.truncate(i);

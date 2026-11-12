@@ -3,7 +3,7 @@
 //! the music video, a VEVO upload); the DJs treat them as one song.
 
 use crate::model::Song;
-use crate::text::fold;
+use crate::text::{fold, without_brackets};
 use std::collections::HashMap;
 
 /// The same key for every version of a song: its title without bracketed
@@ -15,16 +15,7 @@ pub fn song_key(song: &Song) -> String {
 
 fn title_key(title: &str) -> String {
     let lower = title.to_lowercase();
-    let mut base = String::new();
-    let mut depth = 0usize;
-    for c in lower.chars() {
-        match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            _ if depth == 0 => base.push(c),
-            _ => {}
-        }
-    }
+    let mut base = without_brackets(&lower);
     // "Song - Radio Edit", "Song – Remastered 2011", "Song feat. X".
     for cut in [" - ", " – ", " — ", " feat.", " feat ", " ft.", " ft ", " featuring "] {
         if let Some(i) = base.find(cut) {
