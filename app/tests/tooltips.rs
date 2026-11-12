@@ -74,7 +74,7 @@ fn hovered(s: &Listen, at: (f32, f32)) -> iced_test::simulator::Snapshot {
     ui.point_at(at);
     let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at.into() });
     let _ = ui.simulate([moved.clone()]);
-    std::thread::sleep(Duration::from_millis(700));
+    std::thread::sleep(listen::ui::tip::DELAY + Duration::from_millis(250));
     let _ = ui.simulate([moved]);
     ui.snapshot(&s.theme()).expect("snapshot renders")
 }
@@ -182,7 +182,7 @@ fn a_tooltip_waits_for_the_pointer_to_rest() {
     let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at.into() });
     let _ = ui.simulate([moved.clone()]);
     assert!(ui.snapshot(&s.theme()).unwrap().matches_hash(&path).unwrap());
-    std::thread::sleep(Duration::from_millis(700));
+    std::thread::sleep(listen::ui::tip::DELAY + Duration::from_millis(250));
     let _ = ui.simulate([moved]);
     assert!(!ui.snapshot(&s.theme()).unwrap().matches_hash(&path).unwrap(), "shown after the delay");
 }

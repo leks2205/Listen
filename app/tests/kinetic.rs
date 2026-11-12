@@ -1,5 +1,6 @@
 //! Touchpad momentum: a swipe keeps gliding after the fingers lift; holding
-//! still before lifting doesn't fling.
+//! still before lifting doesn't fling. Uses wall-clock sleeps: a stall of more than 90 ms (`IDLE` in
+//! `ui/kinetic.rs`) between the swipe events counts as a lift.
 
 use iced::mouse::ScrollDelta;
 use iced::widget::{column, container, scrollable};
@@ -12,6 +13,14 @@ fn laptop() -> f32 {
     factor(1.0, 1.35)
 }
 use std::time::Duration;
+
+/// Held while a `Simulator` lives: creating and dropping several Vulkan instances at once races in the
+/// Vulkan loader and occasionally crashes the test process.
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu() -> std::sync::MutexGuard<'static, ()> {
+    GPU.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 fn view<'a>() -> Element<'a, f32> {
     let rows = (0..3000).map(|_| container("row").height(40).into());
@@ -38,6 +47,7 @@ fn frames(ui: &mut Simulator<'_, f32>, n: usize) {
 
 /// Five quick 20 px swipe events, then `pause`, then fingers lift, then 1 s of frames.
 fn swipe(pause: Duration) -> (f32, f32) {
+    let _gpu = gpu();
     let mut ui = Simulator::with_size(iced::Settings::default(), iced::Size::new(300.0, 400.0), view());
     ui.point_at((100.0, 100.0));
     for _ in 0..5 {

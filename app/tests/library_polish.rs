@@ -365,7 +365,7 @@ fn a_short_press_on_play_plays_and_a_long_press_plays_the_shuffled_version() {
             .any(|m| matches!(m, Message::ListQuery(ListQueryMsg::PlayAll(_, PlayBehavior::Now, false)))),
         "{short:?}"
     );
-    let long = press_play(&s, std::time::Duration::from_millis(650));
+    let long = press_play(&s, listen::ui::long_press::HOLD + std::time::Duration::from_millis(150));
     assert!(
         long.iter()
             .any(|m| matches!(m, Message::ListQuery(ListQueryMsg::PlayAll(_, PlayBehavior::Now, true)))),
