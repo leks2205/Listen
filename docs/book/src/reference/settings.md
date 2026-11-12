@@ -73,6 +73,7 @@ See [Themes and colours](../appearance/themes.md) for details.
 | Home featured carousel | Shows the large featured carousel at the top of the home page. | On | `settings.home.feature` |
 | Home featured carousel style | **Single** or **Multiple** featured albums. | Single | `settings.home.feature_style` (`"single"`, `"multiple"`) |
 | Home sections | Tick the sections to show and drag them into order. | Genres, Most played, Random, Recently added, Recently played, Recently released, Playlists | `settings.home.sections` (list of ids such as `"mostPlayed"`) |
+| New from your artists | Shows new albums and singles of the artists you follow and play most at the top of Home (YouTube Music; needs the listen-server of **Merge with other devices**). | On | `settings.home.new_releases` |
 
 ### Player bar
 
@@ -306,6 +307,7 @@ See [Player bar and queue](../playback/queue.md).
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
 | Queue panel | Shows the play queue in the right sidebar. | On | `settings.sidebar.show_queue` |
+| Play mode tag | Shows the play mode (Shuffle, Auto or AI) above the sidebar queue, and Auto and AI tags on the songs the Auto-DJ and the AI DJ added. | On | `settings.queue.show_mode_tag` |
 | Lyrics panel | Shows the lyrics of the playing song in the right sidebar. | Off | `settings.queue.lyrics_in_sidebar` |
 | Visualizer panel | Shows the spectrum in the right sidebar (captures only Listen's own audio). | On | `settings.visualizer.in_queue_panel` |
 | Combine lyrics and visualizer | Shows lyrics with the visualizer under them in one panel. | Off | `settings.queue.combined_panel` |
@@ -343,8 +345,8 @@ Some defaults in `[settings.visualizer]`: `mode = 10` (line graph), `gradient = 
 | Include all presets | Cycles through every preset; off uses only the selected ones. | On | `settings.milkdrop.include_all` |
 | Selected presets | Presets to cycle through when the previous row is off. | none | `settings.milkdrop.selected` |
 | Ignored presets | Presets that are never picked. | none | `settings.milkdrop.ignored` |
-
-Frame rate and opacity are `settings.milkdrop.max_fps` (0 means 30, otherwise 5 to 60) and `settings.milkdrop.opacity` (0 to 1, default 1).
+| Max FPS | Frames a second: 0 means 30, otherwise 5 to 60. | 0 | `settings.milkdrop.max_fps` |
+| Opacity | How strongly the picture shows, 0 to 100 %. | 100 % | `settings.milkdrop.opacity` (0 to 1) |
 
 ### Auto-DJ
 
@@ -369,6 +371,7 @@ See [AI DJ](../dj/ai-dj.md) and [Creating a Gemini API key](../dj/gemini-key.md)
 | Voice model | **Flash-Lite TTS (fast)** or **Flash TTS (best voice acting)**. Both are on Gemini's free tier; the daily speech quota is small. | Flash-Lite TTS | `settings.ai_dj.tts_model` |
 | Songs per set | The DJ picks 2 up to this many songs between breaks, 2 to 8. | 5 | `settings.ai_dj.set_max` (and `set_min`, 2) |
 | Talk after | Talk after every set, or only every 2nd to 5th set (saves speech quota). | 1 | `settings.ai_dj.talk_every` |
+| Spoken breaks | Shows how many breaks were voiced today. Listen sets no limit of its own; only Google's speech quota pauses the voice. | | |
 | Voice volume | Relative to the music, -12 to +12 dB. | 0 | `settings.ai_dj.voice_gain_db` |
 | Location | Where the show airs, for example your town; the hosts mention it now and then. Empty means no home town. | empty | `settings.ai_dj.location` |
 | Pronunciation | How the voice should say the place name if it gets it wrong. | empty | `settings.ai_dj.location_pronunciation` |
@@ -434,6 +437,7 @@ See [Lyrics](../playback/lyrics.md).
 | Translation provider | **None**, **Microsoft Azure** or **Google Cloud**. Needs your own API key. | None | `settings.lyrics.translation_api_provider` |
 | Translation API key | The key of that provider. It is kept with the passwords (system keyring, or the private `credentials.toml`); a key an older version wrote to `config.toml` moves there at the next start. | empty | (secret store; `settings.lyrics.translation_api_key` is legacy) |
 | Automatic translation | Translates every song's lyrics when they load (needs the provider and key). | Off | `settings.lyrics.enable_auto_translation` |
+| vocab-hub address | Your vocab-hub (`https://…`) for Lute: the lyrics' words mode shows whether you know a word. Listen only reads your Lute words. Empty is off. | empty | `settings.lyrics.vocab_hub_url` |
 
 ## Hotkeys
 
@@ -531,6 +535,18 @@ See [History, statistics and mixes](../using/history.md).
 | Keep history for | **1 year**, **2 years** or **Unlimited**. Older entries are deleted automatically. Unlimited is needed for the year review. | Unlimited | `settings.history.retention` (`"oneyear"`, `"twoyears"`, `"forever"`) |
 | Export | Writes the history to your Downloads folder as **JSON** or **CSV**. | | |
 | Delete history | **Delete all** (asks to confirm) removes every entry; statistics and mixes disappear too. | | |
+| Merge with other devices | Sends your plays to your own listen-server and takes in the plays of your other devices. A play you remove goes everywhere; **Delete all** and the retention limit stay on this computer. | Off | `settings.history.sync` |
+| listen-server address | The address of your listen-server, for example `https://example.org/listen-api/`. | empty | `settings.history.sync_server` |
+| listen-server token | Kept in the keyring. Press Enter to save it. | none | keyring, not in `config.toml` |
+| Merge history now | **Merge** merges the plays now. | | |
+| Continue on other devices | Shows what your other devices play, with **Play here**, which moves the song, its position and the queue to this computer and pauses the other device. Uses the listen-server address and token above. | On | `settings.history.handoff` |
+
+### Hidden songs
+
+| Row | What it does | Default | Key |
+| --- | --- | --- | --- |
+| Hidden songs | Songs you snoozed (30 days), marked **Not interested** or hid in a playlist, each with **Undo**. The DJs, radio and the mixes leave them out; they still play when you pick them yourself. | none | |
+| Dislike on YouTube Music | **Not interested** on a YouTube Music song also dislikes it there. **Undo** takes the dislike back. | On | `settings.history.dislike_not_interested` |
 
 ### CD ripping
 
