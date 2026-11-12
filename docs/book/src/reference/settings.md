@@ -221,7 +221,7 @@ The player bar's volume (0 to 100) is saved in `settings.playback.volume` (defau
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Mode | Normalises loudness using ReplayGain tags: **No**, **Track** or **Album** (only while Volume levelling is off). | No | `settings.playback.replay_gain` (`"no"`, `"track"`, `"album"`) |
+| Mode | Normalises loudness using ReplayGain tags: **Off**, **Track** or **Album** (only while Volume levelling is off). | Off | `settings.playback.replay_gain` (`"no"`, `"track"`, `"album"`) |
 | Preamp | Gain added on top of the ReplayGain value, -15 to +15 dB. | 0 | `settings.playback.replay_gain_preamp_db` |
 | Prevent clipping | Lowers the gain so the peak never exceeds full scale. | On | `settings.playback.replay_gain_clip` |
 | Fallback gain | Gain for songs without ReplayGain tags, -15 to +15 dB. | 0 | `settings.playback.replay_gain_fallback_db` |
