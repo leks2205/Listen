@@ -142,8 +142,10 @@ fn a_changed_query_resets_selection_and_page() {
     s.modifiers = iced::keyboard::Modifiers::CTRL;
     let _ = s.update(Message::List(listen::app::list::ListMsg::Press(ListId::Albums, 2)));
     assert!(!s.lists.get(&ListId::Albums).selection.is_empty());
+    s.lists.entry(&ListId::Albums).scroll.offset = 500.0;
     q(&mut s, ListQueryMsg::ToggleOrder(ListId::Albums));
     assert!(s.lists.get(&ListId::Albums).selection.is_empty());
+    assert_eq!(s.lists.scroll(&ListId::Albums).offset, 0.0, "back to the top");
 }
 
 #[test]
