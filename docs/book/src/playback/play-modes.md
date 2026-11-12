@@ -87,7 +87,7 @@ With Focus on:
 - No forgotten-favourite slot (a forgotten favourite is rarely a quiet one).
 - Turning Focus on removes upcoming DJ songs that are sung, except the next one (it may already be mixing in). Songs you queued yourself stay.
 
-Songs you start yourself always play as they are. Turn Focus off and the next fill is an ordinary one again. The MCP server's `set_focus` tool switches it, and `get_state` reports it as `focus`.
+Songs you start yourself always play as they are. Turn Focus off and the next fill is an ordinary one again. The MCP server's `set_focus` tool switches it, and `get_now_playing` reports it as `focus`.
 
 `listen --focus` checks Focus on your own data: it splits your history's analysed songs into Auto-DJ-sized candidate pools and prints, as JSON, the mean sung share of eight ordinary five-song fills and of eight Focus fills, and their ratio (`--history FILE`, `--store DIR`, `--fills N`, `--per-fill N`, `--pool N`, `--seed N`). Instrumental swaps come on top of that number.
 
