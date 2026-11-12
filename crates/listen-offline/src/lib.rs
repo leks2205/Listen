@@ -121,11 +121,9 @@ impl Store {
 
     fn save(&self) {
         let idx = self.index.lock().expect("index");
-        let tmp = self.dir.join(format!("{INDEX}.tmp"));
         let result = serde_json::to_vec(&*idx)
             .map_err(std::io::Error::other)
-            .and_then(|b| std::fs::write(&tmp, b))
-            .and_then(|()| std::fs::rename(&tmp, self.dir.join(INDEX)));
+            .and_then(|b| listen_core::files::write_atomic(&self.dir.join(INDEX), &b));
         if let Err(e) = result {
             tracing::warn!("could not save the offline index: {e}");
         }
