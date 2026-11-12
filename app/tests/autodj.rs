@@ -21,7 +21,8 @@ fn autodj_appends_unique_songs() {
     assert!(added.iter().all(|i| i.auto));
     assert!(added.iter().all(|i| i.song.id != queued_id));
     let mut ids: Vec<_> = added.iter().map(|i| i.song.id.clone()).collect();
-    ids.dedup();
+    ids.sort();
+    ids.dedup(); // `dedup` only drops adjacent repeats: sort first
     assert_eq!(ids.len(), count, "no duplicates");
 }
 
