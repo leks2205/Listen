@@ -31,6 +31,7 @@ Because the English text is the key, changing an English string in the code also
 | `app/i18n/<code>.json` | The merged table for one language: a flat JSON object, English text to translation. This is what the app embeds with `include_str!`. |
 | `app/i18n/listen/<code>.json` | Strings that exist only in Listen (not in Feishin). These are the files to edit by hand. |
 | `tools/gen_i18n.py` | Builds the merged tables. |
+| `app/i18n/untranslated/german-only.json` | The strings that exist only in German today; this list only shrinks. |
 | `app/src/i18n.rs` | The `LANGUAGES` list, the lookup code and the locale detection. |
 
 The merged files are generated. Put Listen-only strings into `app/i18n/listen/<code>.json`, the source of truth. If you can't run `gen_i18n.py` (it needs Feishin's locale files), add the same entry to `app/i18n/<code>.json` as well, so the app shows it now; the next run of the script reproduces it from the Listen-only file. Never change an entry only in `app/i18n/<code>.json`: the script would overwrite it. The `merged_tables_carry_every_listen_entry` test checks that every Listen-only entry is in the merged table with the same text.
@@ -50,7 +51,11 @@ For each language the script:
 3. Adds the entries of `app/i18n/listen/<code>.json`. These win over Feishin's.
 4. Writes `app/i18n/<code>.json`, sorted by key.
 
-It also writes `app/i18n/.unmatched.json`, the literals that matched nothing in Feishin. That list shows what still needs a Listen-only translation.
+It also writes `app/i18n/.unmatched.json`, the literals that matched nothing in Feishin. That list shows what still needs a Listen-only translation. At the end it prints the gaps per language: how many German strings each language lacks (`python3 tools/gen_i18n.py --gaps` prints only that, without Feishin's files).
+
+## Missing translations
+
+A string a language lacks shows in English. Translations are written by people, never machine-translated. A new UI string needs its translations in `app/i18n/listen/<code>.json` for the other languages too, not only in `de.json`: the test `no_new_ui_string_is_translated_only_into_german` fails for a string only German has, unless it is one of the older ones listed in `app/i18n/untranslated/german-only.json`. Once a listed string is translated into any other language, delete it from that list (the test names it; `python3 tools/gen_i18n.py --german-only` prints the list as it should read now).
 
 ## Finding what is missing
 
