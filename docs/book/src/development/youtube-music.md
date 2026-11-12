@@ -26,8 +26,8 @@ Google's own sign-in flow for third-party apps (OAuth) is not usable with YouTub
 
 | Browser family | How the cookies are read |
 |---|---|
-| Chromium-based: Chrome, Chromium, Brave, Edge, Vivaldi, Ecosia (also as Flatpaks) | The `Cookies` SQLite database is copied first, because the browser locks the original while it runs. Values marked `v10` use Chromium's built-in key. Values marked `v11` need the browser's password from the Secret Service (read with `secret-tool`). Databases from Chromium 130 on (meta version 24 or higher) prefix each value with a SHA-256 of the host, which Listen strips. |
-| Firefox | `cookies.sqlite`, which is not encrypted. |
+| Chromium-based: Chrome, Chromium, Brave, Edge, Vivaldi, Ecosia (Chrome, Chromium, Brave and Ecosia also as Flatpaks) | The `Cookies` SQLite database is copied first, because the browser locks the original while it runs. Values marked `v10` use Chromium's built-in key. Values marked `v11` need the browser's password from the Secret Service (read with `secret-tool`). Databases from Chromium 130 on (meta version 24 or higher) prefix each value with a SHA-256 of the host, which Listen strips. |
+| Firefox (also the Flatpak) | `cookies.sqlite`, which is not encrypted. |
 
 ### Cookie file and guest mode
 

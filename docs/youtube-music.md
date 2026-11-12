@@ -1,9 +1,12 @@
 # YouTube Music in Listen
 
+Older notes. The maintained pages are `docs/book/src/development/youtube-music.md` (internals) and
+`docs/book/src/getting-started/youtube-music.md` (the user side); where they differ, those are right.
+
 ## Signing in with your browser (recommended)
 **Add server → YouTube Music → Sign in with <browser>.** Listen finds a browser on this computer that is signed in to
 YouTube and reads its youtube.com cookies (`crates/listen-ytmusic/src/browser.rs`):
-- Chromium-based: Ecosia (also the Flatpak `org.ecosia.Browser`), Chrome, Chromium, Brave, Edge and Vivaldi. Listen
+- Chromium-based: Ecosia, Chrome, Chromium and Brave (each also as a Flatpak), Edge and Vivaldi. Listen
   reads the `Cookies` SQLite database from a copy, because the browser locks it while running.
   - `v10` values (Chromium's built-in key, e.g. Flatpaks without keyring access) are decrypted directly.
   - `v11` values need the browser's password from the Secret Service (read via `secret-tool`).
@@ -41,7 +44,7 @@ to Google's consent page.
 | Part | Implementation |
 |---|---|
 | Library, search, albums, artists, playlists, likes, history, lyrics | `ytmapi-rs` (InnerTube, like ytmusicapi) — `crates/listen-ytmusic/src/lib.rs` |
-| Audio streams | `yt-dlp -f bestaudio -g` → direct `googlevideo.com` URL for mpv; cached until ~15 min before `expire=` — `ytdlp.rs` |
+| Audio streams | `yt-dlp --ignore-config -f <FORMAT> -g` (the pinned format list in `ytdlp.rs`) → direct `googlevideo.com` URL for mpv; cached until ~15 min before `expire=` — `ytdlp.rs` |
 | JS runtime for yt-dlp | Deno or Node, auto-detected incl. `~/.nvm` and `~/.local/bin` (desktop apps don't get the shell PATH) |
 | Radio / Auto-DJ | `get_watch_playlist_from_video_id` (the "watch next" list) |
 | History | playing a track reports it (`add_history_item`) so recommendations stay current |
