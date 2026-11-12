@@ -44,7 +44,16 @@ fn messages(s: &Listen, find: &str) -> Vec<Message> {
     ui.into_messages().collect()
 }
 
-fn has(s: &Listen, text: &str) -> bool {
+/// Hides the sidebar entries so a page-text check cannot be satisfied by a sidebar label
+/// (`in_tree` searches the whole window, sidebar included).
+fn without_sidebar(s: &mut Listen) {
+    for item in &mut s.config.settings.sidebar.items {
+        item.visible = false;
+    }
+}
+
+/// Whether any widget in the window draws exactly `text`, visible or not.
+fn in_tree(s: &Listen, text: &str) -> bool {
     let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
     ui.find(text).is_ok()
@@ -52,10 +61,11 @@ fn has(s: &Listen, text: &str) -> bool {
 
 #[test]
 fn home_shows_the_feature_genres_and_rows() {
-    let s = state();
-    assert!(has(&s, "Night Drive"));
-    assert!(has(&s, "Genres"));
-    assert!(has(&s, "Most Played"));
+    let mut s = state();
+    without_sidebar(&mut s);
+    assert!(in_tree(&s, "Night Drive"));
+    assert!(in_tree(&s, "Genres"));
+    assert!(in_tree(&s, "Most Played"));
 }
 
 #[test]
@@ -85,12 +95,12 @@ fn the_sidebar_search_opens_the_palette_and_it_shows_commands() {
         let _ = s.update(m);
     }
     assert!(s.palette_open());
-    assert!(has(&s, "Go to page..."));
+    assert!(in_tree(&s, "Go to page..."));
     // Clicking it goes one page deeper.
     for m in messages(&s, "Go to page...") {
         let _ = s.update(m);
     }
-    assert!(has(&s, "Home"));
+    assert!(s.palette_items().iter().any(|i| i.label == "Home"), "the list of pages");
     let at = s.palette_items().iter().position(|i| i.label == "Tracks").expect("Tracks command");
     let _ = s.update(Message::Palette(PaletteMsg::Choose(at)));
     assert!(!s.palette_open());
@@ -101,7 +111,8 @@ fn the_sidebar_search_opens_the_palette_and_it_shows_commands() {
 fn the_search_page_has_tabs() {
     let mut s = state();
     let _ = s.update(Message::Navigate(Route::Search));
-    assert!(has(&s, "Tracks"));
-    assert!(has(&s, "Albums"));
-    assert!(has(&s, "Artists"));
+    without_sidebar(&mut s);
+    assert!(in_tree(&s, "Tracks"));
+    assert!(in_tree(&s, "Albums"));
+    assert!(in_tree(&s, "Artists"));
 }

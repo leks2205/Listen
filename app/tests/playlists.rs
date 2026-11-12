@@ -39,6 +39,14 @@ fn page(detail: PlaylistDetail) -> Listen {
     s
 }
 
+/// Hides the sidebar entries so a page-text check cannot be satisfied by a sidebar label
+/// (`find` searches the whole window, sidebar included).
+fn without_sidebar(s: &mut Listen) {
+    for item in &mut s.config.settings.sidebar.items {
+        item.visible = false;
+    }
+}
+
 fn has_text(s: &Listen, text: &str) -> bool {
     let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
@@ -66,6 +74,7 @@ fn titles(s: &Listen) -> Vec<String> {
 fn the_list_page_shows_playlists_searches_and_sorts() {
     let mut s = boot();
     let _ = s.update(Message::Navigate(Route::Playlists));
+    without_sidebar(&mut s);
     for t in ["Playlists", "Road trip", "Gym", "Create playlist", "Search"] {
         assert!(has_text(&s, t), "missing {t}");
     }

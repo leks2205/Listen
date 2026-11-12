@@ -7,7 +7,7 @@ use listen::app::list_query::{FilterEdit, ListQueryMsg};
 use listen::app::{INTER, Listen, Message, Route};
 use listen::{Args, FONTS};
 use listen_core::settings::{CollectionList, PlayBehavior};
-use listen_source::{AlbumSort, SongSort, SortOrder};
+use listen_source::{AlbumSort, QueryFilters, SongSort, SortOrder};
 
 static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -34,7 +34,16 @@ fn page(route: Route) -> Listen {
     });
     let _ = s.update(Message::WindowResized(SIZE));
     let _ = s.update(Message::Navigate(route));
+    without_sidebar(&mut s);
     s
+}
+
+/// Hides the sidebar entries so a page-text check cannot be satisfied by a sidebar label
+/// (`in_tree` searches the whole window, sidebar included).
+fn without_sidebar(s: &mut Listen) {
+    for item in &mut s.config.settings.sidebar.items {
+        item.visible = false;
+    }
 }
 
 fn q(s: &mut Listen, msg: ListQueryMsg) {
@@ -53,7 +62,8 @@ fn click(s: &mut Listen, text: &str) {
     }
 }
 
-fn shows(s: &Listen, text: &str) -> bool {
+/// Whether any widget in the window draws exactly `text`, visible or not.
+fn in_tree(s: &Listen, text: &str) -> bool {
     let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), SIZE, s.view());
     ui.find(text).is_ok()
@@ -67,9 +77,9 @@ fn names(s: &Listen) -> Vec<String> {
 fn headers_show_the_controls_and_the_sort() {
     for (route, title) in [(Route::Albums, "Albums"), (Route::Tracks, "Tracks")] {
         let s = page(route);
-        assert!(shows(&s, title));
-        assert!(shows(&s, "Name"), "{title}: sort dropdown");
-        assert!(shows(&s, "Play"), "{title}: play all");
+        assert!(in_tree(&s, title));
+        assert!(in_tree(&s, "Name"), "{title}: sort dropdown");
+        assert!(in_tree(&s, "Play"), "{title}: play all");
     }
 }
 
@@ -80,7 +90,7 @@ fn the_sort_dropdown_lists_the_servers_options_and_sorts() {
     // The button opens the dropdown.
     click(&mut s, "Name");
     assert!(s.list_queries.popup.is_some());
-    assert!(shows(&s, "Recently added") && shows(&s, "Song count"), "Navidrome's list");
+    assert!(in_tree(&s, "Recently added") && in_tree(&s, "Song count"), "Navidrome's list");
     click(&mut s, "Recently added");
     assert!(s.list_queries.popup.is_none());
     assert_eq!(s.list_queries.albums.sort, AlbumSort::RecentlyAdded);
@@ -89,7 +99,7 @@ fn the_sort_dropdown_lists_the_servers_options_and_sorts() {
     let mut reversed = before.clone();
     reversed.reverse();
     assert_eq!(names(&s), reversed);
-    assert!(shows(&s, "Recently added"), "the button shows the sort");
+    assert!(in_tree(&s, "Recently added"), "the button shows the sort");
 }
 
 #[test]
@@ -116,7 +126,7 @@ fn search_filters_the_page_and_clears() {
     assert!(s.library.albums.iter().all(|a| a.name.to_lowercase().contains("night")));
     q(&mut s, ListQueryMsg::SearchInput(ListId::Albums, "zzzz".into()));
     assert!(s.library.albums.is_empty());
-    assert!(shows(&s, "No albums match."));
+    assert!(in_tree(&s, "No albums match."));
     q(&mut s, ListQueryMsg::ClearSearch(ListId::Albums));
     assert_eq!(s.library.albums.len(), all);
     // The Tracks list has its own search.
@@ -142,8 +152,10 @@ fn filters_open_in_a_modal_and_reset() {
     click(&mut s, "Name"); // open the dropdown, then close it
     q(&mut s, ListQueryMsg::ClosePopup);
     q(&mut s, ListQueryMsg::OpenFilters(ListId::Albums));
-    assert!(shows(&s, "Album filters") && shows(&s, "Favorited") && shows(&s, "Compilation"));
-    assert!(shows(&s, "Recently played") || shows(&s, "Genres"));
+    assert!(in_tree(&s, "Album filters") && in_tree(&s, "Favorited") && in_tree(&s, "Compilation"));
+    // The demo has no server: the genre picker shows; "Recently played" is a server filter.
+    assert!(in_tree(&s, "Genres"));
+    assert!(!s.query_filters(&ListId::Albums).contains(QueryFilters::RECENTLY_PLAYED));
     let all = s.library.albums.len();
     q(&mut s, ListQueryMsg::Filter(ListId::Albums, FilterEdit::YearFrom("2025".into())));
     assert!(s.list_queries.albums.filters.active());
@@ -181,9 +193,9 @@ fn track_filters_favorite_yes_and_no() {
     q(&mut s, ListQueryMsg::Filter(ListId::Songs, FilterEdit::Favorite(Some(false))));
     assert_eq!(s.library.songs.len(), all - liked);
     q(&mut s, ListQueryMsg::OpenFilters(ListId::Songs));
-    assert!(shows(&s, "Track filters"));
+    assert!(in_tree(&s, "Track filters"));
     // Compilation is an album filter.
-    assert!(!shows(&s, "Compilation"));
+    assert!(!in_tree(&s, "Compilation"));
 }
 
 #[test]
@@ -249,7 +261,7 @@ fn collections_save_override_apply_and_delete() {
     assert!(s.library.albums.len() < all);
     // The picker lists it.
     q(&mut s, ListQueryMsg::OpenCollections(ListId::Albums, iced::Point::new(300.0, 120.0)));
-    assert!(shows(&s, "New ones"));
+    assert!(in_tree(&s, "New ones"));
     q(&mut s, ListQueryMsg::DeleteCollection(0));
     assert!(s.config.settings.lists.collections.is_empty());
 }

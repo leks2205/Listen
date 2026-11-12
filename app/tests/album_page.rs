@@ -31,6 +31,14 @@ fn page(album: Album) -> Listen {
     s
 }
 
+/// Hides the sidebar entries so a page-text check cannot be satisfied by a sidebar label
+/// (`find` searches the whole window, sidebar included).
+fn without_sidebar(s: &mut Listen) {
+    for item in &mut s.config.settings.sidebar.items {
+        item.visible = false;
+    }
+}
+
 fn has_text(s: &Listen, text: &str) -> bool {
     let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
@@ -56,7 +64,8 @@ fn list_id(s: &Listen) -> ListId {
 
 #[test]
 fn navidrome_header_shows_metadata_and_every_action() {
-    let s = page(demo::navidrome_album());
+    let mut s = page(demo::navidrome_album());
+    without_sidebar(&mut s);
     for text in [
         "ALBUM",
         "Deluxe Edition",
