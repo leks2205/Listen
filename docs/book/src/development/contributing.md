@@ -48,6 +48,8 @@ Look here before writing a helper; the tests in `app/src/source_rules.rs` fail o
 |---|---|---|
 | `Song::new`, `Album::new` | `crates/listen-core/src/model.rs` | every song or album outside a source mapper (tests too); set the rest on top |
 | `text::fold` | `crates/listen-core/src/text.rs` | comparing names: lower case, letters and digits only |
+| `text::without_brackets` (crate-private) | `crates/listen-core/src/text.rs` | song and release keys: cut every bracketed extra |
+| script checks (`is_hangul`, `is_kanji`, `has_cjk`, …) | `crates/listen-lyrics/src/gemini.rs` (`is_hangul` lists all six) | six on purpose with different ranges: pick by range, don't merge |
 | `USER_AGENT`, `MUSICBRAINZ_USER_AGENT` | `crates/listen-core/src/lib.rs` | every reqwest client; the second one for MusicBrainz |
 | `files::write_atomic`, `files::write_atomic_private` | `crates/listen-core/src/files.rs` | every file save that must not be left half-written (the second one for secrets: 0600) |
 | `markup::notification_body` | `crates/listen-core/src/markup.rs` | every desktop notification body (escapes for servers that read markup) |
@@ -58,7 +60,8 @@ Look here before writing a helper; the tests in `app/src/source_rules.rs` fail o
 | `YtDlp::stream_url` | `crates/listen-ytmusic/src/ytdlp.rs` | every yt-dlp stream lookup, audio or video |
 | `listen_lastfm::Client` | `crates/listen-lastfm/src/lib.rs` | every Last.fm API call (add a method there) |
 | `rank::synced_first` | `crates/listen-lyrics/src/rank.rs` | ordering lyric search results (synced lyrics first) |
-| `gpu()`, `iced_settings()`, `save_png()`, `layout` | `app/tests/common/` | app tests: hold `gpu()` while a `Simulator` lives, the app's iced settings, render-check PNGs (they compare nothing), click points from the app's layout constants (`shared_test_helpers.rs` checks) |
+| `providers::lrclib` | `crates/listen-lyrics/src/providers.rs` | parsing lrclib answers (`listen_lyrics::lrclib` uses it) |
+| `gpu()`, `iced_settings()`, `save_png()`, `layout` | `app/tests/common/` | app tests: hold `gpu()` while a `Simulator` lives, the app's iced settings, render-check PNGs (they compare nothing), `settle()` to feed produced messages back, click points from the app's layout constants (`shared_test_helpers.rs` checks) |
 
 ## Traps that already cost a bug
 
