@@ -50,15 +50,18 @@ State kept on the device: `pushedTs` (0 at first), `cursor` (0 at first), the qu
 1. Push the plays with `ts >= pushedTs`, then set `pushedTs` to the newest one sent. `>=` is on purpose:
    two plays can share a second. Plays that came from other devices may go out again; the server ignores them.
 2. Send the queued removals, and clear them only after the 200.
-3. Pull until `items` is empty, saving the highest `seq` as `cursor` after each page. Add the plays not
+3. Pull until `items` is empty, keeping the highest `seq` as `cursor`. Add the plays not
    yet in the file, drop the removed ones, sort by `ts` (file order is what Recently played shows),
    write atomically, then apply the retention limit.
+
+The desktop saves `pushedTs` and `cursor` only when the whole sync succeeded; after a failed page the next
+sync starts again from the old values, which is harmless because pushes and pulls can be repeated.
 
 Skip the sync while the history is switched off. A private session records nothing, so nothing goes out.
 
 ## What counts as removal
 - Removing one play: queued, removed on every device.
-- Clear history: this device only, by design. It sends no removals, and the cursor stays, so the plays
+- **Delete all** (on the history page; `HistoryMsg::Clear` in the code): this device only, by design. It sends no removals, and the cursor stays, so the plays
   do not come back. A desktop's history must not be wiped by a tap on the phone.
 - The retention limit: this device only, for the same reason.
 
