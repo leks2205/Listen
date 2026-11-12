@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Generate crates/listen-core/src/theme/palettes.rs from Feishin's theme files.
 
-Usage: tools/gen_themes.py /path/to/feishin > crates/listen-core/src/theme/palettes.rs
+Usage: tools/gen_themes.py /path/to/feishin > crates/listen-core/src/theme/palettes.rs && cargo fmt -p listen-core
+(the output is one entry per line; the checked-in file is rustfmt's layout, which CI checks).
 Themes are merged onto Feishin's `default.ts` colors, like `app-theme.ts` does.
 """
 import re, sys, pathlib

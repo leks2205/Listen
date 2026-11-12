@@ -29,7 +29,7 @@ The file name is the theme id and appears in the theme pickers as "Name (custom)
   `"extends": "nord"` starts from the built-in Nord).
   Without `extends` the theme starts from `defaultDark` (or `defaultLight` if `mode` is `light`).
 - `mode`: `dark` or `light` (default: taken from the parent).
-- `name`: display name (default: the file name).
+- `name`: display name (default: the file name in words, `sunset-red` → "Sunset Red").
 - `colors` keys (kebab-case, like Feishin): `background`, `background-alternate`, `foreground`,
   `foreground-muted`, `primary`, `state-error`, `state-info`, `state-success`, `state-warning`,
   `surface`, `surface-foreground`. Values: `#rgb`, `#rrggbb`, `#rrggbbaa` (alpha ignored),
