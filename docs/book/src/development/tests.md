@@ -27,7 +27,7 @@ Open the PNG files after a UI change to see what the pages look like. Only snaps
 
 ## Tests that need mpv
 
-`crates/listen-player/tests/mpv_playback.rs` and `deck.rs` drive a real mpv with `--ao=null`, so they make no sound. They look for `mpv` on `PATH` and skip themselves when it is missing. Set `LISTEN_MPV=/path/to/mpv` to use a specific binary. `LISTEN_MPV_ARGS="--ao=null"` also silences mpv for the app's own tests.
+`crates/listen-player/tests/mpv_playback.rs`, `deck.rs` and `headphone_eq.rs` drive a real mpv with `--ao=null`, so they make no sound. They look for `mpv` on `PATH`; when it is missing, each prints `SKIPPED <test>: mpv not found` and passes (only `levelling_stage_takes_gain_live` fails without mpv), so read the output on a machine without mpv. CI installs mpv, so they run there. The ripping pipeline tests without `flac` and the CD detection test without `dbus-daemon` behave the same way. Set `LISTEN_MPV=/path/to/mpv` to use a specific binary. `LISTEN_MPV_ARGS="--ao=null"` also silences mpv for the app's own tests.
 
 ## Live tests
 

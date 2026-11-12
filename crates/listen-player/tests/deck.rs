@@ -82,7 +82,7 @@ impl Drop for Fixture {
 
 async fn deck(name: &str) -> Option<Fixture> {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED {}: mpv not found", std::thread::current().name().unwrap_or(name));
         return None;
     };
     let dir = std::env::temp_dir().join(format!("listen-deck-{name}-{}", std::process::id()));

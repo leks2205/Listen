@@ -126,7 +126,7 @@ fn transfer_db(x: &[f32], y: &[f32], freq: f64) -> f64 {
 #[test]
 fn pink_noise_through_mpv_matches_the_profile() {
     let Some(mpv) = mpv_binary() else {
-        eprintln!("no mpv; skipped");
+        eprintln!("SKIPPED pink_noise_through_mpv_matches_the_profile: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-hpeq-{}", std::process::id()));

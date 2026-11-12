@@ -95,7 +95,7 @@ async fn next(rx: &mut tokio::sync::mpsc::Receiver<DriveEvent>) -> DriveEvent {
 #[tokio::test(flavor = "multi_thread")]
 async fn insert_and_remove_an_audio_cd() {
     let Some((_daemon, address)) = private_bus() else {
-        eprintln!("dbus-daemon not available; skipping");
+        eprintln!("SKIPPED insert_and_remove_an_audio_cd: dbus-daemon not available");
         return;
     };
     let udisks = zbus::connection::Builder::address(address.as_str())

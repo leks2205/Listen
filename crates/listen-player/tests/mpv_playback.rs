@@ -1,5 +1,5 @@
 //! Drives a real mpv (with `--ao=null`) through the two-slot model.
-//! Skipped when no mpv binary is available (`LISTEN_MPV` overrides the path).
+//! Without an mpv binary each test prints `SKIPPED <test>` and passes (`LISTEN_MPV` overrides the path).
 
 use listen_player::{MpvOptions, Player, PlayerEvent, Track};
 use std::path::{Path, PathBuf};
@@ -58,7 +58,7 @@ async fn wait_for(rx: &mut UnboundedReceiver<PlayerEvent>, want: &PlayerEvent) -
 #[tokio::test(flavor = "multi_thread")]
 async fn two_slot_gapless_playback() {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED two_slot_gapless_playback: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-player-test-{}", std::process::id()));
@@ -93,7 +93,7 @@ async fn two_slot_gapless_playback() {
 #[tokio::test(flavor = "multi_thread")]
 async fn failed_track_is_reported_once_without_advancing() {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED failed_track_is_reported_once_without_advancing: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-player-fail-{}", std::process::id()));
@@ -130,7 +130,7 @@ async fn failed_track_is_reported_once_without_advancing() {
 #[tokio::test(flavor = "multi_thread")]
 async fn voice_clip_between_songs() {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED voice_clip_between_songs: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-player-clip-{}", std::process::id()));
@@ -164,7 +164,7 @@ async fn voice_clip_between_songs() {
 #[tokio::test(flavor = "multi_thread")]
 async fn clearing_the_next_slot_right_after_a_switch_keeps_the_new_song() {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED clearing_the_next_slot_right_after_a_switch_keeps_the_new_song: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-player-race-{}", std::process::id()));
@@ -191,7 +191,7 @@ async fn clearing_the_next_slot_right_after_a_switch_keeps_the_new_song() {
 #[tokio::test(flavor = "multi_thread")]
 async fn stop_right_after_play_is_no_queue_end() {
     let Some(binary) = mpv_binary() else {
-        eprintln!("mpv not found; skipping");
+        eprintln!("SKIPPED stop_right_after_play_is_no_queue_end: mpv not found");
         return;
     };
     let dir = std::env::temp_dir().join(format!("listen-player-stop-{}", std::process::id()));

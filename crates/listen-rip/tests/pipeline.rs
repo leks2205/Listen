@@ -23,7 +23,10 @@ fn tools() -> bool {
         .iter()
         .all(|t| std::process::Command::new(t).arg("--version").output().is_ok_and(|o| o.status.success()));
     if !ok {
-        eprintln!("flac/metaflac not installed; skipping");
+        eprintln!(
+            "SKIPPED {}: flac/metaflac not installed",
+            std::thread::current().name().unwrap_or("pipeline")
+        );
     }
     ok
 }

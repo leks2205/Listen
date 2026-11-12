@@ -93,6 +93,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-CI runs the first two plus `cargo test --workspace --lib` on Ubuntu for every push to `main` and every pull request. Tests that need mpv or a live server skip themselves when it is missing; see [Tests](tests.md). Keep a pull request focused on one change, and add or update a test when you fix a bug. New user-visible text must go through the translation system; see [Translations](translations.md).
+CI runs the first two plus `cargo test --workspace --lib` on Ubuntu for every push to `main` and every pull request. Live tests are `#[ignore]`d, and tests that need mpv print `SKIPPED` and pass without it; see [Tests](tests.md). Keep a pull request focused on one change, and add or update a test when you fix a bug. New user-visible text must go through the translation system; see [Translations](translations.md).
 
 Listen is licensed under AGPL-3.0-or-later. By contributing you agree that your change is released under that license.
