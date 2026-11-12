@@ -5,9 +5,10 @@ Listen can serve a small web page that works as a remote control for your phone 
 ## Turning it on
 
 1. Open **Settings → Window → Remote control**.
-2. Switch on **Enable remote control server**. The row then shows "Running: open http://...:4333 on the phone". If it cannot start (for example the port is taken), it shows "Not running" and the reason.
-3. On the phone, open that address in a browser, replacing `localhost` with this computer's address on your network, for example `http://192.168.1.20:4333`.
-4. Optionally use the browser's "Add to Home Screen" to install the page like an app.
+2. Set **Remote server username** and **Remote server password**. Other devices can connect only when both are set.
+3. Switch on **Enable remote control server**. The row then shows "Running: open http://localhost:4333 on the phone (use this computer's address)." Without a username and password it shows "Running at http://127.0.0.1:4333 (this computer only)." instead. If it cannot start (for example the port is taken), it shows "Not running" and the reason.
+4. On the phone, open that address in a browser, replacing `localhost` with this computer's address on your network, for example `http://192.168.1.20:4333`.
+5. Optionally use the browser's "Add to Home Screen" to install the page like an app.
 
 ## Settings
 
