@@ -267,7 +267,7 @@ impl Listen {
         let (text, ext) =
             if csv { (self.history.export_csv(), "csv") } else { (self.history.export_json(), "json") };
         let path = dir.join(format!("listen-history-{}.{ext}", history::now_secs()));
-        std::fs::write(&path, text)?;
+        listen_core::files::write_atomic(path.as_ref(), text.as_ref())?;
         Ok(path)
     }
 

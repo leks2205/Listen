@@ -79,7 +79,7 @@ impl Listen {
     fn flow_learnt_keep(&mut self, l: Learnt) {
         if let Some(dir) = self.history.path().and_then(Path::parent)
             && let Ok(text) = serde_json::to_string_pretty(&l)
-            && let Err(e) = std::fs::write(dir.join(FILE_NAME), text)
+            && let Err(e) = listen_core::files::write_atomic(&dir.join(FILE_NAME), text.as_ref())
         {
             tracing::warn!("saving {FILE_NAME}: {e}");
         }

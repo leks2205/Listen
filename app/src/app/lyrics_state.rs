@@ -184,7 +184,7 @@ impl LyricsUi {
         }
         match serde_json::to_string_pretty(&self.overrides) {
             Ok(json) => {
-                if let Err(e) = std::fs::write(file, json) {
+                if let Err(e) = listen_core::files::write_atomic(file.as_ref(), json.as_ref()) {
                     tracing::warn!("saving lyric overrides: {e}");
                 }
             }
@@ -377,7 +377,7 @@ pub fn write_export(dir: &Path, name: &str, text: &str) -> std::io::Result<PathB
         path = dir.join(format!("{stem} ({n}).{ext}"));
         n += 1;
     }
-    std::fs::write(&path, text)?;
+    listen_core::files::write_atomic(path.as_ref(), text.as_ref())?;
     Ok(path)
 }
 

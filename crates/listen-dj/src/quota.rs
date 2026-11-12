@@ -43,7 +43,7 @@ impl Quota {
             let _ = std::fs::create_dir_all(dir);
         }
         if let Ok(text) = serde_json::to_string(self)
-            && let Err(e) = std::fs::write(path, text)
+            && let Err(e) = listen_core::files::write_atomic(path, text.as_ref())
         {
             tracing::warn!("could not save the AI DJ quota counter: {e}");
         }
