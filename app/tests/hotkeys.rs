@@ -1,30 +1,18 @@
 //! The hotkey editor and the action coverage: recording a combo through the
 //! editor, duplicates, the global flag, and what every action dispatches.
 
+mod common;
+
 use iced::keyboard::key::{Code, Named, Physical};
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers};
 use iced_test::simulator::Simulator;
 use listen::app::hotkeys::{FavoriteMode, HotkeysMsg, SongRef};
-use listen::app::{INTER, Listen, Message, Route, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, Route, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{ServerId, SourceKind};
 use listen_core::settings::{HOTKEY_ACTIONS, hotkey_action};
 use std::sync::Arc;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 fn key(code: Code, ch: &str, modifiers: Modifiers) -> iced::Event {
     iced::Event::Keyboard(KeyEvent::KeyPressed {
@@ -307,8 +295,8 @@ fn editor_click_starts_recording_and_duplicates_show() {
     // Tall enough that the field is inside the window: `click` needs it visible. Raise this if the page grows.
     let size = iced::Size::new(1400.0, 4096.0);
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), size, s.view());
         // "mod+k" (Global search) is the only field with that text.
         ui.click("mod+k").expect("the field is on the page");
         ui.into_messages().collect()
@@ -321,8 +309,8 @@ fn editor_click_starts_recording_and_duplicates_show() {
         let _ = s.update(m);
     }
     assert_eq!(s.hotkey_recording.as_deref(), Some("globalSearch"));
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), size, s.view());
     assert!(ui.find("Press keys\u{2026}").is_ok());
     // Both `play` and `playPause` are bound to space: the duplicate map has it.
     assert!(listen::hotkeys::duplicates(&s.config.settings.hotkeys).contains("space"));

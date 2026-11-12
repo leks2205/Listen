@@ -1,35 +1,20 @@
 //! The compact layout (window <= 768 px): breakpoint, sidebar drawer, volume
 //! popover, the full bar keeping its volume slider, the seek bar.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent, ScrollDelta};
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message};
+use listen::app::{Listen, Message};
 use listen::ui::LayoutMode;
 use listen::ui::player_bar::compact;
-use listen::{Args, FONTS, demo};
-
-/// The headless renderer creates a Vulkan instance per `Simulator`; creating
-/// and dropping several at once races inside the Vulkan loader and crashes
-/// the test process now and then. Tests hold this while a `Simulator` lives.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::{Args, demo};
 
 fn state(width: f32, height: f32) -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
     s.queue.set(demo::album_songs(0), 0);
     let _ = s.update(Message::WindowResized(iced::Size::new(width, height)));
     s
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
 }
 
 fn size(s: &Listen) -> iced::Size {
@@ -39,8 +24,8 @@ fn size(s: &Listen) -> iced::Size {
 /// Runs `events` against the current view and feeds the messages back.
 fn run(s: &mut Listen, at: (f32, f32), events: impl IntoIterator<Item = iced::Event>) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), size(s), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), size(s), s.view());
         ui.point_at(at);
         let _ = ui.simulate(events);
         ui.into_messages().collect()
@@ -63,8 +48,8 @@ fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), size(s), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), size(s), s.view());
     ui.find(text).is_ok()
 }
 

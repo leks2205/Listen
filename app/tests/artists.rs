@@ -3,29 +3,17 @@
 //! personal, favourites, biography links, similar artists, section order) and
 //! of a YouTube Music artist (albums, singles, videos, subscribe).
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::app::artist_page::{ArtistMsg, ArtistSetting, ArtistView, FavMode, TopMode};
 use listen::app::list::ListId;
-use listen::app::{ArtistDetail, INTER, Listen, Message, Route};
-use listen::{Args, FONTS, demo};
+use listen::app::{ArtistDetail, Listen, Message, Route};
+use listen::{Args, demo};
 use listen_core::model::{Album, Artist, ArtistRef, ImageRef, Page, ServerId, Song, SourceKind};
 use listen_core::settings::PlayBehavior;
 use listen_source::{ArtistInfo, ExternalLinks};
 use std::time::Duration;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 1400.0);
 
@@ -36,15 +24,15 @@ fn boot() -> Listen {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
 fn click(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };
@@ -174,19 +162,10 @@ fn ytm(s: &mut Listen) -> Artist {
 
 fn snapshot(name: &str, s: &Listen) {
     let theme = s.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     let snap = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for e in std::fs::read_dir(&dir).unwrap().flatten() {
-        if e.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(e.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG for review (the old one was removed above): this checks that the page
-    // renders, not how it looks.
-    snap.matches_image(dir.join(name)).expect("png written");
+    common::save_png(&snap, name);
 }
 
 #[test]

@@ -1,24 +1,16 @@
 //! The full-screen About tab: sourced facts, credits, and nothing without a source.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::about::AboutMsg;
-use listen::app::{FullscreenTab, INTER, Listen, Message};
-use listen::{Args, FONTS};
+use listen::app::{FullscreenTab, Listen, Message};
 use listen_lyrics::card::{Card, Credit, Credits, Fact, Source};
 
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1400.0, 900.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1400.0, 900.0), s.view());
     ui.find(text).is_ok()
 }
 

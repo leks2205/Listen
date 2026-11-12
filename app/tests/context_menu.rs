@@ -1,19 +1,12 @@
 //! Right-click menus, the manual queue and the expandable cover.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
 use listen::app::menu::{MenuAction, MenuMsg, MenuTarget};
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS, demo};
-use std::path::PathBuf;
-
-/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
-/// Vulkan loader and intermittently crashes the process.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::app::{Listen, Message};
+use listen::{Args, demo};
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args {
@@ -26,19 +19,11 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 /// Right-clicks at `at` and feeds the resulting messages back into the app.
 fn right_click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
         ui.point_at(at);
         let _ = ui.simulate([
             iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Right)),
@@ -112,8 +97,8 @@ fn cover_arrow_expands_the_cover_into_the_sidebar() {
     let bar_top = 950.0 - 90.0;
     let cover = (16.0, bar_top + 15.0);
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
         ui.point_at((cover.0 + 48.0, cover.1 + 13.0));
         let _ = ui.simulate(iced_test::simulator::click());
         ui.into_messages().collect()
@@ -125,19 +110,10 @@ fn cover_arrow_expands_the_cover_into_the_sidebar() {
 
 fn snapshot(name: &str, s: &Listen) {
     let theme = s.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
     let shot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG for review (the old one was removed above): this checks that the page
-    // renders, not how it looks.
-    shot.matches_image(dir.join(name)).expect("png written");
+    common::save_png(&shot, name);
 }
 
 #[test]
@@ -300,8 +276,8 @@ mod caps {
     }
 
     fn shows(s: &Listen, text: &str) -> bool {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1200.0, 800.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
         ui.find(text).is_ok()
     }
 

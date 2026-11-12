@@ -1,27 +1,15 @@
 //! The header of the Tracks and Albums pages: sort dropdown and order toggle,
 //! filters, search, refresh, play-all and the saved collections.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::list::ListId;
 use listen::app::list_query::{FilterEdit, ListQueryMsg};
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Route};
 use listen_core::settings::{CollectionList, PlayBehavior};
 use listen_source::{AlbumSort, QueryFilters, SongSort, SortOrder};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
@@ -52,8 +40,8 @@ fn q(s: &mut Listen, msg: ListQueryMsg) {
 
 fn click(s: &mut Listen, text: &str) {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };
@@ -64,8 +52,8 @@ fn click(s: &mut Listen, text: &str) {
 
 /// Whether any widget in the window draws exactly `text`, visible or not.
 fn in_tree(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
@@ -221,8 +209,8 @@ fn clicking_play_sends_play_all_with_the_behaviour() {
     let mut s = page(Route::Tracks);
     s.config.settings.lists.play_behavior = PlayBehavior::Last;
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click("Play last").expect("play button");
         ui.into_messages().collect()
     };

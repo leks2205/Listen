@@ -2,6 +2,8 @@
 //! entries: the flows through `Listen::update` with fake servers and a
 //! real local folder, plus Simulator clicks on the modals.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Point;
 use iced_test::simulator::Simulator;
@@ -10,8 +12,8 @@ use listen::app::item::details::{DetailsMsg, Load};
 use listen::app::item::share::ShareMsg;
 use listen::app::item::tags::{Step, TagsMsg};
 use listen::app::menu::{ContextMenu, MenuAction, MenuMsg, MenuTarget};
-use listen::app::{INTER, Listen, Message, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -24,20 +26,6 @@ use listen_source::{
 };
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-
-static GPU: Mutex<()> = Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 type ShareCall = (ItemKind, Vec<String>, Option<String>, Option<SystemTime>);
 
@@ -288,8 +276,8 @@ fn get_info_shows_the_model_then_the_servers_facts() {
     assert_eq!(s.item.details.as_ref().unwrap().selected, 1);
 
     {
-        let _gpu = gpu();
-        let ui = Simulator::with_size(settings(), iced::Size::new(1200.0, 800.0), s.view());
+        let _gpu = common::gpu();
+        let ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
         let mut ui = ui;
         assert!(ui.find("Bitrate").is_ok() && ui.find("912 kbps").is_ok());
         assert!(ui.find("2 of 2").is_ok());
@@ -563,8 +551,8 @@ fn servers_never_open_the_tag_editor() {
 // --- clicking the modals ---
 
 fn click_text(s: &Listen, text: &str) -> Vec<String> {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1200.0, 800.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
     ui.click(text).unwrap_or_else(|_| panic!("{text} not found"));
     ui.into_messages().map(|m| format!("{m:?}")).collect()
 }

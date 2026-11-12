@@ -2,12 +2,14 @@
 //! connect / play / pause / seek / volume / end-of-song flow, YouTube Music
 //! served from its local copy, the DJ features sitting out, and the popover.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Task;
 use iced_test::simulator::Simulator;
 use listen::app::dlna::DlnaMsg;
-use listen::app::{INTER, Listen, Message, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -17,14 +19,8 @@ use listen_dlna::testing::FakeRenderer;
 use listen_source::{
     AlbumQuery, Capabilities, ListQuery, MusicSource, Result, SongQuery, SourceError, StreamSource,
 };
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-
-static GPU: Mutex<()> = Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 /// One runtime for the fake renderer, the proxy and the app's tasks.
 fn rt() -> &'static tokio::runtime::Runtime {
@@ -325,17 +321,9 @@ fn a_device_that_vanishes_hands_playback_back() {
     assert!(!s.dlna_casting());
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
@@ -370,20 +358,10 @@ fn the_popover_lists_this_computer_and_the_devices() {
 
 fn snapshot(name: &str, s: &Listen) {
     let theme = s.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
     let snap = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join(name);
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG for review (the old one was removed above): this checks that the page
-    // renders, not how it looks.
-    snap.matches_image(&path).expect("png written");
+    common::save_png(&snap, name);
 }
 
 #[test]

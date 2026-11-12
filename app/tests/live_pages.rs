@@ -4,42 +4,22 @@
 //! The test fetches data itself and feeds the results to `update` as the
 //! app's own tasks would.
 
+mod common;
+
 use iced_test::simulator::Simulator;
-use listen::app::{ArtistDetail, INTER, Listen, Message, PlaylistDetail, Route, SourceHandle};
-use listen::{Args, FONTS};
+use listen::Args;
+use listen::app::{ArtistDetail, Listen, Message, PlaylistDetail, Route, SourceHandle};
 use listen_core::model::ServerId;
 use listen_source::{ListQuery, MusicSource};
-use std::path::PathBuf;
 use std::sync::Arc;
 
-/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
-/// Vulkan loader and intermittently crashes the process.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 fn snapshot(state: &Listen, name: &str) {
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
+    let settings = common::iced_settings();
     let theme = state.theme();
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, iced::Size::new(1600.0, 950.0), state.view());
     let snap = ui.snapshot(&theme).expect("snapshot");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for e in std::fs::read_dir(&dir).unwrap().flatten() {
-        if e.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(e.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG for review (the old one was removed above): this checks that the page
-    // renders, not how it looks.
-    snap.matches_image(dir.join(name)).expect("png written");
+    common::save_png(&snap, name);
 }
 
 #[tokio::test(flavor = "multi_thread")]

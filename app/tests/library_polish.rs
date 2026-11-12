@@ -1,25 +1,13 @@
 //! Library polish: hover play popover, columns and pinning, album groups,
 //! play-button behaviour, filters, refresh, links, carousels, palette.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::list::{ConfigEdit, ListId, ListMsg};
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Route};
 use listen_core::settings::{ColumnId, PlayBehavior};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
@@ -36,8 +24,8 @@ fn page(route: Route) -> Listen {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
@@ -295,8 +283,8 @@ fn dragging_a_carousel_pages_it_and_does_not_open_the_card_under_the_pointer() {
     let name =
         s.library.home_state.row(listen::app::home::Section::MostPlayed).unwrap().albums[1].name.clone();
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         let target = ui.find(name.as_str()).expect("the card");
         let mut at = iced_test::selector::Bounded::visible_bounds(&target).unwrap().center();
         at.y -= 90.0; // the cover above the name
@@ -323,8 +311,8 @@ fn a_plain_click_on_a_carousel_card_still_opens_it() {
     let name =
         s.library.home_state.row(listen::app::home::Section::MostPlayed).unwrap().albums[1].name.clone();
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         let target = ui.find(name.as_str()).expect("the card");
         let mut at = iced_test::selector::Bounded::visible_bounds(&target).unwrap().center();
         at.y -= 90.0;
@@ -342,8 +330,8 @@ fn a_plain_click_on_a_carousel_card_still_opens_it() {
 
 fn press_play(s: &Listen, hold: std::time::Duration) -> Vec<Message> {
     use iced::mouse::{Button, Event as MouseEvent};
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     let target = ui.find("Play").expect("the Play button");
     let at = iced_test::selector::Bounded::visible_bounds(&target).unwrap().center();
     ui.point_at(at);

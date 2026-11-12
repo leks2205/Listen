@@ -1,37 +1,24 @@
 //! Full-screen player and player bar: panel tabs, Escape, settings, the
 //! visualizer overlay, ratings, links, the right-hand buttons and the sleep timer.
 
+mod common;
+
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers, key::Named};
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
 use listen::app::fullscreen_state::{FsSetting, FullscreenMsg};
 use listen::app::sleep_timer::{SleepMode, SleepMsg};
-use listen::app::{FullscreenTab, INTER, Listen, Message, Route, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{FullscreenTab, Listen, Message, Route, SourceHandle};
+use listen::{Args, demo};
 use listen_core::model::{ServerId, SourceKind};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-/// See `compact_layout.rs`: one Vulkan instance at a time.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
     s.queue.set(demo::album_songs(0), 0);
     let _ = s.update(Message::WindowResized(iced::Size::new(1600.0, 900.0)));
     s
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
 }
 
 fn fs(m: FullscreenMsg) -> Message {
@@ -55,16 +42,16 @@ fn escape() -> Message {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
 /// Left-clicks `at` and feeds the resulting messages back.
 fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.point_at(at);
         let _ = ui.simulate([
             iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
@@ -81,8 +68,8 @@ fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
 /// Clicks the text `text` (found in the current view).
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?}: {e:?}"));
         ui.into_messages().collect()
     };

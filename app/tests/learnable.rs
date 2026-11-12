@@ -1,24 +1,10 @@
 //! The Learnable songs mix page.
 
+mod common;
+
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
-
-/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
-/// Vulkan loader and intermittently crashes the process.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
+use listen::Args;
+use listen::app::{Listen, Message, Route};
 
 /// QA bug 94: at 960 px the progress line ("Looking at the lyrics of your liked songs: 396 of
 /// 962") in the mix's subtitle ran past the window's right edge. It now wraps.
@@ -38,8 +24,8 @@ fn the_progress_line_wraps_at_960_px() {
         "Looking at the lyrics of your liked songs: 396 of 962 • 0 % to 0 % known words • 3 songs • {}",
         listen_core::model::format_duration(total)
     );
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 935.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(960.0, 935.0), s.view());
     let line = ui.find(meta.as_str()).map(|l| l.bounds());
     let line = line.expect("the progress line");
     // Unwrapped, the line keeps one row and runs out of the window; wrapped, it takes several rows

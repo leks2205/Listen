@@ -1,17 +1,13 @@
 //! Home carousels, the command palette and the search page, driven through the Simulator.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::home::{HomeMsg, RowId, Section};
 use listen::app::palette::PaletteMsg;
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::app::{Listen, Message, Route};
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args {
@@ -24,17 +20,9 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn messages(s: &Listen, find: &str) -> Vec<Message> {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     let target = ui.find(find).expect("text on screen");
     ui.point_at(target.visible_bounds().expect("visible").center());
     let _ = ui.simulate([
@@ -54,8 +42,8 @@ fn without_sidebar(s: &mut Listen) {
 
 /// Whether any widget in the window draws exactly `text`, visible or not.
 fn in_tree(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 

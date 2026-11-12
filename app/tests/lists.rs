@@ -2,29 +2,17 @@
 //! (grid): click semantics, multi-select, keyboard, hotkeys, drag payload,
 //! play behaviour, columns, the YouTube Music cells and the scroll position.
 
+mod common;
+
 use iced::keyboard::key::{Code, Named, Physical};
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers};
 use iced_test::simulator::Simulator;
 use listen::app::hotkeys::{HotkeysMsg, ListHotkey};
 use listen::app::list::{DropTarget, ListId, ListMsg};
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, Route};
+use listen::{Args, demo};
 use listen_core::model::{ArtistRef, ServerId, SourceKind};
 use listen_core::settings::{ColumnId, DisplayType, ListKind, PlayBehavior, RowSize};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
@@ -48,8 +36,8 @@ fn feed(s: &mut Listen, messages: Vec<Message>) {
 /// Clicks the text `times` times in one view (quick clicks make a double-click) and feeds the messages back.
 fn click_text(s: &mut Listen, text: &str, times: usize) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         for _ in 0..times {
             ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         }
@@ -68,8 +56,8 @@ fn ctrl_click(s: &mut Listen, text: &str) {
 
 fn right_click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         let target = ui.find(text).unwrap_or_else(|e| panic!("no {text:?}: {e:?}"));
         let at = iced_test::selector::Bounded::visible_bounds(&target).unwrap().center();
         ui.point_at(at);
@@ -86,8 +74,8 @@ fn right_click_text(s: &mut Listen, text: &str) -> Vec<Message> {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 

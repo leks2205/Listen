@@ -1,11 +1,13 @@
 //! Appearance: accent, primary shade, custom themes + overrides, font, zoom,
 //! backgrounds and cover options.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::appearance::AppearanceMsg as A;
 use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
 use listen_core::settings::{FontKind, ImagePlaceholder};
 use listen_core::theme::Rgb;
 use listen_core::theme::custom::{self, Loaded};
@@ -19,28 +21,14 @@ fn serial() -> std::sync::MutexGuard<'static, ()> {
     SERIAL.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 fn boot() -> Listen {
     let (s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 3000.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 3000.0), s.view());
     ui.find(text).is_ok()
 }
 
@@ -303,8 +291,8 @@ fn clicking_the_zoom_plus_button_sends_zoom_in() {
     let mut s = boot();
     let _ = s.update(Message::Navigate(Route::Settings));
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 3000.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 3000.0), s.view());
         // The "+" button next to the zoom slider.
         let target = ui.find("+").expect("plus button");
         ui.point_at(target.visible_bounds().expect("visible").center());
@@ -336,18 +324,10 @@ fn override_spacing_and_font_sizes_apply_to_the_screens() {
     assert_eq!(metrics::space_sm(), 8.0, "unset values keep the default");
     {
         let theme = s.theme();
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 1100.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 1100.0), s.view());
         let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("theme-override-spacing-font");
-        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-            if entry.file_name().to_string_lossy().starts_with("theme-override-spacing-font-") {
-                std::fs::remove_file(entry.path()).unwrap();
-            }
-        }
-        snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+        common::save_png(&snapshot, "theme-override-spacing-font");
     }
 
     send(&mut s, A::ThemesChanged(Arc::new(Loaded::default())));

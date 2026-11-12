@@ -2,20 +2,16 @@
 //! log level, caches. Nothing here reaches GitHub or installs anything: the
 //! check results are fed in as messages.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::advanced::{AdvancedMsg, CacheKind};
 use listen::app::overlay::{Modal, OverlayMsg};
 use listen::app::settings_shell::ShellMsg;
 use listen::app::updater::{self, Phase, UpdateMsg};
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message};
 use listen_core::settings::{LogLevel, SettingsTab, UpdateChannel};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, ephemeral: true, ..Args::default() });
@@ -24,24 +20,16 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 3600.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 3600.0), s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 3600.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 3600.0), s.view());
         ui.click(text).unwrap_or_else(|_| panic!("{text} is on screen"));
         ui.into_messages().collect()
     };

@@ -1,31 +1,19 @@
 //! Scrobble modes, private mode, Discord and notification settings, and the
 //! remote control server wired to a real app.
 
+mod common;
+
 use futures_util::{SinkExt, StreamExt};
 use iced_test::simulator::Simulator;
 use listen::app::integrations::{Field, IntegrationSetting as I, IntegrationsMsg};
-use listen::app::{INTER, Listen, Message, Setting};
+use listen::app::{Listen, Message, Setting};
 use listen::playback::PlayerMsg;
-use listen::{Args, FONTS, demo};
+use listen::{Args, demo};
 use listen_core::settings::{DiscordDisplay, DiscordLink, ScrobbleMode, SettingsTab};
 use listen_player::PlayerEvent;
 use serde_json::{Value, json};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message as Ws;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 fn player() -> Listen {
     let (mut s, _) = Listen::boot(&Args { ephemeral: true, ..Args::default() });
@@ -330,9 +318,9 @@ fn demo_mode_never_listens() {
 }
 
 fn page_has(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     // `find` walks the whole page, so rows below the window are found at a normal size.
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
     ui.find(text).is_ok()
 }
 

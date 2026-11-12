@@ -2,17 +2,13 @@
 //! output-device menu of the volume button, the speed rules around DJ
 //! transitions, and the Playback tab's audio rows.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::audio::{AudioMsg, Popup};
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::app::{Listen, Message};
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args {
@@ -26,25 +22,17 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
 /// Clicks the widget with `text` and feeds the messages back.
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|_| panic!("{text} is on screen"));
         ui.into_messages().collect()
     };
@@ -119,10 +107,10 @@ fn right_click_on_the_volume_icon_sends_the_menu_message() {
     let s = state();
     // The volume icon is the left end of the bar's right column; scan the bar for it.
     let size = s.window_size;
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut found = false;
     'scan: for x in (1000..1560).step_by(8) {
-        let mut ui = Simulator::with_size(settings(), size, s.view());
+        let mut ui = Simulator::with_size(common::iced_settings(), size, s.view());
         ui.point_at((x as f32, size.height - 45.0));
         let _ = ui.simulate([iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Right))]);
         if ui.into_messages().any(|m| matches!(m, Message::Audio(AudioMsg::OpenDeviceMenu))) {

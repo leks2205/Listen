@@ -1,12 +1,14 @@
 //! Genres, the folder browser, the Favorites page, favouriting / rating of
 //! albums and artists, and the Show favourites / Show ratings settings.
 
+mod common;
+
 use async_trait::async_trait;
 use iced_test::simulator::Simulator;
 use listen::app::library_extra::{ExtraMsg, GenreSort};
 use listen::app::list::{FavoritesTab, ListId, ListMsg};
-use listen::app::{INTER, Listen, Message, Route, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, Route, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -16,20 +18,6 @@ use listen_source::{
     AlbumQuery, Capabilities, ItemKind, ListQuery, MusicSource, Result, SongQuery, SourceError, StreamSource,
 };
 use std::sync::Arc;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
@@ -41,15 +29,15 @@ fn state_on(route: Route) -> Listen {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };

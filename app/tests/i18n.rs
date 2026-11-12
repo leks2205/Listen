@@ -3,45 +3,24 @@
 //! One test only: the language is process-wide, and the other tests of a binary run in
 //! parallel (they all expect English).
 
+mod common;
+
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message, Route, Setting};
-use listen::{Args, FONTS};
-use std::path::PathBuf;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
+use listen::Args;
+use listen::app::{Listen, Message, Route, Setting};
 
 fn has_text(state: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 2400.0), state.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 2400.0), state.view());
     ui.find(text).is_ok()
 }
 
 fn snapshot(name: &str, state: &Listen) {
     let theme = state.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 1100.0), state.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 1100.0), state.view());
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join(name);
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+    common::save_png(&snapshot, name);
 }
 
 fn demo() -> Listen {

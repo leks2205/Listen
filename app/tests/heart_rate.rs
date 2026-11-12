@@ -3,22 +3,17 @@
 //! stops, Off / Shuffle switch to Auto-DJ, songs the user queued stay, and the heart button toggles and
 //! shows the target BPM.
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::app::heart_rate::{HeartRateMsg, HrStatus};
 use listen::app::play_mode::PlayMode;
-use listen::app::{INTER, Listen, Message};
+use listen::app::{Listen, Message};
 use listen::heart_rate::HrEvent;
-use listen::{Args, FONTS, demo};
+use listen::{Args, demo};
 use listen_core::model::Song;
 use listen_core::queue::WhyCode;
 use std::sync::Arc;
-
-/// See `compact_layout.rs`: one Vulkan instance at a time.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn hr(m: HeartRateMsg) -> Message {
     Message::HeartRate(m)
@@ -365,19 +360,11 @@ fn the_hotkey_and_mcp_switch_it() {
     assert_eq!(json["status"], "searching");
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 /// Clicks the widget with the id `id` in the current view and feeds the messages back.
 fn click(s: &mut Listen, id: &'static str) {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(iced::widget::Id::new(id)).unwrap_or_else(|e| panic!("no {id}: {e:?}"));
         ui.into_messages().collect()
     };
@@ -387,8 +374,8 @@ fn click(s: &mut Listen, id: &'static str) {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
