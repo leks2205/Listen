@@ -292,6 +292,7 @@ fn editor_click_starts_recording_and_duplicates_show() {
         listen_core::settings::SettingsTab::Hotkeys,
     )));
     s.config.settings.hotkeys.insert("play".into(), "space".into());
+    // Tall enough that the field is inside the window: `click` needs it visible. Raise this if the page grows.
     let size = iced::Size::new(1400.0, 4096.0);
     let messages: Vec<Message> = {
         let _gpu = gpu();

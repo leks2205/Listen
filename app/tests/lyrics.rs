@@ -313,7 +313,8 @@ fn settings_page_lists_the_lyrics_options() {
     s.config.settings.settings_tab = listen_core::settings::SettingsTab::Playback;
     for text in ["Prefer local lyrics", "Lyric providers", "Follow the current lyric", "Translation provider"]
     {
-        assert!(has_text_sized(&s, text, iced::Size::new(1400.0, 4000.0)), "{text}");
+        // `find` walks the whole page, so rows below the window are found at a normal size.
+        assert!(has_text_sized(&s, text, iced::Size::new(1400.0, 900.0)), "{text}");
     }
 }
 

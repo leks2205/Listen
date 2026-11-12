@@ -315,7 +315,8 @@ fn demo_mode_never_listens() {
 
 fn page_has(s: &Listen, text: &str) -> bool {
     let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 4000.0), s.view());
+    // `find` walks the whole page, so rows below the window are found at a normal size.
+    let mut ui = Simulator::with_size(settings(), iced::Size::new(1600.0, 950.0), s.view());
     ui.find(text).is_ok()
 }
 
