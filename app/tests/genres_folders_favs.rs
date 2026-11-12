@@ -166,7 +166,8 @@ fn the_toggles_hide_hearts_and_stars() {
 
 // ---- albums and artists with a source ---------------------------------------------
 
-struct Fake;
+/// A source with the given capabilities.
+struct Fake(Capabilities);
 
 #[async_trait]
 impl MusicSource for Fake {
@@ -174,7 +175,7 @@ impl MusicSource for Fake {
         SourceKind::Subsonic
     }
     fn capabilities(&self) -> Capabilities {
-        Capabilities::FAVORITE_ITEMS | Capabilities::RATINGS
+        self.0
     }
     async fn ping(&self) -> Result<()> {
         Ok(())
@@ -224,6 +225,10 @@ impl MusicSource for Fake {
 }
 
 fn with_source() -> (Listen, Album) {
+    with_caps(Capabilities::FAVORITE_ITEMS | Capabilities::RATINGS)
+}
+
+fn with_caps(caps: Capabilities) -> (Listen, Album) {
     let (mut s, _) = Listen::boot(&Args { ephemeral: true, ..Args::default() });
     let id = ServerId("srv".into());
     s.config.servers = vec![ServerConfig {
@@ -233,7 +238,7 @@ fn with_source() -> (Listen, Album) {
         url: "https://x.example".into(),
         username: "me".into(),
     }];
-    let _ = s.update(Message::Connected(id.clone(), Ok(SourceHandle(Arc::new(Fake)))));
+    let _ = s.update(Message::Connected(id.clone(), Ok(SourceHandle(Arc::new(Fake(caps))))));
     let mut album = demo::albums().remove(0);
     album.server_id = id;
     album.source = SourceKind::Subsonic;
@@ -296,6 +301,14 @@ fn artists_are_favourited_and_rated_too() {
 
 #[test]
 fn a_source_without_the_capability_changes_nothing() {
+    let (mut s, album) = with_caps(Capabilities::RATINGS);
+    assert!(!s.can_favorite_items(&album.server_id));
+    let _ = s.set_item_favorite(ItemKind::Album, &album.server_id, &album.id, true);
+    assert!(!s.library.albums[0].favorite && !s.extra.fav_albums[0].favorite);
+}
+
+#[test]
+fn an_unknown_server_changes_nothing() {
     let (mut s, mut album) = with_source();
     album.server_id = ServerId("elsewhere".into());
     let _ = s.set_item_favorite(ItemKind::Album, &album.server_id, &album.id, true);
