@@ -1,5 +1,5 @@
 //! The analysis helper process gives the same results as in-process analysis
-//! and stops when idle. Needs mpv; skipped quietly where it isn't installed.
+//! and stops when idle. Needs mpv; skipped (with a SKIPPED line on stderr) where it isn't installed.
 
 use listen_analysis::{Cancel, Opts, Worker, analyze_url, worker::IDLE_EXIT};
 use std::path::Path;
@@ -45,6 +45,7 @@ fn write_song(path: &Path) {
 #[tokio::test]
 async fn helper_matches_in_process_analysis_and_stops() {
     if !have_mpv() {
+        eprintln!("SKIPPED helper_matches_in_process_analysis_and_stops: mpv is not installed");
         return;
     }
     let dir = std::env::temp_dir().join(format!("listen-worker-test-{}", std::process::id()));
