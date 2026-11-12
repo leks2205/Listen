@@ -106,3 +106,4 @@ You will not need these in normal use.
 | `LISTEN_STARTUP_DELAY_MS` | Waits up to 5000 ms before starting. Listen sets it itself when it restarts on Windows. |
 | `LISTEN_I18N_COLLECT` | Writes the interface texts that are shown to the given file, for translators. See [Translations](../development/translations.md). |
 | `LISTEN_DEMO_VIDEO_KBPS`, `LISTEN_DEMO_VIDEO_FIRST_BYTE_MS` | Speed of the demo video stream. |
+| `LISTEN_HR_FAKE` | Replaces the heart-rate sensor with a scripted source: `bpm:seconds` steps such as `70:180,150:300`. See [Heart-rate tempo](../playback/heart-rate.md). |
