@@ -483,11 +483,11 @@ See [Remote control](../integration/remote.md).
 | --- | --- | --- | --- |
 | Enable remote control server | Serves a remote control page. The description shows the address while it runs, or why it did not start. | Off | `settings.integrations.remote.enabled` |
 | Remote server port | The port of the server. Press Enter to apply. | 4333 | `settings.integrations.remote.port` |
-| Remote server address | `0.0.0.0` lets other devices in your network connect; `127.0.0.1` only this computer. Press Enter to apply. | `0.0.0.0` | `settings.integrations.remote.bind` |
+| Remote server address | `0.0.0.0` lets other devices in your network connect (only with a username and password, see below); `127.0.0.1` only this computer. Press Enter to apply. | `0.0.0.0` | `settings.integrations.remote.bind` |
 | Remote server username | The user name to sign in with. Leave both fields empty for no sign-in. | empty | `settings.integrations.remote.username` |
 | Remote server password | The password to sign in with. Press Enter to save; it is kept in the keyring. | none | keyring, not in `config.toml` |
 
-A warning appears when the server is on without a username and password: anyone in your network can then control Listen.
+Without both a username and a password the server only listens on this computer (`127.0.0.1`), whatever the address says, and a note under the rows says so. Set both to use the remote from another device.
 
 ### MCP server
 
