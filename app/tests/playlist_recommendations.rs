@@ -177,7 +177,8 @@ fn the_shared_implementation_leaves_out_the_playlist_and_repeats_nothing() {
 }
 
 #[test]
-fn sources_without_similarity_have_no_recommendations() {
+fn sources_without_the_recommendations_capability_are_not_asked() {
+    // Similar songs alone is not enough: the gate is PLAYLIST_RECOMMENDATIONS.
     let (source, calls) = fake(Capabilities::SIMILAR_SONGS);
     assert!(block_on(source.playlist_recommendations(&songs(6), 5)).is_err());
     assert!(calls.lock().unwrap().similar.is_empty(), "asked a source that cannot");
