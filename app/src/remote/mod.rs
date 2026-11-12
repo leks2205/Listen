@@ -1,6 +1,11 @@
 //! Remote control server (Feishin's `main/features/core/remote`): HTTP and WebSocket on one port
 //! (default 4333), optional basic auth, an embedded phone page and Feishin's message format
 //! (`shared/types/remote-types.ts`). Clients only get what [`Shared`] holds, never server credentials.
+//!
+//! It also holds the parts every local HTTP server of the app shares (the MCP server uses them):
+//! [`bind`], [`serve`] (accept loop with a client limit), [`read_head`] (with its [`HEAD_TIMEOUT`]),
+//! [`respond`], [`same_origin`] and [`constant_eq`]. A new local server uses them, and a fix to how
+//! connections are accepted or read goes into them, so every server gets it.
 
 pub mod ws;
 

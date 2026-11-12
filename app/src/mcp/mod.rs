@@ -2,6 +2,9 @@
 //! Streamable HTTP, JSON responses only: one JSON-RPC 2.0 message per `POST /mcp`, each with
 //! `Authorization: Bearer <token>`. `initialize`, `ping` and `tools/list` are answered here;
 //! `tools/call` goes to the app as a [`Call`].
+//!
+//! The socket, the accept loop, reading the request head (with its timeout) and writing responses are
+//! the shared helpers of [`crate::remote`] (`bind`, `serve`, `read_head`, `respond`); change them there.
 
 pub mod tools;
 
