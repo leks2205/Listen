@@ -7,9 +7,6 @@ use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
 use listen_core::settings::{DiscordDisplay, DiscordLink, DiscordSettings};
 use std::sync::{Arc, Mutex};
 
-/// Feishin's default application id (a custom one can be set in settings).
-pub const DEFAULT_CLIENT_ID: &str = "1560790551337640127";
-
 /// Discord shows at most this many characters per line (Feishin `MAX_FIELD_LENGTH`).
 pub const MAX_FIELD_LENGTH: usize = 127;
 /// Longest link Discord accepts (Feishin `MAX_URL_LENGTH`).

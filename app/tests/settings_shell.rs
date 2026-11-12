@@ -8,7 +8,7 @@ use listen::app::{INTER, Listen, Message};
 use listen::{Args, FONTS};
 use listen_core::config::ServerConfig;
 use listen_core::model::{ServerId, SourceKind};
-use listen_core::settings::{HomeFeatureStyle, Settings, SettingsTab};
+use listen_core::settings::{DEFAULT_DISCORD_CLIENT_ID, HomeFeatureStyle, Settings, SettingsTab};
 
 static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -168,12 +168,12 @@ fn player_bar_sidebar_home_and_discord_controls_change_settings() {
     assert!(!s.config.settings.window.title_bar_track_info);
     send(&mut s, ShellMsg::DiscordIdInput("123".into()));
     assert_eq!(
-        s.config.settings.window.discord_client_id, "1560790551337640127",
+        s.config.settings.window.discord_client_id, DEFAULT_DISCORD_CLIENT_ID,
         "typing alone does not save"
     );
     send(&mut s, ShellMsg::DiscordIdSave);
     assert_eq!(s.config.settings.window.discord_client_id, "123");
     send(&mut s, ShellMsg::DiscordIdInput("  ".into()));
     send(&mut s, ShellMsg::DiscordIdSave);
-    assert_eq!(s.config.settings.window.discord_client_id, "1560790551337640127", "empty = default");
+    assert_eq!(s.config.settings.window.discord_client_id, DEFAULT_DISCORD_CLIENT_ID, "empty = default");
 }
