@@ -143,9 +143,15 @@ impl PlanRequest<'_> {
     /// holds (a short pool can't fill a longer set). Callers may pass raw settings; every consumer of
     /// `set_min`/`set_max` (prompt, schema, answer repair) goes through this one rule.
     pub fn set_bounds(&self) -> (usize, usize) {
-        let max = self.set_max.max(1).min(self.candidates.len().max(1));
-        (self.set_min.max(1).min(max), max)
+        set_bounds(self.set_min, self.set_max, self.candidates.len())
     }
+}
+
+/// The rule of [`PlanRequest::set_bounds`] for a pool of `pool` songs; [`parse_plan`] repairs answers
+/// with it too, so it never trims or tops up to a different size than the prompt asked for.
+fn set_bounds(set_min: usize, set_max: usize, pool: usize) -> (usize, usize) {
+    let max = set_max.max(1).min(pool.max(1));
+    (set_min.max(1).min(max), max)
 }
 
 /// What the listener set up for the show (Settings → AI DJ). Every field may be empty.
@@ -568,8 +574,7 @@ fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
 pub fn parse_plan(text: &str, pool: usize, set_min: usize, set_max: usize) -> Result<Plan, String> {
     let body = text.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```");
     let raw: RawPlan = serde_json::from_str(body.trim()).map_err(|e| format!("bad plan JSON: {e}"))?;
-    let set_max = set_max.max(1).min(pool);
-    let set_min = set_min.max(1).min(set_max);
+    let (set_min, set_max) = set_bounds(set_min, set_max, pool);
     let mut picks: Vec<usize> = Vec::new();
     let mut notes: Vec<String> = Vec::new();
     for (k, v) in raw.picks.iter().enumerate() {
@@ -926,6 +931,12 @@ mod tests {
         assert_eq!(tiny_pool.picks, vec![0]);
 
         assert!(parse_plan("not json", 5, 2, 5).is_err());
+        // Answer repair follows the prompt's set-size rule: min above max asks for max songs, no minimum
+        // still asks for one.
+        let swapped = parse_plan(r#"{"picks": [0, 1, 2, 3, 4], "line": "x"}"#, 10, 5, 3).unwrap();
+        assert_eq!(swapped.picks.len(), 3);
+        let unset = parse_plan(r#"{"picks": [], "line": "x"}"#, 10, 0, 40).unwrap();
+        assert_eq!(unset.picks, [0]);
     }
 
     #[test]
