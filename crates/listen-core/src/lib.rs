@@ -35,6 +35,22 @@ pub mod weekly;
 /// workspace version). Use this instead of spelling it out per client.
 pub const USER_AGENT: &str = concat!("Listen/", env!("CARGO_PKG_VERSION"));
 
+/// The `User-Agent` of MusicBrainz requests: [`USER_AGENT`] plus the contact MusicBrainz asks every
+/// client for (the project page). Disc lookups (listen-rip) and credit cards (listen-lyrics) use it.
+pub const MUSICBRAINZ_USER_AGENT: &str =
+    concat!("Listen/", env!("CARGO_PKG_VERSION"), " ( ", env!("CARGO_PKG_REPOSITORY"), " )");
+
+#[cfg(test)]
+mod user_agent_tests {
+    use super::{MUSICBRAINZ_USER_AGENT, USER_AGENT};
+
+    #[test]
+    fn musicbrainz_requests_name_the_app_and_a_contact() {
+        let contact = MUSICBRAINZ_USER_AGENT.strip_prefix(USER_AGENT).unwrap();
+        assert!(contact.starts_with(" ( https://") && contact.ends_with(" )"), "{MUSICBRAINZ_USER_AGENT}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// The crate header is the map contributors and the porting inventory read: every module is on it.

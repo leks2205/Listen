@@ -4,6 +4,7 @@ description = "Domain types, queue, settings, history memory, song identity and 
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
 base64 = "0.22"

@@ -5,8 +5,7 @@ use crate::toc::Toc;
 use serde_json::Value;
 use std::time::Duration;
 
-pub const USER_AGENT: &str =
-    concat!("Listen/", env!("CARGO_PKG_VERSION"), " ( https://github.com/leks2205/Listen )");
+pub const USER_AGENT: &str = listen_core::MUSICBRAINZ_USER_AGENT;
 const API: &str = "https://musicbrainz.org/ws/2";
 /// Countries preferred when several releases fit equally (Germany, Europe, worldwide).
 const PREFERRED_COUNTRIES: [&str; 3] = ["DE", "XE", "XW"];

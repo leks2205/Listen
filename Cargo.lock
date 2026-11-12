@@ -4228,6 +4228,7 @@ dependencies = [
  "base64 0.22.1",
  "futures-util",
  "libc",
+ "listen-core",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

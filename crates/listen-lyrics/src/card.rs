@@ -218,10 +218,6 @@ pub async fn facts(
 
 // ---- MusicBrainz ------------------------------------------------------------------
 
-fn user_agent() -> String {
-    format!("Listen/{} ( https://github.com/leks2205/Listen )", env!("CARGO_PKG_VERSION"))
-}
-
 fn lucene(s: &str) -> String {
     s.chars()
         .flat_map(|c| {
@@ -304,7 +300,7 @@ pub fn parse_credits(rec: &Value) -> Credits {
 async fn get_json(http: &reqwest::Client, url: &str) -> Result<Value, String> {
     let resp = http
         .get(url)
-        .header("User-Agent", user_agent())
+        .header("User-Agent", listen_core::MUSICBRAINZ_USER_AGENT)
         .header("Accept", "application/json")
         .timeout(Duration::from_secs(20))
         .send()

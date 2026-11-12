@@ -4,8 +4,10 @@ description = "CD ripping for Listen: whipper rips, Listen tags (MusicBrainz), f
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [dependencies]
+listen-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
