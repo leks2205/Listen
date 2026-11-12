@@ -65,9 +65,9 @@ For a detailed trace set `LISTEN_VIZ_DEBUG=1` and read `listen.log`. See [Visual
 
 ## The AI DJ stopped talking or says the quota is used up
 
-The AI DJ uses your own Gemini key, and the free tier allows only a limited number of spoken breaks per day. When Google reports the quota as used up, the DJ keeps choosing songs and shows its lines as text, and tries speech again within the hour. The AI DJ settings show "N of M spoken breaks left today". The counter resets once a day, at midnight Pacific Time.
+The AI DJ uses your own Gemini key, and Google's free tier allows only a small amount of speech per day; Listen sets no limit of its own. When Google reports the quota as used up, the DJ keeps choosing songs and shows its lines as text, and tries speech again within the hour. The **Spoken breaks** row in the AI DJ settings shows how many breaks were spoken today (for example "3 spoken breaks today."), or that Google reported the quota as used up. Google resets the quota once a day, at midnight Pacific Time.
 
-To get more speech, let the DJ talk less often (**Talk after**, **Songs per set**), lower **Spoken breaks per day**, or use a key from a project with billing enabled. If the DJ is unavailable altogether, check that the key is saved (press **Save** again, Listen checks it), that you are online, and that the key has not been deleted in Google AI Studio. `listen --check-ai-dj` runs two test rounds from a terminal. See [AI DJ](../dj/ai-dj.md) and [Creating a Gemini API key](../dj/gemini-key.md).
+To make the free quota last longer, let the DJ talk less often (**Talk after**, **Songs per set**), or use a key from a project with billing enabled. If the DJ is unavailable altogether, check that the key is saved (press **Save** again, Listen checks it), that you are online, and that the key has not been deleted in Google AI Studio. `listen --check-ai-dj` runs two test rounds from a terminal. See [AI DJ](../dj/ai-dj.md) and [Creating a Gemini API key](../dj/gemini-key.md).
 
 ## Song analysis is slow or uses too much CPU
 
