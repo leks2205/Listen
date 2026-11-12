@@ -25,7 +25,7 @@ Listen is a Cargo workspace: one application crate (`app`, binary name `listen`)
 
 ## The app crate
 
-`app/src/main.rs` only calls into `app/src/lib.rs`, which parses the command line (`Args`) and starts the iced application. Most of the code is under `app/src/app/`, with one module per feature area:
+`app/src/main.rs` parses the command line (`Args`, defined in `app/src/lib.rs`), runs `--analysis-worker` or a `--check-*` tool instead of the window when one is the first argument, takes the single-instance lock and starts iced with `iced::daemon`. Everything else is in the `listen` library crate (`app/src/lib.rs`), so tests can boot and render it headlessly. Most of the code is under `app/src/app/`, with one module per feature area:
 
 | Area | Modules |
 |---|---|
@@ -45,6 +45,8 @@ Listen follows iced's Elm-style loop. The central type is `Listen` in `app/src/a
 - `view(&self) -> Element<Message>` builds the whole widget tree from the state. It never changes anything.
 - `subscription(&self) -> Subscription<Message>` lists the event streams the app listens to right now: window and keyboard events, timers, mpv events, and the background streams described below. The list depends on the state, so a stream is only active when its setting is on.
 - `theme(&self)` and `title(&self)` give the current theme and window title.
+
+`main.rs` hands iced the per-window wrappers `window_view`, `window_theme` and `window_title` (in `app/src/app.rs`), which call `view`, `theme` and `title`.
 
 `Message` is one large enum whose variants are grouped by feature (for example the `Mcp(McpMsg)` variant for everything the MCP server sends).
 
