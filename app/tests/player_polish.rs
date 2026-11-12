@@ -47,7 +47,7 @@ fn render(name: &str, state: &Listen) {
             std::fs::remove_file(entry.path()).unwrap();
         }
     }
-    assert!(snapshot.matches_image(&path).expect("png written"));
+    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
 }
 
 fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
@@ -242,7 +242,7 @@ fn toasts_get_feishin_titles_and_hover_holds_them() {
 }
 
 #[test]
-fn toast_is_narrower_in_a_small_window() {
+fn toast_renders_in_a_small_window() {
     let mut s = state(360.0, 600.0);
     s.toast_error("A long error message that has to wrap inside a narrow window".into());
     render("player-polish-toast-narrow", &s);
@@ -251,7 +251,7 @@ fn toast_is_narrower_in_a_small_window() {
 // ---- header title -----------------------------------------------------------------
 
 #[test]
-fn home_feature_title_fits_at_500px() {
+fn home_feature_renders_at_500px() {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
     let _ = s.update(Message::WindowResized(iced::Size::new(500.0, 700.0)));
     render("player-polish-home-500", &s);

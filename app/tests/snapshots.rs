@@ -37,14 +37,15 @@ fn render_sized(name: &str, state: Listen, size: iced::Size) {
 
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
     std::fs::create_dir_all(&dir).unwrap();
-    // `matches_image` writes the PNG when none exists yet; remove the old one first.
+    // `matches_image` writes the PNG only when none exists, so remove the old one first. Nothing is compared:
+    // these tests check that a page renders; look at the PNGs to see how it looks.
     let path = dir.join(name);
     for entry in std::fs::read_dir(&dir).unwrap().flatten() {
         if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
             std::fs::remove_file(entry.path()).unwrap();
         }
     }
-    assert!(snapshot.matches_image(&path).expect("png written"));
+    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
     println!("wrote {}-*.png", path.display());
 }
 
@@ -329,7 +330,7 @@ fn home_feed_shelves() {
     render_state("home-feed", state);
 }
 
-/// A 1000-song playlist: only visible rows are built (virtualized).
+/// A 1000-song playlist page renders (the list builds only its visible rows).
 #[test]
 fn big_playlist_page() {
     use listen::app::{Message, PlaylistDetail, Route};
@@ -396,9 +397,9 @@ fn collapsed_sidebar() {
     render_state("sidebar-collapsed", state);
 }
 
-/// Narrow panels: long titles are cut with "…", durations stay in their column.
+/// Narrow panels with long titles (in the PNG: titles cut with "…", durations in their column).
 #[test]
-fn narrow_panels_keep_durations() {
+fn narrow_panels_render_long_titles() {
     use listen::app::{Message, Route};
     let (mut state, _) = Listen::boot(&demo("tokyoNight", true));
     let titles = [
@@ -526,7 +527,7 @@ fn hotkeys_tab() {
             std::fs::remove_file(entry.path()).unwrap();
         }
     }
-    assert!(snapshot.matches_image(&path).expect("png written"));
+    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
 }
 
 /// The Window section of the settings page (a tall window shows the whole page)
@@ -719,7 +720,7 @@ fn playback_settings_audio() {
                 std::fs::remove_file(entry.path()).unwrap();
             }
         }
-        assert!(snapshot.matches_image(&path).expect("png written"));
+        snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
     }
 }
 
@@ -2369,7 +2370,7 @@ fn get_info_korean() {
     render_state("get-info-korean", state);
 }
 
-/// A hovered "My Library" item: the hover box covers icon and text evenly.
+/// A hovered "My Library" item (in the PNG: the hover box should cover icon and text evenly).
 #[test]
 fn sidebar_item_hovered() {
     let (state, _) = Listen::boot(&demo("tokyoNight", true));
@@ -2398,7 +2399,7 @@ fn sidebar_item_hovered() {
             std::fs::remove_file(entry.path()).unwrap();
         }
     }
-    assert!(snapshot.matches_image(&path).expect("png written"));
+    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
 }
 
 /// The play modes: the player bar button's icon per mode and the queue's

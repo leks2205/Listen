@@ -196,7 +196,7 @@ fn save(name: &str, s: &Listen, at: (f32, f32)) {
             std::fs::remove_file(e.path()).unwrap();
         }
     }
-    assert!(hovered(s, at).matches_image(dir.join(name)).unwrap());
+    hovered(s, at).matches_image(dir.join(name)).expect("png written"); // fresh PNG, compares nothing
 }
 
 #[test]
