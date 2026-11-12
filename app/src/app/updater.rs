@@ -473,7 +473,8 @@ pub fn replace_binary(new: &Path, target: &Path) -> std::io::Result<()> {
 }
 
 /// Whether running `binary --version` prints exactly `version` as one of its words
-/// (`listen 0.29.0`; a broken or mislabelled download is not installed).
+/// (`listen 0.29.0`; a broken or mislabelled download is not installed). Only the tarball path swaps a
+/// binary, so only it checks; dnf and the Windows installer install the package they were given.
 pub fn binary_reports(binary: &Path, version: &Version) -> Result<(), String> {
     let out = std::process::Command::new(binary)
         .arg("--version")
@@ -1093,6 +1094,51 @@ mod tests {
         std::fs::create_dir_all(&sub).unwrap();
         std::fs::rename(&bin, sub.join("listen")).unwrap();
         assert_eq!(find_binary(&d), Some(sub.join("listen")));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// A release as the release scripts publish it (tag `vX.Y.Z`, Cargo version `X.Y.Z`; recorded from
+    /// the v0.41.5 release, no network) is accepted on every install path: each finds its asset and
+    /// SHA256SUMS, and the tarball's binary, printing `listen X.Y.Z` as `--version` does, passes the check.
+    #[cfg(all(unix, target_arch = "x86_64"))]
+    #[test]
+    fn a_published_release_installs_on_every_package_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let json = r####"[{"tag_name":"v0.41.5","draft":false,"prerelease":false,"body":"### Changes\n- x",
+            "html_url":"https://example.com/releases/tag/v0.41.5","assets":[
+            {"name":"listen-0.41.5-1.fc44.x86_64.rpm","url":"https://example.com/a/1","size":1},
+            {"name":"listen-0.41.5-x86_64.tar.gz","url":"https://example.com/a/2","size":1},
+            {"name":"Listen-Setup-0.41.5.exe","url":"https://example.com/a/3","size":1},
+            {"name":"SHA256SUMS","url":"https://example.com/a/4","size":1}]}]"####;
+        let release = parse_releases(json).unwrap().remove(0);
+        assert_eq!((release.tag.as_str(), release.version.clone()), ("v0.41.5", v("0.41.5")));
+        for (package, dist, asset) in [
+            (Package::Rpm, Some("fc44"), "listen-0.41.5-1.fc44.x86_64.rpm"),
+            (Package::Tarball, None, "listen-0.41.5-x86_64.tar.gz"),
+            (Package::WindowsInstaller, None, "Listen-Setup-0.41.5.exe"),
+        ] {
+            assert!(has_package(&release, package), "{asset} is offered");
+            let (chosen, sums) = select_assets(&release, package, dist).unwrap();
+            assert_eq!((chosen.name.as_str(), sums.name.as_str()), (asset, SUMS_NAME));
+        }
+        let picked =
+            pick_update_for(std::slice::from_ref(&release), &v("0.41.4"), UpdateChannel::Stable, |r| {
+                has_package(r, Package::WindowsInstaller)
+            });
+        assert_eq!(
+            picked.map(|r| r.tag),
+            Some("v0.41.5".to_string()),
+            "a Windows copy is offered the update"
+        );
+        // The tarball unpacks to `listen-0.41.5-x86_64/listen` (packaging/build-rpm.sh).
+        let d = scratch("published");
+        let sub = d.join("listen-0.41.5-x86_64");
+        std::fs::create_dir_all(&sub).unwrap();
+        let bin = sub.join("listen");
+        std::fs::write(&bin, "#!/bin/sh\necho 'listen 0.41.5'\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let found = find_binary(&d).unwrap();
+        assert_eq!(binary_reports(&found, &release.version), Ok(()));
         let _ = std::fs::remove_dir_all(d);
     }
 
