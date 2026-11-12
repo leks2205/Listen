@@ -1,6 +1,6 @@
 ; Listen: per-user Windows installer (Inno Setup 6.3+).
 ; Built by packaging/windows/build-installer.sh:
-;   ISCC /DAppVersion=0.29.0 /DDistDir=<assembled folder> /DOutputDir=<out> listen.iss
+;   ISCC /DAppVersion=<version from Cargo.toml> /DDistDir=<assembled folder> /DOutputDir=<out> listen.iss
 ; No administrator prompt: everything goes to %LOCALAPPDATA%\Programs\Listen and the
 ; current user's Start menu / desktop.
 

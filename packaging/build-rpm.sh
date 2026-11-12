@@ -18,10 +18,11 @@ tar -C "$stage" -czf "dist/$name.tar.gz" "$name"
 top="$stage/rpmbuild"
 mkdir -p "$top/SOURCES" "$top/SPECS"
 cp "dist/$name.tar.gz" "$top/SOURCES/"
-# Building on a non-Fedora machine (e.g. the Ubuntu runner): rpmbuild has no dist tag there.
+# Building on a machine that is not Fedora: rpmbuild has no dist tag there, so the RPM is labelled for
+# LISTEN_RPM_FEDORA (default 43; keep it at the oldest Fedora release the RPM supports).
 dist_def=()
 if [[ -z "$(rpm --eval '%{?dist}' 2>/dev/null)" ]]; then
-    dist_def=(--define "dist .fc43")
+    dist_def=(--define "dist .fc${LISTEN_RPM_FEDORA:-43}")
 fi
 rpmbuild -bb --quiet \
     "${dist_def[@]}" \

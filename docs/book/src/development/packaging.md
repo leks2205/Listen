@@ -20,6 +20,7 @@ packaging/build-rpm.sh
 
 - `listen-<version>-x86_64.tar.gz`, a portable tarball with the binary, the desktop file, the icon, `LICENSE`, `NOTICE.md`, `README.md` and `THIRD_PARTY_LICENSES.html`.
 - `listen-<version>-1.<dist>.x86_64.rpm`, built by `rpmbuild` from `packaging/listen.spec`, which installs the binary, the desktop entry (`io.github.leks2205.Listen.desktop`) and the icon, and declares the run-time dependencies (mpv, PipeWire tools, the display libraries, whipper, flac and cdrdao; yt-dlp and Node.js as recommended packages). On a machine that is not Fedora the script defines a `dist` tag so `rpmbuild` still works.
+  That tag is `.fc43` unless `LISTEN_RPM_FEDORA` names another Fedora release.
 
 The RPM is a binary package of the prebuilt executable; it does not compile anything.
 

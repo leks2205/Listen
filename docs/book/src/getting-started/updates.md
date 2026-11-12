@@ -12,7 +12,7 @@ What happens next depends on how you installed Listen:
 
 | Installation | What the updater does |
 |---|---|
-| Fedora RPM (program under `/usr`) | Installs the matching RPM for your Fedora release with `pkexec dnf install`. You are asked for your password. |
+| Fedora RPM (program under `/usr`) | Installs the RPM for your Fedora release (the `fc44` part of the file name) with `pkexec dnf install`; when the release has none for your Fedora, it takes the first RPM the release carries. You are asked for your password. |
 | Tarball or other copy under your home folder, such as `~/.local/bin/listen` | Replaces that file in place. Listen first checks that the new program reports the expected version. |
 | Windows installer | Runs the new `Listen-Setup-<version>.exe` silently in the background, closes Listen and starts the new version. Your queue and window position are saved first. |
 
