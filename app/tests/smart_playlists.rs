@@ -161,7 +161,8 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends a message and everything its tasks answer (a few rounds).
+/// Sends a message, then feeds what its tasks answer back four times (the follow-up rounds);
+/// messages still pending after that are dropped.
 fn send(s: &mut Listen, msg: SmartMsg) {
     let mut queue = vec![Message::Smart(msg)];
     for _ in 0..4 {

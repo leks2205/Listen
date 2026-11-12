@@ -148,7 +148,8 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends `m`, then feeds the answers back.
+/// Sends `m`, then feeds the produced messages back four times (the follow-up rounds); messages still
+/// pending after that are dropped.
 fn settle(s: &mut Listen, m: Message) {
     let mut pending = run(s.update(m));
     for _ in 0..4 {
