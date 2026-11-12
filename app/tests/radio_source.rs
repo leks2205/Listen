@@ -1,6 +1,8 @@
 //! Radio, Related and the jukebox against a fake server (not demo mode):
 //! what the app asks the source and what it does with the answers.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Task;
 use listen::app::radio::RadioMsg;
@@ -177,39 +179,29 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends `m`, then feeds the produced messages back three times (the follow-up rounds); messages still
-/// pending after that are dropped.
-fn settle(s: &mut Listen, m: Message) {
-    let mut pending = run(s.update(m));
-    for _ in 0..3 {
-        let next: Vec<Message> = pending.drain(..).flat_map(|m| run(s.update(m))).collect();
-        pending = next;
-    }
-}
-
 const RADIO: Capabilities = Capabilities::INTERNET_RADIO.union(Capabilities::SIMILAR_SONGS);
 
 #[test]
 fn the_radio_page_loads_and_writes_through_the_source() {
     let (mut s, calls) = app(RADIO, false);
-    settle(&mut s, Message::Navigate(Route::Radio));
+    common::settle(&mut s, Message::Navigate(Route::Radio), 3, run);
     assert_eq!(s.radio.stations.len(), 1);
 
-    settle(&mut s, Message::Radio(RadioMsg::OpenCreate));
+    common::settle(&mut s, Message::Radio(RadioMsg::OpenCreate), 3, run);
     for m in [
         RadioMsg::FormName("Rock".into()),
         RadioMsg::FormStream("https://x/rock".into()),
         RadioMsg::FormSubmit,
     ] {
-        settle(&mut s, Message::Radio(m));
+        common::settle(&mut s, Message::Radio(m), 3, run);
     }
     assert_eq!(s.radio.stations.len(), 2, "{:?}", calls.lock().unwrap());
     assert!(s.radio.form.is_none());
 
-    settle(&mut s, Message::Radio(RadioMsg::OpenEdit("r9".into())));
-    settle(&mut s, Message::Radio(RadioMsg::FormName("Rock 2".into())));
-    settle(&mut s, Message::Radio(RadioMsg::FormSubmit));
-    settle(&mut s, Message::Radio(RadioMsg::Delete("r1".into())));
+    common::settle(&mut s, Message::Radio(RadioMsg::OpenEdit("r9".into())), 3, run);
+    common::settle(&mut s, Message::Radio(RadioMsg::FormName("Rock 2".into())), 3, run);
+    common::settle(&mut s, Message::Radio(RadioMsg::FormSubmit), 3, run);
+    common::settle(&mut s, Message::Radio(RadioMsg::Delete("r1".into())), 3, run);
     let radio = calls.lock().unwrap().radio.clone();
     assert!(radio.contains(&"create Rock".to_string()), "{radio:?}");
     assert!(radio.contains(&"update r9 Rock 2".to_string()), "{radio:?}");
@@ -230,7 +222,7 @@ fn related_asks_the_source_and_drops_the_song_itself() {
     let (mut s, calls) = app(RADIO, false);
     let list = songs(4);
     s.queue.set(list.clone(), 0);
-    settle(&mut s, Message::Radio(RadioMsg::RelatedRefresh));
+    common::settle(&mut s, Message::Radio(RadioMsg::RelatedRefresh), 3, run);
     assert_eq!(calls.lock().unwrap().similar, [(list[0].id.clone(), 50)]);
     let shown: Vec<_> = s.radio.related.songs.iter().map(|x| x.id.clone()).collect();
     assert_eq!(shown, [list[1].id.clone(), list[2].id.clone(), list[3].id.clone()]);
@@ -242,7 +234,7 @@ fn related_asks_the_source_and_drops_the_song_itself() {
 fn related_says_so_when_the_source_cannot() {
     let (mut s, calls) = app(Capabilities::INTERNET_RADIO, false);
     s.queue.set(songs(2), 0);
-    settle(&mut s, Message::Radio(RadioMsg::RelatedRefresh));
+    common::settle(&mut s, Message::Radio(RadioMsg::RelatedRefresh), 3, run);
     assert!(calls.lock().unwrap().similar.is_empty());
     assert!(s.radio.related.error.is_some());
 }
@@ -250,15 +242,15 @@ fn related_says_so_when_the_source_cannot() {
 #[test]
 fn the_jukebox_takes_over_playback_when_chosen() {
     let (mut s, calls) = app(Capabilities::JUKEBOX, true);
-    settle(&mut s, Message::Radio(RadioMsg::JukeboxProbe));
+    common::settle(&mut s, Message::Radio(RadioMsg::JukeboxProbe), 3, run);
     assert_eq!(s.radio.jukebox.available, Some(true));
     assert!(s.jukebox_offered());
-    settle(&mut s, Message::Radio(RadioMsg::SetAudioPlayer(AudioPlayer::Jukebox)));
+    common::settle(&mut s, Message::Radio(RadioMsg::SetAudioPlayer(AudioPlayer::Jukebox)), 3, run);
     assert!(s.jukebox_active());
 
     let list = songs(3);
     s.queue.set(list.clone(), 1);
-    settle(&mut s, Message::Radio(RadioMsg::JukeboxPoll));
+    common::settle(&mut s, Message::Radio(RadioMsg::JukeboxPoll), 3, run);
     calls.lock().unwrap().jukebox.clear();
     // Play from the second song: the server gets the queue from there.
     let task = s.update(Message::Next);
@@ -268,21 +260,21 @@ fn the_jukebox_takes_over_playback_when_chosen() {
     assert_eq!(cmds[1], JukeboxCmd::Start);
 
     calls.lock().unwrap().jukebox.clear();
-    settle(&mut s, Message::TogglePlay);
+    common::settle(&mut s, Message::TogglePlay, 3, run);
     assert_eq!(calls.lock().unwrap().jukebox, [JukeboxCmd::Stop]);
-    settle(&mut s, Message::Volume(40.0));
+    common::settle(&mut s, Message::Volume(40.0), 3, run);
     assert!(calls.lock().unwrap().jukebox.contains(&JukeboxCmd::SetGain(0.4)));
 }
 
 #[test]
 fn a_server_without_jukebox_is_not_offered_and_falls_back_to_mpv() {
     let (mut s, _) = app(Capabilities::JUKEBOX, false);
-    settle(&mut s, Message::Radio(RadioMsg::JukeboxProbe));
+    common::settle(&mut s, Message::Radio(RadioMsg::JukeboxProbe), 3, run);
     assert_eq!(s.radio.jukebox.available, Some(false));
     assert!(!s.jukebox_offered(), "hidden when unsupported");
     assert!(!s.jukebox_active());
     // A saved Jukebox choice on a server that refuses goes back to mpv.
     s.config.settings.playback.audio_player = AudioPlayer::Jukebox;
-    settle(&mut s, Message::Radio(RadioMsg::JukeboxProbed(false)));
+    common::settle(&mut s, Message::Radio(RadioMsg::JukeboxProbed(false)), 3, run);
     assert_eq!(s.config.settings.playback.audio_player, AudioPlayer::Mpv);
 }

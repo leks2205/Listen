@@ -1,6 +1,8 @@
 //! The "Recommended" strip under a playlist's rows: the shared source implementation and what
 //! the page does with it (cache, the "+", the refresh button), against a fake server.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Task;
 use listen::app::playlists::PlaylistPageMsg;
@@ -151,16 +153,6 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends `m`, then feeds the produced messages back three times (the follow-up rounds); messages still
-/// pending after that are dropped.
-fn settle(s: &mut Listen, m: Message) {
-    let mut pending = run(s.update(m));
-    for _ in 0..3 {
-        let next: Vec<Message> = pending.drain(..).flat_map(|m| run(s.update(m))).collect();
-        pending = next;
-    }
-}
-
 #[test]
 fn the_shared_implementation_leaves_out_the_playlist_and_repeats_nothing() {
     let (source, _) = fake(Capabilities::PLAYLIST_RECOMMENDATIONS | Capabilities::SIMILAR_SONGS);
@@ -188,7 +180,7 @@ fn sources_without_the_recommendations_capability_are_not_asked() {
 #[test]
 fn the_playlist_page_shows_the_strip_and_the_plus_adds_one_song() {
     let (mut s, calls) = app();
-    settle(&mut s, Message::Navigate(Route::Playlist("pl".into())));
+    common::settle(&mut s, Message::Navigate(Route::Playlist("pl".into())), 3, run);
     let strip = &s.playlist_page.recommended;
     assert_eq!(strip.songs.len(), 5);
     assert!(strip.error.is_none());
@@ -196,13 +188,13 @@ fn the_playlist_page_shows_the_strip_and_the_plus_adds_one_song() {
 
     // The strip is kept for the playlist: leaving and coming back costs no request.
     let asked = calls.lock().unwrap().similar.len();
-    settle(&mut s, Message::Navigate(Route::Home));
-    settle(&mut s, Message::Navigate(Route::Playlist("pl".into())));
+    common::settle(&mut s, Message::Navigate(Route::Home), 3, run);
+    common::settle(&mut s, Message::Navigate(Route::Playlist("pl".into())), 3, run);
     assert_eq!(calls.lock().unwrap().similar.len(), asked, "the strip is cached");
 
     // The "+" adds exactly that song and drops its row.
     let first = s.playlist_page.recommended.songs[0].clone();
-    settle(&mut s, Message::PlaylistPage(PlaylistPageMsg::RecommendAdd(0)));
+    common::settle(&mut s, Message::PlaylistPage(PlaylistPageMsg::RecommendAdd(0)), 3, run);
     assert_eq!(s.playlist_page.recommended.songs.len(), 4);
     let added = calls.lock().unwrap().added.clone();
     assert_eq!(added.len(), 1, "{added:?}");
@@ -211,7 +203,7 @@ fn the_playlist_page_shows_the_strip_and_the_plus_adds_one_song() {
 
     // The refresh button asks for another set.
     let asked = calls.lock().unwrap().similar.len();
-    settle(&mut s, Message::PlaylistPage(PlaylistPageMsg::Recommend(true)));
+    common::settle(&mut s, Message::PlaylistPage(PlaylistPageMsg::Recommend(true)), 3, run);
     assert!(calls.lock().unwrap().similar.len() > asked, "refresh asks again");
     assert_eq!(s.playlist_page.recommended.songs.len(), 5);
 }

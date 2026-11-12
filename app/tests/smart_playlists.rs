@@ -149,21 +149,9 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends a message, then feeds what its tasks answer back four times (the follow-up rounds);
-/// messages still pending after that are dropped.
+/// Sends a smart-playlist message and settles it with three follow-up rounds (see `common::settle`).
 fn send(s: &mut Listen, msg: SmartMsg) {
-    let mut queue = vec![Message::Smart(msg)];
-    for _ in 0..4 {
-        let mut next = vec![];
-        for m in queue {
-            let m = match m {
-                Message::ForServer(_, inner) => *inner,
-                other => other,
-            };
-            next.extend(run(s.update(m)));
-        }
-        queue = next;
-    }
+    common::settle(s, Message::Smart(msg), 3, run);
 }
 
 fn editor(s: &Listen) -> &Editor {

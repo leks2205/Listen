@@ -144,16 +144,6 @@ fn run(task: Task<Message>) -> Vec<Message> {
     })
 }
 
-/// Sends `m`, then feeds the produced messages back four times (the follow-up rounds); messages still
-/// pending after that are dropped.
-fn settle(s: &mut Listen, m: Message) {
-    let mut pending = run(s.update(m));
-    for _ in 0..4 {
-        let next: Vec<Message> = pending.drain(..).flat_map(|m| run(s.update(m))).collect();
-        pending = next;
-    }
-}
-
 async fn fake_and_renderer() -> (FakeRenderer, Renderer) {
     let fake = FakeRenderer::start().await;
     let r = Renderer::fetch(&fake.location).await.unwrap();
@@ -167,7 +157,7 @@ fn connected(src: Src) -> (Listen, FakeRenderer) {
     // The song plays locally first.
     s.playback.playing = true;
     s.playback.position = Duration::from_secs(40);
-    settle(&mut s, Message::Dlna(DlnaMsg::Connect(0)));
+    common::settle(&mut s, Message::Dlna(DlnaMsg::Connect(0)), 4, run);
     (s, fake)
 }
 
@@ -203,25 +193,25 @@ fn casting_hands_the_song_over_and_the_transport_goes_to_the_device() {
     // The player bar's volume is the device's; the local volume is kept for later.
     let local = s.config.settings.playback.volume;
     assert_eq!(s.playback.volume, 30, "the device's volume is shown");
-    settle(&mut s, Message::Volume(55.0));
+    common::settle(&mut s, Message::Volume(55.0), 4, run);
     assert_eq!(fake.state().volume, 55);
     assert_eq!(s.config.settings.playback.volume, local, "the saved local volume is not touched");
-    settle(&mut s, Message::ToggleMute);
+    common::settle(&mut s, Message::ToggleMute, 4, run);
     assert!(fake.state().muted);
-    settle(&mut s, Message::ToggleMute);
+    common::settle(&mut s, Message::ToggleMute, 4, run);
     assert!(!fake.state().muted);
 
-    settle(&mut s, Message::TogglePlay);
+    common::settle(&mut s, Message::TogglePlay, 4, run);
     assert_eq!(fake.state().state, "PAUSED_PLAYBACK");
     assert!(!s.playback.playing);
-    settle(&mut s, Message::TogglePlay);
+    common::settle(&mut s, Message::TogglePlay, 4, run);
     assert_eq!(fake.state().state, "PLAYING");
-    settle(&mut s, Message::Seek(100.0));
+    common::settle(&mut s, Message::Seek(100.0), 4, run);
     assert_eq!(fake.state().position, 100);
 
     // The poll brings the device's position back.
     fake.state().position = 123;
-    settle(&mut s, Message::Dlna(DlnaMsg::Poll));
+    common::settle(&mut s, Message::Dlna(DlnaMsg::Poll), 4, run);
     assert_eq!(s.playback.position, Duration::from_secs(123));
     assert_eq!(s.playback.duration, Some(Duration::from_secs(205)));
 
@@ -229,17 +219,17 @@ fn casting_hands_the_song_over_and_the_transport_goes_to_the_device() {
     s.dlna_settle_for_test();
     fake.state().state = "STOPPED";
     let first = s.queue.current().map(|i| i.uid);
-    settle(&mut s, Message::Dlna(DlnaMsg::Poll));
+    common::settle(&mut s, Message::Dlna(DlnaMsg::Poll), 4, run);
     assert_ne!(s.queue.current().map(|i| i.uid), first, "advanced to the next song");
     assert_eq!(fake.actions().iter().filter(|a| *a == "SetAVTransportURI").count(), 2);
     assert_eq!(fake.state().state, "PLAYING");
 
     // Next / Previous load on the device too.
-    settle(&mut s, Message::Next);
+    common::settle(&mut s, Message::Next, 4, run);
     assert_eq!(fake.actions().iter().filter(|a| *a == "SetAVTransportURI").count(), 3);
 
     // Back to this computer: the local volume returns and the device stops.
-    settle(&mut s, Message::Dlna(DlnaMsg::Disconnect));
+    common::settle(&mut s, Message::Dlna(DlnaMsg::Disconnect), 4, run);
     assert!(!s.dlna_casting());
     assert_eq!(s.playback.volume, local);
     assert!(fake.actions().contains(&"Stop".to_string()));
@@ -249,7 +239,7 @@ fn casting_hands_the_song_over_and_the_transport_goes_to_the_device() {
 fn the_end_of_the_queue_stops_the_device() {
     let (mut s, fake) = connected(plain());
     s.queue.set(songs(SourceKind::Subsonic).into_iter().take(1).collect(), 0);
-    settle(&mut s, Message::Stop);
+    common::settle(&mut s, Message::Stop, 4, run);
     assert_eq!(fake.state().state, "STOPPED");
     assert!(!s.playback.playing);
     assert_eq!(s.playback.position, Duration::ZERO);
@@ -305,7 +295,7 @@ fn dj_transitions_and_voice_sit_out_while_casting() {
     s.config.settings.mixing.enabled = true;
     s.config.settings.auto_dj.enabled = true;
     assert!(!s.mixing_possible(), "no DJ transitions on a renderer");
-    settle(&mut s, Message::Dlna(DlnaMsg::Disconnect));
+    common::settle(&mut s, Message::Dlna(DlnaMsg::Disconnect), 4, run);
     assert!(s.mixing_possible(), "they are back on this computer");
 }
 

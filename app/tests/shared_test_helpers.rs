@@ -1,5 +1,5 @@
-//! Source checks on `app/tests/*.rs`: the GPU lock, the iced settings and the PNG writer live once, in
-//! `tests/common/mod.rs`, and every test that creates a `Simulator` holds `common::gpu()`.
+//! Source checks on `app/tests/*.rs`: the GPU lock, the iced settings, the PNG writer and the message settling
+//! loop live once, in `tests/common/mod.rs`, and every test that creates a `Simulator` holds `common::gpu()`.
 
 use std::path::PathBuf;
 
@@ -57,6 +57,7 @@ fn test_files_do_not_copy_the_shared_helpers() {
         ("fn gpu(", "a GPU lock helper: use common::gpu()"),
         ("FONTS.iter()", "iced settings: use common::iced_settings()"),
         ("matches_image(", "a PNG writer: use common::save_png()"),
+        ("fn settle(", "a message settling loop: use common::settle()"),
     ];
     let mut found = Vec::new();
     for (name, source) in test_files() {

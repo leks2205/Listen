@@ -2,8 +2,9 @@
 //!
 //! Every Simulator test takes `common::gpu()` and holds the guard while its `Simulator` lives, builds the
 //! `Simulator` with `common::iced_settings()`, and writes pictures with `common::save_png()`. Click points
-//! that depend on the app's layout come from `common::layout`. `tests/shared_test_helpers.rs` fails when a
-//! test file copies one of these instead.
+//! that depend on the app's layout come from `common::layout`. A message and the messages its tasks produce
+//! are processed with `common::settle()`. `tests/shared_test_helpers.rs` fails when a test file copies one of
+//! these instead.
 //!
 //! Each `tests/*.rs` file is compiled as its own crate, so every test binary gets its own copy of this module
 //! (and of the lock). Files use only some of the helpers, hence the `dead_code` allowance.
@@ -11,7 +12,9 @@
 
 pub mod layout;
 
+use iced::Task;
 use iced_test::simulator::Snapshot;
+use listen::app::{Listen, Message};
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -34,6 +37,16 @@ pub fn iced_settings() -> iced::Settings {
         fonts: listen::FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
         default_font: listen::app::INTER,
         ..Default::default()
+    }
+}
+
+/// Sends `m` to `app`, then feeds the produced messages back `rounds` times (the follow-up rounds); messages
+/// still pending after that are dropped. `run` drives one task to the messages it produces (each file runs
+/// tasks on the runtime its fakes need).
+pub fn settle(app: &mut Listen, m: Message, rounds: usize, run: fn(Task<Message>) -> Vec<Message>) {
+    let mut pending = run(app.update(m));
+    for _ in 0..rounds {
+        pending = pending.into_iter().flat_map(|m| run(app.update(m))).collect();
     }
 }
 
