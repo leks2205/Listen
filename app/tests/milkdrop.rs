@@ -10,6 +10,15 @@ fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/milkdrop")
 }
 
+/// Whether libprojectM 4 can be loaded; a test that needs it says so when it is skipped.
+fn projectm_installed(test: &str) -> bool {
+    let ok = milkdrop::availability().is_ok();
+    if !ok {
+        eprintln!("SKIPPED {test}: libprojectM 4 is not installed");
+    }
+    ok
+}
+
 #[test]
 fn missing_library_is_reported_not_fatal() {
     let err = ffi::Api::load_from(&["/nonexistent/libprojectM-4.so.4", "libnot-projectm.so"])
@@ -47,8 +56,7 @@ fn real_library_renders_frames_and_cycles() {
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    if milkdrop::availability().is_err() {
-        eprintln!("skipped: libprojectM 4 is not installed");
+    if !projectm_installed("real_library_renders_frames_and_cycles") {
         return;
     }
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Out>(8);
@@ -244,7 +252,7 @@ fn milkdrop_is_only_active_where_it_can_run() {
 
 #[test]
 fn next_button_and_search_pick_send_messages() {
-    if milkdrop::availability().is_err() {
+    if !projectm_installed("next_button_and_search_pick_send_messages") {
         return;
     }
     let _turn = REQUESTS.lock().unwrap_or_else(|e| e.into_inner());
@@ -276,7 +284,7 @@ fn next_button_and_search_pick_send_messages() {
 
 #[test]
 fn the_picture_shows_in_the_fullscreen_visualizer_with_the_preset_name() {
-    if milkdrop::availability().is_err() {
+    if !projectm_installed("the_picture_shows_in_the_fullscreen_visualizer_with_the_preset_name") {
         return;
     }
     let mut s = boot();
@@ -298,7 +306,7 @@ fn the_picture_shows_in_the_fullscreen_visualizer_with_the_preset_name() {
 
 #[test]
 fn an_empty_preset_folder_is_explained() {
-    if milkdrop::availability().is_err() {
+    if !projectm_installed("an_empty_preset_folder_is_explained") {
         return;
     }
     let mut s = boot();
