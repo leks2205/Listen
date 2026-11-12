@@ -110,7 +110,7 @@ pub fn build(opts: &DiscordSettings, input: &Input) -> Option<Presence> {
     let mut p = Presence {
         kind: if opts.show_as_listening { Kind::Listening } else { Kind::Playing },
         status: match opts.display {
-            DiscordDisplay::Feishin => StatusLine::Name,
+            DiscordDisplay::AppName => StatusLine::Name,
             DiscordDisplay::Song => StatusLine::Details,
             DiscordDisplay::Artist => StatusLine::State,
         },

@@ -232,7 +232,7 @@ pub fn import_feishin(base: &Settings, json: &str) -> Result<Settings, serde_jso
     set_bool(&mut ig.discord.state_icon, &dc["showStateIcon"]);
     set_bool(&mut ig.discord.server_image, &dc["showServerImage"]);
     match dc["displayType"].as_str() {
-        Some("feishin") => ig.discord.display = DiscordDisplay::Feishin,
+        Some("feishin") => ig.discord.display = DiscordDisplay::AppName,
         Some("song") => ig.discord.display = DiscordDisplay::Song,
         Some("artist") => ig.discord.display = DiscordDisplay::Artist,
         _ => {}

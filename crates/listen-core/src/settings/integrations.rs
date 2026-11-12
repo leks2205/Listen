@@ -9,19 +9,20 @@ use super::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DiscordDisplay {
-    /// Listen's application name (serialized `feishin`, Feishin's value for it); not a Feishin mode.
+    /// Listen's application name. Serialized `feishin`: Feishin's `DiscordDisplayType` value for it.
     #[default]
-    Feishin,
+    #[serde(rename = "feishin")]
+    AppName,
     Song,
     Artist,
 }
 
 impl DiscordDisplay {
-    pub const ALL: [Self; 3] = [Self::Feishin, Self::Song, Self::Artist];
+    pub const ALL: [Self; 3] = [Self::AppName, Self::Song, Self::Artist];
 
     pub fn label(self) -> &'static str {
         match self {
-            Self::Feishin => "Listen",
+            Self::AppName => "Listen",
             Self::Song => "Song name",
             Self::Artist => "Artist name",
         }
@@ -135,7 +136,7 @@ impl Default for DiscordSettings {
             show_as_listening: false,
             show_paused: true,
             state_icon: true,
-            display: DiscordDisplay::Feishin,
+            display: DiscordDisplay::AppName,
             link: DiscordLink::None,
             server_image: false,
             lastfm_key: String::new(),
@@ -284,5 +285,13 @@ mod tests {
         assert_eq!(s.remote.port, 4333);
         assert!(!s.remote.enabled);
         assert!(s.discord.show_paused);
+    }
+
+    #[test]
+    fn discord_display_keeps_feishins_stored_names() {
+        let names: Vec<String> =
+            DiscordDisplay::ALL.iter().map(|d| serde_json::to_string(d).unwrap()).collect();
+        assert_eq!(names, [r#""feishin""#, r#""song""#, r#""artist""#]);
+        assert_eq!(serde_json::from_str::<DiscordDisplay>(r#""feishin""#).unwrap(), DiscordDisplay::AppName);
     }
 }
