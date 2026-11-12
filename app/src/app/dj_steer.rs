@@ -106,22 +106,52 @@ mod tests {
     }
 
     #[test]
-    fn a_request_plans_a_new_set_behind_the_dj_song_a_mix_keeps() {
+    fn a_request_drops_the_next_dj_song_whose_mix_has_not_started() {
+        let songs = demo::album_songs(0);
+        for phase in [crate::app::mix::Phase::Planned, crate::app::mix::Phase::Ready] {
+            let mut s = rig();
+            s.queue.set(vec![songs[0].clone()], 0);
+            s.queue.add_picked(songs[1..4].iter().map(|x| (x.clone(), dj_why())).collect());
+            s.demo = false;
+            s.config.settings.ai_dj.enabled = true;
+            s.dj.key = Some("test-key".into());
+            let fake =
+                crate::app::substitute::tests::Fake::new(listen_core::model::SourceKind::Subsonic, vec![]);
+            s.sources.insert(songs[0].server_id.clone(), std::sync::Arc::new(fake));
+            s.mix.phase = phase;
+            let _ = s.on_steer(SteerMsg::Chip(Chip::Calmer));
+            let left: Vec<String> = s.queue.iter().map(|i| i.song.id.clone()).collect();
+            assert_eq!(left, vec![songs[0].id.clone()], "{phase:?}: only the playing song stays");
+            assert_eq!(s.mix.phase, crate::app::mix::Phase::Idle, "{phase:?}: the planned mix is cancelled");
+            assert_eq!(
+                s.dj_plan_blocker(0),
+                Some(Blocker::AlreadyPlanning),
+                "{phase:?}: the new set is planned to follow the playing song"
+            );
+        }
+    }
+
+    fn dj_why() -> listen_core::queue::Why {
+        listen_core::queue::Why::new(
+            listen_core::queue::Picker::AiDj,
+            listen_core::queue::WhyCode::AiDj { note: String::new() },
+        )
+    }
+
+    #[test]
+    fn a_request_plans_a_new_set_behind_the_dj_song_whose_mix_has_started() {
         let mut s = rig();
         let songs = demo::album_songs(0);
         s.queue.set(vec![songs[0].clone()], 0);
-        let why = listen_core::queue::Why::new(
-            listen_core::queue::Picker::AiDj,
-            listen_core::queue::WhyCode::AiDj { note: String::new() },
-        );
+        let why = dj_why();
         s.queue.add_picked(songs[1..4].iter().map(|x| (x.clone(), why.clone())).collect());
         s.demo = false;
         s.config.settings.ai_dj.enabled = true;
         s.dj.key = Some("test-key".into());
         let fake = crate::app::substitute::tests::Fake::new(listen_core::model::SourceKind::Subsonic, vec![]);
         s.sources.insert(songs[0].server_id.clone(), std::sync::Arc::new(fake));
-        // The handover into the next DJ song is planned: that song stays.
-        s.mix.phase = crate::app::mix::Phase::Planned;
+        // The next DJ song's deck is loading (`Phase::decks_busy`): that song stays.
+        s.mix.phase = crate::app::mix::Phase::Preloading;
         assert_eq!(s.dj_plan_blocker(0), Some(Blocker::SongsQueued));
         let _ = s.on_steer(SteerMsg::Chip(Chip::Calmer));
         let left: Vec<String> = s.queue.iter().map(|i| i.song.id.clone()).collect();
@@ -143,7 +173,7 @@ mod tests {
         t.demo = false;
         t.config.settings.ai_dj.enabled = true;
         t.dj.key = Some("test-key".into());
-        t.mix.phase = crate::app::mix::Phase::Planned;
+        t.mix.phase = crate::app::mix::Phase::Running;
         let _ = t.on_steer(SteerMsg::Chip(Chip::MoreEnergy));
         assert_eq!(t.dj_plan_blocker(1), Some(Blocker::SongsQueued));
     }

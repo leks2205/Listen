@@ -266,15 +266,21 @@ impl Listen {
     }
 
     /// Tell the DJ: the requests changed. The not-yet-started DJ songs make way and the DJ plans a new
-    /// set at once (the song playing now plays on; the next song stays when a transition into it is
-    /// planned or running, i.e. `mix.phase != Idle`, which with DJ transitions on is most of a song).
+    /// set at once, to start right after the song playing now. Only a next DJ song whose transition has
+    /// started (`Phase::decks_busy`: its deck is loading or the blend is playing) stays, with the new set
+    /// behind it; a transition that is merely planned or waiting is cancelled and its song dropped.
     pub(super) fn dj_replan(&mut self) -> Task<Message> {
         self.dj.requests_fresh = true;
         if !self.ai_dj_on() {
             return Task::none();
         }
         let start = self.queue.len() - self.queue.upcoming();
-        let keep_next = self.mix.phase != super::mix::Phase::Idle;
+        let keep_next = self.mix.started_into_next();
+        let cancel = if self.mix.owns_next() && !keep_next {
+            self.mix_cancel("Tell the DJ replaced the next song")
+        } else {
+            Task::none()
+        };
         let gone: Vec<(u64, Song)> = self
             .queue
             .iter()
@@ -298,7 +304,7 @@ impl Listen {
             self.drop_break();
         }
         self.queue.remove_many(&uids);
-        // The DJ song a planned or running mix keeps doesn't hold the new set back: it is planned behind it now.
+        // The DJ song a started mix keeps doesn't hold the new set back: it is planned behind it now.
         let kept = self.queue.iter().skip(start).take_while(|i| i.auto).count().min(usize::from(keep_next));
         // A plan already under way was made without the change: drop it when it lands.
         self.dj.generation += 1;
@@ -314,7 +320,7 @@ impl Listen {
                 Some(why) => format!("new set later ({why})"),
             }
         );
-        Task::batch([self.refresh_next(), self.dj_plan_past(kept)])
+        Task::batch([cancel, self.refresh_next(), self.dj_plan_past(kept)])
     }
 
     fn quota_file(&self) -> Option<PathBuf> {
@@ -753,7 +759,7 @@ impl Listen {
     }
 
     /// Plans a set unless something blocks it; the first `kept` upcoming songs don't count as "still
-    /// queued" (Tell the DJ: the next DJ song a mix keeps, the new set goes behind it).
+    /// queued" (Tell the DJ: the next DJ song a started mix keeps, the new set goes behind it).
     pub(super) fn dj_plan_past(&mut self, kept: usize) -> Task<Message> {
         if let Some(why) = self.dj_plan_blocker(kept) {
             if why == Blocker::BackingOff {

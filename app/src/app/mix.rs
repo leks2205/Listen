@@ -252,6 +252,12 @@ impl MixState {
         self.phase != Phase::Idle && !self.handed_over
     }
 
+    /// The transition into the next queue item has started (`Phase::decks_busy`, before the handover):
+    /// replacing that song now would cut the mix. A merely planned or waiting mix can still be cancelled.
+    pub fn started_into_next(&self) -> bool {
+        self.owns_next() && self.phase.decks_busy()
+    }
+
     pub fn plan(&self) -> Option<&TransitionPlan> {
         self.plan.as_deref()
     }
