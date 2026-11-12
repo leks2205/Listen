@@ -181,15 +181,13 @@ impl Config {
         }
     }
 
-    /// Writes atomically (temp file + rename) so a crash never truncates it.
+    /// Writes atomically ([`crate::files::write_atomic`]) so a crash never truncates it.
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         let io = |source| ConfigError::Io { path: path.into(), source };
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(io)?;
         }
-        let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, toml::to_string_pretty(self)?).map_err(io)?;
-        std::fs::rename(&tmp, path).map_err(io)
+        crate::files::write_atomic(path, toml::to_string_pretty(self)?.as_bytes()).map_err(io)
     }
 
     /// The options of a server (all off for servers without an entry).

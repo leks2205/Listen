@@ -10,6 +10,8 @@
 //! - `scene`: the scene and era gate every song a DJ adds must pass;
 //! - `analysis`, `describe`: the audio-analysis and describe-it record types;
 //! - `peq`: parametric EQ and headphone correction;
+//! - `files`: saving a whole file atomically (`files::write_atomic`: every save that must not be left
+//!   half-written);
 //! - `markup`: plain text for notification servers that read markup (every notification sender);
 //! - `releases`: the release radar.
 
@@ -17,6 +19,7 @@ pub mod analysis;
 pub mod config;
 pub mod describe;
 pub mod exclude;
+pub mod files;
 pub mod history;
 pub mod markup;
 pub mod memory;

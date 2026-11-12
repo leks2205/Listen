@@ -181,15 +181,12 @@ impl SavedQueue {
         saved.queue.is_consistent().then_some(saved)
     }
 
-    /// Writes atomically (temp file + rename). One writer at a time per `path`: concurrent calls share the
-    /// temp file and can rename each other's half-written data (the app serialises its writes).
+    /// Writes atomically ([`crate::files::write_atomic`]): readers see the old queue or the new one.
     pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec(self).map_err(std::io::Error::other)?)?;
-        std::fs::rename(&tmp, path)
+        crate::files::write_atomic(path, &serde_json::to_vec(self).map_err(std::io::Error::other)?)
     }
 }
 

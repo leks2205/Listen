@@ -67,14 +67,13 @@ impl Exclusions {
         std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
     }
 
-    /// Writes the file (atomically, through a temporary file next to it).
+    /// Writes the file atomically ([`crate::files::write_atomic`]).
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(self).map_err(std::io::Error::other)?)?;
-        std::fs::rename(tmp, path)
+        let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
+        crate::files::write_atomic(path, text.as_bytes())
     }
 
     /// May `song` play in `ctx`?

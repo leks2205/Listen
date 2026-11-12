@@ -355,7 +355,7 @@ impl History {
         Ok(removed)
     }
 
-    /// Replaces the file atomically (temp file + rename) with `entries` in their order and the kept
+    /// Replaces the file atomically ([`crate::files::write_atomic`]) with `entries` in their order and the kept
     /// unknown lines, each before the first entry that is later than it.
     fn write(&self, entries: &[Entry], unknown: &[Unknown]) -> std::io::Result<()> {
         let Some(path) = &self.path else { return Ok(()) };
@@ -375,9 +375,7 @@ impl History {
             text.push_str(&u.line);
             text.push('\n');
         }
-        let tmp = path.with_extension("jsonl.tmp");
-        std::fs::write(&tmp, text)?;
-        std::fs::rename(&tmp, path)
+        crate::files::write_atomic(path, text.as_bytes())
     }
 
     /// The latest plays (skips left out), newest first, with their index in `entries` (valid until the
