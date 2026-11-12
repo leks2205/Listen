@@ -37,7 +37,7 @@ Open **Settings → Playback**, find the **Visualizer** section and press **Conf
 
 **FFT:** **FFT Size** (1024 to 32768; default 16384) and **Smoothing** (0 to 0.95).
 
-**Frequency range and scaling:** **Minimum Frequency** (20 to 50 Hz), **Maximum Frequency** (8000 to 22050 Hz) and **Frequency Scale** (**Log**, **Linear**, **Bark**, **Mel**).
+**Frequency range and scaling:** **Minimum Frequency** (20 to 50 Hz), **Maximum Frequency** (8000 to 22050 Hz) and **Frequency Scale** (**Log Scale**, **Linear Scale**, **Bark Scale**, **Mel Scale**).
 
 **Sensitivity:** **Weighting Filter** (None, A, B, C, D, Z), **Minimum Decibels** (-120 to -60), **Maximum Decibels** (-40 to 0), **Linear Amplitude** with **Linear Boost**, and **Volume** (input gain, 0 to 4).
 

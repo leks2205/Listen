@@ -108,7 +108,7 @@ Below the first switches there is a status line, described next.
 The grey text under **YouTube Music songs** tells you what is going on. It can contain:
 
 - `N songs analysed`, and in brackets how many each computer contributed when a folder is shared.
-- `library N songs`, the size of the library found so far, with `(listing...)` while the library is still being listed.
+- `library N songs`, the size of the library found so far, with `(listing…)` while the library is still being listed.
 - `N waiting`, the number of songs in line.
 - A reason for waiting in brackets: `paused during a DJ transition`, `library analysis is off` or `paused on battery`.
 - `Now:` the song being analysed.
@@ -116,11 +116,11 @@ The grey text under **YouTube Music songs** tells you what is going on. It can c
 - An error, for example when the analysis folder cannot be written.
 - If you have a YouTube Music account: `YouTube Music: analysed on demand (queue and DJ candidates)` or `YouTube Music: not analysed`.
 
-It shows **Off.** when **Analyse songs** is off and **Starting...** for a moment after start.
+It shows **Off.** when **Analyse songs** is off and **Starting…** for a moment after start.
 
 ## The analysis folder
 
-By default the results are kept in a folder called `analysis` inside Listen's data folder (see [Files and folders](../reference/files.md)). To use another folder, type its path into **Analysis folder** and press **Save**, or press **Choose...** and pick it. Leaving the field empty returns to the default. Changing the folder restarts the analysis; results in the old folder are not moved, so copy them over first if you want to keep them.
+By default the results are kept in a folder called `analysis` inside Listen's data folder (see [Files and folders](../reference/files.md)). To use another folder, type its path into **Analysis folder** and press **Save**, or press **Choose…** and pick it. Leaving the field empty returns to the default. Changing the folder restarts the analysis; results in the old folder are not moved, so copy them over first if you want to keep them.
 
 Inside the folder Listen creates `v1/<computer name>/000001.jsonl`, `000002.jsonl` and so on. These are plain text files with one song per line, including the artist and title so you can recognise them. They contain only measurements, never audio.
 
