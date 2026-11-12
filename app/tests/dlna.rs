@@ -228,8 +228,8 @@ fn casting_hands_the_song_over_and_the_transport_goes_to_the_device() {
     assert_eq!(s.playback.position, Duration::from_secs(123));
     assert_eq!(s.playback.duration, Some(Duration::from_secs(205)));
 
-    // The device ends the song (after a moment of playing): the queue moves on.
-    std::thread::sleep(Duration::from_millis(2200));
+    // The device ends the song (after the settle window): the queue moves on.
+    s.dlna_settle_for_test();
     fake.state().state = "STOPPED";
     let first = s.queue.current().map(|i| i.uid);
     settle(&mut s, Message::Dlna(DlnaMsg::Poll));
@@ -316,9 +316,11 @@ fn dj_transitions_and_voice_sit_out_while_casting() {
 fn a_device_that_vanishes_hands_playback_back() {
     let (mut s, _fake) = connected(plain());
     // The device stops answering: after a few failed polls the app plays on.
-    for _ in 0..5 {
+    for _ in 0..listen::app::dlna::DLNA_MAX_POLL_FAILS - 1 {
         let _ = s.dlna_poll_failed_for_test();
     }
+    assert!(s.dlna_casting(), "a few failed polls are not yet a lost device");
+    let _ = s.dlna_poll_failed_for_test();
     assert!(!s.dlna_casting());
 }
 

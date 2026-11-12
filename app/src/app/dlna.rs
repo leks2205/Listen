@@ -18,7 +18,9 @@ const POLL: Duration = Duration::from_secs(1);
 /// How long a search for renderers listens.
 const SCAN_FOR: Duration = Duration::from_secs(3);
 /// Consecutive failed polls after which the device counts as gone.
-const MAX_FAILS: u8 = 5;
+pub const DLNA_MAX_POLL_FAILS: u8 = 5;
+/// A STOPPED this soon after loading is the renderer still switching tracks, not the song's end.
+const END_SETTLE: Duration = Duration::from_secs(2);
 /// A song is not seeked into below this (the click that started it was a start).
 const MIN_RESUME: Duration = Duration::from_secs(3);
 
@@ -238,6 +240,15 @@ impl Listen {
     #[doc(hidden)]
     pub fn dlna_found_for_test(&mut self, renderers: Vec<Renderer>) {
         self.dlna.renderers = renderers;
+    }
+
+    /// Test hook: the current song was loaded on the renderer longer ago than the settle window,
+    /// so a STOPPED now counts as its end.
+    #[doc(hidden)]
+    pub fn dlna_settle_for_test(&mut self) {
+        if let Some(cast) = self.dlna.cast.as_mut() {
+            cast.loaded_at = None;
+        }
     }
 
     /// Test hook: one poll of the current song failed.
@@ -552,7 +563,7 @@ impl Listen {
             Err(e) => {
                 cast.fails += 1;
                 tracing::warn!("DLNA poll failed ({}): {e}", cast.fails);
-                if cast.fails >= MAX_FAILS {
+                if cast.fails >= DLNA_MAX_POLL_FAILS {
                     let name = cast.renderer.name.clone();
                     self.toast_error(format!("Lost the connection to {name}; playing on this computer."));
                     return self.dlna_disconnect();
@@ -561,7 +572,7 @@ impl Listen {
             }
         };
         let Polled { state, info } = *polled;
-        let settled = cast.loaded_at.is_none_or(|t| t.elapsed() > Duration::from_secs(2));
+        let settled = cast.loaded_at.is_none_or(|t| t.elapsed() > END_SETTLE);
         let ended = matches!(state, TransportState::Stopped | TransportState::NoMedia)
             && cast.seen_playing
             && settled;
