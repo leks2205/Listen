@@ -48,6 +48,9 @@ pub mod tray_menu;
 pub mod ui;
 pub mod visualizer;
 
+#[cfg(test)]
+mod source_rules;
+
 use std::path::PathBuf;
 
 pub const FONTS: [&[u8]; 8] = [

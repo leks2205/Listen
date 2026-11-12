@@ -54,6 +54,11 @@ pub struct GainInfo {
     pub album_peak: Option<f32>,
 }
 
+/// One track as every source reports it.
+///
+/// Build one with [`Song::new`] and set what you know on top
+/// (`Song { artists, ..Song::new(id, server, kind, title) }`), in tests too. Only the source mappers
+/// write every field (`only_source_mappers_spell_out_whole_songs_and_albums` in the app checks this).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Song {
     pub id: String,
@@ -195,6 +200,8 @@ impl Song {
     }
 }
 
+/// One album as every source reports it. Build one with [`Album::new`] and set what you know on top;
+/// the same rule as for [`Song`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Album {
     pub id: String,
