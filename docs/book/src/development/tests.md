@@ -69,6 +69,7 @@ Needs: `navidrome` (path in `NAVIDROME`), PipeWire with `pw-record`, `xvfb-run`,
 | `DJ_E2E_KEEP=1` | Keep the run folder with logs and the recording. |
 | `DJ_E2E_RECORD=0` | Do not record the sink. |
 | `DJ_E2E_ACTIONS=1` | Press next, pause, seek and next-while-preloading over MPRIS during the blends to test the cancel paths. |
+| `DJ_E2E_PW_DIR` | Runtime folder of the private PipeWire (default `/tmp/dj-e2e-pw`); removed at the end. |
 | `DJ_E2E_MODELS` | Cache folder for the beat model between runs. |
 
 ## Screenshots

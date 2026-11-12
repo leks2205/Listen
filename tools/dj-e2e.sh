@@ -13,6 +13,8 @@
 #                   seek back, next while preloading) to test the cancel paths
 #   NAVIDROME       navidrome binary (default ~/navidrome/navidrome)
 #   LISTEN_BIN      the app (default target/release/listen, built if missing)
+#   DJ_E2E_PW_DIR   the private PipeWire's runtime folder (default /tmp/dj-e2e-pw; it is
+#                   removed at the end, so never point it at a session you use)
 #   DJ_E2E_MODELS   beat model cache kept between runs
 #                   (default ~/.cache/listen-dj-e2e/models)
 #
@@ -28,7 +30,7 @@ NAVIDROME=${NAVIDROME:-$HOME/navidrome/navidrome}
 RECORD=${DJ_E2E_RECORD:-1}
 ACTIONS=${DJ_E2E_ACTIONS:-0}
 MODELS=${DJ_E2E_MODELS:-$HOME/.cache/listen-dj-e2e/models}
-PW_DIR=/tmp/listen-pw
+PW_DIR=${DJ_E2E_PW_DIR:-/tmp/dj-e2e-pw}
 PORT=4533
 USER_NAME=admin
 PASSWORD=listen-test
@@ -76,6 +78,7 @@ for _ in $(seq 100); do
   sleep 0.2
 done
 echo "navidrome: $n/$want songs"
+[[ $n -ge $want ]] || { echo "ERROR: Navidrome scanned $n of $want songs" >&2; exit 1; }
 
 LISTEN_PW_DIR=$PW_DIR bash "$ROOT/tools/s0b-pipewire.sh" start >/dev/null
 
@@ -208,7 +211,14 @@ if [[ $RECORD == 1 ]]; then
     echo "ERROR: recording is pure silence; its gap/bump flags are not trustworthy" >&2
     fail=1
   fi
-  echo "audio present: the recording has non-zero samples"
+  if [[ $fail == 0 ]]; then
+    echo "audio present: the recording has non-zero samples"
+  fi
   "$DJREC" check "$RUN/rec.wav" "$(cat "$RUN/rec.start")" "$LOG" "$RUN/actions.txt"
+fi
+# A run in which no mix was planned (the app did not start, or never reached a transition) tested nothing.
+if [[ $(grep -cE 'INFO.*mix “[^”]*” → “[^”]*”: [A-Z]' "$LOG" || true) == 0 ]]; then
+  echo "ERROR: no transition was planned; nothing was tested" >&2
+  fail=1
 fi
 exit $fail
