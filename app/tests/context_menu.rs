@@ -330,6 +330,8 @@ mod caps {
     fn a_youtube_music_guest_gets_no_playlist_entries() {
         let mut s = with_source(SourceKind::YouTubeMusic, listen_ytmusic::capabilities(true));
         song_menu(&mut s, SourceKind::YouTubeMusic);
+        // The menu is open (a hidden entry is only proof when its menu shows).
+        assert!(shows(&s, "Start radio"));
         assert!(!shows(&s, "Add to playlist…"));
     }
 
@@ -339,7 +341,9 @@ mod caps {
         song_menu(&mut s, SourceKind::Jellyfin);
         assert!(shows(&s, "Add to playlist…"));
         let _ = s.update(Message::Menu(MenuMsg::Open(MenuTarget::playlist(&playlist()))));
-        assert!(!shows(&s, "Rename…"));
+        assert!(shows(&s, "Play in smooth order"), "the playlist menu is open");
+        // Renaming lives in "Edit playlist…".
+        assert!(!shows(&s, "Edit playlist…"));
         assert!(!shows(&s, "Delete playlist…"));
         song_menu(&mut s, SourceKind::Jellyfin);
         let _ = s.update(Message::Menu(MenuMsg::Do(MenuAction::ChoosePlaylist)));
