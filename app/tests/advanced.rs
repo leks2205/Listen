@@ -107,8 +107,10 @@ fn a_found_update_opens_the_dialog_with_its_notes() {
 fn download_and_install_never_installs_in_demo_mode() {
     let mut s = state();
     let _ = s.update(checked(true, RELEASES));
-    click_text(&mut s, "Download and install");
-    assert_eq!(s.adv.update.phase, Phase::Idle);
+    assert!(s.adv.update.available.is_some(), "an update is offered");
+    // A test build's button is disabled (the exe is under `target/`), so send its message directly.
+    let _ = s.update(Message::Update(UpdateMsg::Install));
+    assert_eq!(s.adv.update.phase, Phase::Idle, "demo mode never installs");
 }
 
 #[test]
