@@ -91,6 +91,6 @@ Problems are listed in red or grey under the **Custom themes folder** row in Set
 - A file that is not valid JSON or TOML, is not an object, or has an unknown `extends` is listed as an error and that theme is skipped.
 - A loop in `extends`, or a chain longer than 10, is an error.
 - Two files with the same name (for example `sunset.json` and `sunset.toml`) are an error.
-- An invalid colour value is dropped with a note, and the rest of the theme still loads. The same goes for unknown colour keys, an unknown `mode`, and out-of-range or non-numeric override values.
+- An invalid colour value is dropped with a note, and the rest of the theme still loads. The same goes for unknown colour keys, an unknown `mode` and non-numeric override values. An override number outside its range is set to the nearest allowed value without a note (for example a `font_size` of 900 becomes 48).
 
 Fix the file and save it; the list updates on its own.
