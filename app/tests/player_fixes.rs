@@ -78,15 +78,28 @@ fn a_forward_seek_does_not_scrobble_until_enough_is_played() {
 #[test]
 fn a_new_track_starts_counting_afresh() {
     let mut s = state();
-    let threshold_ticks = 3;
-    for t in 0..threshold_ticks {
+    let total = s.duration();
+    let p = &s.config.settings.playback;
+    let threshold = Duration::from_secs(u64::from(p.scrobble_at_secs))
+        .min(total.mul_f32(f32::from(p.scrobble_at_percent) / 100.0))
+        .as_secs();
+    assert!(threshold > 6, "test needs a threshold to cross");
+    // Real play of the first track to just under the threshold.
+    let played_secs = threshold - 2;
+    for t in 0..=played_secs {
+        pos(&mut s, t as f64);
+    }
+    assert!(s.history.entries.is_empty(), "not scrobbled yet");
+    let _ = s.update(Message::Next);
+    // Four seconds of the next track: carried over, the old time would cross the threshold now.
+    for t in 0..=4 {
         pos(&mut s, f64::from(t));
     }
-    let _ = s.update(Message::Next);
-    pos(&mut s, 100.0);
+    assert!(!s.history.entries.is_empty(), "the skip is noted");
     assert!(
         s.history.entries.iter().all(|e| e.status == listen_core::history::PlayStatus::Skipped),
-        "the old track's played time is gone (only its skip is noted)"
+        "the old track's played time is gone (only its skip is noted): {:?}",
+        s.history.entries.iter().map(|e| e.status).collect::<Vec<_>>()
     );
 }
 
