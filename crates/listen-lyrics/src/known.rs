@@ -230,13 +230,11 @@ impl Store {
             .unwrap_or_default()
     }
 
-    /// Writes the store (temp file, then rename).
+    /// Writes the store atomically (`listen_core::files::write_atomic`).
     pub fn save(&self, cache_dir: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(cache_dir)?;
-        let path = Self::path(cache_dir);
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec(self).map_err(std::io::Error::other)?)?;
-        std::fs::rename(tmp, path)
+        let bytes = serde_json::to_vec(self).map_err(std::io::Error::other)?;
+        listen_core::files::write_atomic(&Self::path(cache_dir), &bytes)
     }
 
     /// Records a song's lyric lines. Returns whether anything changed. Lines without Korean

@@ -355,10 +355,8 @@ impl CardCache {
 
     pub fn save(dir: &Path, song_key: &str, lang: &str, card: &Card) -> std::io::Result<()> {
         std::fs::create_dir_all(dir)?;
-        let path = Self::path(dir, song_key, lang);
-        let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, serde_json::to_vec(card).map_err(std::io::Error::other)?)?;
-        std::fs::rename(tmp, path)
+        let bytes = serde_json::to_vec(card).map_err(std::io::Error::other)?;
+        listen_core::files::write_atomic(&Self::path(dir, song_key, lang), &bytes)
     }
 }
 

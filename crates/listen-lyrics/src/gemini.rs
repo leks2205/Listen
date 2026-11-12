@@ -428,13 +428,11 @@ impl SongCache {
             .unwrap_or_default()
     }
 
-    /// Writes the song's cache (atomically: temp file, then rename).
+    /// Writes the song's cache atomically (`listen_core::files::write_atomic`).
     pub fn save(&self, dir: &Path, song_key: &str) -> std::io::Result<()> {
         std::fs::create_dir_all(dir)?;
-        let path = Self::path(dir, song_key);
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec(self).map_err(std::io::Error::other)?)?;
-        std::fs::rename(tmp, path)
+        let bytes = serde_json::to_vec(self).map_err(std::io::Error::other)?;
+        listen_core::files::write_atomic(&Self::path(dir, song_key), &bytes)
     }
 
     /// The cached translation of these lines into `lang`, if any.
