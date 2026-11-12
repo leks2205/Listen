@@ -298,7 +298,7 @@ fn the_picture_shows_in_the_fullscreen_visualizer_with_the_preset_name() {
     let _ = s.update(Message::Milkdrop(MilkdropMsg::Preset("b-green".into())));
     assert!(view_has(&s, 900.0, "b-green"));
     assert!(!view_has(&s, 900.0, "Starting Milkdrop…"));
-    // An empty folder says so.
+    // A render error replaces the picture with its reason.
     let _ = s.update(Message::Milkdrop(MilkdropMsg::Error("no OpenGL here".into())));
     s.milk.frame = None;
     assert!(view_has(&s, 900.0, "no OpenGL here"));
