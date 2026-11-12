@@ -222,7 +222,7 @@ fn clear_and_global_flag() {
 }
 
 #[test]
-fn window_hotkey_runs_the_action_and_global_ones_do_not() {
+fn window_hotkeys_run_every_action_bound_to_the_combo() {
     let mut s = server_state(SourceKind::Subsonic);
     s.config.settings.hotkeys.insert("rate4".into(), "mod+4".into());
     press(&mut s, key_event(Code::Digit4, "4", Modifiers::CTRL));
@@ -231,6 +231,12 @@ fn window_hotkey_runs_the_action_and_global_ones_do_not() {
     s.config.settings.hotkeys.insert("favoriteCurrentAdd".into(), "mod+4".into());
     press(&mut s, key_event(Code::Digit4, "4", Modifiers::CTRL));
     assert!(s.queue.current().unwrap().song.favorite);
+    // A global action also fires from the window while the system-wide portal is off (as in an
+    // ephemeral run); with the portal on the window skips it (`hotkeys::actions_for` unit tests).
+    s.config.settings.hotkeys.insert("rate2".into(), "mod+2".into());
+    s.config.settings.hotkeys_global.insert("rate2".into());
+    press(&mut s, key_event(Code::Digit2, "2", Modifiers::CTRL));
+    assert_eq!(s.queue.current().unwrap().song.rating, Some(2));
 }
 
 #[test]
