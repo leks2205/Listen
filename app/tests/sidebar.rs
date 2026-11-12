@@ -1,27 +1,15 @@
 //! The sidebar: playlist list (toggle, filter, folders, manual order, shared),
 //! collections, the collapsed rail, settings reorder and the app menu.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::sidebar_state::{DragKind, Popup, Scope, SidebarMsg, SidebarSetting};
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Route};
 use listen_core::model::{Playlist, ServerId, SourceKind};
 use listen_core::settings::{Collection, FolderView};
 use std::time::Duration;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 1500.0);
 
@@ -60,15 +48,15 @@ fn state() -> Listen {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };
@@ -228,8 +216,8 @@ fn app_menu_opens_navigates_and_closes() {
 fn menu_button_opens_the_app_menu() {
     let s = state();
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         // The menu button is the second of the four squares right of the search box.
         ui.point_at((272.0, 62.0));
         let _ = ui.simulate(iced_test::simulator::click());

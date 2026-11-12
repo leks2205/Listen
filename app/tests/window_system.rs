@@ -1,17 +1,13 @@
 //! Window system: saved window state, the Window tab, bar styles, the title
 //! and minimizing without a tray.
 
+mod common;
+
 use iced::window;
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message, Route, Setting, WindowAction, WindowSetting, WindowStateMsg};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, Route, Setting, WindowAction, WindowSetting, WindowStateMsg};
+use listen::{Args, demo};
 use listen_core::settings::WindowBarStyle;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -20,15 +16,11 @@ fn state() -> Listen {
 }
 
 fn sim_settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
+    common::iced_settings()
 }
 
 fn has_text(s: &Listen, size: iced::Size, text: &str) -> bool {
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(sim_settings(), size, s.view());
     ui.find(text).is_ok()
 }

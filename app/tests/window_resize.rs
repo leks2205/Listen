@@ -1,25 +1,17 @@
 //! Diagonal window resize, MPRIS Play/Pause, and a restored song staying paused.
 
+mod common;
+
 use iced::window::Direction;
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message, WindowAction};
+use listen::app::{Listen, Message, WindowAction};
 use listen::mpris::{MprisCmd, MprisMsg};
-use listen::{Args, FONTS, demo};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::{Args, demo};
 
 fn press_at(at: (f32, f32)) -> Vec<Message> {
     let size = iced::Size::new(800.0, 600.0);
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
-    let _gpu = gpu();
+    let settings = common::iced_settings();
+    let _gpu = common::gpu();
     let content: iced::Element<'_, Message> = iced::widget::space().width(800).height(600).into();
     let mut ui = Simulator::with_size(settings, size, listen::ui::title_bar::resize_edges(content));
     ui.point_at(at);

@@ -2,18 +2,12 @@
 //! `target/snapshots/` for visual review. Run with:
 //! `cargo test -p listen --test snapshots -- --nocapture`
 
+mod common;
+
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen};
-use listen::{Args, FONTS};
+use listen::Args;
+use listen::app::Listen;
 use std::path::PathBuf;
-
-/// Held while a `Simulator` lives: creating and dropping several Vulkan instances at once races in the
-/// Vulkan loader and occasionally crashes the test process.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn render(name: &str, args: Args) {
     let (state, _task) = Listen::boot(&args);
@@ -25,27 +19,13 @@ fn render_state(name: &str, state: Listen) {
 }
 
 fn render_sized(name: &str, state: Listen, size: iced::Size) {
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
+    let settings = common::iced_settings();
     let theme = state.theme();
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, size, state.view());
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
 
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    // `matches_image` writes the PNG only when none exists, so remove the old one first. Nothing is compared:
-    // these tests check that a page renders; look at the PNGs to see how it looks.
-    let path = dir.join(name);
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+    let path = common::save_png(&snapshot, name);
     println!("wrote {}-*.png", path.display());
 }
 
@@ -507,29 +487,17 @@ fn hotkeys_tab() {
     s.hotkeys.insert("rate5".into(), "mod+5".into());
     s.hotkeys_global.insert("next".into());
     state.hotkey_recording = Some("pause".into());
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
+    let settings = common::iced_settings();
     let theme = state.theme();
     let tab = iced::widget::container(listen::ui::settings::hotkeys::global_shortcuts(&state))
         .padding(24)
         .width(iced::Length::Fill)
         .height(iced::Length::Fill)
         .style(listen::style::app_background(state.tokens));
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, iced::Size::new(1000.0, 2250.0), tab);
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("hotkeys-tab");
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with("hotkeys-tab-") {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+    common::save_png(&snapshot, "hotkeys-tab");
 }
 
 /// The Window section of the settings page (a tall window shows the whole page)
@@ -699,13 +667,9 @@ fn playback_settings_audio() {
         ("playback-settings-audio-2", -3.6),
         ("playback-settings-audio-3", -1.6),
     ] {
-        let settings = iced::Settings {
-            fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-            default_font: INTER,
-            ..Default::default()
-        };
+        let settings = common::iced_settings();
         let theme = state.theme();
-        let _gpu = gpu();
+        let _gpu = common::gpu();
         let mut ui = Simulator::with_size(settings, iced::Size::new(1600.0, 1100.0), state.view());
         ui.point_at((800.0, 500.0));
         if lines != 0.0 {
@@ -714,15 +678,7 @@ fn playback_settings_audio() {
             })]);
         }
         let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join(name);
-        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-            if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-                std::fs::remove_file(entry.path()).unwrap();
-            }
-        }
-        snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+        common::save_png(&snapshot, name);
     }
 }
 
@@ -2374,16 +2330,8 @@ fn get_info_korean() {
 fn sidebar_item_hovered() {
     let (state, _) = Listen::boot(&demo("tokyoNight", true));
     let theme = state.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(
-        iced::Settings {
-            fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-            default_font: INTER,
-            ..Default::default()
-        },
-        iced::Size::new(1600.0, 950.0),
-        state.view(),
-    );
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), state.view());
     // The "Albums" row of the sidebar, found by its text.
     let albums = ui.find("Albums").expect("the sidebar lists Albums");
     let at = iced_test::selector::Bounded::visible_bounds(&albums).expect("Albums is visible").center();
@@ -2391,15 +2339,7 @@ fn sidebar_item_hovered() {
     ui.point_at(at);
     let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at })]);
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("sidebar-hover");
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with("sidebar-hover-") {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+    common::save_png(&snapshot, "sidebar-hover");
 }
 
 /// The play modes: the player bar button's icon per mode and the queue's
@@ -2498,7 +2438,7 @@ fn milkdrop_frame() -> Vec<u8> {
     use listen::milkdrop::{api, ffi::ProjectM, gl::Headless};
     let (w, h) = (960usize, 540usize);
     // EGL and a live Vulkan instance must not set up at the same time.
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     #[cfg(target_os = "linux")]
     if let Ok(api) = api()
         && let Ok(gl) = Headless::new(w as i32, h as i32)

@@ -2,10 +2,12 @@
 //! choosing a version, finishing, failing, dismissing; plus a snapshot of
 //! the panel with a picker and a finished rip.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::rip::RipMsg;
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message};
 use listen_rip::pipeline::{Candidate, Report, Stage, Update};
 use listen_rip::tags::MetaSource;
 use listen_rip::whipper::ArSummary;
@@ -120,21 +122,10 @@ fn snapshot_rip_panel() {
     up(&mut s, b, Update::Finished(report()));
     up(&mut s, b, Update::Stage(Stage::Done));
 
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
+    let settings = common::iced_settings();
     let theme = s.theme();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, iced::Size::new(1600.0, 950.0), s.view());
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with("rip-panel-") {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG (the old one was removed above): this checks that the page renders, not how it looks.
-    snapshot.matches_image(dir.join("rip-panel")).expect("png written");
+    common::save_png(&snapshot, "rip-panel");
 }

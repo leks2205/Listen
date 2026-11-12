@@ -1,5 +1,7 @@
 //! Milkdrop: library loader, preset folder, and real frames where libprojectM 4 and OpenGL exist.
 
+mod common;
+
 use listen::milkdrop::{self, ffi, presets};
 
 /// The render thread's requests are global: tests that make or watch them take turns.
@@ -51,7 +53,7 @@ fn real_library_renders_frames_and_cycles() {
     let _turn = REQUESTS.lock().unwrap_or_else(|e| e.into_inner());
     engine::clear_requests();
     // EGL and a live Vulkan instance (the Simulators below) must not set up at the same time.
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     use listen_core::settings::MilkdropSettings;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
@@ -140,18 +142,11 @@ fn real_library_renders_frames_and_cycles() {
 // ---- the settings and the view ---------------------------------------------------
 
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::milkdrop::{MilkdropMsg, MilkdropSetting};
-use listen::app::{INTER, Listen, Message, Setting};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Setting};
 use listen_core::settings::{SettingsTab, VisualizerKind};
 use std::sync::Arc;
-
-/// Vulkan instances race when several `Simulator`s live at once.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn boot() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -161,12 +156,8 @@ fn boot() -> Listen {
 }
 
 fn view_has(s: &Listen, height: f32, text: &str) -> bool {
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
-    let _gpu = gpu();
+    let settings = common::iced_settings();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, iced::Size::new(1400.0, height), s.view());
     ui.find(text).is_ok()
 }
@@ -260,13 +251,9 @@ fn next_button_and_search_pick_send_messages() {
     let _ = s.update(Message::Navigate(listen::app::Route::Settings));
     scanned(&mut s);
     let _ = s.update(Message::Milkdrop(MilkdropMsg::Query("blue".into())));
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
+    let settings = common::iced_settings();
     let messages: Vec<Message> = {
-        let _gpu = gpu();
+        let _gpu = common::gpu();
         let mut ui = Simulator::with_size(settings, iced::Size::new(1400.0, 6000.0), s.view());
         ui.click("sub/c-blue").expect("the search lists the match");
         ui.into_messages().collect()

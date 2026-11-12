@@ -1,29 +1,17 @@
 //! The lyrics view: offset buttons, search / override / clear, translation and
 //! karaoke display, export, follow, and the settings.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::learnable::LearnMsg;
 use listen::app::lyrics_state::{LyricsMsg, LyricsSetting, SEARCH_MODAL};
-use listen::app::{INTER, Listen, Message, Setting};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Setting};
 use listen_core::model::Lyrics;
 use listen_lyrics::providers::{SearchHit, Source};
 
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 const LRC: &str = "[00:00.50]Neon lights across the bay\n[00:05.00]We drive until the break of day\n[00:10.00]Midnight signal on the air\n[00:15.00]Afterglow is everywhere";
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 fn boot_with(lyrics: Lyrics) -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -42,16 +30,16 @@ fn size() -> iced::Size {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), size(), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), size(), s.view());
     ui.find(text).is_ok()
 }
 
 /// Clicks `text` and feeds the resulting messages back.
 fn click(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), size(), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), size(), s.view());
         ui.click(text).unwrap_or_else(|_| panic!("no {text} on screen"));
         ui.into_messages().collect()
     };
@@ -319,8 +307,8 @@ fn settings_page_lists_the_lyrics_options() {
 }
 
 fn has_text_sized(s: &Listen, text: &str, size: iced::Size) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), size, s.view());
     ui.find(text).is_ok()
 }
 
@@ -420,8 +408,8 @@ fn the_translation_button_is_off_without_a_translation_and_a_request_carries_ove
 #[test]
 fn the_lyric_buttons_wrap_in_a_narrow_window() {
     let s = boot_with(listen_lyrics::parse_lrc("[00:01.00]내가 골랐다는 노래\n[00:05.00]Yeah yeah"));
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 800.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(960.0, 800.0), s.view());
     // `find` also returns clipped widgets: check that each button is drawn inside the window.
     for text in ["DISPLAY", "EXPORT"] {
         let found = ui.find(text).unwrap_or_else(|e| panic!("no {text}: {e:?}"));

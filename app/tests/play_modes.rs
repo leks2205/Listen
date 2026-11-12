@@ -1,16 +1,12 @@
 //! The play-mode cycle (Off -> Shuffle -> Auto-DJ -> AI DJ) from every control, and its effects.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
 use listen::app::play_mode::PlayMode;
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS, demo};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
+use listen::app::{Listen, Message};
+use listen::{Args, demo};
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args {
@@ -25,14 +21,6 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn feed(s: &mut Listen, messages: Vec<Message>) {
     for m in messages {
         let _ = s.update(m);
@@ -41,8 +29,8 @@ fn feed(s: &mut Listen, messages: Vec<Message>) {
 
 fn click_text(s: &mut Listen, text: &str) {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?}: {e:?}"));
         ui.into_messages().collect()
     };
@@ -51,8 +39,8 @@ fn click_text(s: &mut Listen, text: &str) {
 
 /// What a press at `at` sends; the state is not changed.
 fn press_at(s: &Listen, at: (f32, f32)) -> Vec<Message> {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.point_at(at);
     let _ = ui.simulate([
         iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),

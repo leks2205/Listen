@@ -1,12 +1,14 @@
 //! The smart-playlist editor: capability gating, the rule builder (add / remove rules,
 //! nested groups, field types), loading an existing playlist and saving.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Task;
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::smart_playlist::{Editor, GroupEdit, MODAL_KEY, RuleEdit, SmartMsg, SortEdit};
-use listen::app::{INTER, Listen, Message, Route, SourceHandle};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Route, SourceHandle};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -20,20 +22,6 @@ use listen_source::{
 };
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-static GPU: Mutex<()> = Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 #[derive(Default, Debug)]
 struct Calls {
@@ -183,15 +171,15 @@ fn editor(s: &Listen) -> &Editor {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
 fn click(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };

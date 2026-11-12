@@ -1,17 +1,13 @@
 //! Hover tooltips: the function plus the live hotkey binding of the action.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message};
+use listen::app::{Listen, Message};
 use listen::ui::tip::{binding_text, tip_text};
-use listen::{Args, FONTS, demo};
+use listen::{Args, demo};
 use std::time::Duration;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -21,18 +17,10 @@ fn state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 /// Presses along `y` over `xs` in one interface and reports whether `wanted` was sent.
 fn presses(s: &Listen, y: f32, xs: &[f32], wanted: fn(&Message) -> bool) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     for x in xs {
         ui.point_at((*x, y));
         let _ = ui.simulate([
@@ -69,8 +57,8 @@ fn find_at(s: &Listen, ys: &[f32], wanted: fn(&Message) -> bool) -> (f32, f32) {
 
 /// Hovers `at`, waits past the tooltip delay and returns the picture with the tooltip open.
 fn hovered(s: &Listen, at: (f32, f32)) -> iced_test::simulator::Snapshot {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.point_at(at);
     let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at.into() });
     let _ = ui.simulate([moved.clone()]);
@@ -81,8 +69,8 @@ fn hovered(s: &Listen, at: (f32, f32)) -> iced_test::simulator::Snapshot {
 
 /// The picture without any hover.
 fn idle(s: &Listen) -> iced_test::simulator::Snapshot {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.snapshot(&s.theme()).expect("snapshot renders")
 }
 
@@ -176,8 +164,8 @@ fn a_tooltip_waits_for_the_pointer_to_rest() {
     let s = state();
     let at = find_button(&s, |m| matches!(m, Message::NextClick));
     let path = hash_path("rest");
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.point_at(at);
     let moved = iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at.into() });
     let _ = ui.simulate([moved.clone()]);
@@ -189,14 +177,7 @@ fn a_tooltip_waits_for_the_pointer_to_rest() {
 
 /// Writes the hovered picture to `target/snapshots/<name>-*.png` for a look.
 fn save(name: &str, s: &Listen, at: (f32, f32)) {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for e in std::fs::read_dir(&dir).unwrap().flatten() {
-        if e.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(e.path()).unwrap();
-        }
-    }
-    hovered(s, at).matches_image(dir.join(name)).expect("png written"); // fresh PNG, compares nothing
+    common::save_png(&hovered(s, at), name);
 }
 
 #[test]

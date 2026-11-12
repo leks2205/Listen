@@ -2,6 +2,8 @@
 //! queue panel open (fullscreen queue tab included).
 //! Run: cargo test --release -p listen --test view_cost -- --ignored --nocapture
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::app::{FullscreenTab, Listen, Message, Route};
 use listen::{Args, demo};
@@ -34,25 +36,18 @@ fn big_state() -> Listen {
     s
 }
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: listen::FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: listen::app::INTER,
-        ..Default::default()
-    }
-}
-
 /// (view only, view + layout) in ms per rebuild.
 fn measure(s: &Listen) -> (f64, f64) {
+    let _gpu = common::gpu();
     let size = iced::Size::new(1849.0, 1233.0);
     // Warm up (text shaping caches), then measure.
     for _ in 0..3 {
-        let _ = Simulator::with_size(settings(), size, s.view());
+        let _ = Simulator::with_size(common::iced_settings(), size, s.view());
     }
     let n = 20;
     let t = Instant::now();
     for _ in 0..n {
-        let _ = Simulator::with_size(settings(), size, s.view());
+        let _ = Simulator::with_size(common::iced_settings(), size, s.view());
     }
     let total = t.elapsed().as_secs_f64() * 1000.0 / n as f64;
     let t = Instant::now();
@@ -63,7 +58,7 @@ fn measure(s: &Listen) -> (f64, f64) {
     let t = Instant::now();
     for _ in 0..n {
         let empty: iced::Element<'_, Message> = iced::widget::column![].into();
-        let _ = Simulator::with_size(settings(), size, empty);
+        let _ = Simulator::with_size(common::iced_settings(), size, empty);
     }
     let overhead = t.elapsed().as_secs_f64() * 1000.0 / n as f64;
     (view_only, total - overhead)
@@ -101,7 +96,8 @@ fn a_long_queue_builds_only_the_visible_rows() {
         })
         .collect();
     s.queue.set(songs, 3);
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1849.0, 1233.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1849.0, 1233.0), s.view());
     let built = (0..200).filter(|i| ui.find(format!("Queued song {i}")).is_ok()).count();
     assert!(built > 0, "the panel shows the start of the queue");
     assert!(built < 100, "{built} of the first 200 rows were built");

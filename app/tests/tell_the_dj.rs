@@ -2,28 +2,24 @@
 //! click on a chip adds the request and a second click removes it, and the panel renders in German.
 //! One test in its own binary: the UI language is global.
 
-use iced_test::simulator::Simulator;
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS, demo};
-use listen_dj::Chip;
+mod common;
 
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
+use iced_test::simulator::Simulator;
+use listen::app::{Listen, Message};
+use listen::{Args, demo};
+use listen_dj::Chip;
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
 fn shows(s: &Listen, text: &str) -> bool {
-    Simulator::with_size(settings(), SIZE, s.view()).find(text).is_ok()
+    let _gpu = common::gpu();
+    Simulator::with_size(common::iced_settings(), SIZE, s.view()).find(text).is_ok()
 }
 
 fn click(s: &mut Listen, text: &str) {
     let messages: Vec<Message> = {
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };

@@ -2,28 +2,16 @@
 //! reorder, remove with a confirmation), the dialogs and the add-to-playlist
 //! picker. Demo mode; writes are applied locally.
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::app::album_page::TrackSort;
 use listen::app::list::ListId;
 use listen::app::menu::{MenuAction, MenuMsg, MenuPage, MenuTarget};
 use listen::app::overlay::{Modal, OverlayMsg};
 use listen::app::playlists::PlaylistPageMsg as P;
-use listen::app::{INTER, Listen, Message, PlaylistDetail, Route};
-use listen::{Args, FONTS, demo};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
+use listen::app::{Listen, Message, PlaylistDetail, Route};
+use listen::{Args, demo};
 
 fn boot() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -48,15 +36,15 @@ fn without_sidebar(s: &mut Listen) {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|_| panic!("no {text}"));
         ui.into_messages().collect()
     };

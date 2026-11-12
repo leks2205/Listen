@@ -1,12 +1,14 @@
 //! The entries of every context menu per capability set, the actions applied
 //! to several targets, queue moves and snapshots of each kind's menu.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::Task;
 use iced_test::simulator::Simulator;
 use listen::app::menu::{EntryKind, MenuAction, MenuMsg, MenuTarget, PlayHow, QueueMove, entries};
-use listen::app::{INTER, Listen, Message, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ArtistRef, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -15,20 +17,6 @@ use listen_source::{
     AlbumQuery, Capabilities, ItemKind, ListQuery, MusicSource, Result, SongQuery, SourceError, StreamSource,
 };
 use std::sync::{Arc, Mutex};
-
-static GPU: Mutex<()> = Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 /// What the fake server was asked to do.
 #[derive(Default, Debug)]
@@ -1183,8 +1171,8 @@ fn a_right_click_on_a_folder_row_opens_the_folder_menu() {
     let name =
         s.extra.tree.children.get("").and_then(|c| c.last()).map(|f| f.name.clone()).expect("tree root");
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), size, s.view());
         let found = ui.find(name.as_str()).expect("a folder row");
         let at = iced_test::selector::Bounded::visible_bounds(&found).unwrap().center();
         ui.point_at(at);
@@ -1207,18 +1195,10 @@ fn a_right_click_on_a_folder_row_opens_the_folder_menu() {
 
 fn snapshot(name: &str, s: &Listen) {
     let theme = s.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(900.0, 700.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(900.0, 700.0), s.view());
     let shot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    // Writes a fresh PNG (the old one was removed above): this checks that the page renders, not how it looks.
-    shot.matches_image(dir.join(name)).expect("png written");
+    common::save_png(&shot, name);
 }
 
 #[test]

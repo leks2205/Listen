@@ -1,30 +1,17 @@
 //! Sign-in extras headlessly: LAN discovery list, option toggles, Quick
 //! Connect, the edit-server dialog and the action-required page.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::servers::{Failure, ServersMsg};
-use listen::app::{INTER, Listen, LoginMsg, Message, SourceHandle};
-use listen::{Args, FONTS};
+use listen::app::{Listen, LoginMsg, Message, SourceHandle};
 use listen_core::config::ServerConfig;
 use listen_core::model::{ServerId, SourceKind};
 use listen_jellyfin::discovery::Found;
 use listen_jellyfin::quick_connect::Initiated;
 use std::sync::Arc;
-
-/// One `Simulator` (Vulkan instance) at a time, see `compact_layout.rs`.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 fn state() -> Listen {
     let (mut s, _) =
@@ -46,8 +33,8 @@ fn nd() -> ServerConfig {
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|_| panic!("no widget with “{text}”"));
         ui.into_messages().collect()
     };
@@ -58,8 +45,8 @@ fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 

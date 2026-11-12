@@ -3,28 +3,15 @@
 //! furigana, toasts and the header title. Snapshots are rendered here;
 //! PNGs go to `target/snapshots/`.
 
+mod common;
+
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
 use listen::app::audio::AudioMsg;
 use listen::app::overlay::OverlayMsg;
-use listen::app::{INTER, Listen, Message};
+use listen::app::{Listen, Message};
 use listen::ui::player_bar;
-use listen::{Args, FONTS, demo};
-use std::path::PathBuf;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
+use listen::{Args, demo};
 
 fn state(width: f32, height: f32) -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -36,24 +23,16 @@ fn state(width: f32, height: f32) -> Listen {
 fn render(name: &str, state: &Listen) {
     let size = state.window_size;
     let theme = state.theme();
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), size, state.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), size, state.view());
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join(name);
-    for entry in std::fs::read_dir(&dir).unwrap().flatten() {
-        if entry.file_name().to_string_lossy().starts_with(&format!("{name}-")) {
-            std::fs::remove_file(entry.path()).unwrap();
-        }
-    }
-    snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
+    common::save_png(&snapshot, name);
 }
 
 /// Presses at every `xs` along `y` in one interface and returns what was sent (the state is not changed).
 fn presses(s: &Listen, y: f32, xs: &[f32]) -> Vec<Message> {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     for x in xs {
         ui.point_at((*x, y));
         let _ = ui.simulate([
@@ -66,8 +45,8 @@ fn presses(s: &Listen, y: f32, xs: &[f32]) -> Vec<Message> {
 
 fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.point_at(at);
         let _ = ui.simulate([
             iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
@@ -215,8 +194,8 @@ fn sidebar_lyrics_panel_shows_the_lyrics_controls_and_translation() {
     render("player-polish-sidebar-lyrics", &s);
     // The panel has the lyrics view's controls.
     {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         assert!(ui.find("DISPLAY").is_ok(), "the lyrics controls are in the panel");
         assert!(ui.find("Hello again").is_ok(), "the lines are in the panel");
     }
@@ -251,8 +230,8 @@ fn toasts_get_feishin_titles_and_hover_marks_them() {
     s.toast_warning("Careful".into());
     s.toast_info("FYI".into());
     {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         for title in ["Success", "Error", "Warning", "Info"] {
             assert!(ui.find(title).is_ok(), "{title}");
         }

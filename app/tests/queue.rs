@@ -1,6 +1,8 @@
 //! The play queue surfaces (side panel, drawer, Now Playing page, toolbar, drag and drop, selection,
 //! Up Next headers, confirmations, player filters, layout) and Auto-DJ / manual queue behaviour.
 
+mod common;
+
 use iced::keyboard::key::{Code, Named, Physical};
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers};
 use iced_test::simulator::Simulator;
@@ -8,24 +10,10 @@ use listen::app::list::{Drag, DragPayload, DropTarget, ListId, ListMsg, Picked};
 use listen::app::menu::{MenuAction, MenuMsg};
 use listen::app::overlay::Modal;
 use listen::app::queue_ui::{QueueMsg, QueueSetting};
-use listen::app::{INTER, Listen, Message, Route};
+use listen::app::{Listen, Message, Route};
 use listen::ui::queue::{Panel, QueueTool, panels, unfolded};
-use listen::{Args, FONTS, demo};
+use listen::{Args, demo};
 use listen_core::settings::{FilterField, FilterOp, PlayerFilter, SideQueueLayout, SideQueueStyle};
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
@@ -50,15 +38,15 @@ fn playing(s: &Listen) -> String {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str, times: usize) {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), SIZE, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         for _ in 0..times {
             ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         }

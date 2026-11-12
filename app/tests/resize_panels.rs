@@ -1,16 +1,10 @@
 //! Dragging the dividers resizes the left sidebar and the queue panel.
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::Args;
 use listen::app::{Listen, Message, PanelSide};
-
-/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
-/// Vulkan loader and intermittently crashes the process.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (s, _) = Listen::boot(&Args {
@@ -75,7 +69,7 @@ fn dragging_under_160_px_collapses_and_back_expands() {
 fn pressing_the_divider_starts_a_drag() {
     let s = state();
     let x = s.config.settings.sidebar.width + 2.5; // the 5 px handle right of the sidebar
-    let _gpu = gpu();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(iced::Settings::default(), iced::Size::new(1600.0, 950.0), s.view());
     ui.point_at((x, 400.0));
     let _ = ui.simulate(iced_test::simulator::click());

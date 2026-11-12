@@ -1,25 +1,17 @@
 //! The Statistics page: the rolling 4-week view and the switch to calendar years.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::history::HistoryMsg;
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message, Route};
 use listen_core::history::{self, Entry};
 use listen_core::model::ArtistRef;
 
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1400.0, 1000.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1400.0, 1000.0), s.view());
     ui.find(text).is_ok()
 }
 
@@ -74,8 +66,8 @@ fn tiles_and_lists_keep_their_text_inside_at_960_px() {
     let _ = s.update(Message::History(HistoryMsg::Weeks));
     let _ = s.update(Message::Navigate(Route::Stats));
     let _ = s.update(Message::WindowResized(iced::Size::new(960.0, 1048.0)));
-    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 1048.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(960.0, 1048.0), s.view());
     let value = ui.find("1222 h 13 min").expect("the week's listening time");
     let next = ui.find("different songs").expect("the third tile");
     let (v, n) = (value.bounds(), next.bounds());
@@ -106,9 +98,9 @@ fn the_german_comparison_line_wraps_inside_its_tile_at_960_px() {
     let _ = s.update(Message::History(HistoryMsg::Weeks));
     let _ = s.update(Message::Navigate(Route::Stats));
     let _ = s.update(Message::WindowResized(iced::Size::new(960.0, 1048.0)));
-    let _gpu = GPU.lock().unwrap_or_else(|e| e.into_inner());
+    let _gpu = common::gpu();
     listen::i18n::set_language("de");
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 1048.0), s.view());
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(960.0, 1048.0), s.view());
     let line = ui.find("+174 % ggü. letzter Woche").map(|l| l.bounds());
     listen::i18n::set_language("en");
     let line = line.expect("the German comparison line of the plays tile");

@@ -3,18 +3,14 @@
 //! the Radio page's buttons, the create / edit / delete flow, the ICY title,
 //! and that a playing stream stays out of the queue's business.
 
+mod common;
+
 use iced_test::simulator::Simulator;
 use listen::app::radio::RadioMsg;
-use listen::app::{INTER, Listen, Message, Route};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, Route};
+use listen::{Args, demo};
 use listen_player::PlayerEvent;
 use std::time::Duration;
-
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
@@ -28,12 +24,8 @@ fn send(s: &mut Listen, m: RadioMsg) {
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let settings = iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    };
-    let _gpu = gpu();
+    let settings = common::iced_settings();
+    let _gpu = common::gpu();
     let mut ui = Simulator::with_size(settings, s.window_size, s.view());
     ui.find(text).is_ok()
 }

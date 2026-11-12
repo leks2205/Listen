@@ -1,13 +1,15 @@
 //! The context-menu core: multi-target actions, submenus, keyboard and the
 //! preview footer.
 
+mod common;
+
 use async_trait::async_trait;
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers, key::Named};
 use iced::{Point, Task};
 use iced_test::simulator::Simulator;
 use listen::app::menu::{MenuAction, MenuMsg, MenuTarget};
-use listen::app::{INTER, Listen, Message, SourceHandle};
-use listen::{Args, FONTS, demo};
+use listen::app::{Listen, Message, SourceHandle};
+use listen::{Args, demo};
 use listen_core::config::ServerConfig;
 use listen_core::model::{
     Album, Artist, ImageRef, Page, Playlist, SearchResults, ServerId, Song, SourceKind,
@@ -16,20 +18,6 @@ use listen_source::{
     AlbumQuery, Capabilities, ItemKind, ListQuery, MusicSource, Result, SongQuery, SourceError, StreamSource,
 };
 use std::sync::{Arc, Mutex};
-
-static GPU: Mutex<()> = Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
 
 /// What the fake server was asked to do.
 #[derive(Default, Debug)]
@@ -160,8 +148,8 @@ fn menu(s: &mut Listen, msg: MenuMsg) -> Vec<Message> {
 }
 
 fn shows(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), iced::Size::new(1200.0, 800.0), s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
     ui.find(text).is_ok()
 }
 
@@ -294,8 +282,8 @@ fn a_submenu_flips_to_the_left_at_the_window_edge() {
             MenuMsg::OpenAt(MenuTarget::song(&songs_of(SourceKind::Subsonic, 1)[0]), Point::new(at, 100.0)),
         );
         let _ = menu(&mut s, MenuMsg::Hover(0));
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), iced::Size::new(1200.0, 800.0), s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
         ui.find(text).expect("text").bounds().x
     };
     // "Start radio" is in the main panel, "Next (shuffled)" in the submenu.

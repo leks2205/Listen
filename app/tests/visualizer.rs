@@ -1,45 +1,32 @@
 //! The visualizer options modal, presets, and the waveform seek bar.
 
+mod common;
+
 use iced_test::simulator::Simulator;
+use listen::Args;
 use listen::app::overlay::Modal;
 use listen::app::viz::{MODAL, SliderSetting, VizMsg};
-use listen::app::{INTER, Listen, Message};
-use listen::{Args, FONTS};
+use listen::app::{Listen, Message};
 use listen_analysis::waveform::Waveform;
 use listen_core::settings::{ChannelLayout, SliderType, WaveformAlign};
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Vulkan instances race when several `Simulator`s live at once.
-static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn gpu() -> std::sync::MutexGuard<'static, ()> {
-    GPU.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn settings() -> iced::Settings {
-    iced::Settings {
-        fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
-        default_font: INTER,
-        ..Default::default()
-    }
-}
-
 fn boot(args: Args) -> Listen {
     Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..args }).0
 }
 
 fn has_text(s: &Listen, text: &str) -> bool {
-    let _gpu = gpu();
-    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
     ui.find(text).is_ok()
 }
 
 fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.click(text).unwrap_or_else(|e| panic!("no {text:?} on screen: {e:?}"));
         ui.into_messages().collect()
     };
@@ -51,8 +38,8 @@ fn click_text(s: &mut Listen, text: &str) -> Vec<Message> {
 
 fn run_events(s: &mut Listen, at: (f32, f32), events: impl IntoIterator<Item = iced::Event>) -> Vec<Message> {
     let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), s.window_size, s.view());
         ui.point_at(at);
         let _ = ui.simulate(events);
         ui.into_messages().collect()
