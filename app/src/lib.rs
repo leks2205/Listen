@@ -240,3 +240,20 @@ mod usage_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod doc_tests {
+    /// The crate table of the architecture page names every crate under `crates/`.
+    #[test]
+    fn architecture_page_lists_every_crate() {
+        let page = include_str!("../../docs/book/src/development/architecture.md");
+        let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates");
+        for entry in std::fs::read_dir(crates).expect("crates/") {
+            let entry = entry.expect("a directory entry");
+            if entry.path().is_dir() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                assert!(page.contains(&format!("| `{name}` |")), "{name} is missing from architecture.md");
+            }
+        }
+    }
+}

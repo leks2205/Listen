@@ -17,6 +17,7 @@ Listen is a Cargo workspace: one application crate (`app`, binary name `listen`)
 | `listen-mix` | DJ transition logic without DSP or mpv: scoring how well two songs follow each other, ordering DJ picks, and planning where and how to mix. |
 | `listen-dj` | The AI DJ: prompts, personas, the Gemini text and speech client, request quota. |
 | `listen-lyrics` | Lyrics providers, LRC parsing, ranking, translation and romanisation helpers. |
+| `listen-lastfm` | Last.fm: the desktop sign-in, now playing and scrobbles (kept in an on-disk queue, so plays made offline arrive later), and the most common spelling of a song's artist, title and album, so the same song from two sources counts as one. |
 | `listen-visualizer` | Audio capture and spectrum analysis for the visualizer. |
 | `listen-dlna` | UPnP/DLNA casting: discovery, SOAP control and a streaming proxy. |
 | `listen-offline` | Downloaded songs. |
