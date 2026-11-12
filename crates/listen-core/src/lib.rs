@@ -31,8 +31,11 @@ pub mod theme;
 pub mod versions;
 pub mod weekly;
 
-/// The `User-Agent` every HTTP client of Listen sends (`Listen/<version>`; all crates share the
-/// workspace version). Use this instead of spelling it out per client.
+/// The `User-Agent` of Listen's own HTTP clients (`Listen/<version>`; all crates share the workspace
+/// version). Set it on every reqwest client builder instead of spelling it out
+/// (`every_http_client_sends_the_listen_user_agent` in the app checks). Exceptions: MusicBrainz takes
+/// [`MUSICBRAINZ_USER_AGENT`]; YouTube requests that must look like a browser or the iOS app send their
+/// own (listen-ytmusic `token`, `loudness`); the DLNA proxy forwards the player's headers.
 pub const USER_AGENT: &str = concat!("Listen/", env!("CARGO_PKG_VERSION"));
 
 /// The `User-Agent` of MusicBrainz requests: [`USER_AGENT`] plus the contact MusicBrainz asks every

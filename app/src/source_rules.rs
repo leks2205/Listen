@@ -124,3 +124,49 @@ fn letters_and_digits_folds_use_text_fold() {
     }
     assert!(found.is_empty(), "use listen_core::text::fold instead of a hand-written fold: {found:?}");
 }
+
+/// `Listen/<version>` is spelled once, as `listen_core::USER_AGENT` (or `MUSICBRAINZ_USER_AGENT`).
+#[test]
+fn the_listen_user_agent_is_spelled_only_in_listen_core() {
+    let mut found = Vec::new();
+    for (path, src) in workspace_sources() {
+        if path == "crates/listen-core/src/lib.rs" {
+            continue;
+        }
+        for (i, line) in src.lines().enumerate() {
+            if line.contains("\"Listen/\"") || line.contains("\"Listen/{") {
+                found.push(format!("{path}:{}", i + 1));
+            }
+        }
+    }
+    assert!(found.is_empty(), "use listen_core::USER_AGENT: {found:?}");
+}
+
+/// Every HTTP client Listen builds names itself with `listen_core::USER_AGENT`. The exceptions talk
+/// to endpoints that get another identity or none.
+#[test]
+fn every_http_client_sends_the_listen_user_agent() {
+    const OTHER_IDENTITY: [(&str, &str); 4] = [
+        (
+            "crates/listen-ytmusic/src/token.rs",
+            "the YouTube Music web page: a browser User-Agent per request",
+        ),
+        ("crates/listen-ytmusic/src/audio.rs", "googlevideo stream URLs resolved by yt-dlp"),
+        ("crates/listen-dlna/src/renderer.rs", "TVs and speakers in the local network"),
+        ("crates/listen-dlna/src/proxy.rs", "TVs and speakers in the local network"),
+    ];
+    let mut found = Vec::new();
+    for (path, src) in workspace_sources() {
+        if OTHER_IDENTITY.iter().any(|(p, _)| *p == path) {
+            continue;
+        }
+        for (at, _) in src.match_indices("Client::builder()") {
+            let chain = &src[at..];
+            let chain = &chain[..chain.find(".build()").unwrap_or(chain.len())];
+            if !chain.contains(".user_agent(") {
+                found.push(place(&path, &src, at));
+            }
+        }
+    }
+    assert!(found.is_empty(), "add .user_agent(listen_core::USER_AGENT) to: {found:?}");
+}
