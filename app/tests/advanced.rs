@@ -199,6 +199,20 @@ fn exported_path(s: &Listen) -> std::path::PathBuf {
     std::path::PathBuf::from(msg.message.trim_start_matches("Settings exported to ").trim_end_matches('.'))
 }
 
+/// Every object key in `v`, nested ones included.
+fn keys(v: &serde_json::Value, out: &mut Vec<String>) {
+    match v {
+        serde_json::Value::Object(m) => {
+            for (k, x) in m {
+                out.push(k.clone());
+                keys(x, out);
+            }
+        }
+        serde_json::Value::Array(a) => a.iter().for_each(|x| keys(x, out)),
+        _ => {}
+    }
+}
+
 #[test]
 fn settings_export_then_import_restores_them() {
     let mut s = state();
@@ -207,7 +221,11 @@ fn settings_export_then_import_restores_them() {
     let _ = s.update(Message::Advanced(AdvancedMsg::ExportSettings));
     let path = exported_path(&s);
     let text = std::fs::read_to_string(&path).unwrap();
-    assert!(text.contains("listen-settings") && !text.to_lowercase().contains("password"));
+    assert!(text.contains("listen-settings"));
+    let mut names = Vec::new();
+    keys(&serde_json::from_str(&text).unwrap(), &mut names);
+    let secret: Vec<_> = names.iter().filter(|k| listen_core::settings::is_secret_key(k)).collect();
+    assert!(secret.is_empty(), "no secrets in the export: {secret:?}");
 
     s.config.settings.history.enabled = true;
     s.config.settings.advanced.update_channel = UpdateChannel::Stable;

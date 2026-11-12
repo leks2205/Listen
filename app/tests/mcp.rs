@@ -87,8 +87,24 @@ fn ai_dj_and_settings_tools() {
     let all = call(&mut s, "get_settings", json!({})).unwrap();
     assert_eq!(all["history"]["enabled"], false);
     assert!(all["ai_dj"].is_object());
-    let text = all.to_string();
-    assert!(!text.contains("password") && !text.to_lowercase().contains("api_key\":\""), "no secrets");
+    let mut names = Vec::new();
+    keys(&all, &mut names);
+    let secret: Vec<_> = names.iter().filter(|k| listen_core::settings::is_secret_key(k)).collect();
+    assert!(secret.is_empty(), "no secrets: {secret:?}");
+}
+
+/// Every object key in `v`, nested ones included.
+fn keys(v: &serde_json::Value, out: &mut Vec<String>) {
+    match v {
+        serde_json::Value::Object(m) => {
+            for (k, x) in m {
+                out.push(k.clone());
+                keys(x, out);
+            }
+        }
+        serde_json::Value::Array(a) => a.iter().for_each(|x| keys(x, out)),
+        _ => {}
+    }
 }
 
 #[test]
