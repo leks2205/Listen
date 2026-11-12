@@ -1,6 +1,10 @@
 //! The YouTube Music home feed (`FEmusic_home`: Quick picks, mixes, recommended
 //! albums, …). ytmapi-rs 0.3 has no query for it, so this sends the browse
 //! request itself and reads the shelves from the JSON.
+//!
+//! It is also the home of the page-parsing helpers every hand-written page parser uses: browse
+//! requests ([`BrowseQuery`]), song lists and grids ([`song_page`], [`grid_page`]), items, text runs,
+//! thumbnails, and the next page's token ([`Continuation`], [`Continuation::ending`], [`next_token`]).
 
 use serde_json::{Map, Value, json};
 use std::borrow::Cow;

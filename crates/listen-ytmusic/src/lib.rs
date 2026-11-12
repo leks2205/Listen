@@ -2,6 +2,10 @@
 //!
 //! * Library, search, albums, artists, playlists, likes, history, home feed: `ytmapi-rs` (InnerTube),
 //!   signed in with cookies from a local browser ([`browser`]) or a cookie export ([`cookies`]).
+//! * Pages ytmapi-rs can't read (home feed, browse grids, song lists, the library extras) are parsed from
+//!   InnerTube JSON by hand. The page-parsing helpers they share (items, text runs, thumbnails, song
+//!   shelves, continuation tokens: `Continuation`, `next_token`) live in `home`; `library` and the other
+//!   parsers import them from there.
 //! * Audio: `yt-dlp` resolves a stream URL for mpv. Analysed or DJ-mixed songs are fetched into a local
 //!   cache ([`audio`]) under a shared request budget ([`budget`]); playback prefers the cached copy.
 

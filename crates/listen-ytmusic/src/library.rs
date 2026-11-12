@@ -1,7 +1,8 @@
 //! Library calls ytmapi-rs lacks: subscribed artists with their page type
 //! (only real artist channels are kept), the "Save to playlist" list, and
 //! adding to / creating playlists with the result checked. Request shapes
-//! follow ytmusicapi and YouTube.js.
+//! follow ytmusicapi and YouTube.js. Page-parsing helpers (continuations, text runs, thumbnails)
+//! come from `home`; add shared ones there.
 
 use crate::home::{Continuation, Unparsed, next_token, page_type, shelves_in, text, thumbs};
 use serde_json::{Map, Value, json};
