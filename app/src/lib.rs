@@ -82,7 +82,7 @@ Options:
   --onboarding           Show the first-start wizard (with --ephemeral: screenshots)
   --check-youtube-music  Sign in with the browser's YouTube session and print what
                          Listen sees of the library (counts only), then exit
-  --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt] [--request R]
+  --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt] [--request R] [--offline]
                          Run AI DJ rounds (default 2) against Gemini with a sample
                          song pool, grade every break with a judge call and save
                          the first two spoken breaks as WAV, then exit; --request
