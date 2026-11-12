@@ -31,7 +31,7 @@ pub struct AnalysisHandle {
     /// per song, however often the track-change hook runs).
     pooled: Arc<Mutex<HashSet<String>>>,
     /// The singing-voice detector is downloaded: songs analysed without it are analysed again
-    /// (Navidrome and local files; YouTube Music fetches are budgeted, so those keep their analysis).
+    /// (Navidrome; local files are never analysed, YouTube Music fetches are budgeted, so those keep theirs).
     voice: Arc<std::sync::atomic::AtomicBool>,
     /// The scenes of the describe-it index (`Listen/embeddings/v1/clamp3`) for the bridge scene gate;
     /// reloaded when the index changes.

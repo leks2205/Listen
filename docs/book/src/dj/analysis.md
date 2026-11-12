@@ -55,7 +55,7 @@ so clearing caches doesn't remove it. **Remove** deletes it again.
 
 With the detector, every song analysed from then on gets its vocal curve and its instrumental intro and outro
 from the detector (it adds about a second per song). Songs that were analysed without it are analysed again in
-the background, Navidrome and local songs only: YouTube Music songs keep their analysis, because fetching them
+the background, Navidrome songs only: YouTube Music songs keep their analysis, because fetching them
 again would use up YouTube's request budget. The status line says **vocals: singing-voice detector** or
 **vocals: built-in heuristic**; it switches as soon as Download or Remove finishes. On three songs with synced lyrics, the detector's vocal curve agreed with the
 lyrics better than the estimate (correlation 0.73 against 0.55; the start of the singing within 3 s instead of
