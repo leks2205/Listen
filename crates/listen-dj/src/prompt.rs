@@ -510,6 +510,8 @@ pub fn response_schema(persona: &Persona, set_min: usize, set_max: usize, new: b
     schema
 }
 
+/// The answer schema without the optional `introduces`. Fields every show asks (`picks`, `notes`) are
+/// built once above the persona branch; only the spoken part differs per branch.
 fn base_schema(persona: &Persona, set_min: usize, set_max: usize) -> Value {
     // The picks and their notes are the same with and without a co-host; only
     // the spoken part differs (one line vs. turns between two voices).
@@ -937,6 +939,16 @@ mod tests {
         assert_eq!(swapped.picks.len(), 3);
         let unset = parse_plan(r#"{"picks": [], "line": "x"}"#, 10, 0, 40).unwrap();
         assert_eq!(unset.picks, [0]);
+    }
+
+    #[test]
+    fn solo_and_duo_shows_ask_the_same_picks_and_notes() {
+        let duo = PERSONAS.iter().find(|p| p.cohost.is_some()).expect("a two-host persona");
+        let solo = PERSONAS.iter().find(|p| p.cohost.is_none()).expect("a one-host persona");
+        let (duo, solo) = (response_schema(duo, 2, 5, true), response_schema(solo, 2, 5, true));
+        for field in ["picks", "notes", "mood", "introduces"] {
+            assert_eq!(duo["properties"][field], solo["properties"][field], "{field}");
+        }
     }
 
     #[test]
