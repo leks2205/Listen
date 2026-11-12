@@ -70,18 +70,32 @@ pub fn order(q: &Query, mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
     for h in &mut hits {
         h.score = score(q, h);
     }
-    hits.sort_by(|a, b| {
-        (b.synced == Some(true))
-            .cmp(&(a.synced == Some(true)))
-            .then(a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
-    });
+    hits.sort_by(synced_first);
     hits
+}
+
+/// The order of search results everywhere they are listed: synchronized lyrics first, then by score
+/// (best match first). Sort with this rather than writing the comparison again.
+pub fn synced_first(a: &SearchHit, b: &SearchHit) -> std::cmp::Ordering {
+    (b.synced == Some(true))
+        .cmp(&(a.synced == Some(true)))
+        .then(a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::providers::Source;
+
+    #[test]
+    fn search_results_list_synced_lyrics_first_then_the_best_match() {
+        let with = |name: &str, synced, score| SearchHit { score, ..hit(name, "a", synced) };
+        let mut hits =
+            [with("plain", Some(false), 0.1), with("far", Some(true), 0.5), with("near", Some(true), 0.2)];
+        hits.sort_by(synced_first);
+        let names: Vec<&str> = hits.iter().map(|h| h.name.as_str()).collect();
+        assert_eq!(names, ["near", "far", "plain"]);
+    }
 
     fn hit(name: &str, artist: &str, synced: Option<bool>) -> SearchHit {
         SearchHit {

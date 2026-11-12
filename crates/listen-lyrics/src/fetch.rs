@@ -54,11 +54,7 @@ pub async fn search_all(http: &reqwest::Client, q: &Query, sources: &[Source]) -
             all.extend(hits);
         }
     }
-    all.sort_by(|a, b| {
-        (b.synced == Some(true))
-            .cmp(&(a.synced == Some(true)))
-            .then(a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
-    });
+    all.sort_by(crate::rank::synced_first);
     all
 }
 
