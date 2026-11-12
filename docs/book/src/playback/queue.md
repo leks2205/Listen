@@ -22,6 +22,7 @@ From left to right:
 |---|---|
 | Stop | Stops playback. |
 | Play mode | Cycles Off, Shuffle, Auto-DJ and AI DJ. See [Play modes and Auto-DJ](play-modes.md). |
+| Heart-rate tempo | Plays songs whose tempo fits your heart rate (Bluetooth sensor). In a very narrow bar it is hidden unless the mode is on. See [Heart-rate tempo](heart-rate.md). |
 | Previous | Goes to the previous song. More than 10 seconds into a song, it restarts the song instead. `Alt`+click jumps to the previous album. |
 | Skip backward | Jumps back by a fixed time (5 s by default). |
 | Play / Pause | Starts or pauses playback. |
