@@ -530,7 +530,7 @@ See [History, statistics and mixes](../using/history.md).
 
 | Row | What it does | Default | Key |
 | --- | --- | --- | --- |
-| Record listening history | Saved only on this computer (song, server, time); never uploaded or shared. Off writes nothing. | On | `settings.history.enabled` |
+| Record listening history | Saved on this computer (song, server, time); it goes to your own listen-server only when **Merge with other devices** is on. Off writes nothing. | On | `settings.history.enabled` |
 | Don't record this session | Pauses recording until you close Listen. | Off | not saved |
 | Keep history for | **1 year**, **2 years** or **Unlimited**. Older entries are deleted automatically. Unlimited is needed for the year review. | Unlimited | `settings.history.retention` (`"oneyear"`, `"twoyears"`, `"forever"`) |
 | Export | Writes the history to your Downloads folder as **JSON** or **CSV**. | | |
