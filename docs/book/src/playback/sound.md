@@ -33,7 +33,7 @@ More output options in the same section:
 - **yes**: always gapless.
 - **no**: a short gap between songs.
 
-Listen prepares the next song while the current one plays, so albums and playlists play without a break. Crossfading between songs is not available as a setting; the [DJ transitions](../dj/transitions.md) blend songs that the Auto-DJ or AI DJ picked, and albums stay gapless.
+Listen prepares the next song while the current one plays, so albums and playlists play without a break. Crossfading between songs is not available as a setting; the [DJ transitions](../dj/transitions.md) blend songs that the Auto-DJ or AI DJ picked, and albums stay gapless. Gapless means no silence: each song still fades in and out over **Fade songs in and out** (1.5 s by default, see [Track fades](#track-fades)), also between album tracks; set it to 0 for fully seamless albums.
 
 ## Track fades
 

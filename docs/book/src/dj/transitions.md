@@ -14,7 +14,7 @@ A transition is made only when all of this is true:
 - The two songs are not consecutive tracks of the same album (same disc, track numbers one apart). Albums stay gapless.
 - Both songs have been analysed.
 
-Songs you start yourself by playing an album or playlist always play gapless, with no mixing. If a mix cannot be prepared in time, or you skip, seek or pause during the lead-up, Listen simply falls back to gapless playback.
+Songs you start yourself by playing an album or playlist always play gapless, with no mixing (each song keeps its own short fade, see [Track fades](../playback/sound.md#track-fades)). If a mix cannot be prepared in time, or you skip, seek or pause during the lead-up, Listen simply falls back to gapless playback.
 
 ## What a transition sounds like
 
