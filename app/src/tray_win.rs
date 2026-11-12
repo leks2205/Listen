@@ -12,7 +12,7 @@ use tray_icon::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging as wm;
 
 pub use crate::tray_menu::TrayCmd;
-use crate::tray_menu::menu as tray_menu;
+use crate::tray_menu::{menu as tray_menu, play_pause_label};
 
 /// The 64 px app icon (rendered from `packaging/io.github.leks2205.Listen.svg`).
 const ICON_PNG: &[u8] = include_bytes!("../../packaging/windows/tray-64.png");
@@ -120,10 +120,9 @@ fn run_thread(
         while wm::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
             if msg.hwnd.is_null() && msg.message == wm::WM_APP {
                 while let Ok((playing, title)) = updates.try_recv() {
-                    if let Some(Some(play)) = items.first().map(|(i, _)| i.as_ref()) {
-                        play.set_text(crate::i18n::tr(
-                            tray_menu(playing)[0].map_or("Play", |(label, _)| label),
-                        ));
+                    let play = items.iter().find(|(_, cmd)| *cmd == Some(TrayCmd::PlayPause));
+                    if let Some((Some(play), _)) = play {
+                        play.set_text(crate::i18n::tr(play_pause_label(playing)));
                     }
                     let tip =
                         if title.is_empty() { "Listen".to_string() } else { format!("Listen\n{title}") };

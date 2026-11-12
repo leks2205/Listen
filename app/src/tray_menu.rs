@@ -16,10 +16,16 @@ pub enum TrayCmd {
     Quit,
 }
 
+/// The label of the [`TrayCmd::PlayPause`] entry. A tray that relabels the entry when playback
+/// changes finds it by its command, not by its place in [`menu`].
+pub fn play_pause_label(playing: bool) -> &'static str {
+    if playing { "Pause" } else { "Play" }
+}
+
 /// The menu in order: label and command, `None` = separator.
 pub fn menu(playing: bool) -> Vec<Option<(&'static str, TrayCmd)>> {
     vec![
-        Some((if playing { "Pause" } else { "Play" }, TrayCmd::PlayPause)),
+        Some((play_pause_label(playing), TrayCmd::PlayPause)),
         Some(("Next Track", TrayCmd::Next)),
         Some(("Previous Track", TrayCmd::Previous)),
         Some(("Stop", TrayCmd::Stop)),
@@ -49,5 +55,13 @@ mod tests {
             ]
         );
         assert_eq!(menu(true)[0], Some(("Pause", TrayCmd::PlayPause)));
+    }
+
+    #[test]
+    fn the_play_pause_entry_carries_the_play_pause_label() {
+        for playing in [false, true] {
+            let entry = menu(playing).into_iter().flatten().find(|(_, cmd)| *cmd == TrayCmd::PlayPause);
+            assert_eq!(entry.map(|(label, _)| label), Some(play_pause_label(playing)));
+        }
     }
 }
