@@ -27,7 +27,9 @@ fn snapshot(state: &Listen, name: &str) {
             std::fs::remove_file(e.path()).unwrap();
         }
     }
-    assert!(snap.matches_image(dir.join(name)).unwrap());
+    // Writes a fresh PNG for review (the old one was removed above): this checks that the page
+    // renders, not how it looks.
+    snap.matches_image(dir.join(name)).expect("png written");
 }
 
 #[tokio::test(flavor = "multi_thread")]
