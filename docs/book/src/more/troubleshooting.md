@@ -48,7 +48,7 @@ The installer is not code-signed yet, so SmartScreen says the app is unrecognise
 
 - Media keys normally work through MPRIS. KDE Plasma, GNOME, Cinnamon and Budgie send them to Listen themselves; **Global media hotkeys** is only needed on other desktops.
 - Global hotkeys use the desktop's shortcut portal (KDE Plasma and GNOME). The desktop has the last word: it may ask you to confirm the keys, may pick other keys than the ones you suggested, and shows them in its own shortcut settings. If it refuses, the **Hotkeys** page says "The desktop refused system-wide shortcuts" with the reason. Make sure the portal for your desktop (for example `xdg-desktop-portal-kde`) is installed and running, then restart Listen.
-- On **Wayland**, apps cannot read or set their own window position, so Listen does not restore it and starts where the compositor puts it. Hiding to the tray closes the window and opens a new one when you bring it back. If you need X11 behaviour, start Listen with `WINIT_UNIX_BACKEND=x11`.
+- On **Wayland**, apps cannot read or set their own window position, so Listen does not restore it and starts where the compositor puts it. Hiding to the tray closes the window and opens a new one when you bring it back. If you need X11 behaviour, start Listen with an empty `WAYLAND_DISPLAY` (`WAYLAND_DISPLAY= listen`); it then runs through X11 (XWayland).
 - In the tray, if your desktop has no tray (some GNOME setups need an extension), Listen starts with a window instead of hidden.
 
 See [Hotkeys](../integration/hotkeys.md) and [Media keys and system controls](../integration/media-controls.md).
