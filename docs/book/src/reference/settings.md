@@ -434,8 +434,8 @@ See [Lyrics](../playback/lyrics.md).
 | Furigana | Shows the reading above kanji in Japanese lyrics. Only in builds with the dictionary. | Off | `settings.lyrics.enable_furigana` |
 | NetEase translations | Fetches NetEase's own translation and shows it under each line. | Off | `settings.lyrics.enable_netease_translation` |
 | Translation language | The language online translation translates into. | English | `settings.lyrics.translation_target_language` (`"en"`) |
-| Translation provider | **None**, **Microsoft Azure** or **Google Cloud**. Needs your own API key. | None | `settings.lyrics.translation_api_provider` |
-| Translation API key | The key of that provider. It is kept with the passwords (system keyring, or the private `credentials.toml`); a key an older version wrote to `config.toml` moves there at the next start. | empty | (secret store; `settings.lyrics.translation_api_key` is legacy) |
+| Translation provider | **None**, **Microsoft Azure**, **Google Cloud** or **Gemini**. Azure and Google Cloud need your own API key; Gemini uses the AI DJ's key and leaves English lines as they are. | None | `settings.lyrics.translation_api_provider` |
+| Translation API key | The key of that provider. It is kept with the passwords (system keyring, or the private `credentials.toml`); a key an older version wrote to `config.toml` moves there at the next start. Not shown for Gemini. | empty | (secret store; `settings.lyrics.translation_api_key` is legacy) |
 | Automatic translation | Translates every song's lyrics when they load (needs the provider and key). | Off | `settings.lyrics.enable_auto_translation` |
 | vocab-hub address | Your vocab-hub (`https://…`) for Lute: the lyrics' words mode shows whether you know a word. Listen only reads your Lute words. Empty is off. | empty | `settings.lyrics.vocab_hub_url` |
 
