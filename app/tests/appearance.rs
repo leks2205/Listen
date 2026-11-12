@@ -100,11 +100,19 @@ fn zoom_steps_by_five_and_stays_in_range() {
 #[test]
 fn zoom_changes_the_compact_breakpoint_through_the_window_size() {
     let _serial = serial();
-    // iced reports the logical size (physical / scale); the layout follows it.
+    // iced divides the window's physical size by `ui_scale` and reports that logical size; the layout follows it.
     let mut s = boot();
+    let physical = 1400.0;
+    assert_eq!(listen::ui::LayoutMode::for_width(physical), listen::ui::LayoutMode::Full, "wide at 100 %");
     send(&mut s, A::ZoomSet(200));
-    let _ = s.update(Message::WindowResized(iced::Size::new(700.0, 600.0)));
-    assert_eq!(s.layout_mode(), listen::ui::LayoutMode::Compact);
+    let scale = s.ui_scale(iced::window::Id::unique());
+    assert!((scale - 2.0).abs() < f32::EPSILON, "{scale}");
+    let _ = s.update(Message::WindowResized(iced::Size::new(physical / scale, 600.0)));
+    assert_eq!(
+        s.layout_mode(),
+        listen::ui::LayoutMode::Compact,
+        "a 1400 px window at 200 % is laid out at 700 px"
+    );
 }
 
 #[test]
