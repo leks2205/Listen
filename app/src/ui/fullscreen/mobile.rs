@@ -12,7 +12,7 @@ use iced::widget::{button, column, container, responsive, row, slider, space};
 use iced::{Alignment, Length, Padding};
 
 /// The compact layout's full-screen player (Feishin's MobileFullscreenPlayer): header, cover, metadata,
-/// progress, controls and a bottom row (shuffle / repeat / queue / lyrics, the YouTube Music song/video
+/// progress, controls and a bottom row (play mode / heart rate / repeat / queue / lyrics, the YouTube Music song/video
 /// switch). Queue and lyrics swap the cover for their panel.
 pub fn mobile(state: &Listen) -> iced::Element<'_, Message> {
     use listen_core::model::format_duration;

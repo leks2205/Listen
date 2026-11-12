@@ -44,7 +44,7 @@ Under the facts are the **Credits** (writer, composer, lyricist, arranger, produ
 
 The card is fetched when the tab is open (and again when the song changes while it is open), then kept for 30 days per song and language. **Look it up again** fetches a fresh one. One card costs up to three Gemini requests: when Gemini's answer comes back without source links, Listen asks again.
 
-In a narrow window (768 px or less) Listen uses a phone-style layout instead: a header, the cover, the details, a progress bar and the transport buttons, and a bottom row with shuffle, repeat, queue and lyrics. The queue and the lyrics replace the cover while they are open.
+In a narrow window (768 px or less) Listen uses a phone-style layout instead: a header, the cover, the details, a progress bar and the transport buttons, and a bottom row with the play-mode button, the heart-rate button, repeat, queue, lyrics and, for YouTube Music songs, the song/video switch. The queue and the lyrics replace the cover while they are open.
 
 ## Settings of the full-screen player
 
