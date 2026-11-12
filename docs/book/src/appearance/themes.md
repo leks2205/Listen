@@ -4,7 +4,7 @@ This page explains how to change the look of Listen: the theme, light and dark m
 
 ## Choosing a theme
 
-Listen ships with 32 themes plus six desktop presets, and it can load your own. Which picker you see depends on **Follow system theme**:
+Listen ships with 32 themes plus seven desktop presets, and it can load your own. Which picker you see depends on **Follow system theme**:
 
 - **Follow system theme on** (the default): you choose a **Dark theme** and a **Light theme**. Listen uses the one that matches the desktop's light or dark setting and switches when the desktop does. The defaults are Tokyo Night (dark) and Default Light (light).
 - **Follow system theme off**: you choose one **Theme** that is always used. The default is Default Dark.
@@ -23,7 +23,7 @@ The set is the same as in Feishin, which Listen's interface is modelled on.
 
 On Linux, **Follow desktop theme** (on by default) makes Listen use the colours of your desktop instead of a built-in theme. It reads the KDE colour scheme (`kdeglobals`, including the accent colour) and follows changes live, usually within a second. When it is on, it takes precedence over the theme choices below it. The row's description tells you what Listen found. If no desktop colours can be found, Listen uses the theme you picked.
 
-The six presets named "(desktop)" in the pickers (Tokyo Night, Catppuccin Mocha, Gruvbox Dark, Nord, Rosé Pine, Dracula) are hand-tuned palettes. Listen selects one of them automatically when a compatible theme-switcher script on your desktop announces it.
+The seven presets named "(desktop)" in the pickers (Tokyo Night, Catppuccin Mocha, Gruvbox Dark, Nord, Rosé Pine, Dracula, KDE Stock / Breeze Dark) are hand-tuned palettes. Listen selects one of them automatically when a compatible theme-switcher script on your desktop announces it.
 
 This row does not exist on Windows. There, use **Follow system theme**.
 
