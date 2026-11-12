@@ -217,32 +217,14 @@ impl Secrets {
         result.is_ok()
     }
 
-    /// Writes a private temp file next to it and renames it over the old one: a crash mid-write leaves
-    /// the old file, and the new one is always created 0600 (`mode` only applies when a file is created).
+    /// Saves through `listen_core::files::write_atomic_private`: a crash mid-write leaves the old file,
+    /// and the new one is created 0600 from its first byte.
     fn write_fallback(&self, all: &BTreeMap<String, String>) -> std::io::Result<()> {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         if let Some(dir) = self.fallback.parent() {
             std::fs::create_dir_all(dir)?;
         }
         let text = toml::to_string(all).map_err(std::io::Error::other)?;
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let tmp = self.fallback.with_extension(format!("toml.tmp-{}-{n}", std::process::id()));
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let written = opts.open(&tmp).and_then(|mut f| {
-            std::io::Write::write_all(&mut f, text.as_bytes())?;
-            f.sync_all()
-        });
-        let renamed = written.and_then(|()| std::fs::rename(&tmp, &self.fallback));
-        if renamed.is_err() {
-            let _ = std::fs::remove_file(&tmp);
-        }
-        renamed
+        listen_core::files::write_atomic_private(&self.fallback, text.as_bytes())
     }
 }
 

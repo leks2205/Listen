@@ -437,8 +437,6 @@ pub fn audio_path(song_id: &str) -> Result<std::path::PathBuf, String> {
     wav.extend_from_slice(b"data");
     wav.extend_from_slice(&(pcm.len() as u32).to_le_bytes());
     wav.extend_from_slice(&pcm);
-    let tmp = path.with_extension("part");
-    std::fs::write(&tmp, wav).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+    listen_core::files::write_atomic(&path, &wav).map_err(|e| e.to_string())?;
     Ok(path)
 }

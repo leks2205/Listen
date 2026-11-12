@@ -49,6 +49,7 @@ Look here before writing a helper; the tests in `app/src/source_rules.rs` fail o
 | `Song::new`, `Album::new` | `crates/listen-core/src/model.rs` | every song or album outside a source mapper (tests too); set the rest on top |
 | `text::fold` | `crates/listen-core/src/text.rs` | comparing names: lower case, letters and digits only |
 | `USER_AGENT`, `MUSICBRAINZ_USER_AGENT` | `crates/listen-core/src/lib.rs` | every reqwest client; the second one for MusicBrainz |
+| `files::write_atomic`, `files::write_atomic_private` | `crates/listen-core/src/files.rs` | every file save that must not be left half-written (the second one for secrets: 0600) |
 | `markup::notification_body` | `crates/listen-core/src/markup.rs` | every desktop notification body (escapes for servers that read markup) |
 | `Listen::listen_server`, `ListenServer` | `app/src/app/history_sync.rs` | every listen-server feature: address, token, URLs; requests go through `self.http` with a per-request `.timeout` (`listen_server_features_use_the_shared_client` checks) |
 | `bind`, `serve`, `read_head`, `respond` | `app/src/remote/mod.rs` | every local HTTP server (remote control, MCP) |

@@ -196,3 +196,51 @@ fn only_listen_lastfm_calls_the_lastfm_api() {
         .collect();
     assert!(found.is_empty(), "add a listen_lastfm::Client method instead: {found:?}");
 }
+
+/// A whole file is saved with `listen_core::files::write_atomic` (or `write_atomic_private` for
+/// secrets), never a hand-written temp file plus rename: the copies named their temp file with
+/// `with_extension` (so `x.json` and `x.toml` shared one), skipped the flush and left temp files
+/// behind on errors.
+#[test]
+fn files_are_saved_atomically_only_through_listen_core_files() {
+    /// Files that write their own temp file and rename it, with the reason.
+    const OWN_TEMP_FILE: [(&str, &str); 1] = [(
+        "app/src/app/item/save.rs",
+        "streams a download chunk by chunk with progress; there are no bytes in memory to hand over",
+    )];
+    let (mut found, mut exempt) = (Vec::new(), Vec::new());
+    for (path, src) in workspace_sources() {
+        if path == "crates/listen-core/src/files.rs" {
+            continue;
+        }
+        for (at, call) in src.match_indices("fs::rename(") {
+            let arg = src[at + call.len()..].trim_start().trim_start_matches('&');
+            let name: String = arg.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+            if !["tmp", "temp", "part", "staged"].iter().any(|t| name.starts_with(t)) {
+                continue;
+            }
+            let writes = [
+                format!("fs::write(&{name},"),
+                format!("fs::write({name},"),
+                format!("File::create(&{name})"),
+                format!("File::create({name})"),
+                format!(".open(&{name})"),
+                format!(".open({name})"),
+            ];
+            if writes.iter().any(|w| src.contains(w.as_str())) {
+                if OWN_TEMP_FILE.iter().any(|(p, _)| *p == path) {
+                    exempt.push(path.clone());
+                } else {
+                    found.push(place(&path, &src, at));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "save the file with listen_core::files::write_atomic: {found:?}");
+    for (path, why) in OWN_TEMP_FILE {
+        assert!(
+            exempt.iter().any(|p| p == path),
+            "{path} ({why}) no longer renames its own temp file: drop it here"
+        );
+    }
+}

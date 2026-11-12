@@ -205,19 +205,17 @@ async fn fetch_bytes(http: reqwest::Client, url: String, disk: Option<PathBuf>) 
     Some(Arc::new(bytes))
 }
 
-/// Writes a cover into the disk cache through a temporary file and a rename, so a quit mid-write
-/// never leaves a cut-off file at `path` that later starts would take for the cover.
+/// Writes a cover into the disk cache atomically (`listen_core::files::write_atomic`), so a quit
+/// mid-write never leaves a cut-off file at `path` that later starts would take for the cover.
 async fn store(path: &std::path::Path, bytes: &[u8]) {
-    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    if let Some(dir) = path.parent() {
-        let _ = tokio::fs::create_dir_all(dir).await;
-    }
-    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmp = path.with_extension(format!("{}-{n}.tmp", std::process::id()));
-    let stored = tokio::fs::write(&tmp, bytes).await.is_ok() && tokio::fs::rename(&tmp, path).await.is_ok();
-    if !stored {
-        let _ = tokio::fs::remove_file(&tmp).await;
-    }
+    let (path, bytes) = (path.to_path_buf(), bytes.to_vec());
+    let _ = tokio::task::spawn_blocking(move || {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        listen_core::files::write_atomic(&path, &bytes)
+    })
+    .await;
 }
 
 /// A small, heavily blurred version of a cover, like Feishin's `filter: blur(<n>rem)` header art.

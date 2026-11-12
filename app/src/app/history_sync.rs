@@ -223,9 +223,8 @@ impl Listen {
 
     fn history_sync_save(&self) {
         let Some(path) = self.history_sync_file() else { return };
-        let tmp = path.with_extension("json.tmp");
         let text = serde_json::to_string(&self.history_view.sync).unwrap_or_default();
-        if let Err(e) = std::fs::write(&tmp, text).and_then(|()| std::fs::rename(&tmp, &path)) {
+        if let Err(e) = listen_core::files::write_atomic(&path, text.as_bytes()) {
             tracing::warn!("saving the history sync state: {e}");
         }
     }
