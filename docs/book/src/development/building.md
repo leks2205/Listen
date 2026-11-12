@@ -55,7 +55,7 @@ Everything after `--` goes to Listen. See [Command line](../reference/command-li
 | `--queue` | Open the queue sidebar on start. |
 | `--video` | Start with the song/video switch on. |
 | `--theme <ID>` | Force a theme, for example `tokyoNight` or `defaultLight`. |
-| `--route <PAGE>` | Start on `home`, `albums`, `tracks` or `settings`. |
+| `--route <PAGE>` | Start on `home`, `albums`, `artists`, `tracks`, `favorites`, `recent`, `stats`, `mixes`, `radio` or `settings`. |
 | `--onboarding` | Show the first-start wizard even in demo or ephemeral runs. |
 | `--size <WxH>` | Initial window size. The default is 1600x950. |
 

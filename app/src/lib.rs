@@ -75,7 +75,8 @@ Options:
   --screenshot-delay <MS>  Wait before the screenshot (default 2500)
   --login <URL> <USER>   Sign in for this run only (password from $LISTEN_PASSWORD;
                          nothing is saved)
-  --route <PAGE>         Start on home, albums, tracks or settings
+  --route <PAGE>         Start on home, albums, artists, tracks, favorites, recent, stats, mixes, radio
+                         or settings
   --autoplay             Start playing the first home album (with --login)
   --ephemeral            Don't save settings or credentials (tests, demos)
   --onboarding           Show the first-start wizard (with --ephemeral: screenshots)
@@ -237,6 +238,21 @@ mod usage_tests {
                     "{mode} is dispatched in main.rs but missing from USAGE"
                 );
             }
+        }
+    }
+
+    /// `--help` names every page `--route` accepts (`parse_route`).
+    #[test]
+    fn usage_lists_every_route() {
+        let app = include_str!("app.rs");
+        let body = app.split("pub fn parse_route").nth(1).expect("parse_route in app.rs");
+        let body = body.split("_ => None").next().unwrap_or_default();
+        let start = super::USAGE.find("--route").expect("--route in USAGE");
+        let help = &super::USAGE[start..start + super::USAGE[start..].find("\n  --").unwrap_or(0)];
+        let words: Vec<&str> = help.split(|c: char| !c.is_ascii_alphanumeric()).collect();
+        for page in body.split('"').skip(1).step_by(2) {
+            assert!(super::app::parse_route(page).is_some(), "{page} is no route");
+            assert!(words.contains(&page), "--route {page} works but is missing from USAGE");
         }
     }
 }
