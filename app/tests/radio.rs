@@ -147,7 +147,7 @@ fn a_station_plays_without_touching_the_queue_or_scrobbling() {
 fn the_related_list_goes_to_the_fullscreen_tab() {
     use listen::app::FullscreenTab;
     let mut s = state();
-    // Closed: nothing is fetched on a track change.
+    // RelatedRefresh fills the full-screen tab's list for the playing song.
     send(&mut s, RadioMsg::RelatedRefresh);
     let first = s.queue.current().map(|i| i.song.id.clone());
     assert_eq!(s.fs.related_for, first);

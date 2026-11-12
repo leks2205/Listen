@@ -579,12 +579,10 @@ fn the_albums_page_is_a_grid_with_selection_and_a_display_toggle() {
     let _ = s.update(Message::List(ListMsg::Press(ListId::Albums, 0)));
     s.modifiers = Modifiers::default();
     key(&mut s, Named::ArrowDown, Modifiers::default());
-    let columns = listen::ui::list::grid::GridLayout::new(
-        SIZE.width - 400.0,
-        &s.config.settings.lists.config(ListKind::Albums).grid,
-    )
-    .columns;
-    assert!(selected(&s, &ListId::Albums)[0] >= 1, "moved down by a row (columns {columns})");
+    let below = selected(&s, &ListId::Albums);
+    assert!(below.len() == 1 && below[0] > 1, "down moves by a whole row of cards, not one card: {below:?}");
+    key(&mut s, Named::ArrowUp, Modifiers::default());
+    assert_eq!(selected(&s, &ListId::Albums), [0], "up comes back to the same column");
     // Switch to the table and back to the grid.
     let _ = s.update(Message::List(ListMsg::Config(
         ListId::Albums,
@@ -600,6 +598,7 @@ fn the_albums_page_is_a_grid_with_selection_and_a_display_toggle() {
         ListId::Albums,
         listen::app::list::ConfigEdit::Display(DisplayType::Grid),
     )));
+    assert_eq!(s.config.settings.lists.config(ListKind::Albums).display, DisplayType::Grid);
 }
 
 #[test]

@@ -257,7 +257,7 @@ fn section_order_and_visibility_follow_the_setting() {
 }
 
 #[test]
-fn biography_collapses_and_links_are_rich_text() {
+fn biography_collapses_and_expands() {
     let mut s = boot();
     navidrome(&mut s);
     assert!(shows(&s, "Show more"));

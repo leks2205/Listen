@@ -134,7 +134,7 @@ fn the_folder_browser_has_a_tree_and_the_songs_of_the_open_folder() {
     assert!(shows(&s, "Midnight Signal"), "the songs of the folder");
     assert!(shows(&s, "Play next") && shows(&s, "Refresh"));
     assert_eq!(s.active_list(), Some(ListId::Folder));
-    // The tree opens the way to the folder and marks it.
+    // The tree lists the root's folders.
     assert_eq!(s.extra.tree.children.get("").map(Vec::len), Some(demo::ALBUMS.len()));
 }
 

@@ -82,6 +82,11 @@ fn crossfade_is_shown_disabled_with_feishins_reason() {
     audio(&mut s, AudioMsg::TogglePopover);
     assert!(has_text(&s, "Crossfade"));
     assert!(has_text(&s, "Gapless"));
+    assert!(has_text(
+        &s,
+        "Crossfade is only available with the web player. Listen plays gaplessly through mpv; \
+         the DJ transitions (Settings → Playback) blend songs the Auto-DJ or AI DJ picks."
+    ));
     // Clicking the disabled segment does nothing.
     assert!(click_text(&mut s, "Crossfade").is_empty());
     assert_eq!(s.config.settings.playback.gapless, "weak");
@@ -235,6 +240,22 @@ fn transcoding_section_is_shown_unless_only_youtube_music_is_set_up() {
     audio(&mut s, AudioMsg::TranscodeSampleRate("48000".into()));
     let t = &s.config.settings.playback.transcode;
     assert!(t.enabled && t.format == "opus" && t.bitrate == 128 && t.max_sample_rate == 48_000);
+
+    // Only YouTube Music set up: no transcoding section; any other server brings it back.
+    use listen_core::config::ServerConfig;
+    use listen_core::model::{ServerId, SourceKind};
+    let server = |id: &str, kind| ServerConfig {
+        id: ServerId(id.into()),
+        name: id.into(),
+        kind,
+        url: "https://music.example".into(),
+        username: "me".into(),
+    };
+    let (mut y, _) = Listen::boot(&Args { ephemeral: true, ..Args::default() });
+    y.config.servers = vec![server("ytm", SourceKind::YouTubeMusic)];
+    assert!(!y.transcoding_available());
+    y.config.servers.push(server("nd", SourceKind::Subsonic));
+    assert!(y.transcoding_available());
 }
 
 #[test]

@@ -582,7 +582,7 @@ fn the_server_buttons_are_hidden_without_a_server_queue() {
 // ---- YouTube Music songs in the queue ----------------------------------------------------------------
 
 #[test]
-fn youtube_music_rows_keep_their_menu_hearts_and_dj() {
+fn youtube_music_rows_keep_their_menu_and_the_play_mode_toggle() {
     use listen::app::menu::MenuTarget;
     use listen_core::model::SourceKind;
     let mut s = boot();
@@ -601,7 +601,6 @@ fn youtube_music_rows_keep_their_menu_hearts_and_dj() {
     assert_eq!(songs.len(), 2);
     assert!(songs.iter().all(|x| x.source == SourceKind::YouTubeMusic));
     assert_eq!(queue_uids, [s.queue.item_at(1).unwrap().uid, s.queue.item_at(3).unwrap().uid]);
-    // Hearts and the DJ toggle are still on the rows / in the header.
     // The play-mode toggle is in the header (it names the current mode).
     assert!(shows(&s, s.play_mode().tag()));
     assert!(shows(&s, "Coastline"));

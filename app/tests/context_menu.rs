@@ -73,7 +73,6 @@ fn right_click_on_a_queue_row_opens_its_menu_at_the_cursor() {
     assert!(matches!(&menu.target, MenuTarget::Songs { queue_uids, .. } if *queue_uids == [third]));
     // A right-click on the backdrop closes it.
     let _ = right_click(&mut s, (800.0, 40.0));
-    let _ = s.update(Message::Menu(MenuMsg::Close));
     assert!(s.menu.is_none());
 }
 
@@ -145,7 +144,10 @@ fn snapshot_menu_and_expanded_cover() {
     let mut s = state();
     let _ = s.update(Message::ToggleCoverExpanded);
     let song = demo::album_songs(1)[0].clone();
-    let _ = s.update(Message::Menu(MenuMsg::Do(MenuAction::AddToQueue))); // no menu: ignored
+    // An action with no open menu is ignored.
+    let before = titles(&s);
+    let _ = s.update(Message::Menu(MenuMsg::Do(MenuAction::AddToQueue)));
+    assert!(s.menu.is_none() && titles(&s) == before);
     let _ = s.update(Message::RightClickAt(iced::Point::new(1450.0, 300.0)));
     let _ = s.update(Message::Menu(MenuMsg::Open(MenuTarget::song(&song))));
     snapshot("context-menu", &s);

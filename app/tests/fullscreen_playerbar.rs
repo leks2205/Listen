@@ -251,7 +251,7 @@ fn the_full_screen_player_shows_badges_and_links() {
 }
 
 #[test]
-fn the_bar_title_links_to_now_playing_and_the_menu_button_opens_the_song_menu() {
+fn the_bar_title_links_to_now_playing() {
     let mut s = state();
     let title = s.queue.current().unwrap().song.title.clone();
     let messages = click_text(&mut s, &title);

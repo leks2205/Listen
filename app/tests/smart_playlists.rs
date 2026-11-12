@@ -255,7 +255,7 @@ fn add_and_remove_rules_and_nested_groups_with_clicks() {
     click(&mut s, "Add rule group");
     assert_eq!(editor(&s).query.root.groups.len(), 1);
     assert_eq!(editor(&s).query.root.groups[0].kind, GroupKind::Any);
-    // A group inside the group: the sub-group's own "Add rule group" is the second button.
+    // Nested groups by message (the sub-group's buttons have the same labels as the root's).
     send(&mut s, SmartMsg::Group(vec![0], GroupEdit::AddGroup));
     send(&mut s, SmartMsg::Group(vec![0, 0], GroupEdit::AddRule));
     assert_eq!(editor(&s).query.root.get(&[0, 0]).unwrap().rules.len(), 2);
