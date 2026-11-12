@@ -1,4 +1,4 @@
-//! Diagonal window resize and MPRIS Play.
+//! Diagonal window resize, MPRIS Play/Pause, and a restored song staying paused.
 
 use iced::window::Direction;
 use iced_test::simulator::Simulator;

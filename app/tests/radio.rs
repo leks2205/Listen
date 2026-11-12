@@ -1,4 +1,5 @@
-//! Internet radio, the Related list and the jukebox setting, in demo mode:
+//! Internet radio and the Related list, in demo mode (the jukebox against a fake server is in
+//! `radio_source.rs`):
 //! the Radio page's buttons, the create / edit / delete flow, the ICY title,
 //! and that a playing stream stays out of the queue's business.
 
