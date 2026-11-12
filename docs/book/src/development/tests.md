@@ -15,9 +15,13 @@ Unit tests live next to the code in `#[cfg(test)]` modules. The `app/tests/` fol
 
 CI (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --exclude listen --lib --tests` (the crates' unit and integration tests, with mpv installed) and `cargo test -p listen --lib` (the app's unit tests). It does not run the app's `app/tests/`, which need a GPU session, or the doc tests.
 
+## Shared helpers of the app tests
+
+Each file in `app/tests/` is its own test binary; shared code lives in `app/tests/common/` and a file includes it with `mod common;`. Every test that creates an iced `Simulator` takes `common::gpu()` first and holds the guard while the `Simulator` lives: the headless renderer creates a Vulkan instance per `Simulator`, and several at once can crash the test process. Build the `Simulator` with `common::iced_settings()` (the app's fonts), write pictures with `common::save_png()`, and compute click points that depend on the layout with `common::layout` (from the app's `pub const`s, or by finding a widget's text). `app/tests/shared_test_helpers.rs` fails when a test file creates a `Simulator` without the lock or defines its own lock, settings or PNG writer.
+
 ## Snapshot tests
 
-`app/tests/snapshots.rs` (and the `snapshot` helpers in other files of `app/tests/`) renders pages headlessly with `iced_test` and writes PNG files to `target/snapshots/` for visual review. Each run deletes the previous PNG before it writes the new one, so these tests check that a page renders without a panic; they do not compare pixels. A test that promises how a page looks (for example that something fits) needs its own assertion on widget bounds or text. Run it with output visible:
+`app/tests/snapshots.rs` (and the `snapshot` helpers in other files of `app/tests/`) renders pages headlessly with `iced_test` and writes PNG files to `target/snapshots/` with `common::save_png()` for visual review. Each run deletes the previous PNG before it writes the new one, so these tests check that a page renders without a panic; they do not compare pixels. A test that promises how a page looks (for example that something fits) needs its own assertion on widget bounds or text. Run it with output visible:
 
 ```bash
 cargo test -p listen --test snapshots -- --nocapture
