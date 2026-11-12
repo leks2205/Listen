@@ -362,7 +362,6 @@ fn the_popover_lists_this_computer_and_the_devices() {
     let (_fake, r) = rt().block_on(fake_and_renderer());
     s.dlna_found_for_test(vec![r]);
     assert!(!has_text(&s, "This computer"));
-    let _ = s.update(Message::Dlna(DlnaMsg::Close));
     s.dlna.open = true;
     assert!(has_text(&s, "This computer"));
     assert!(has_text(&s, "Fake Speaker"));

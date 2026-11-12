@@ -25,7 +25,7 @@ fn state() -> Listen {
 #[test]
 fn dragging_follows_the_cursor_within_limits() {
     let mut s = state();
-    let (left, right) = (s.config.settings.sidebar.width, s.config.settings.sidebar.queue_width);
+    let right = s.config.settings.sidebar.queue_width;
 
     // Feishin keeps the sidebar between 260 and 400 px.
     s.config.settings.sidebar.width = 300.0;
@@ -35,7 +35,6 @@ fn dragging_follows_the_cursor_within_limits() {
     }
     let _ = s.update(Message::ResizeEnd);
     assert_eq!(s.config.settings.sidebar.width, 350.0);
-    let _ = left;
 
     // The queue grows when its divider moves left.
     let _ = s.update(Message::ResizeStart(PanelSide::Right));

@@ -312,8 +312,7 @@ fn ratings_show_for_subsonic_only_and_the_same_star_clears() {
 #[test]
 fn right_controls_follow_the_setting() {
     let mut s = state();
-    let (w, _, r_all) = (s.window_size.width, 0, listen::ui::player_bar::column_widths(&s, 1000.0).2);
-    let _ = w;
+    let r_all = listen::ui::player_bar::column_widths(&s, 1000.0).2;
     // Hide the queue button and the sleep timer.
     for id in ["queue", "sleep_timer"] {
         let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::RightVisible(id.into(), false))));
@@ -410,7 +409,6 @@ fn sleep_timer_end_of_album_and_track_shuffle() {
     let _ = s.update(advance());
     assert!(s.sleep_timer.is_some() && s.playback.playing);
     // ... a song of another album ends it.
-    s.queue.for_each_song_mut(|_| {});
     let other = demo::album_songs(3);
     s.queue.set(vec![s.queue.current().unwrap().song.clone(), other[0].clone()], 0);
     let _ = s.update(advance());
