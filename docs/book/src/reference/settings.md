@@ -354,6 +354,8 @@ See [Play modes and Auto-DJ](../playback/play-modes.md).
 | --- | --- | --- | --- |
 | Enabled | Keeps the queue going with similar songs. | On | `settings.auto_dj.enabled` |
 | Songs to add | Songs added whenever the queue runs out, 1 to 20. | 5 | `settings.auto_dj.item_count` |
+| Forgotten favourites | One song in eight is a favourite you haven't played for a while. | On | `settings.auto_dj.forgotten_favourites` |
+| Learn from my skips | Weighs tempo, key, energy and sound by the songs you skip early after a handover. | On | `settings.auto_dj.learned_weights` |
 
 ### AI DJ
 
@@ -584,4 +586,4 @@ The **About** tab has no options. It shows the version, the license (GNU Affero 
 
 ## Keys that have no row
 
-A few keys are stored automatically and are not on the Settings page: `settings.settings_tab` (the tab you last had open), `settings.onboarded` (the first-start wizard was finished), `settings.window.state` (last window size and position), `settings.sidebar.width` and `settings.sidebar.queue_width` (dragged panel widths), `settings.lists.saved_queries` and `settings.lists.collections` (saved list filters), and the sidebar's hand-made playlist order.
+A few keys are stored automatically and are not on the Settings page: `settings.settings_tab` (the tab you last had open), `settings.onboarded` (the first-start wizard was finished), `settings.window.state` (last window size and position), `settings.sidebar.width` and `settings.sidebar.queue_width` (dragged panel widths), `settings.auto_dj.focus` (Focus mode, switched in the queue or with the MCP tool `set_focus`), `settings.lists.saved_queries` and `settings.lists.collections` (saved list filters), and the sidebar's hand-made playlist order.
