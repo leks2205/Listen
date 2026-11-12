@@ -16,7 +16,7 @@ listen [OPTIONS]
 | `--fullscreen` | Opens the full-screen player at start (with `--demo`). |
 | `--theme <ID>` | Forces a theme by its id for this run, for example `tokyoNight` or `defaultLight`. |
 | `--size <WxH>` | Initial window size in pixels, for example `--size 1280x800`. The default is `1600x950`. |
-| `--route <PAGE>` | Opens on `home`, `albums`, `tracks` or `settings`. If Listen is already running, the running window is brought forward and shown that page. |
+| `--route <PAGE>` | Opens on `home`, `albums`, `tracks`, `artists`, `favorites`, `recent`, `stats`, `mixes`, `radio` or `settings`. If Listen is already running, the running window is brought forward and shown that page. |
 | `--login <URL> <USER>` | Signs in to a server for this run only. The password is read from the environment variable `LISTEN_PASSWORD`. Nothing is saved. |
 | `--autoplay` | Starts playing the first album on the home page (with `--login`). |
 | `--ephemeral` | Does not read or write settings or credentials. Meant for tests and demos. |
