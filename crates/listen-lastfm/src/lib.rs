@@ -140,9 +140,10 @@ impl Client {
         }
         params.push(("format".into(), "json".into()));
         let req = if post { self.http.post(API).form(&params) } else { self.http.get(API).query(&params) };
-        let resp = req.send().await.map_err(|e| Error::Http(e.to_string()))?;
+        let resp = req.send().await.map_err(network)?;
         let status = resp.status();
-        let body: Value = resp.json().await.map_err(|e| Error::Http(format!("{status}: {e}")))?;
+        let body: Value =
+            resp.json().await.map_err(|e| Error::Http(format!("{status}: {}", e.without_url())))?;
         if let Some(code) = body.get("error").and_then(Value::as_i64) {
             let message = body.get("message").and_then(Value::as_str).unwrap_or("").to_string();
             return Err(Error::Api { code, message });
@@ -329,6 +330,12 @@ fn same_title(a: &str, b: &str) -> bool {
 fn album_image_of(v: &Value) -> Option<String> {
     let image = v["album"]["image"].as_array()?.get(3)?["#text"].as_str()?;
     image.starts_with("https://").then(|| image.to_string())
+}
+
+/// A failed request as an [`Error::Http`] without its URL: a GET carries the API key, the auth token
+/// and the signature in its query, and the message reaches logs and the settings page.
+fn network(e: reqwest::Error) -> Error {
+    Error::Http(e.without_url().to_string())
 }
 
 fn num(v: &Value) -> u64 {
@@ -626,6 +633,18 @@ impl Scrobbler {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn network_errors_never_carry_the_request_url() {
+        // A port nobody listens on: the request fails locally, nothing leaves the machine.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let url = format!("http://127.0.0.1:{port}/2.0/?api_key=KEY123&token=TOK456&api_sig=SIG789");
+        let e = reqwest::Client::new().get(url).send().await.unwrap_err();
+        let text = network(e).to_string();
+        for secret in ["KEY123", "TOK456", "SIG789"] {
+            assert!(!text.contains(secret), "{text}");
+        }
+    }
 
     #[test]
     fn names_in_a_bio() {
