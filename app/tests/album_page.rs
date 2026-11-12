@@ -82,7 +82,7 @@ fn navidrome_header_shows_metadata_and_every_action() {
     ] {
         assert!(has_text(&s, text), "missing {text}");
     }
-    // Every album artist is its own link; the original date comes first.
+    // The original release date is shown too.
     assert!(has_text(&s, "Nov 8, 2019"));
     // Disc rows with their titles.
     assert!(has_text(&s, "Disc 1 - Originals") && has_text(&s, "Disc 2 - Reworks"));
@@ -229,7 +229,7 @@ fn ytm_album_renders_and_hides_what_youtube_cannot_do() {
     // A rating does nothing.
     let _ = s.update(Message::AlbumPage(AlbumPageMsg::Rate(5)));
     assert_eq!(s.library.album.as_ref().unwrap().rating, None);
-    // Play, add to the queue and like a track.
+    // Add to the queue and play a track.
     let before = s.queue.len();
     let _ = click_text(&mut s, "Add last");
     assert_eq!(s.queue.len(), before + 5);

@@ -177,11 +177,19 @@ fn recording_stores_the_pressed_combo() {
     assert_eq!(s.hotkey_recording, None);
     assert_eq!(s.config.settings.hotkeys.get("nextAlbum").map(String::as_str), Some("mod+shift+j"));
 
-    // The recorded combo runs the action; while recording nothing else fires.
-    s.config.settings.hotkeys.insert("rate3".into(), "mod+shift+j".into());
+    // While another action records, the combo only becomes its binding: nothing fires.
+    let mut songs = demo::album_songs(0);
+    songs.extend(demo::album_songs(1));
+    let first_len = demo::album_songs(0).len();
+    s.queue.set(songs, 0);
+    let ctrl_shift_j = || key_event(Code::KeyJ, "j", Modifiers::CTRL | Modifiers::SHIFT);
     let _ = s.update(Message::Hotkeys(HotkeysMsg::Record("zoomIn".into())));
-    press(&mut s, key_event(Code::Space, " ", Modifiers::empty()));
-    assert_eq!(s.config.settings.hotkeys.get("zoomIn").map(String::as_str), Some("space"));
+    press(&mut s, ctrl_shift_j());
+    assert_eq!(s.config.settings.hotkeys.get("zoomIn").map(String::as_str), Some("mod+shift+j"));
+    assert_eq!(s.queue.current_position(), Some(0), "nextAlbum did not fire while recording");
+    // Once recorded, the combo runs its action.
+    press(&mut s, ctrl_shift_j());
+    assert_eq!(s.queue.current_position(), Some(first_len));
 
     // Escape cancels without changing anything.
     let _ = s.update(Message::Hotkeys(HotkeysMsg::Record("zoomOut".into())));

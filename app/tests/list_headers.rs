@@ -163,7 +163,7 @@ fn filters_open_in_a_modal_and_reset() {
     assert!(s.list_queries.albums.filters.active());
     assert!(s.library.albums.len() < all);
     assert!(s.library.albums.iter().all(|a| a.year.is_some_and(|y| y >= 2025)));
-    // The button's highlight follows the filters; Reset clears them all.
+    // Reset clears them all.
     click(&mut s, "Reset");
     assert!(!s.list_queries.albums.filters.active());
     assert_eq!(s.library.albums.len(), all);

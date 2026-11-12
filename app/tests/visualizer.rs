@@ -229,10 +229,14 @@ fn clicking_the_waveform_seeks() {
     }
     let (y, middle) = found.expect("a click on the bar seeks");
     assert!(middle > 40.0 && middle < 160.0, "mid-bar is mid-song, got {middle}");
-    // Release sends the seek.
-    let _ = run_events(&mut s, (w / 2.0, y), [iced::Event::Mouse(Mouse::ButtonReleased(Button::Left))]);
+    // Release sends the seek (the press and the release reach the same widget).
+    let released = [
+        iced::Event::Mouse(Mouse::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(Mouse::ButtonReleased(Button::Left)),
+    ];
+    let sent = run_events(&mut s, (w / 2.0, y), released);
+    assert!(sent.iter().any(|m| matches!(m, Message::SeekRelease)), "{sent:?}");
     // Further left is earlier.
-    let _ = s.update(Message::SeekRelease);
     let mut earlier = None;
     for dx in [40.0, 70.0, 100.0, 130.0] {
         let sent = run_events(&mut s, (w / 2.0 - dx, y), press.clone());

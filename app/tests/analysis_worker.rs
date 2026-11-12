@@ -61,8 +61,14 @@ async fn helper_matches_in_process_analysis_and_stops() {
     assert_eq!(direct, via_helper);
     assert!(worker.is_running());
     // Errors cross the process boundary as the same kind.
-    let missing = worker.analyze("/nonexistent/song.wav", &opts, &Cancel::default()).await;
-    assert!(missing.is_err());
+    let gone = "/nonexistent/song.wav";
+    let in_process = analyze_url(gone, &opts, &Cancel::default()).await.expect_err("missing file");
+    let via_helper = worker.analyze(gone, &opts, &Cancel::default()).await.expect_err("missing file");
+    assert_eq!(
+        (std::mem::discriminant(&via_helper), via_helper.is_transient()),
+        (std::mem::discriminant(&in_process), in_process.is_transient()),
+        "{via_helper:?} vs {in_process:?}"
+    );
     // Not idle long enough yet: it stays.
     worker.stop_if_idle().await;
     assert!(worker.is_running());

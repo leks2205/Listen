@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers, key::Named};
 use iced::{Point, Task};
 use iced_test::simulator::Simulator;
-use listen::app::menu::{MenuAction, MenuKey, MenuMsg, MenuTarget};
+use listen::app::menu::{MenuAction, MenuMsg, MenuTarget};
 use listen::app::{INTER, Listen, Message, SourceHandle};
 use listen::{Args, FONTS, demo};
 use listen_core::config::ServerConfig;
@@ -330,8 +330,6 @@ fn arrows_enter_and_left_drive_the_menu() {
     press(&mut s, Named::Enter);
     assert!(s.menu.is_none());
     assert_eq!(s.queue.iter().count(), 1);
-    // The keys are the menu's only while it is open.
-    assert!(MenuKey::from_key(&Key::Named(Named::ArrowDown)).is_some());
 }
 
 // --- footer ---
