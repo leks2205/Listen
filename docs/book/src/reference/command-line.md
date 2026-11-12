@@ -13,6 +13,7 @@ listen [OPTIONS]
 | `--demo` | Uses the built-in demo library and generated audio. No server needed and nothing is saved. A good way to look around first. |
 | `--queue` | Opens the queue sidebar at start (with `--demo`). |
 | `--video` | Starts with the song/video switch on (with `--demo`). |
+| `--fullscreen` | Opens the full-screen player at start (with `--demo`). |
 | `--theme <ID>` | Forces a theme by its id for this run, for example `tokyoNight` or `defaultLight`. |
 | `--size <WxH>` | Initial window size in pixels, for example `--size 1280x800`. The default is `1600x950`. |
 | `--route <PAGE>` | Opens on `home`, `albums`, `tracks` or `settings`. If Listen is already running, the running window is brought forward and shown that page. |
