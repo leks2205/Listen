@@ -35,8 +35,9 @@ pub const TABS: [(FullscreenTab, Icon, &str); 5] = [
     (FullscreenTab::About, Icon::LuInfo, "About"),
 ];
 
-/// Padding of the full-screen content and the gap between the image column and the panel.
-const PAD: Padding = Padding { top: 8.0, right: 32.0, bottom: 24.0, left: 16.0 };
+/// Padding of the full-screen content and the gap between the image column and the panel. Tests compute the
+/// top bar's click points from `PAD`.
+pub const PAD: Padding = Padding { top: 8.0, right: 32.0, bottom: 24.0, left: 16.0 };
 const COLUMN_GAP: f32 = 48.0;
 /// Room under the cover for title, artists, album and badges.
 const INFO_H: f32 = 190.0;

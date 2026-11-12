@@ -3,6 +3,7 @@
 
 mod common;
 
+use common::layout;
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers, key::Named};
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
@@ -151,9 +152,7 @@ fn panel_tabs_toggle_and_the_player_stays_open() {
 fn a_tab_button_click_toggles_the_panel() {
     let mut s = state();
     let _ = s.update(Message::OpenFullscreenTab(FullscreenTab::Queue));
-    // The five tab buttons sit top right: Up Next, Related, Lyrics, Visualizer, About (36 px, 4 px apart).
-    let right = 1600.0 - 32.0;
-    let lyrics = (right - 2.0 * 40.0 - 18.0, 38.0 + 8.0 + 18.0);
+    let lyrics = layout::fullscreen_tab_button(&s, FullscreenTab::Lyrics);
     let messages = click(&mut s, lyrics);
     assert!(
         messages
@@ -190,7 +189,8 @@ fn the_gear_opens_the_settings_and_changes_apply() {
     let mut s = state();
     let _ = s.update(Message::ToggleFullscreen);
     // The gear is the second button top left.
-    let messages = click(&mut s, (16.0 + 40.0 + 18.0, 38.0 + 8.0 + 18.0));
+    let gear = layout::fullscreen_left_button(&s, 1);
+    let messages = click(&mut s, gear);
     assert!(
         messages.iter().any(|m| matches!(m, Message::Fullscreen(FullscreenMsg::OpenSettings))),
         "{messages:?}"
@@ -248,8 +248,8 @@ fn the_bar_title_links_to_now_playing() {
 #[test]
 fn clicking_the_empty_bar_opens_the_player_only_with_the_setting() {
     let mut s = state();
-    // Empty spot in the bar's left column, right of the text.
-    let at = (s.window_size.width * 0.27, s.window_size.height - 70.0);
+    // Empty spot in the bar's left column, right of the text, 20 px below the bar's top.
+    let at = (s.window_size.width * 0.27, layout::bar_top(s.window_size) + 20.0);
     let messages = click(&mut s, at);
     assert!(!messages.iter().any(|m| matches!(m, Message::ToggleFullscreen)), "{messages:?}");
     assert!(!s.fullscreen);

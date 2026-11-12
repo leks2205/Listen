@@ -324,13 +324,18 @@ pub fn divider_v<'a>(t: Tokens) -> Element<'a, Message> {
     container(text("")).width(1).height(Length::Fill).style(style::divider(t)).into()
 }
 
+/// Width of a panel's resize handle; tests compute click points from it.
+pub const RESIZE_HANDLE_W: f32 = 5.0;
+
 /// A vertical divider you can drag to resize the panel next to it.
 pub fn resize_handle<'a>(t: Tokens, side: crate::app::PanelSide) -> Element<'a, Message> {
     let line = container(text("")).width(1).height(Length::Fill).style(style::divider(t));
-    iced::widget::mouse_area(container(line).width(5).height(Length::Fill).center_x(5))
-        .on_press(Message::ResizeStart(side))
-        .interaction(iced::mouse::Interaction::ResizingHorizontally)
-        .into()
+    iced::widget::mouse_area(
+        container(line).width(RESIZE_HANDLE_W).height(Length::Fill).center_x(RESIZE_HANDLE_W),
+    )
+    .on_press(Message::ResizeStart(side))
+    .interaction(iced::mouse::Interaction::ResizingHorizontally)
+    .into()
 }
 
 /// 1px horizontal structural divider.

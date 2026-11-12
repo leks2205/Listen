@@ -3,11 +3,14 @@
 
 mod common;
 
+use common::layout;
 use iced::mouse::{Button, Event as MouseEvent, ScrollDelta};
 use iced_test::simulator::Simulator;
 use listen::app::{Listen, Message};
+use listen::style::metrics;
 use listen::ui::LayoutMode;
 use listen::ui::player_bar::compact;
+use listen::ui::sidebar;
 use listen::{Args, demo};
 
 fn state(width: f32, height: f32) -> Listen {
@@ -77,13 +80,16 @@ fn the_pip_button_and_hotkey_are_gone() {
 fn drawer_opens_and_closes() {
     let mut s = state(700.0, 600.0);
     assert!(!s.drawer_open);
-    // The floating Menu button is bottom-left, above the 90 px bar.
-    let messages = click(&mut s, (50.0, 600.0 - 90.0 - 12.0 - 18.0));
+    // The floating Menu button, found by its label.
+    let everywhere = iced::Rectangle::with_size(size(&s));
+    let menu = layout::text_center(&s, size(&s), "Menu", everywhere).expect("the Menu button");
+    let messages = click(&mut s, menu);
     assert!(messages.iter().any(|m| matches!(m, Message::ToggleDrawer)), "{messages:?}");
     assert!(s.drawer_open);
     assert!(has_text(&s, "My Library"), "the drawer shows the sidebar");
-    // A click on the backdrop (right of the 320 px drawer) closes it.
-    let messages = click(&mut s, (600.0, 300.0));
+    // A click on the backdrop (right of the drawer) closes it.
+    let backdrop = (sidebar::DRAWER_WIDTH + (size(&s).width - sidebar::DRAWER_WIDTH) / 2.0, 300.0);
+    let messages = click(&mut s, backdrop);
     assert!(messages.iter().any(|m| matches!(m, Message::CloseDrawer)), "{messages:?}");
     assert!(!s.drawer_open);
     // Navigating closes it too.
@@ -96,8 +102,13 @@ fn drawer_opens_and_closes() {
     assert!(!s.drawer_open);
 }
 
+/// Middle of the compact bar's seek strip, along the bar's top edge.
+fn seek_bar(s: &Listen) -> (f32, f32) {
+    (size(s).width / 2.0, layout::bar_top(size(s)) + compact::SEEK_HEIGHT / 2.0)
+}
+
 fn speaker(s: &Listen) -> (f32, f32) {
-    (size(s).width - 8.0 - 3.0 * 40.0 - 18.0, size(s).height - 45.0)
+    (compact::speaker_center_x(size(s).width), layout::bar_center_y(size(s)))
 }
 
 #[test]
@@ -173,10 +184,10 @@ fn full_bar_keeps_the_volume_slider_at_every_width() {
     for (w, h) in [(769.0, 600.0), (770.0, 600.0), (900.0, 700.0), (1200.0, 800.0), (2400.0, 1000.0)] {
         let mut s = state(w, h);
         let _ = s.update(Message::Volume(0.0));
-        // The slider is the last control: `volume_width` px, 16 px from the right edge.
+        // The slider is the last control: `volume_width` px, `space_lg` from the right edge.
         let vw = f32::from(s.config.settings.player_bar.volume_width);
-        let x = w - 16.0 - vw * 0.25;
-        let messages = click(&mut s, (x, h - 45.0));
+        let at = (w - metrics::space_lg() - vw * 0.25, layout::bar_center_y(size(&s)));
+        let messages = click(&mut s, at);
         let v = messages.iter().find_map(|m| match m {
             Message::Volume(v) => Some(*v),
             _ => None,
@@ -190,14 +201,15 @@ fn full_bar_wheel_over_the_slider_changes_volume() {
     let mut s = state(1200.0, 800.0);
     let vw = f32::from(s.config.settings.player_bar.volume_width);
     let up = iced::Event::Mouse(MouseEvent::WheelScrolled { delta: ScrollDelta::Lines { x: 0.0, y: 1.0 } });
-    let messages = run(&mut s, (1200.0 - 16.0 - vw / 2.0, 800.0 - 45.0), [up]);
+    let at = (1200.0 - metrics::space_lg() - vw / 2.0, layout::bar_center_y(size(&s)));
+    let messages = run(&mut s, at, [up]);
     assert!(messages.iter().any(|m| matches!(m, Message::VolumeWheel(y) if *y > 0.0)), "{messages:?}");
 }
 
 #[test]
 fn compact_bar_has_a_seek_bar_that_seeks_on_release() {
     let mut s = state(600.0, 600.0);
-    let at = (300.0, 600.0 - 90.0 + 7.0);
+    let at = seek_bar(&s);
     let messages = click(&mut s, at);
     assert!(messages.iter().any(|m| matches!(m, Message::SeekPreview(_))), "{messages:?}");
     assert!(messages.iter().any(|m| matches!(m, Message::SeekRelease)), "{messages:?}");
@@ -217,7 +229,8 @@ fn compact_bar_has_no_seek_bar_for_radio() {
         },
         title: None,
     });
-    let messages = click(&mut s, (300.0, 600.0 - 90.0 + 7.0));
+    let at = seek_bar(&s);
+    let messages = click(&mut s, at);
     assert!(!messages.iter().any(|m| matches!(m, Message::SeekPreview(_))), "{messages:?}");
 }
 

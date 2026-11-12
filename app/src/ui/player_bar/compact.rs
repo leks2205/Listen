@@ -22,8 +22,8 @@ fn text_width(width: f32) -> f32 {
     (width - metrics::space_md() - metrics::PLAYER_ART - metrics::space_md() - right_width()).max(0.0)
 }
 
-/// Height of the seek bar's strip.
-const SEEK_HEIGHT: f32 = 14.0;
+/// Height of the seek bar's strip along the bar's top edge; tests compute click points from it.
+pub const SEEK_HEIGHT: f32 = 14.0;
 
 /// Width of the horizontal slider track.
 const SLIDER_WIDTH: f32 = 100.0;
@@ -38,7 +38,8 @@ const POPOVER_PAD: f32 = 8.0;
 pub const POPOVER: Size = Size::new(2.0 * POPOVER_PAD + SLIDER_WIDTH + POPOVER_GAP + VALUE_W, 24.0);
 
 /// Horizontal centre of the speaker icon (the first of the right controls) in a bar `width` px wide.
-fn speaker_center_x(width: f32) -> f32 {
+/// Tests compute their click point from it.
+pub fn speaker_center_x(width: f32) -> f32 {
     width - metrics::space_sm() - 3.0 * (metrics::CONTROL + metrics::space_xs()) - metrics::CONTROL / 2.0
 }
 

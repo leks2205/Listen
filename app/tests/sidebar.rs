@@ -219,7 +219,7 @@ fn menu_button_opens_the_app_menu() {
         let _gpu = common::gpu();
         let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         // The menu button is the second of the four squares right of the search box.
-        ui.point_at((272.0, 62.0));
+        ui.point_at(common::layout::sidebar_square(&s, 1));
         let _ = ui.simulate(iced_test::simulator::click());
         ui.into_messages().collect()
     };

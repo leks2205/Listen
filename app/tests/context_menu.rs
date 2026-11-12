@@ -2,11 +2,15 @@
 
 mod common;
 
+use common::layout;
 use iced::mouse::{Button, Event as MouseEvent};
 use iced_test::simulator::Simulator;
 use listen::app::menu::{MenuAction, MenuMsg, MenuTarget};
 use listen::app::{Listen, Message};
+use listen::style::metrics;
 use listen::{Args, demo};
+
+const SIZE: iced::Size = iced::Size::new(1600.0, 950.0);
 
 fn state() -> Listen {
     let (mut s, _) = Listen::boot(&Args {
@@ -23,7 +27,7 @@ fn state() -> Listen {
 fn right_click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
     let messages: Vec<Message> = {
         let _gpu = common::gpu();
-        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
         ui.point_at(at);
         let _ = ui.simulate([
             iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Right)),
@@ -41,17 +45,13 @@ fn titles(s: &Listen) -> Vec<String> {
     s.queue.iter().map(|i| i.song.title.clone()).collect()
 }
 
-fn top(s: &Listen) -> f32 {
-    if s.config.settings.window.custom_title_bar { 31.0 } else { 0.0 }
-}
-
 #[test]
 fn right_click_on_a_queue_row_opens_its_menu_at_the_cursor() {
     let mut s = state();
     let third = s.queue.iter().nth(2).unwrap().uid;
-    // Queue panel on the right: header 65 px, mode switcher 32 px, the toolbar, rows 64 px.
-    let toolbar = listen::ui::queue::TOOLBAR_H;
-    let at = (1600.0 - 250.0, top(&s) + 65.0 + 32.0 + toolbar + 64.0 * 2.0 + 32.0);
+    // The third row's title, inside the queue panel on the right.
+    let title = s.queue.iter().nth(2).unwrap().song.title.clone();
+    let at = layout::text_center(&s, SIZE, &title, layout::queue_panel(&s, SIZE)).expect("the row's title");
     let messages = right_click(&mut s, at);
     assert!(matches!(messages.first(), Some(Message::RightClickAt(_))), "{messages:?}");
     let menu = s.menu.as_ref().expect("menu open");
@@ -93,13 +93,15 @@ fn add_to_queue_goes_after_the_manual_queue_and_steers_the_dj() {
 fn cover_arrow_expands_the_cover_into_the_sidebar() {
     let mut s = state();
     assert!(!s.config.settings.sidebar.cover_expanded);
-    // The player-bar cover: bottom left, 60 px; the arrow sits in its top-right corner.
-    let bar_top = 950.0 - 90.0;
-    let cover = (16.0, bar_top + 15.0);
+    // The player-bar cover: bottom left, centred in the bar; the arrow sits in its top-right corner.
+    let cover = (
+        metrics::space_lg(),
+        layout::bar_top(SIZE) + (metrics::PLAYER_BAR_HEIGHT - metrics::PLAYER_ART) / 2.0,
+    );
     let messages: Vec<Message> = {
         let _gpu = common::gpu();
-        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
-        ui.point_at((cover.0 + 48.0, cover.1 + 13.0));
+        let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
+        ui.point_at((cover.0 + metrics::PLAYER_ART - 12.0, cover.1 + 13.0));
         let _ = ui.simulate(iced_test::simulator::click());
         ui.into_messages().collect()
     };
@@ -111,7 +113,7 @@ fn cover_arrow_expands_the_cover_into_the_sidebar() {
 fn snapshot(name: &str, s: &Listen) {
     let theme = s.theme();
     let _gpu = common::gpu();
-    let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
     let shot = ui.snapshot(&theme).expect("snapshot renders");
     common::save_png(&shot, name);
 }

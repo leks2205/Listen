@@ -68,7 +68,7 @@ fn dragging_under_160_px_collapses_and_back_expands() {
 #[test]
 fn pressing_the_divider_starts_a_drag() {
     let s = state();
-    let x = s.config.settings.sidebar.width + 2.5; // the 5 px handle right of the sidebar
+    let x = s.config.settings.sidebar.width + listen::ui::RESIZE_HANDLE_W / 2.0; // the handle right of the sidebar
     let _gpu = common::gpu();
     let mut ui = Simulator::with_size(iced::Settings::default(), iced::Size::new(1600.0, 950.0), s.view());
     ui.point_at((x, 400.0));

@@ -9,6 +9,8 @@
 //! (and of the lock). Files use only some of the helpers, hence the `dead_code` allowance.
 #![allow(dead_code)]
 
+pub mod layout;
+
 use iced_test::simulator::Snapshot;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
