@@ -84,27 +84,28 @@ fn view_rebuild_cost_per_page() {
     println!("fullscreen {QUEUE}-song queue: view {view:.2} ms, layout ≈ {:.2} ms", all - view);
 }
 
-/// The queue panel builds only visible rows: 1500 songs cost about what 15 do.
+/// The queue panel builds only the rows in view, so a long queue costs about what a short one
+/// does. Checked by what is built (`find` walks every built widget), not by timing.
 #[test]
-fn a_long_queue_costs_no_more_than_a_short_one() {
-    let mut long = big_state();
-    let _ = long.update(Message::Navigate(Route::Settings));
-    let mut short = big_state();
-    let _ = short.update(Message::Navigate(Route::Settings));
-    let songs: Vec<_> = long.queue.iter().take(15).map(|i| i.song.clone()).collect();
-    short.queue.set(songs, 3);
-    let time = |s: &Listen| {
-        for _ in 0..3 {
-            std::hint::black_box(s.view());
-        }
-        let t = Instant::now();
-        for _ in 0..10 {
-            std::hint::black_box(s.view());
-        }
-        t.elapsed()
-    };
-    let (long, short) = (time(&long), time(&short));
-    assert!(long < short * 3, "1500-song queue {long:?} vs 15 songs {short:?}");
+fn a_long_queue_builds_only_the_visible_rows() {
+    let mut s = big_state();
+    let _ = s.update(Message::Navigate(Route::Settings));
+    let songs: Vec<_> = s
+        .queue
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            let mut song = item.song.clone();
+            song.title = format!("Queued song {i}");
+            song
+        })
+        .collect();
+    s.queue.set(songs, 3);
+    let mut ui = Simulator::with_size(settings(), iced::Size::new(1849.0, 1233.0), s.view());
+    let built = (0..200).filter(|i| ui.find(format!("Queued song {i}")).is_ok()).count();
+    assert!(built > 0, "the panel shows the start of the queue");
+    assert!(built < 100, "{built} of the first 200 rows were built");
+    assert!(ui.find(format!("Queued song {}", QUEUE - 1)).is_err(), "the end of the queue is not built");
 }
 
 /// Reopening the queue (panel or fullscreen) resets the stored scroll offset to 0.
