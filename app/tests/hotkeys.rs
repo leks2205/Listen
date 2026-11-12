@@ -51,8 +51,8 @@ fn demo_state() -> Listen {
     Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() }).0
 }
 
-/// A state with a Subsonic-kind server (ratings) and a queue of its songs.
-fn server_state(kind: SourceKind) -> Listen {
+/// A Subsonic server with a queue whose songs claim `song_source` (ratings follow the song's source).
+fn server_state(song_source: SourceKind) -> Listen {
     let (mut s, _) = Listen::boot(&Args { ephemeral: true, ..Args::default() });
     s.config.servers = vec![ServerConfig {
         id: ServerId("srv".into()),
@@ -68,7 +68,7 @@ fn server_state(kind: SourceKind) -> Listen {
     let mut songs = demo::album_songs(0);
     for song in &mut songs {
         song.server_id = ServerId("srv".into());
-        song.source = kind;
+        song.source = song_source;
         song.favorite = false;
         song.rating = None;
     }
