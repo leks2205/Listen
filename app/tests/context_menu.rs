@@ -64,8 +64,9 @@ fn top(s: &Listen) -> f32 {
 fn right_click_on_a_queue_row_opens_its_menu_at_the_cursor() {
     let mut s = state();
     let third = s.queue.iter().nth(2).unwrap().uid;
-    // Queue panel on the right: header 65 px, mode switcher 32 px, toolbar 44 px, rows 64 px.
-    let at = (1600.0 - 250.0, top(&s) + 65.0 + 32.0 + 44.0 + 64.0 * 2.0 + 32.0);
+    // Queue panel on the right: header 65 px, mode switcher 32 px, the toolbar, rows 64 px.
+    let toolbar = listen::ui::queue::TOOLBAR_H;
+    let at = (1600.0 - 250.0, top(&s) + 65.0 + 32.0 + toolbar + 64.0 * 2.0 + 32.0);
     let messages = right_click(&mut s, at);
     assert!(matches!(messages.first(), Some(Message::RightClickAt(_))), "{messages:?}");
     let menu = s.menu.as_ref().expect("menu open");
