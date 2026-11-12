@@ -33,7 +33,7 @@ Because the English text is the key, changing an English string in the code also
 | `tools/gen_i18n.py` | Builds the merged tables. |
 | `app/src/i18n.rs` | The `LANGUAGES` list, the lookup code and the locale detection. |
 
-The merged files are generated. Do not edit `app/i18n/<code>.json` directly; your change would be overwritten the next time the script runs. Put Listen-only strings into `app/i18n/listen/<code>.json`.
+The merged files are generated. Put Listen-only strings into `app/i18n/listen/<code>.json`, the source of truth. If you can't run `gen_i18n.py` (it needs Feishin's locale files), add the same entry to `app/i18n/<code>.json` as well, so the app shows it now; the next run of the script reproduces it from the Listen-only file. Never change an entry only in `app/i18n/<code>.json`: the script would overwrite it. The `merged_tables_carry_every_listen_entry` test checks that every Listen-only entry is in the merged table with the same text.
 
 ## Generating the tables
 
@@ -81,7 +81,7 @@ Texts that are built from a pattern use `{}` for each value, for example `"Added
 
 2. Add the code to `english_name()` in the same file. The AI DJ uses it to name the language in its prompt.
 3. Add a line to `source()` that embeds the table: `"sv" => Some(include_str!("../i18n/sv.json")),`.
-4. Add the code to the `langs` set in `tools/gen_i18n.py`.
+4. Nothing to add in `tools/gen_i18n.py`: it reads the codes from `LANGUAGES`.
 5. Create `app/i18n/listen/sv.json` with at least `{}`, then fill it with translations, and run `tools/gen_i18n.py` against Feishin's locale files. If Feishin has no locale of that code, the table is built from your Listen-only file alone.
 6. Update the language count in the `every_language_has_a_table_that_parses` test in `app/src/i18n.rs`. That test also requires each table to hold more than 1000 entries, so a new language needs a substantial first translation.
 7. Run `cargo test -p listen --test i18n` and `cargo test -p listen --lib i18n`, and look at the result with `LISTEN_LANG=sv cargo run --release -p listen -- --demo`.

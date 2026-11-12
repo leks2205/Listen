@@ -336,6 +336,27 @@ pub(crate) fn rust_sources(dir: &str) -> Vec<(String, String)> {
 mod tests {
     use super::*;
 
+    /// `gen_i18n.py` copies every entry of `app/i18n/listen/<code>.json` into `app/i18n/<code>.json`; a
+    /// string added by hand to both files must match, or the next run of the script changes it.
+    #[test]
+    fn merged_tables_carry_every_listen_entry() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("i18n");
+        let read = |path: std::path::PathBuf| -> std::collections::BTreeMap<String, String> {
+            let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            serde_json::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+        };
+        for (code, _) in LANGUAGES.iter().filter(|(code, _)| *code != "en") {
+            let merged = read(dir.join(format!("{code}.json")));
+            for (key, value) in read(dir.join("listen").join(format!("{code}.json"))) {
+                assert_eq!(
+                    merged.get(&key),
+                    Some(&value),
+                    "{code}: {key:?} differs from app/i18n/listen/{code}.json"
+                );
+            }
+        }
+    }
+
     /// `ui::plural(n, "word")` looks up "1 word" / "{} words": a noun without both keys shows its
     /// count in English, and a joined line ("4 albums · 52 tracks") can never be translated later.
     #[test]

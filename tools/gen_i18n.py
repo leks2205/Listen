@@ -79,8 +79,10 @@ def main():
             by_norm.setdefault(norm(holes(v)), []).append(k)
     lits = listen_literals()
     (root / "app/i18n/listen").mkdir(parents=True, exist_ok=True)
-    # the UI languages (app/src/i18n.rs LANGUAGES); Feishin's other locales are not shipped
-    langs = {"ar", "bn", "de", "es", "fr", "hi", "it", "ko", "nl", "pl", "pt", "ro", "ru", "uk", "ur", "zh-Hans"}
+    # the UI languages, read from app/src/i18n.rs LANGUAGES; Feishin's other locales are not shipped
+    table = (root / "app/src/i18n.rs").read_text().split("pub const LANGUAGES")[1].split("];")[0]
+    langs = set(re.findall(r'\("([\w-]+)", "', table)) - {"en"}
+    assert len(langs) > 10, f"LANGUAGES not found in app/src/i18n.rs: {langs}"
     codes = sorted(p.stem for p in loc_dir.glob("*.json") if p.stem in langs) + sorted(
         langs - {p.stem for p in loc_dir.glob("*.json")})
     matched = {}

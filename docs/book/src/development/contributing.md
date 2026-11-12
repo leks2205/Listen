@@ -11,7 +11,8 @@ details.
 - App unit tests live in the lib target: `cargo test -p listen --lib <name>` (`--bin listen` has none
   and passes vacuously).
 - A user-visible change updates `docs/book/src/` in the same commit; new UI strings get their German
-  text in `app/i18n/de.json` and `app/i18n/listen/de.json` (see [Translations](translations.md)).
+  text in `app/i18n/listen/de.json` and the same entry in the generated `app/i18n/de.json` (see
+  [Translations](translations.md); `merged_tables_carry_every_listen_entry` checks the pair).
 
 ## Rules that break things far away
 
