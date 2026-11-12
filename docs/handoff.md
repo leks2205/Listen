@@ -31,7 +31,8 @@ All routes need `Authorization: Bearer <token>`.
 - `song` is the current song with its `server_key` (the same key as in `docs/history-sync.md`), or
   `null` while nothing (or an internet radio station) plays. A DJ bridge stretch is never sent.
 - `queue` is optional; leave it out when the queue did not change and the server keeps the last one.
-  At most 20 songs before and 150 after the current one; `index` points at the current song.
+  At most 20 songs before and 150 after the current one; `index` points at the current song (during a DJ
+  bridge, which is never sent, at the song after it).
 - `took_from` is sent once, with the state that follows a takeover. The server stamps it with the record's
   `seq` (`took_seq`) and keeps it until the next takeover.
 

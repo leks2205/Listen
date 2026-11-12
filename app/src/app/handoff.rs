@@ -30,6 +30,12 @@ const QUEUE_AFTER: usize = 150;
 /// The long poll's wait (the server holds at most 30 s).
 const WAIT_S: u64 = 25;
 
+/// Where in the sent queue (the queue `positions` without DJ bridge stretches) the song at queue
+/// position `at` is. During a bridge that is the song after it, or the last one sent when none follows.
+fn sent_index(positions: &[usize], at: usize) -> usize {
+    positions.iter().position(|&p| p >= at).unwrap_or(positions.len().saturating_sub(1))
+}
+
 /// Another device as listen-server reports it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -389,7 +395,7 @@ impl Listen {
                 .filter(|(_, i)| i.bridge.is_none())
                 .map(|(p, i)| (p, wire_song(&i.song, servers)))
                 .collect();
-            let index = items.iter().position(|(p, _)| *p == at).unwrap_or(0);
+            let index = sent_index(&items.iter().map(|(p, _)| *p).collect::<Vec<_>>(), at);
             body["queue"] =
                 json!({ "index": index, "items": items.into_iter().map(|(_, v)| v).collect::<Vec<_>>() });
         }
@@ -537,6 +543,15 @@ mod tests {
 
     fn listing(devices: Vec<Remote>) -> Listing {
         Listing { seq: 1, now_ms: 0, devices }
+    }
+
+    #[test]
+    fn the_queue_index_points_at_the_song_after_a_bridge() {
+        // Positions 3 and 4 are a bridge stretch, which is not sent; position 4 plays.
+        assert_eq!(sent_index(&[0, 1, 2, 5, 6], 4), 3, "the song after the bridge");
+        assert_eq!(sent_index(&[0, 1, 2, 5, 6], 2), 2, "a normal song is itself");
+        assert_eq!(sent_index(&[0, 1, 2], 4), 2, "a bridge at the end: the last song sent");
+        assert_eq!(sent_index(&[], 0), 0);
     }
 
     #[test]
