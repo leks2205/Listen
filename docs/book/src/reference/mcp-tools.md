@@ -13,7 +13,7 @@ Songs, albums, artists and playlists are named by a `ref` string:
 | Artist | `artist:<server>\|<id>` |
 | Playlist | `playlist:<server>\|<id>` |
 
-`<server>` is the id of a music server as `list_servers` shows it, and `<id>` is the server's own id for the item. Do not make refs up: every tool that returns items (`search`, `get_album`, `get_artist`, `get_playlist`, `list_playlists`, `get_queue`, `get_now_playing`) includes a `ref`, and Listen remembers the items it has returned since it started. A ref it has not returned gives the error `Unknown ref "...". Use a ref returned by search, get_album, get_playlist or get_queue.`
+`<server>` is the id of a music server as `list_servers` shows it, and `<id>` is the server's own id for the item. Do not make refs up: every tool that returns items (`search`, `get_album`, `get_artist`, `get_playlist`, `list_playlists`, `get_queue`, `get_now_playing`) includes a `ref`, and Listen remembers the items it has returned since it started. A ref it has not returned gives the error `Unknown ref “...”. Use a ref a tool returned (search, get_album, get_artist, get_playlist, list_playlists, get_queue, get_now_playing).`
 
 Queue entries are not refs; they are named by an integer `uid` from `get_queue`. Playlist entries are named by their 0-based position from `get_playlist`.
 
