@@ -21,7 +21,8 @@ use std::collections::{HashMap, HashSet};
 
 /// The ACT-R decay.
 pub const DECAY: f64 = 0.5;
-/// A forgotten favourite has at least this many plays …
+/// A forgotten favourite has at least this many plays … (the Auto-DJ's slot; the "Why this song?" tag of other
+/// picks uses `listen_dj::familiarity::{FAVOURITE_PLAYS, FORGOTTEN_DAYS}`, documented in queue.md)
 pub const FORGOTTEN_MIN_PLAYS: u32 = 5;
 /// … and none in this many days.
 pub const FORGOTTEN_QUIET_DAYS: i64 = 30;

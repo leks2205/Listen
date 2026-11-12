@@ -17,7 +17,8 @@ const MIN_DAYS: i64 = 14;
 /// How a [`Familiarity::tag`] for a never-played song starts. The prompt, the plan schema and the judge
 /// find new songs by it: test a tag with [`Familiarity::is_new_tag`], never with a copy of the text.
 pub const NEW_TAG: &str = "new to you";
-/// A song with this many plays is tagged "favourite" (and is the "Why this song?" favourite).
+/// A song with this many plays is tagged "favourite" (and is the "Why this song?" favourite). The Auto-DJ's
+/// forgotten-favourite slot uses its own pair, `listen_core::memory::FORGOTTEN_MIN_PLAYS` / `FORGOTTEN_QUIET_DAYS`.
 pub const FAVOURITE_PLAYS: u32 = 10;
 /// From this many days without a play the tag says "not heard for N months" (a forgotten favourite).
 pub const FORGOTTEN_DAYS: u32 = 60;
