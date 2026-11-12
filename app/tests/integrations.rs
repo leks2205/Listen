@@ -176,6 +176,29 @@ fn basic(user: &str, pass: &str) -> String {
     format!("Basic {}", base64::engine::general_purpose::STANDARD.encode(format!("{user}:{pass}")))
 }
 
+/// Runs the phone's commands as they arrive, for up to 3 s, until `done` holds.
+async fn pump_until(s: &mut Listen, done: impl Fn(&Listen) -> bool) {
+    let end = tokio::time::Instant::now() + Duration::from_secs(3);
+    while !done(s) && tokio::time::Instant::now() < end {
+        while let Some(cmd) = s.integ.poll_remote_command() {
+            let _ = s.update(Message::Integrations(IntegrationsMsg::Remote(cmd)));
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+/// Whether the port stops accepting connections within 3 s.
+async fn port_closes(addr: std::net::SocketAddr) -> bool {
+    let end = tokio::time::Instant::now() + Duration::from_secs(3);
+    while tokio::time::Instant::now() < end {
+        if tokio::net::TcpStream::connect(addr).await.is_err() {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    false
+}
+
 type Client = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn event(c: &mut Client) -> (String, Value) {
@@ -249,19 +272,13 @@ fn a_phone_controls_the_running_app() {
 
         // Volume from the phone.
         c.send(Ws::text(json!({ "event": "volume", "volume": 25 }).to_string())).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        while let Some(cmd) = s.integ.poll_remote_command() {
-            let _ = s.update(Message::Integrations(IntegrationsMsg::Remote(cmd)));
-        }
+        pump_until(&mut s, |s| s.playback.volume == 25).await;
         assert_eq!(s.playback.volume, 25);
         let _ = s.update(Message::Noop);
         assert_eq!(event(&mut c).await, ("volume".to_string(), json!(25)));
         // Skip ahead in the queue.
         c.send(Ws::text(json!({ "event": "queue-jump", "uniqueId": third }).to_string())).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        while let Some(cmd) = s.integ.poll_remote_command() {
-            let _ = s.update(Message::Integrations(IntegrationsMsg::Remote(cmd)));
-        }
+        pump_until(&mut s, |s| s.queue.current().is_some_and(|i| i.song.title == first[2].title)).await;
         assert_eq!(s.queue.current().unwrap().song.title, first[2].title);
         let _ = s.update(Message::Noop);
         let mut saw_song = false;
@@ -278,10 +295,7 @@ fn a_phone_controls_the_running_app() {
         c.send(Ws::text(json!({ "event": "remove-from-queue", "uniqueId": second }).to_string()))
             .await
             .unwrap();
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        while let Some(cmd) = s.integ.poll_remote_command() {
-            let _ = s.update(Message::Integrations(IntegrationsMsg::Remote(cmd)));
-        }
+        pump_until(&mut s, |s| s.queue.len() == first.len() - 1).await;
         assert_eq!(s.queue.len(), first.len() - 1);
     });
 
@@ -301,8 +315,7 @@ fn a_phone_controls_the_running_app() {
     let _ = s.update(Message::Setting(Setting::Integrations(I::RemoteEnabled(false))));
     assert!(s.integ.remote_addr().is_none());
     rt.block_on(async {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-        assert!(tokio::net::TcpStream::connect(addr).await.is_err());
+        assert!(port_closes(addr).await, "the port is free again");
     });
 }
 

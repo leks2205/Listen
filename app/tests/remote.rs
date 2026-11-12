@@ -350,8 +350,11 @@ async fn shutdown_closes_clients_with_the_given_code() {
             None => panic!("closed without a code"),
         }
     }
-    // The port is free again.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // The port is free again (polled: the listener closes asynchronously).
+    let end = tokio::time::Instant::now() + Duration::from_secs(3);
+    while tokio::net::TcpStream::connect(s.addr).await.is_ok() && tokio::time::Instant::now() < end {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     assert!(tokio::net::TcpStream::connect(s.addr).await.is_err());
 }
 
