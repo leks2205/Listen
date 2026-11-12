@@ -109,13 +109,24 @@ fn the_play_row_of_the_context_menu_follows_the_play_button_behavior() {
     for behavior in [PlayBehavior::Now, PlayBehavior::Next, PlayBehavior::Last] {
         let mut s = page(Route::Home);
         list(&mut s, ListMsg::PlayBehavior(behavior));
-        // Something is playing already, so next and last differ from now.
-        let songs = listen::demo::album_songs(0);
-        let _ = s.update(Message::Menu(MenuMsg::Open(MenuTarget::song(&songs[0]))));
+        // A song that is not queued yet, so where it lands shows which behaviour ran. One song already waits
+        // in the manual queue, so its top (next) and its end (last) differ.
+        let song = listen::demo::album_songs(1)[0].clone();
+        assert!(s.queue.iter().all(|i| i.song.id != song.id), "not queued yet");
+        s.queue.enqueue_next(listen::demo::album_songs(2)[..1].to_vec());
+        let current = s.queue.current_position().expect("something is playing");
+        let manual_end = current + 1 + s.queue.manual_len();
+        let _ = s.update(Message::Menu(MenuMsg::Open(MenuTarget::song(&song))));
         let _ = s.update(Message::Menu(MenuMsg::Do(MenuAction::PlayDefault)));
         assert!(s.menu.is_none());
-        let queued: Vec<String> = s.queue.iter().map(|i| i.song.id.clone()).collect();
-        assert!(queued.contains(&songs[0].id), "{behavior:?}: {queued:?}");
+        let at = s.queue.iter().position(|i| i.song.id == song.id);
+        match behavior {
+            PlayBehavior::Now => {
+                assert_eq!(s.queue.current().map(|i| i.song.id.clone()), Some(song.id.clone()), "plays now")
+            }
+            PlayBehavior::Next => assert_eq!(at, Some(current + 1), "right after the playing song"),
+            PlayBehavior::Last => assert_eq!(at, Some(manual_end), "at the end of the manual queue"),
+        }
     }
 }
 
