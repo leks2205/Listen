@@ -186,7 +186,7 @@ impl Default for Mixing {
 #[serde(default)]
 pub struct AiDj {
     pub enabled: bool,
-    /// `late_night`, `morning` or `calm` (see `listen_dj::PERSONAS`).
+    /// `late_night`, `morning`, `calm` or `hamburg_duo` (see `listen_dj::PERSONAS`).
     pub persona: String,
     pub text_model: String,
     pub tts_model: String,
