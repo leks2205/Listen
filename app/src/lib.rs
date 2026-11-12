@@ -147,7 +147,7 @@ pub struct Args {
     pub login: Option<(String, String)>,
     pub route: Option<String>,
     pub autoplay: bool,
-    /// Never write config or credentials.
+    /// Start from default settings (unless `--login`) and never write config or credentials.
     pub ephemeral: bool,
     /// Show the first-start wizard even though this run is a demo or ephemeral.
     pub onboarding: bool,

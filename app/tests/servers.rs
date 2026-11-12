@@ -29,8 +29,6 @@ fn settings() -> iced::Settings {
 fn state() -> Listen {
     let (mut s, _) =
         Listen::boot(&Args { theme: Some("tokyoNight".into()), ephemeral: true, ..Args::default() });
-    // Never the real config of the machine running the tests.
-    s.config = Default::default();
     s.connecting = false;
     let _ = s.update(Message::WindowResized(iced::Size::new(1200.0, 800.0)));
     s
