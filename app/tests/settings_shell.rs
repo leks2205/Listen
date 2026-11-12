@@ -120,8 +120,8 @@ fn reset_to_default_confirms_then_keeps_servers() {
 #[test]
 fn restart_required_toast_offers_relaunch() {
     let mut s = state();
-    // No current setting needs a restart, so raise the toast directly.
-    s.toast_restart_required("The window bar changes after restarting Listen.");
+    // Raised directly; the language setting raises the same toast (see i18n.rs).
+    s.toast_restart_required("Restart the application to apply the new language");
     let toast = s.overlay.toasts.last().expect("a toast");
     assert!(toast.persistent);
     assert_eq!(toast.title.as_deref(), Some("Restart required"));

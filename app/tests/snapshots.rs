@@ -491,7 +491,9 @@ fn settings_tabs_search_and_restart_toast() {
     render_state("settings-search", state);
     let (mut state, _) = Listen::boot(&demo("tokyoNight", false));
     let _ = state.update(Message::Navigate(Route::Settings));
-    let _ = state.update(Message::Setting(listen::app::Setting::CustomTitleBar(false)));
+    // Picking a language raises the toast; the open UI stays English until the restart.
+    let _ = state.update(Message::Setting(listen::app::Setting::Language("de".into())));
+    assert!(state.overlay.toasts.iter().any(|t| t.title.as_deref() == Some("Restart required")));
     render_state("settings-restart-toast", state);
 }
 
