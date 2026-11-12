@@ -31,7 +31,11 @@ const FORMAT_SUFFIXES: &[&str] =
     &[" - single", " - ep", " (single)", " (ep)", " [single]", " [ep]", " - the 1st single"];
 
 /// Hangul, kana or Han characters: a title in an East Asian script, which uploads often pair with a
-/// translated or romanised name in brackets.
+/// translated or romanised name in brackets. U+AC00-D7A3, U+1100-11FF, U+3130-318F, U+3040-30FF,
+/// U+4E00-9FFF: a yes/no for a whole title, so the common blocks are enough.
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::gemini::is_hangul`, `listen_lyrics::furigana::is_kanji`,
+/// `listen_lyrics::vocal::is_syllabic`, `listen_core::substitute::script_of`, the app's `ui::is_hangul`.
 fn has_cjk(s: &str) -> bool {
     s.chars().any(|c| matches!(c as u32, 0xAC00..=0xD7A3 | 0x1100..=0x11FF | 0x3130..=0x318F | 0x3040..=0x30FF | 0x4E00..=0x9FFF))
 }

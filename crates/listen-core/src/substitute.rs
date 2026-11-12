@@ -122,6 +122,12 @@ fn words(s: &str) -> Vec<&str> {
     s.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect()
 }
 
+/// The script most letters of `s` are in: Latin a-z and U+C0-24F; Hangul U+1100-11FF, U+3130-318F,
+/// U+AC00-D7AF; kana and Han as one `Cjk` (U+3040-30FF, U+3400-9FFF, U+F900-FAFF); the rest `Other`.
+/// It counts letters per script (a majority, not a yes/no), so it has its own ranges.
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::gemini::is_hangul`, `listen_lyrics::furigana::is_kanji`,
+/// `listen_lyrics::vocal::is_syllabic`, `listen_lastfm::names::has_cjk`, the app's `ui::is_hangul`.
 fn script_of(s: &str) -> Option<Script> {
     let (mut latin, mut hangul, mut cjk, mut other) = (0, 0, 0, 0);
     for c in s.chars().filter(|c| c.is_alphabetic()) {

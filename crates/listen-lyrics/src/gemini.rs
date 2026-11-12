@@ -51,7 +51,11 @@ pub struct Gloss {
 
 // ---- words ------------------------------------------------------------------------
 
-/// Hangul syllables and jamo (Lute's word characters for Korean).
+/// Hangul syllables and jamo (Lute's word characters for Korean): U+AC00-D7A3, U+1100-11C2 and
+/// U+3131-318E, no jamo extensions, so words split where Lute splits them.
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::furigana::is_kanji`, `listen_lyrics::vocal::is_syllabic`, `listen_lastfm::names::has_cjk`,
+/// `listen_core::substitute::script_of`, the app's `ui::is_hangul`.
 pub fn is_hangul(c: char) -> bool {
     ('가'..='힣').contains(&c) || ('ᄀ'..='ᇂ').contains(&c) || ('ㄱ'..='ㆎ').contains(&c)
 }

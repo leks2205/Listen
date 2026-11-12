@@ -89,6 +89,13 @@ pub fn font(weight: Weight) -> Font {
     Font { weight, ..crate::appearance::current_font() }
 }
 
+/// Every character the Hangul font has to draw: jamo U+1100-11FF, compatibility jamo U+3130-318F,
+/// jamo extensions U+A960-A97F and U+D7B0-D7FF, syllables U+AC00-D7AF; wider than the word checks
+/// because a missed character falls back to a font without Hangul.
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::gemini::is_hangul`, `listen_lyrics::furigana::is_kanji`,
+/// `listen_lyrics::vocal::is_syllabic`, `listen_lastfm::names::has_cjk`,
+/// `listen_core::substitute::script_of`.
 fn is_hangul(c: char) -> bool {
     matches!(c, '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}' | '\u{A960}'..='\u{A97F}' | '\u{AC00}'..='\u{D7AF}' | '\u{D7B0}'..='\u{D7FF}')
 }

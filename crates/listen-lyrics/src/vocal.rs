@@ -96,6 +96,11 @@ fn units(text: &str) -> usize {
     n
 }
 
+/// One sung syllable per character: Hangul syllables U+AC00-D7A3, kana U+3040-30FF, Han U+4E00-9FFF and
+/// U+3400-4DBF; no jamo (parts of a syllable) and no rare Han planes (too rare to change a timing).
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::gemini::is_hangul`, `listen_lyrics::furigana::is_kanji`, `listen_lastfm::names::has_cjk`,
+/// `listen_core::substitute::script_of`, the app's `ui::is_hangul`.
 fn is_syllabic(c: char) -> bool {
     matches!(c as u32, 0xAC00..=0xD7A3 | 0x3040..=0x30FF | 0x4E00..=0x9FFF | 0x3400..=0x4DBF)
 }

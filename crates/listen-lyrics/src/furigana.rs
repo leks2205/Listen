@@ -14,7 +14,11 @@ pub struct Segment {
 /// Whether this build can produce furigana.
 pub const AVAILABLE: bool = cfg!(feature = "furigana");
 
-/// Kanji (and the iteration marks that read like them).
+/// Kanji (and the iteration marks that read like them): Han U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF,
+/// U+20000-2FA1F plus 々 and 〆, every Han character that may need a reading; kana are readings already.
+/// Its siblings have other ranges on purpose (pick by range, do not merge):
+/// `listen_lyrics::gemini::is_hangul`, `listen_lyrics::vocal::is_syllabic`, `listen_lastfm::names::has_cjk`,
+/// `listen_core::substitute::script_of`, the app's `ui::is_hangul`.
 pub fn is_kanji(c: char) -> bool {
     matches!(c as u32, 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0x20000..=0x2FA1F)
         || matches!(c, '々' | '〆')
