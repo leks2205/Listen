@@ -1,4 +1,4 @@
-//! Renders Listen's main screens headlessly (tiny-skia) and writes PNGs to
+//! Renders Listen's main screens headlessly (wgpu, or tiny-skia without a GPU) and writes PNGs to
 //! `target/snapshots/` for visual review. Run with:
 //! `cargo test -p listen --test snapshots -- --nocapture`
 
