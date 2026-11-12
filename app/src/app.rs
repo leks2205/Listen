@@ -2655,8 +2655,8 @@ impl Listen {
         Task::batch([resolve, image_task, self.scrobble(ScrobbleEvent::NowPlaying), self.substitute_warm()])
     }
 
-    /// The current track couldn't be resolved or played: retry it once with a
-    /// fresh stream (URLs expire, requests fail), then skip to the next one.
+    /// The current track couldn't be resolved or played: retry it up to three times (backup server,
+    /// fresh URL, its backup server; URLs expire, requests fail), then skip to the next one.
     /// Title and audio always stay in step: mpv is stopped first.
     fn playback_failed(&mut self, reason: String) -> Task<Message> {
         let Some(item) = self.queue.current() else {
