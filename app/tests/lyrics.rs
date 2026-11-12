@@ -421,5 +421,10 @@ fn the_lyric_buttons_wrap_in_a_narrow_window() {
     let s = boot_with(listen_lyrics::parse_lrc("[00:01.00]내가 골랐다는 노래\n[00:05.00]Yeah yeah"));
     let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 800.0), s.view());
-    assert!(ui.find("DISPLAY").is_ok() && ui.find("EXPORT").is_ok());
+    // `find` also returns clipped widgets: check that each button is drawn inside the window.
+    for text in ["DISPLAY", "EXPORT"] {
+        let found = ui.find(text).unwrap_or_else(|e| panic!("no {text}: {e:?}"));
+        let b = iced_test::selector::Bounded::visible_bounds(&found).expect("drawn, not clipped");
+        assert!(b.x + b.width <= 960.0, "{text} overflows the window: {b:?}");
+    }
 }
