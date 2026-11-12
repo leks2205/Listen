@@ -133,7 +133,8 @@ impl Listen {
     }
 
     /// Whether the volume is moving or a transition needs precise timing (the fade clock ticks every
-    /// [`TICK`]). A planned transition that is still far away only needs [`fade_slow`](Self::fade_slow).
+    /// [`TICK`]). Every mix phase needs it except `Planned` while
+    /// [`mix_planned_far`](Self::mix_planned_far), which only needs [`fade_slow`](Self::fade_slow).
     pub fn fade_active(&self) -> bool {
         if !self.decks.has_active() || self.mock_playback() {
             return false;

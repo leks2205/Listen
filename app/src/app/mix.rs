@@ -56,7 +56,10 @@ pub enum Phase {
     /// No transition is planned: mpv plays the queue gaplessly on the active deck.
     #[default]
     Idle,
-    /// A plan exists; mpv's "next" slot is empty so mpv doesn't advance.
+    /// A plan exists; mpv's "next" slot is empty so mpv doesn't advance. With DJ transitions on this
+    /// holds for most of every song, and the 30 ms fade clock is needed only from shortly before the
+    /// plan's first timed step (`Listen::mix_planned_far`): ask `Listen::fade_active` whether the
+    /// clock must run fast, not `phase != Idle`.
     Planned,
     /// The incoming song is being loaded (paused) on the other deck.
     Preloading,
