@@ -142,6 +142,12 @@ impl ListenServer {
     }
 }
 
+/// The listen-server address of the "Merge with other devices" setting: trimmed, without trailing `/`.
+/// Empty means no server; every "is a server set" check reads this, not the raw setting.
+fn server_base(setting: &str) -> &str {
+    setting.trim().trim_end_matches('/')
+}
+
 /// Whole-request limit of the history, exclusions and flow-weight exchanges.
 pub(super) const SYNC_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -231,7 +237,7 @@ impl Listen {
     /// exclusions, flow weights, release radar, Describe it, handoff) and adds its own on/off check;
     /// send its requests with the shared `self.http` and a per-request `.timeout(..)`.
     pub(super) fn listen_server(&self) -> Option<ListenServer> {
-        let base = self.config.settings.history.sync_server.trim().trim_end_matches('/');
+        let base = server_base(&self.config.settings.history.sync_server);
         if base.is_empty() {
             return None;
         }
@@ -266,7 +272,7 @@ impl Listen {
         let settings = &self.config.settings.history;
         if !settings.enabled
             || !settings.sync
-            || settings.sync_server.trim().is_empty()
+            || server_base(&settings.sync_server).is_empty()
             || self.history_view.syncing
         {
             return Task::none();
@@ -395,6 +401,37 @@ mod tests {
             .await
             .unwrap();
         assert!(gone.gone.contains(&(ts, song)));
+    }
+
+    #[test]
+    fn an_address_of_only_slashes_is_no_listen_server() {
+        assert_eq!(server_base(" / "), "");
+        assert_eq!(server_base("https://sync.example.com//"), "https://sync.example.com");
+        assert_eq!(server_base(" https://sync.example.com/listen "), "https://sync.example.com/listen");
+    }
+
+    /// Every listen-server feature sends its requests with the app's shared client (its User-Agent,
+    /// its connect timeout) and a per-request `.timeout(..)`: a module that reaches listen-server
+    /// through `listen_server()` builds no client of its own.
+    #[test]
+    fn listen_server_features_use_the_shared_client() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app");
+        let mut features = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            if !text.contains(".listen_server()") {
+                continue;
+            }
+            features += 1;
+            let code = text.split("#[cfg(test)]").next().unwrap_or_default();
+            assert!(
+                !code.contains("Client::builder"),
+                "{} reaches listen-server but builds its own HTTP client: use the shared `self.http`",
+                path.display()
+            );
+        }
+        assert!(features >= 6, "found only {features} listen-server features in {}", dir.display());
     }
 
     #[test]

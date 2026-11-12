@@ -29,6 +29,8 @@ const QUEUE_BEFORE: usize = 20;
 const QUEUE_AFTER: usize = 150;
 /// The long poll's wait (the server holds at most 30 s).
 const WAIT_S: u64 = 25;
+/// Whole-request limit of every handoff request: a poll is held up to [`WAIT_S`] by the server.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(WAIT_S + 15);
 
 /// Where in the sent queue (the queue `positions` without DJ bridge stretches) the song at queue
 /// position `at` is. During a bridge that is the song after it, or the last one sent when none follows.
@@ -109,7 +111,6 @@ type Sig = (bool, Option<u64>, u64);
 
 #[derive(Debug, Default)]
 pub struct Handoff {
-    http: Option<reqwest::Client>,
     /// The last answer and when it came (to place the server clock).
     pub listing: Option<(Listing, Instant)>,
     polling: bool,
@@ -236,7 +237,7 @@ async fn get_json<T: serde::de::DeserializeOwned>(
     url: String,
     token: String,
 ) -> Result<T, String> {
-    let response = http.get(url).bearer_auth(token).send().await.map_err(failed)?;
+    let response = http.get(url).timeout(REQUEST_TIMEOUT).bearer_auth(token).send().await.map_err(failed)?;
     let text = response.error_for_status().map_err(failed)?.text().await.map_err(failed)?;
     serde_json::from_str(&text).map_err(|e| e.to_string())
 }
@@ -257,19 +258,6 @@ impl Listen {
 
     pub(super) fn handoff_on(&self) -> bool {
         self.handoff_base().is_some()
-    }
-
-    fn handoff_http(&mut self) -> reqwest::Client {
-        self.handoff
-            .http
-            .get_or_insert_with(|| {
-                reqwest::Client::builder()
-                    .connect_timeout(Duration::from_secs(8))
-                    .timeout(Duration::from_secs(WAIT_S + 15))
-                    .build()
-                    .unwrap_or_default()
-            })
-            .clone()
     }
 
     pub(super) fn on_handoff(&mut self, msg: HandoffMsg) -> Task<Message> {
@@ -317,7 +305,7 @@ impl Listen {
         let after = self.handoff.listing.as_ref().map_or(0, |(l, _)| l.seq);
         self.handoff.polling = true;
         let url = format!("{base}v1/now?after={after}&wait={WAIT_S}");
-        let http = self.handoff_http();
+        let http = self.http.clone();
         Task::perform(get_json::<Listing>(http, url, token), |r| Message::Handoff(HandoffMsg::Polled(r)))
     }
 
@@ -406,10 +394,17 @@ impl Listen {
         self.handoff.queue_sent = Some(queue_sig);
         self.handoff.publishing = true;
         let url = format!("{base}v1/now/{}", listen_analysis::store::machine_id());
-        let http = self.handoff_http();
+        let http = self.http.clone();
         Task::perform(
             async move {
-                let r = http.put(url).bearer_auth(token).json(&body).send().await.map_err(failed)?;
+                let r = http
+                    .put(url)
+                    .timeout(REQUEST_TIMEOUT)
+                    .bearer_auth(token)
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(failed)?;
                 r.error_for_status().map(|_| ()).map_err(failed)
             },
             |r| Message::Handoff(HandoffMsg::Published(r)),
@@ -460,7 +455,7 @@ impl Listen {
         }
         let Some((base, token)) = self.handoff_base() else { return Task::none() };
         self.handoff.fetching = true;
-        let http = self.handoff_http();
+        let http = self.http.clone();
         let url = format!("{base}v1/now/{device}");
         Task::perform(get_json::<Value>(http, url, token), move |r| {
             Message::Handoff(HandoffMsg::Fetched(trigger, r))
