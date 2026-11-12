@@ -9,7 +9,8 @@ use listen_core::settings::{Rect, Restored, WindowState};
 pub enum WindowStateMsg {
     /// Asked after a resize or move: the window's mode right now.
     Probe { maximized: bool, fullscreen: bool },
-    /// The debounce timer of that generation ran out.
+    /// The debounce timer of that generation ran out (each resize or move starts a new generation;
+    /// only the newest one saves).
     Flush(u64),
 }
 
@@ -148,6 +149,12 @@ impl Listen {
             Message::WindowState(WindowStateMsg::Flush(generation))
         });
         Task::batch([probe, timer])
+    }
+
+    /// Test hook: the generation of the newest debounce timer (what its `Flush` carries).
+    #[doc(hidden)]
+    pub fn window_generation_for_test(&self) -> u64 {
+        self.win.generation
     }
 
     pub(super) fn on_window_state(&mut self, msg: WindowStateMsg) -> Task<Message> {

@@ -114,9 +114,10 @@ fn window_geometry_is_tracked_and_saved() {
     let _ = s.update(Message::WindowEvent(id, window::Event::Moved(iced::Point::new(50.0, 60.0))));
     // The window reported it is a normal one; the debounce timer ran out.
     let _ = s.update(Message::WindowState(WindowStateMsg::Probe { maximized: false, fullscreen: false }));
-    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(1)));
+    let newest = s.window_generation_for_test();
+    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(newest - 1)));
     assert!(s.config.settings.window.state.is_none(), "stale timers are ignored");
-    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(2)));
+    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(newest)));
     let saved = s.config.settings.window.state.expect("saved");
     assert_eq!((saved.width, saved.height), (1234.0, 777.0));
     assert_eq!((saved.x, saved.y), (Some(50.0), Some(60.0)));
@@ -125,7 +126,7 @@ fn window_geometry_is_tracked_and_saved() {
     // Maximizing keeps the normal size and records the flag.
     let _ = s.update(Message::WindowEvent(id, window::Event::Resized(iced::Size::new(2560.0, 1400.0))));
     let _ = s.update(Message::WindowState(WindowStateMsg::Probe { maximized: true, fullscreen: false }));
-    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(3)));
+    let _ = s.update(Message::WindowState(WindowStateMsg::Flush(s.window_generation_for_test())));
     let saved = s.config.settings.window.state.expect("saved");
     assert_eq!((saved.width, saved.height), (1234.0, 777.0));
     assert!(saved.maximized);
