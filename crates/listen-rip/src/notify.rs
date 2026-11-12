@@ -16,6 +16,20 @@ pub async fn notify(summary: &str, body: &str, warning: bool) -> Result<(), Stri
         use std::collections::HashMap;
         use zbus::zvariant::Value;
         let conn = zbus::Connection::session().await.map_err(|e| e.to_string())?;
+        let markup = conn
+            .call_method(
+                Some("org.freedesktop.Notifications"),
+                "/org/freedesktop/Notifications",
+                Some("org.freedesktop.Notifications"),
+                "GetCapabilities",
+                &(),
+            )
+            .await
+            .ok()
+            .and_then(|reply| reply.body().deserialize::<Vec<String>>().ok())
+            .is_some_and(|caps| caps.iter().any(|c| c == "body-markup"));
+        // Album and track names are plain text: escaped for servers that read markup.
+        let body = listen_core::markup::notification_body(body, markup);
         let mut hints: HashMap<&str, Value<'_>> = HashMap::new();
         hints.insert("desktop-entry", Value::from("io.github.leks2205.Listen"));
         hints.insert("urgency", Value::U8(if warning { 2 } else { 1 }));
@@ -25,7 +39,7 @@ pub async fn notify(summary: &str, body: &str, warning: bool) -> Result<(), Stri
             "/org/freedesktop/Notifications",
             Some("org.freedesktop.Notifications"),
             "Notify",
-            &("Listen", 0u32, "io.github.leks2205.Listen", summary, body, actions, hints, -1i32),
+            &("Listen", 0u32, "io.github.leks2205.Listen", summary, body.as_ref(), actions, hints, -1i32),
         )
         .await
         .map_err(|e| e.to_string())?;

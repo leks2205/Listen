@@ -57,29 +57,6 @@ impl Debounce {
     }
 }
 
-/// `s` escaped for a notification body the server reads as markup: song titles like "Simon & Garfunkel"
-/// or "<3" would otherwise be cut off or hidden.
-pub fn escape_markup(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&apos;"),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// The body to send: a server that advertises the `body-markup` capability (Desktop Notifications
-/// spec) parses the body as markup, so plain text is escaped for it; other servers show it as is.
-pub fn wire_body(body: &str, markup: bool) -> std::borrow::Cow<'_, str> {
-    if markup { escape_markup(body).into() } else { body.into() }
-}
-
 /// Sends the notification. Failures are only logged by the caller.
 pub async fn send(c: &Content) -> Result<(), String> {
     #[cfg(target_os = "linux")]
@@ -99,7 +76,8 @@ pub async fn send(c: &Content) -> Result<(), String> {
             .ok()
             .and_then(|reply| reply.body().deserialize::<Vec<String>>().ok())
             .is_some_and(|caps| caps.iter().any(|c| c == "body-markup"));
-        let body = wire_body(&c.body, markup);
+        // Escaped for servers that read markup (`listen_core::markup`, shared with the CD ripper).
+        let body = listen_core::markup::notification_body(&c.body, markup);
         let mut hints: HashMap<&str, Value<'_>> = HashMap::new();
         hints.insert("desktop-entry", Value::from(listen_core::config::APP_ID));
         hints.insert("suppress-sound", Value::Bool(true));
@@ -140,13 +118,6 @@ mod tests {
         assert_eq!(c.title, "Song");
         assert_eq!(c.body, "A · B\nAlbum");
         assert_eq!(c.icon, Some(PathBuf::from("/tmp/c.jpg")));
-    }
-
-    #[test]
-    fn the_body_is_escaped_only_for_servers_that_read_markup() {
-        let body = "Simon & Garfunkel\n<Intro> \"Live\" '73";
-        assert_eq!(wire_body(body, true), "Simon &amp; Garfunkel\n&lt;Intro&gt; &quot;Live&quot; &apos;73");
-        assert_eq!(wire_body(body, false), body);
     }
 
     #[test]
