@@ -226,6 +226,8 @@ fn only_navidrome_with_the_native_api_offers_smart_playlists() {
         send(&mut s, SmartMsg::Edit("p".into()));
         assert!(s.smart.editor.is_none());
         // And the settings page has no "Query builder" section.
+        let _ = s.update(Message::Navigate(Route::Settings));
+        assert_eq!(s.route, Route::Settings);
         assert!(!shows(&s, "Custom fields"));
     }
     let (mut s, _) = app(navidrome(), None);
