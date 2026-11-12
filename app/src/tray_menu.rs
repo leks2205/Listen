@@ -74,7 +74,8 @@ mod tests {
         for (file, src) in
             [("tray.rs", include_str!("tray.rs")), ("tray_win.rs", include_str!("tray_win.rs"))]
         {
-            assert!(src.contains("crate::tray_menu::menu"), "{file} does not render tray_menu::menu");
+            let renders = src.contains("crate::tray_menu::menu") || src.contains("menu as tray_menu");
+            assert!(renders, "{file} does not render tray_menu::menu");
             for cmd in src.split("TrayCmd::").skip(1).map(|r| r.split(|c: char| !c.is_alphanumeric()).next())
             {
                 assert!(matches!(cmd, Some("Toggle" | "PlayPause")), "{file} handles a menu command itself");
