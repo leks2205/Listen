@@ -9,7 +9,7 @@ use listen::app::menu::{MenuAction, MenuMsg};
 use listen::app::overlay::Modal;
 use listen::app::queue_ui::{QueueMsg, QueueSetting};
 use listen::app::{INTER, Listen, Message, Route};
-use listen::ui::queue::{Panel, panels};
+use listen::ui::queue::{Panel, QueueTool, panels, unfolded};
 use listen::{Args, FONTS, demo};
 use listen_core::settings::{FilterField, FilterOp, PlayerFilter, SideQueueLayout, SideQueueStyle};
 
@@ -530,6 +530,11 @@ fn saving_and_restoring_the_queue_on_a_server() {
     );
     let _ = s.update(Message::Connected(ServerId("nd".into()), Ok(listen::app::SourceHandle(source))));
     assert!(s.queue_server_sync(), "Navidrome keeps a play queue");
+    let tools = unfolded(0, s.queue_server_sync());
+    assert!(
+        tools.contains(&QueueTool::Save) && tools.contains(&QueueTool::Restore),
+        "the server buttons show"
+    );
 
     // What is saved: this server's songs in play order, the playing one and the position.
     let mut mine = songs(0);
@@ -566,9 +571,11 @@ fn saving_and_restoring_the_queue_on_a_server() {
 
 #[test]
 fn the_server_buttons_are_hidden_without_a_server_queue() {
-    // Demo mode has no server: the same toolbar still builds.
+    // Demo mode has no server: the toolbar still builds, without save / restore.
     let s = boot();
     assert!(!s.queue_server_sync());
+    let tools = unfolded(0, s.queue_server_sync());
+    assert!(!tools.iter().any(|t| matches!(t, QueueTool::Save | QueueTool::Restore)), "{tools:?}");
     assert!(shows(&s, "Search"));
 }
 
