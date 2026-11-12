@@ -1,5 +1,8 @@
-//! Audio stream URLs via `yt-dlp` (it keeps up with YouTube's signature / PO-token changes). URLs are
-//! cached until shortly before their `expire=` time (usually ~6 h).
+//! Audio and video stream URLs via `yt-dlp` (it keeps up with YouTube's signature / PO-token changes).
+//! URLs are cached until shortly before their `expire=` time (usually ~6 h).
+//!
+//! Every lookup runs through the one private `YtDlp::stream_url` (no config files, failures logged);
+//! a new kind of stream is a new format passed to it, not another yt-dlp command.
 
 use listen_core::analysis::FileId;
 use listen_core::settings::StreamQuality;

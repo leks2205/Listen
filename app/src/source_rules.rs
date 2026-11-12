@@ -170,3 +170,29 @@ fn every_http_client_sends_the_listen_user_agent() {
     }
     assert!(found.is_empty(), "add .user_agent(listen_core::USER_AGENT) to: {found:?}");
 }
+
+/// yt-dlp is asked for stream URLs (`-g`) only by `listen_ytmusic::ytdlp` (`YtDlp::stream_url`).
+#[test]
+fn only_ytdlp_rs_asks_yt_dlp_for_stream_urls() {
+    let found: Vec<String> = workspace_sources()
+        .into_iter()
+        .filter(|(path, src)| {
+            path != "crates/listen-ytmusic/src/ytdlp.rs" && src.contains(concat!("\"-", "g\""))
+        })
+        .map(|(path, _)| path)
+        .collect();
+    assert!(found.is_empty(), "resolve streams through listen_ytmusic::ytdlp::YtDlp: {found:?}");
+}
+
+/// Last.fm is called only through `listen_lastfm::Client` (one User-Agent, signatures, error mapping).
+#[test]
+fn only_listen_lastfm_calls_the_lastfm_api() {
+    let found: Vec<String> = workspace_sources()
+        .into_iter()
+        .filter(|(path, src)| {
+            !path.starts_with("crates/listen-lastfm/") && src.contains("audioscrobbler.com")
+        })
+        .map(|(path, _)| path)
+        .collect();
+    assert!(found.is_empty(), "add a listen_lastfm::Client method instead: {found:?}");
+}

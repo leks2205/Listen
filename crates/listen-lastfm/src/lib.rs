@@ -1,6 +1,8 @@
 //! Last.fm for Listen (desktop and phone use the same code):
 //!
-//! - [`Client`]: the web API (desktop sign-in flow: token → browser → session key; now playing; scrobbles).
+//! - [`Client`]: the web API (desktop sign-in flow: token → browser → session key; now playing; scrobbles;
+//!   album covers, [`Client::album_image`]). Every Last.fm call of Listen goes through it (shared
+//!   User-Agent, signatures, error mapping): add a method here instead of calling the API from the app.
 //! - [`Resolver`]: the most common spelling of a song's artist, title and album on Last.fm, so the same song
 //!   from YouTube Music and from a music server lands on one track, not two (cached on disk).
 //! - [`Scrobbler`]: scrobbles go into an on-disk queue first and are sent in batches, so plays made offline
