@@ -37,9 +37,10 @@ impl History {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(self).unwrap_or_default())?;
-        std::fs::rename(tmp, path)
+        listen_core::files::write_atomic(
+            path,
+            serde_json::to_string_pretty(self).unwrap_or_default().as_bytes(),
+        )
     }
 
     pub fn contains(&self, disc_id: &str) -> bool {
