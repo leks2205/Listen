@@ -426,10 +426,7 @@ impl Resolver {
         if let Some(p) = &self.path
             && let Ok(bytes) = serde_json::to_vec(&*cache)
         {
-            let tmp = p.with_extension("tmp");
-            if std::fs::write(&tmp, bytes).is_ok() {
-                let _ = std::fs::rename(&tmp, p);
-            }
+            let _ = listen_core::files::write_atomic(p, &bytes);
         }
         Ok(out)
     }
@@ -624,10 +621,7 @@ impl Scrobbler {
             return;
         }
         if let Ok(bytes) = serde_json::to_vec(queue) {
-            let tmp = self.queue_path.with_extension("tmp");
-            if std::fs::write(&tmp, bytes).is_ok() {
-                let _ = std::fs::rename(&tmp, &self.queue_path);
-            }
+            let _ = listen_core::files::write_atomic(&self.queue_path, &bytes);
         }
     }
 }
