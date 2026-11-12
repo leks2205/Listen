@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_secs(8);
-const LRCLIB: &str = "https://lrclib.net/api";
+pub(crate) const LRCLIB: &str = "https://lrclib.net/api";
 const NETEASE_SEARCH: &str = "https://music.163.com/api/search/get";
 const NETEASE_LYRICS: &str = "https://music.163.com/api/song/lyric";
 const GENIUS_SEARCH: &str = "https://genius.com/api/search/song";
@@ -132,8 +132,50 @@ pub mod netease {
     }
 }
 
+/// The crate's one lrclib.net parser: the manual search here and the automatic lookup `crate::lrclib`
+/// both read lrclib answers through this module.
 pub mod lrclib {
     use super::*;
+
+    /// One lrclib.net record: the answer of `/get`, or one entry of a `/search` answer.
+    #[derive(Debug, Default, PartialEq)]
+    pub(crate) struct Record {
+        pub(crate) synced: Option<String>,
+        pub(crate) plain: Option<String>,
+        pub(crate) instrumental: bool,
+        /// Seconds.
+        pub(crate) duration: Option<f64>,
+    }
+
+    impl Record {
+        fn of(v: &Value) -> Record {
+            Record {
+                synced: v["syncedLyrics"].as_str().map(str::to_string),
+                plain: v["plainLyrics"].as_str().map(str::to_string),
+                instrumental: v["instrumental"].as_bool() == Some(true),
+                duration: v["duration"].as_f64(),
+            }
+        }
+
+        /// The synced lyrics when they are not blank, else the plain ones when they are not blank.
+        pub(crate) fn text(&self) -> Option<&str> {
+            [&self.synced, &self.plain]
+                .into_iter()
+                .flatten()
+                .map(String::as_str)
+                .find(|t| !t.trim().is_empty())
+        }
+    }
+
+    /// The record of a `/get` answer; `None` when the body is not JSON.
+    pub(crate) fn parse_record(body: &str) -> Option<Record> {
+        parse(body).map(|v| Record::of(&v))
+    }
+
+    /// The records of a `/search` answer.
+    pub(crate) fn parse_records(body: &str) -> Vec<Record> {
+        parse(body).and_then(|v| v.as_array().map(|a| a.iter().map(Record::of).collect())).unwrap_or_default()
+    }
 
     pub fn parse_search(body: &str) -> Vec<SearchHit> {
         let Some(v) = parse(body) else { return vec![] };
@@ -156,12 +198,7 @@ pub mod lrclib {
 
     /// Synced lyrics when there are, else the plain ones.
     pub fn parse_track(body: &str) -> Option<String> {
-        let v = parse(body)?;
-        ["syncedLyrics", "plainLyrics"]
-            .iter()
-            .filter_map(|k| v[*k].as_str())
-            .find(|t| !t.trim().is_empty())
-            .map(str::to_string)
+        parse_record(body)?.text().map(str::to_string)
     }
 }
 
