@@ -244,8 +244,11 @@ fn ytm_album_renders_and_hides_what_youtube_cannot_do() {
 fn opening_another_album_resets_search_and_sort() {
     let mut s = page(demo::navidrome_album());
     let _ = s.update(Message::AlbumPage(AlbumPageMsg::Search("x".into())));
+    let _ = s.update(Message::AlbumPage(AlbumPageMsg::Sort(TrackSort::Name)));
+    assert_eq!(s.album_page.sort, TrackSort::Name);
     let _ = s.update(Message::AlbumLoaded(Ok(demo::ytm_album())));
     assert!(s.album_page.search.is_empty());
+    assert_eq!(s.album_page.sort, TrackSort::default());
     assert_eq!(s.album_rows("MPREb_demoAlbum01").len(), 5);
     assert!(s.album_rows("nd-album-neon").is_empty());
 }

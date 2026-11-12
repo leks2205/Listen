@@ -416,7 +416,7 @@ fn file_server(body: &'static [u8]) -> String {
 }
 
 #[test]
-fn save_file_writes_the_original_next_to_a_progress_toast() {
+fn save_file_writes_the_original_and_clears_the_progress_toast() {
     let base = file_server(b"FLACDATA-FLACDATA");
     let (mut s, _) = app_with(SourceKind::Subsonic, listen_subsonic::capabilities(), Some(base));
     let dir = std::env::temp_dir().join(format!("listen-item-save-{}", std::process::id()));
@@ -589,7 +589,7 @@ fn the_modals_react_to_clicks() {
 }
 
 #[test]
-fn the_tag_editor_buttons_click() {
+fn the_tag_editor_preview_button_clicks() {
     let (mut s, dir) = local_app(&["c.mp3"]);
     let songs = local_songs(&s);
     do_action(&mut s, MenuTarget::songs(&songs), MenuAction::EditTags);

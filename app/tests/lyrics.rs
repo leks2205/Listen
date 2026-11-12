@@ -325,7 +325,7 @@ fn has_text_sized(s: &Listen, text: &str, size: iced::Size) -> bool {
 }
 
 #[test]
-fn karaoke_words_light_up_with_the_playback_position() {
+fn karaoke_lyrics_track_the_line_and_the_position_in_ms() {
     let mut s = boot_with(listen_lyrics::parse_lrc(
         "[00:10.00]<00:10.00>Sing <00:11.00>along <00:12.00>now\n[00:14.00]<00:14.00>Next",
     ));

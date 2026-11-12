@@ -87,7 +87,7 @@ fn the_list_page_shows_playlists_searches_and_sorts() {
 }
 
 #[test]
-fn create_dialog_makes_a_playlist() {
+fn create_dialog_submits_and_waits_for_the_server() {
     let mut s = boot();
     let _ = s.update(Message::Navigate(Route::Playlists));
     let _ = click_text(&mut s, "Create playlist");
@@ -96,9 +96,6 @@ fn create_dialog_makes_a_playlist() {
     let _ = s.update(Message::PlaylistPage(P::FormComment("sun".into())));
     let _ = s.update(Message::PlaylistPage(P::FormPublic(true)));
     let _ = s.update(Message::PlaylistPage(P::FormSubmit));
-    // The demo applies the result by message.
-    let done = listen::demo::navidrome_playlist().playlist;
-    let _ = done;
     assert!(s.playlist_page.form.as_ref().is_some_and(|f| f.busy));
 }
 
@@ -193,6 +190,9 @@ fn picker_searches_and_pins_the_recent_playlist() {
     let shown = listen::app::playlists::picker::ordered(&all, search, Some("nd-pl-chill"));
     assert_eq!(shown.len(), 1);
     assert_eq!(shown[0].name, "Gym");
+    // Without a search the recent playlist comes first.
+    let pinned = listen::app::playlists::picker::ordered(&all, "", Some("nd-pl-chill"));
+    assert_eq!(pinned[0].id, "nd-pl-chill");
     let _ = s.update(Message::PlaylistPage(P::SkipDuplicates(true)));
     assert!(s.config.settings.lists.skip_duplicates);
 }

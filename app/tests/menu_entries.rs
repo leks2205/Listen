@@ -1149,7 +1149,7 @@ fn the_queue_menu_follows_feishins_order() {
 // --- lists, folders ---
 
 #[test]
-fn the_dots_button_of_a_selected_row_opens_the_selections_menu() {
+fn context_at_a_selected_row_opens_the_selections_menu() {
     use listen::app::list::{ListId, ListMsg};
     let (mut s, _) = Listen::boot(&Args { demo: true, theme: Some("tokyoNight".into()), ..Args::default() });
     let _ = s.update(Message::WindowResized(iced::Size::new(1200.0, 800.0)));
