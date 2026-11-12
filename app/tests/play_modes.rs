@@ -49,29 +49,30 @@ fn click_text(s: &mut Listen, text: &str) {
     feed(s, messages);
 }
 
-fn click_at(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
-    let messages: Vec<Message> = {
-        let _gpu = gpu();
-        let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
-        ui.point_at(at);
-        let _ = ui.simulate([
-            iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
-            iced::Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
-        ]);
-        ui.into_messages().collect()
-    };
-    feed(s, messages.clone());
-    messages
+/// What a press at `at` sends; the state is not changed.
+fn press_at(s: &Listen, at: (f32, f32)) -> Vec<Message> {
+    let _gpu = gpu();
+    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    ui.point_at(at);
+    let _ = ui.simulate([
+        iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+        iced::Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
+    ]);
+    ui.into_messages().collect()
 }
 
-/// Finds the shuffle button by clicking along the player bar's centre row.
-fn find_bar_button(s: &mut Listen) -> (f32, f32) {
+fn click_at(s: &mut Listen, at: (f32, f32)) {
+    let messages = press_at(s, at);
+    feed(s, messages);
+}
+
+/// Finds the shuffle button by pressing along the player bar's centre row (no press reaches the state).
+fn find_bar_button(s: &Listen) -> (f32, f32) {
     for dy in [30.0, 45.0, 60.0, 20.0] {
         let y = s.window_size.height - dy;
         for x in (300..1300).step_by(12) {
             let at = (x as f32, y);
-            let probe = click_at(s, at);
-            if probe.iter().any(|m| matches!(m, Message::ToggleShuffle)) {
+            if press_at(s, at).iter().any(|m| matches!(m, Message::ToggleShuffle)) {
                 return at;
             }
         }
@@ -82,15 +83,14 @@ fn find_bar_button(s: &mut Listen) -> (f32, f32) {
 #[test]
 fn the_player_bar_button_cycles_the_modes() {
     let mut s = state();
-    // The probe click that found the button was the first press.
-    let at = find_bar_button(&mut s);
+    let at = find_bar_button(&s);
     let mut seen = vec![s.play_mode()];
     for _ in 0..3 {
         click_at(&mut s, at);
         seen.push(s.play_mode());
     }
     use PlayMode::*;
-    assert_eq!(seen, [Shuffle, AutoDj, Off, Shuffle]);
+    assert_eq!(seen, [Off, Shuffle, AutoDj, Off]);
 }
 
 /// The queue header's mode button names the current mode and each click moves to the next.
