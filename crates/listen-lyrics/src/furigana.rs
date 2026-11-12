@@ -20,7 +20,8 @@ pub fn is_kanji(c: char) -> bool {
         || matches!(c, '々' | '〆')
 }
 
-fn to_hira(c: char) -> char {
+/// Katakana to hiragana, one character (anything else unchanged). Romaji uses it too.
+pub(crate) fn to_hira(c: char) -> char {
     match c as u32 {
         0x30A1..=0x30F6 => char::from_u32(c as u32 - 0x60).unwrap_or(c),
         _ => c,

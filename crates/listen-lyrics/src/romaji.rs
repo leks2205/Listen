@@ -10,13 +10,8 @@ fn is_kana(c: char) -> bool {
     matches!(c as u32, 0x3041..=0x3096 | 0x30A1..=0x30FA | 0x31F0..=0x31FF | 0xFF66..=0xFF9D)
 }
 
-/// Katakana to hiragana (so the table only has one script).
-fn to_hira(c: char) -> char {
-    match c as u32 {
-        0x30A1..=0x30F6 => char::from_u32(c as u32 - 0x60).unwrap_or(c),
-        _ => c,
-    }
-}
+// Katakana goes through `furigana::to_hira` first, so the table only has one script.
+use crate::furigana::to_hira;
 
 fn base(c: char) -> Option<&'static str> {
     Some(match c {
