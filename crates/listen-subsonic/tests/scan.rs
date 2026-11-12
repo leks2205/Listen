@@ -62,12 +62,12 @@ async fn non_admin_gets_not_authorized() {
 /// Live: `LISTEN_ND_URL/USER/PASS` set and `-- --ignored` → start a scan on the real server.
 /// A non-admin account must answer "not authorized", an admin one a status.
 #[tokio::test]
-#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
+#[ignore = "live: needs a Navidrome server in LISTEN_ND_*; run with --ignored"]
 async fn live_start_scan() {
     let (Ok(url), Ok(user), Ok(pass)) =
         (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER"), std::env::var("LISTEN_ND_PASS"))
     else {
-        eprintln!("LISTEN_ND_* not set; skipping");
+        eprintln!("SKIPPED live_start_scan: LISTEN_ND_* not set");
         return;
     };
     let nd = Subsonic::new(ServerId("live".into()), &url, &user, &pass).unwrap();

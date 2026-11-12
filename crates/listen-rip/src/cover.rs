@@ -97,7 +97,7 @@ mod tests {
 
     /// Live (`--ignored`): REVIVE+ has no release cover, its release group has one.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "live: musicbrainz.org and the Cover Art Archive"]
     async fn live_cover_chain() {
         let rs = crate::musicbrainz::parse_lookup(
             &serde_json::from_str(include_str!("../tests/fixtures/discid_revive.json")).unwrap(),

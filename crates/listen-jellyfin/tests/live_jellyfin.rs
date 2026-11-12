@@ -16,10 +16,10 @@ fn env() -> Option<(String, String, String)> {
 }
 
 #[tokio::test]
-#[ignore = "live server: needs LISTEN_JF_*, run with --ignored"]
+#[ignore = "live: needs a Jellyfin server in LISTEN_JF_*; run with --ignored"]
 async fn browse_and_stream() {
     let Some((url, user, pass)) = env() else {
-        eprintln!("LISTEN_JF_* not set; skipping");
+        eprintln!("SKIPPED browse_and_stream: LISTEN_JF_* not set");
         return;
     };
     let jf = Jellyfin::connect(ServerId("live".into()), &url, &user, &pass).await.expect("sign in");
@@ -71,15 +71,18 @@ async fn browse_and_stream() {
 }
 
 #[tokio::test]
-#[ignore = "live server: needs LISTEN_JF_*, run with --ignored"]
+#[ignore = "live: needs a Jellyfin server in LISTEN_JF_*; run with --ignored"]
 async fn wrong_password_is_auth_error() {
-    let Some((url, user, _)) = env() else { return };
+    let Some((url, user, _)) = env() else {
+        eprintln!("SKIPPED wrong_password_is_auth_error: LISTEN_JF_* not set");
+        return;
+    };
     let r = Jellyfin::connect(ServerId("bad".into()), &url, &user, "definitely-wrong").await;
     assert!(matches!(r, Err(SourceError::Auth(_))));
 }
 
 /// Every test in this file talks to a real server (maybe someone's real library), so each is
-/// `#[ignore]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
+/// `#[ignore = "live: …"]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
 #[test]
 fn live_tests_run_only_when_asked() {
     let src = include_str!("live_jellyfin.rs");
@@ -87,6 +90,6 @@ fn live_tests_run_only_when_asked() {
     for test in src.split(marker).skip(1) {
         let head = &test[..test.find("async fn").expect("a test function")];
         let name = test[test.find("async fn").unwrap()..].split('(').next().unwrap_or_default();
-        assert!(head.contains("#[ignore"), "{name} must be #[ignore]");
+        assert!(head.contains("#[ignore = \"live:"), "{name} must be #[ignore = \"live: …\"]");
     }
 }

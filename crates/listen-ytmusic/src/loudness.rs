@@ -115,7 +115,7 @@ mod tests {
 
     /// Live check against YouTube (`cargo test -p listen-ytmusic -- --ignored loudness_live`).
     #[tokio::test]
-    #[ignore]
+    #[ignore = "live: YouTube"]
     async fn loudness_live() {
         let db = fetch_loudness_db("dQw4w9WgXcQ", Urgency::Now).await.unwrap();
         assert!(db.is_some_and(|d| (-10.0..10.0).contains(&d)), "{db:?}");

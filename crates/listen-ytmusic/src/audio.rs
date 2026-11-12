@@ -397,7 +397,7 @@ mod tests {
 
     /// `LISTEN_TEST_URL=<googlevideo url> cargo test -p listen-ytmusic -- --ignored download_url`
     #[tokio::test]
-    #[ignore = "network"]
+    #[ignore = "live: needs LISTEN_TEST_URL, a stream URL"]
     async fn download_url() {
         // The URL itself, or a file holding it.
         let mut url = std::env::var("LISTEN_TEST_URL").expect("LISTEN_TEST_URL");

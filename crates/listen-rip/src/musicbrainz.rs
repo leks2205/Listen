@@ -384,7 +384,7 @@ mod tests {
 
     /// Live: the REVIVE+ disc on musicbrainz.org (run with --ignored).
     #[tokio::test]
-    #[ignore]
+    #[ignore = "live: musicbrainz.org"]
     async fn live_lookup() {
         let rs = lookup(&http_client(), &revive_toc()).await.unwrap();
         assert!(rs.len() >= 5, "{} releases", rs.len());

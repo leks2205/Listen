@@ -31,7 +31,7 @@ Open the PNG files after a UI change to see what the pages look like. Only snaps
 
 ## Live tests
 
-Live tests talk to a real server, service or device. Every one of them is `#[ignore = "live: …"]`, so `cargo test --workspace` stays offline and lists them as ignored instead of counting them as passed; run one with `-- --ignored`. The server tests also read the address and login from environment variables (and skip when those are missing). A live test that changes something on the server (a favourite) puts it back before it ends.
+Live tests talk to a real server, service or device. Every one of them is `#[ignore = "live: …"]`, so `cargo test --workspace` stays offline and lists them as ignored instead of counting them as passed; run one with `-- --ignored`. The server tests also read the address and login from environment variables; run with `-- --ignored` but without them, they print `SKIPPED <test>: …` and return. A live test that changes something on the server (a favourite) puts it back before it ends.
 
 | Variables | Test | Needs |
 |---|---|---|
@@ -40,6 +40,9 @@ Live tests talk to a real server, service or device. Every one of them is `#[ign
 | none | `listen-lyrics/tests/live_lrclib.rs` | Internet access (looks up a well-known song on lrclib.net) |
 | none | `listen-visualizer/tests/live_capture.rs` | Linux with PipeWire and mpv |
 | `LISTEN_YTM_COOKIE` (optional) | `listen-ytmusic/tests/live_ytdlp.rs`, `app/tests/live_pages.rs` (`youtube_music_pages`) | Internet, `yt-dlp` and a JavaScript runtime. `LISTEN_YTM_COOKIE` can supply a cookie header; the default is a guest cookie. |
+| none | `listen-ytmusic` `loudness::tests::loudness_live` | Internet access (YouTube) |
+| none | `listen-rip` `musicbrainz::tests::live_lookup`, `cover::tests::live_cover_chain` | Internet access (musicbrainz.org and the Cover Art Archive) |
+| `LISTEN_GEMINI_KEY`, `LISTEN_GEMINI_MODEL` (optional) | `listen-lyrics` `gemini::tests::live_gemini` | A Gemini API key |
 | none | `listen-analysis` `voice::tests::downloads_the_pinned_weights` | Internet access (downloads the singing-voice weights) |
 | `LISTEN_TEST_URL=<stream URL>` | `listen-ytmusic/src/audio.rs`, run with `-- --ignored download_url` | A stream URL you resolved yourself |
 

@@ -15,10 +15,10 @@ fn client() -> Option<Subsonic> {
 }
 
 #[tokio::test]
-#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
+#[ignore = "live: needs a Navidrome server in LISTEN_ND_*; run with --ignored"]
 async fn browse_and_stream() {
     let Some(nd) = client() else {
-        eprintln!("LISTEN_ND_* not set; skipping");
+        eprintln!("SKIPPED browse_and_stream: LISTEN_ND_* not set");
         return;
     };
     nd.ping().await.expect("ping");
@@ -63,9 +63,10 @@ async fn browse_and_stream() {
 }
 
 #[tokio::test]
-#[ignore = "live server: needs LISTEN_ND_*, run with --ignored"]
+#[ignore = "live: needs a Navidrome server in LISTEN_ND_*; run with --ignored"]
 async fn wrong_password_is_auth_error() {
     let (Ok(url), Ok(user)) = (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER")) else {
+        eprintln!("SKIPPED wrong_password_is_auth_error: LISTEN_ND_* not set");
         return;
     };
     let nd = Subsonic::new(ServerId("bad".into()), &url, &user, "definitely-wrong").unwrap();
@@ -73,7 +74,7 @@ async fn wrong_password_is_auth_error() {
 }
 
 /// Every test in this file talks to a real server (maybe someone's real library), so each is
-/// `#[ignore]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
+/// `#[ignore = "live: …"]`: it runs only with `-- --ignored` and the variables set, never in a plain `cargo test`.
 #[test]
 fn live_tests_run_only_when_asked() {
     let src = include_str!("live_navidrome.rs");
@@ -81,6 +82,6 @@ fn live_tests_run_only_when_asked() {
     for test in src.split(marker).skip(1) {
         let head = &test[..test.find("async fn").expect("a test function")];
         let name = test[test.find("async fn").unwrap()..].split('(').next().unwrap_or_default();
-        assert!(head.contains("#[ignore"), "{name} must be #[ignore]");
+        assert!(head.contains("#[ignore = \"live:"), "{name} must be #[ignore = \"live: …\"]");
     }
 }

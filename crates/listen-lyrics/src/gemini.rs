@@ -576,7 +576,7 @@ mod tests {
 
     /// Live check against Gemini: `LISTEN_GEMINI_KEY=… cargo test -p listen-lyrics live_gemini -- --ignored --nocapture`.
     #[tokio::test]
-    #[ignore]
+    #[ignore = "live: Gemini, needs LISTEN_GEMINI_KEY"]
     async fn live_gemini() {
         let key = std::env::var("LISTEN_GEMINI_KEY").unwrap_or_default();
         let model = std::env::var("LISTEN_GEMINI_MODEL").unwrap_or_else(|_| "gemini-3.5-flash-lite".into());
