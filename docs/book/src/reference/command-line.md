@@ -77,7 +77,7 @@ Set these in the terminal before the command (`LISTEN_LANG=de listen`) or, for a
 
 | Variable | Effect |
 |---|---|
-| `WINIT_UNIX_BACKEND` | Set to `x11` on a Wayland session to run Listen through X11 instead. |
+| `WAYLAND_DISPLAY` | Set it empty (`WAYLAND_DISPLAY= listen`) on a Wayland session to run Listen through X11 (XWayland) instead. |
 | `LISTEN_MILKDROP_EGL` | Forces how the Milkdrop visualizer creates its graphics context: `device` (a GPU device), `surfaceless` (Mesa) or `default`. By default Listen tries them in that order. Useful when Milkdrop shows nothing. |
 | `LISTEN_VIZ_DEBUG` | Set to `1` to log visualizer frames and audio capture start and stop once a second. |
 

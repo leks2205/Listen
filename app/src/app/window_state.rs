@@ -43,11 +43,10 @@ pub struct WinTrack {
 const MIN_SIZE: (f32, f32) = (480.0, 120.0);
 const DEBOUNCE: Duration = Duration::from_millis(600);
 
-/// Winit opens a Wayland window unless told otherwise; Wayland clients
-/// can neither read nor set their position.
+/// Winit (0.29+) opens a Wayland window whenever `WAYLAND_DISPLAY` is set and not empty (it no longer
+/// reads `WINIT_UNIX_BACKEND`); Wayland clients can neither read nor set their position.
 pub fn is_wayland() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some_and(|v| !v.is_empty())
-        && std::env::var("WINIT_UNIX_BACKEND").map_or(true, |b| b != "x11")
 }
 
 /// `xrandr --listmonitors` lines such as ` 0: +*DP-1 2560/597x1440/336+1920+0  DP-1`.
