@@ -253,7 +253,6 @@ fn the_expand_control_opens_one_album_panel_under_its_row() {
     let mut s = page(Route::Albums);
     list(&mut s, ListMsg::Expand(ListId::Albums, 1));
     assert_eq!(s.lists.expanded, Some((ListId::Albums, 1)));
-    let name = s.library.albums[1].name.clone();
     // The panel shows the album's tracks and the play buttons.
     assert!(shows(&s, "Add next") && shows(&s, "Add last"), "panel buttons");
     assert!(shows(&s, &s.library.albums[1].songs[0].title.clone()), "its first track");
@@ -266,7 +265,6 @@ fn the_expand_control_opens_one_album_panel_under_its_row() {
     list(&mut s, ListMsg::Expand(ListId::Albums, 1));
     list(&mut s, ListMsg::Collapse);
     assert_eq!(s.lists.expanded, None);
-    let _ = name;
 }
 
 #[test]

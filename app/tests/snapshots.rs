@@ -1107,7 +1107,6 @@ fn playlists_page_grid() {
 fn add_to_playlist_picker() {
     use listen::app::Message;
     use listen::app::menu::{MenuAction, MenuMsg, MenuPage, MenuTarget};
-    use listen::app::playlists::PlaylistPageMsg as P;
     let song = listen::demo::album_songs(1)[0].clone();
     let (mut state, _) = Listen::boot(&demo("tokyoNight", false));
     let _ = state.update(Message::WindowResized(iced::Size::new(1600.0, 950.0)));
@@ -1122,7 +1121,6 @@ fn add_to_playlist_picker() {
             MenuPage::Playlists { list: Some(Ok(playlists)), new_name: String::new(), search: String::new() };
     }
     render_state("playlist-picker", state);
-    let _ = P::SkipDuplicates(true);
 }
 
 #[test]
@@ -2346,14 +2344,13 @@ fn albums_detail_view_with_badges_and_controls() {
 /// The single feature half way through its slide to the next album.
 #[test]
 fn home_feature_sliding() {
-    use listen::app::home::{FEATURE_SLIDE, HomeMsg};
+    use listen::app::home::HomeMsg;
     let (mut state, _) = Listen::boot(&demo("tokyoNight", false));
     let _ = state.update(listen::app::Message::Home(HomeMsg::Feature(1, 1)));
     // Held half way, so that the picture is the same every time.
     if let Some(a) = state.library.home_state.feature.anim.as_mut() {
         a.frozen = Some(0.5);
     }
-    let _ = FEATURE_SLIDE;
     render_state("home-feature-sliding", state);
 }
 
