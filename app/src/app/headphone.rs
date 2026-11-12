@@ -1,4 +1,4 @@
-//! Headphone correction (item 18): the AutoEq profile bound to the output that plays now is the
+//! Headphone correction: the AutoEq profile bound to the output that plays now is the
 //! first stage of every deck's `af` chain (`listen_core::peq::mpv_filter`). With the audio device
 //! on "auto" the system's default sink is the output (polled with `pactl get-default-sink` every
 //! 0.5 s while a profile is bound), so plugging in or connecting headphones switches the profile

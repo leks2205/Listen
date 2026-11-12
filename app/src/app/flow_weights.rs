@@ -1,4 +1,4 @@
-//! Flow weights learnt from early skips (item 16, [`listen_mix::learn`]): refitted from the listening
+//! Flow weights learnt from early skips ([`listen_mix::learn`]): refitted from the listening
 //! history as it grows, kept in `flow-weights.json` next to it, used by the flow scorer when the setting
 //! is on. The fit also goes through listen-server (`/v1/flow-weights`, with the history sync): the
 //! newest fit of any device wins ([`Learnt::replaces`]), so every device mixes with the same weights.

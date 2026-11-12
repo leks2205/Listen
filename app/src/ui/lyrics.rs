@@ -752,7 +752,7 @@ fn export_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_
 }
 
 /// The gloss of the clicked word: dictionary form, part of speech, meaning and Lute status (read
-/// only: decision round 1 keeps Listen from writing to Lute).
+/// only: Listen never writes to Lute).
 fn gloss_dialog(state: &Listen) -> Option<(Element<'_, Message>, Vec<Element<'_, Message>>)> {
     use listen_lyrics::vocab::Knowledge;
     let t = state.tokens;

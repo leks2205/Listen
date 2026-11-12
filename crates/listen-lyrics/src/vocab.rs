@@ -1,5 +1,5 @@
 //! A vocab-hub client: which Korean words the listener knows (Lute is the source of truth behind
-//! the hub). Read only: Listen never writes to Lute (decision round 1).
+//! the hub). Read only: Listen never writes to Lute.
 //!
 //! Hub route: `GET /api/words` → `{version, terms: {word: status}}` (single-token Lute terms,
 //! status 1-5 learning, 99 well known, 98 ignored).

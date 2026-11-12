@@ -454,7 +454,7 @@ impl Listen {
         } else if cur.bridge.is_some() {
             listen_mix::bridge::plan_out_of(fa, fb, &ctx)
         } else {
-            // Render-and-verify (item 11): the plan is played through on the analysis curves first; one
+            // Render-and-verify: the plan is played through on the analysis curves first; one
             // that dips, bumps, clashes vocals or cuts a sung line gives way to the next option.
             let gains = (self.levelling_gain(&cur_song).db, self.levelling_gain(&next_song).db);
             let v = listen_mix::verify::plan_verified(fa, fb, &ctx, gains);

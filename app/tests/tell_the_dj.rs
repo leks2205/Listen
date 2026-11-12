@@ -1,4 +1,4 @@
-//! "Tell the DJ" in the queue panel (item 8): the request box and chips show while the AI DJ is on, a
+//! "Tell the DJ" in the queue panel: the request box and chips show while the AI DJ is on, a
 //! click on a chip adds the request and a second click removes it, and the panel renders in German.
 //! One test in its own binary: the UI language is global.
 

@@ -1,4 +1,4 @@
-//! Volume levelling (item 2): every song is brought to the target loudness of the "Volume
+//! Volume levelling: every song is brought to the target loudness of the "Volume
 //! levelling" setting with the gain from `listen_mix::loudness` (contract C5). The gain is the
 //! `level_in` of an `alimiter` at the end of each deck's `af` chain, so boosts are limited.
 //! A new song gets its gain at once; a changed setting or a late loudness value ramps at most

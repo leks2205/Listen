@@ -1,4 +1,4 @@
-//! Render-and-verify for planned transitions (DJustify-style gates, PLAN item 11): before a plan is
+//! Render-and-verify for planned transitions (DJustify-style gates): before a plan is
 //! armed it is played through on the analysis curves — both decks' loudness (bar curve anchored on the
 //! integrated loudness, [`LocalLevel`]), lead-vocal likelihood (with synced lyrics merged in) and the
 //! plan's gain envelope, equal-loudness trim, EQ moves and echo repeats — every [`STEP_S`]. A plan fails

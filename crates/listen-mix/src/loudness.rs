@@ -177,7 +177,7 @@ pub fn ramp_steps(from_db: f32, to_db: f32, step_s: f32) -> Vec<(f32, f32)> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Blend gain: an equal-loudness crossfade (item 11).
+// Blend gain: an equal-loudness crossfade.
 //
 // Two decks playing at once add up: a beat blend with both at full level is about +3 dB louder
 // than either, an equal-power fade over a quiet outro sounds like a hole. Instead of one fixed

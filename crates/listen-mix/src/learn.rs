@@ -1,4 +1,4 @@
-//! Flow weights learnt from the listener's own skips (item 16).
+//! Flow weights learnt from the listener's own skips.
 //!
 //! Every automatic handover in the history (a song played, the next one picked by the player, on the
 //! same device, right after it) becomes a labelled transition: skipped within 30 s or not. A logistic

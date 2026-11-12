@@ -1,4 +1,4 @@
-//! "Describe it" on the search page (item 14): the query goes to listen-server's natural-language search
+//! "Describe it" on the search page: the query goes to listen-server's natural-language search
 //! (`GET /v1/search?q=`, ranking in `listen_core::describe`) instead of the music server's title search.
 //! Offered when "Merge with other devices" has a listen-server address and token. Turning the mode on
 //! asks the server to load its text encoder (`POST /v1/search/warm`) so the first search is quick.

@@ -1,4 +1,4 @@
-//! Parametric EQ and AutoEq headphone correction (item 18).
+//! Parametric EQ and AutoEq headphone correction.
 //!
 //! A [`Profile`] is a preamp plus peaking and shelf biquads (RBJ cookbook, the same formulas
 //! AutoEq and ffmpeg's `equalizer`/`lowshelf`/`highshelf` use). The desktop renders it as one mpv

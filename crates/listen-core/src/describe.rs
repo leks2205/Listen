@@ -1,4 +1,4 @@
-//! "Describe it": natural-language library search (item 14).
+//! "Describe it": natural-language library search.
 //!
 //! `listen-embed` (a Python job on a PC with a GPU, `tools/listen-embed/`) writes one line per song into
 //! `embeddings/v1/<model>/*.jsonl`, keyed by the analysis store's song ids: a CLaMP 3 embedding of a 30-s
