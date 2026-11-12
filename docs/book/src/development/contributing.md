@@ -31,8 +31,11 @@ details.
 - **Tests that need the network, a real device or a running service are `#[ignore = "live: …"]`**
   (run them with `-- --ignored`). An early `return` when an environment variable is missing makes
   them pass without testing anything, and nobody sees that they never ran.
-- **No snapshot test of content chosen at random** (e.g. the Recommended strip): it differs every
-  run and fails the suite. Look at such a render once by hand; test the behaviour instead.
+- **Snapshot tests are render checks, not comparisons.** Each run deletes the old PNG and writes a
+  new one, so a snapshot test fails only when the page panics. A test whose name promises how a page
+  looks (`*_fits_*`) asserts on widget bounds or text. Don't snapshot content chosen at random (e.g.
+  the Recommended strip): two runs can't be compared by eye. Look at it once by hand; test the
+  behaviour instead.
 
 ## Traps that already cost a bug
 

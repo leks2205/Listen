@@ -17,13 +17,13 @@ CI (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`, `cargo clippy --
 
 ## Snapshot tests
 
-`app/tests/snapshots.rs` renders pages headlessly with `iced_test` and writes PNG files to `target/snapshots/` for visual review. The test also compares against a previous image where one exists. Run it with output visible:
+`app/tests/snapshots.rs` (and the `snapshot` helpers in other files of `app/tests/`) renders pages headlessly with `iced_test` and writes PNG files to `target/snapshots/` for visual review. Each run deletes the previous PNG before it writes the new one, so these tests check that a page renders without a panic; they do not compare pixels. A test that promises how a page looks (for example that something fits) needs its own assertion on widget bounds or text. Run it with output visible:
 
 ```bash
 cargo test -p listen --test snapshots -- --nocapture
 ```
 
-Open the PNG files after a UI change to see what the pages look like. Only snapshot content that is the same on every run: a page that shows songs picked at random (the Recommended strip) differs each time and fails the comparison, so look at such a render once by hand and test its behaviour instead. `app/tests/live_pages.rs` does the same with data from a real server (see below).
+Open the PNG files after a UI change to see what the pages look like. Only snapshot content that is the same on every run: a page that shows songs picked at random (the Recommended strip) differs each time, so two runs can't be compared by eye; look at such a render once by hand and test its behaviour instead. `app/tests/live_pages.rs` does the same with data from a real server (see below).
 
 ## Tests that need mpv
 
