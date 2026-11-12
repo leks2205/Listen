@@ -82,9 +82,8 @@ impl VoiceModel {
         // Refuse a file the detector can't read before it lands.
         SvdNet::from_pt(&bytes).map_err(err)?;
         let path = dir.join(FILE_NAME);
-        let tmp = path.with_extension("pt.part");
-        std::fs::write(&tmp, &bytes).map_err(|e| err(format!("{}: {e}", tmp.display())))?;
-        std::fs::rename(&tmp, &path).map_err(|e| err(format!("{}: {e}", path.display())))?;
+        listen_core::files::write_atomic(&path, &bytes)
+            .map_err(|e| err(format!("{}: {e}", path.display())))?;
         Ok(VoiceModel { path })
     }
 

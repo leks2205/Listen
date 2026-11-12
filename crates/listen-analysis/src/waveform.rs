@@ -112,10 +112,7 @@ impl WaveformCache {
 
     pub fn put(&self, key: &str, wf: &Waveform) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.dir)?;
-        let path = self.path(key);
-        let tmp = path.with_extension("tmp");
-        std::fs::write(&tmp, wf.to_bytes())?;
-        std::fs::rename(tmp, path)?;
+        listen_core::files::write_atomic(&self.path(key), &wf.to_bytes())?;
         self.prune();
         Ok(())
     }

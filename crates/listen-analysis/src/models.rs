@@ -68,9 +68,8 @@ impl BeatModel {
             if got != sha {
                 return Err(err(format!("{name}: checksum mismatch")));
             }
-            let tmp = path.with_extension("onnx.part");
-            std::fs::write(&tmp, &bytes).map_err(|e| err(format!("{}: {e}", tmp.display())))?;
-            std::fs::rename(&tmp, &path).map_err(|e| err(format!("{}: {e}", path.display())))?;
+            listen_core::files::write_atomic(&path, &bytes)
+                .map_err(|e| err(format!("{}: {e}", path.display())))?;
         }
         Self::in_dir(dir).ok_or_else(|| err("model files incomplete".into()))
     }
