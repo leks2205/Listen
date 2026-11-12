@@ -41,7 +41,7 @@ The button is highlighted whenever repeat is on, and shows a "1" symbol for **On
 
 ## Auto-DJ
 
-The Auto-DJ keeps the music going without you filling the queue. It watches how many songs are left after the playing one. When at most one song is left, it asks the server of the playing song for songs similar to it, adds a few random songs as filler, and appends the best candidates to the end of the queue. Songs it added are tagged **Auto-DJ** in the queue. See [Player bar and queue](queue.md#queued-songs-and-dj-songs).
+The Auto-DJ keeps the music going without you filling the queue. It watches how many songs are left after the playing one. When at most one song is left, it asks the server of the playing song for songs similar to it, adds a few random songs as filler, and appends the best candidates to the end of the queue. Songs it added are tagged **Auto** in the queue. See [Player bar and queue](queue.md#queued-songs-and-dj-songs).
 
 Details:
 
