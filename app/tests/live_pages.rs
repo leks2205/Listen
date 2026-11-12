@@ -1,5 +1,6 @@
-//! Renders pages with real server data (headless). Skipped unless
-//! `LISTEN_ND_URL`, `LISTEN_ND_USER`, `LISTEN_ND_PASS` are set.
+//! Renders pages with real server data (headless). Ignored by default: run with
+//! `cargo test -p listen --test live_pages -- --ignored` and `LISTEN_ND_URL`, `LISTEN_ND_USER`,
+//! `LISTEN_ND_PASS` set (the YouTube Music test needs only the network).
 //! The test fetches data itself and feeds the results to `update` as the
 //! app's own tasks would.
 
@@ -33,12 +34,12 @@ fn snapshot(state: &Listen, name: &str) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[ignore = "live: needs LISTEN_ND_URL/USER/PASS and a real Navidrome"]
 async fn pages_with_real_data() {
     let (Ok(url), Ok(user), Ok(pass)) =
         (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER"), std::env::var("LISTEN_ND_PASS"))
     else {
-        eprintln!("LISTEN_ND_* not set; skipping");
-        return;
+        panic!("set LISTEN_ND_URL, LISTEN_ND_USER and LISTEN_ND_PASS to run this ignored live test");
     };
     let source: Arc<dyn MusicSource> =
         Arc::new(listen_subsonic::Subsonic::new(ServerId("live".into()), &url, &user, &pass).unwrap());
