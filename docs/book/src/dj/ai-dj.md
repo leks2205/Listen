@@ -110,7 +110,7 @@ The free tier of the Gemini API has daily and per-minute limits, and the speech 
 - When Google says the daily speech quota is used up, the DJ keeps picking songs and shows its lines as text on screen. It tries speech again after an hour. Saving a new key clears this state.
 - If the limit is only per-minute, Listen waits briefly and tries once more.
 
-If the text model fails or its limit is reached, similar songs fill in (as if the Auto-DJ were on) and a message tells you that the AI DJ is unavailable. Listen then waits before trying again, a little longer after each failure, up to an hour. A rejected key shows a warning that points you to **Settings → AI DJ**.
+If the text model fails or its limit is reached, similar songs fill in (as if the Auto-DJ were on) and a message tells you that the AI DJ is unavailable. Listen then waits before trying again, from one minute, doubling after each failure up to about half an hour (an hour when Google reports the daily quota as used up). A rejected key shows a warning that points you to **Settings → AI DJ**.
 
 Playback never waits for the DJ: if the answer is late, the music simply continues.
 
