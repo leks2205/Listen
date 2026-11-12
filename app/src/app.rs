@@ -4817,10 +4817,11 @@ struct Resize {
     start_width: f32,
 }
 
-/// Feishin's `constrainSidebarWidth`.
+/// Feishin's `constrainSidebarWidth` (left sidebar).
 const SIDEBAR_MIN: f32 = 260.0;
 const SIDEBAR_MAX: f32 = 400.0;
 const SIDEBAR_COLLAPSE_BELOW: f32 = 160.0;
+/// Listen's own queue limits, not Feishin's (it clamps the queue to 250–960, `docs/design-tokens.md`).
 const QUEUE_MIN: f32 = 300.0;
 const QUEUE_MAX: f32 = 900.0;
 

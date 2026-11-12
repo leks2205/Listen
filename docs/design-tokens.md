@@ -47,7 +47,7 @@ CSS colour helpers (postcss-preset-mantine):
   - Button hover rgb(125 125 125/30%). Close uses `state-error` on hover.
 - **Main grid:** `sidebar | 1fr | [right sidebar]`.
   - **Left sidebar:** default **400px**, clamped 260–400. Dragging below 160 collapses it to **80px**.
-  - **Right sidebar (queue):** default 600px, clamped 250–960, hidden by default. Background `background-alternate`, border-left rgba(255,255,255,.05).
+  - **Right sidebar (queue):** default 600px, clamped 250–960 (Listen clamps it to 300–900), hidden by default. Background `background-alternate`, border-left rgba(255,255,255,.05).
 - **Left sidebar:** background `background-alternate`, border-right rgba(255,255,255,.05). Flex column, gap 4.
   - **Action bar:** 65px high, padding 0 12. Grid gap 8.
     - Search input (7/12 of the width, 36px high, LuSearch icon; opens the command palette).
