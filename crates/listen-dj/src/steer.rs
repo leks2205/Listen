@@ -241,9 +241,10 @@ impl Requests {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?)?;
-        std::fs::rename(tmp, path)
+        listen_core::files::write_atomic(
+            path,
+            &serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?,
+        )
     }
 
     /// Calls for more of the listener's favourites in the pool (the history bucket gets bigger).
