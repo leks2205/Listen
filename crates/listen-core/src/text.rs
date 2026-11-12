@@ -1,6 +1,7 @@
-//! Text matching helpers shared by every crate that compares names (versions, substitutes,
-//! release radar, lyrics lookups). Look here before writing another "lower-case, letters
-//! and digits only" helper.
+//! Text matching helpers shared by every crate that compares names (song versions, substitutes,
+//! release radar, headphone models, Last.fm and lyrics titles, CD covers). Look here before writing
+//! another "lower-case, letters and digits only" helper; `letters_and_digits_folds_use_text_fold`
+//! (app) fails on a copy.
 
 use unicode_normalization::UnicodeNormalization;
 

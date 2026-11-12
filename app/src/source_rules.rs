@@ -103,3 +103,24 @@ fn only_source_mappers_spell_out_whole_songs_and_albums() {
          (`Song {{ artists, ..Song::new(..) }}`): {found:?}"
     );
 }
+
+/// "Lower-case letters and digits only" is `listen_core::text::fold`: NFC-normalised first, so a
+/// decomposed (macOS-tagged) name folds to the same key as a composed one.
+#[test]
+fn letters_and_digits_folds_use_text_fold() {
+    let mut found = Vec::new();
+    for (path, src) in workspace_sources() {
+        if path == "crates/listen-core/src/text.rs" {
+            continue;
+        }
+        let lines: Vec<&str> = src.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            let filters = line.contains(".filter(|") && line.contains(".is_alphanumeric())");
+            let lowers = lines[i..lines.len().min(i + 3)].iter().any(|l| l.contains("to_lowercase"));
+            if filters && lowers {
+                found.push(format!("{path}:{}", i + 1));
+            }
+        }
+    }
+    assert!(found.is_empty(), "use listen_core::text::fold instead of a hand-written fold: {found:?}");
+}

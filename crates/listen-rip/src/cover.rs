@@ -2,6 +2,7 @@
 //! group), then the iTunes store as a last resort. 1200 px JPEG.
 
 use crate::musicbrainz::Release;
+use listen_core::text::fold;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -34,17 +35,12 @@ async fn image(http: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
     (ok && bytes.len() > 1000).then_some(bytes)
 }
 
-/// Lowercase letters and digits only, for comparing names.
-fn norm(s: &str) -> String {
-    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
-}
-
 /// The 1200 px artwork URL of the iTunes album matching artist + title.
 pub fn itunes_pick(body: &Value, artist: &str, album: &str) -> Option<String> {
-    let (a, t) = (norm(artist), norm(album));
+    let (a, t) = (fold(artist), fold(album));
     body["results"].as_array()?.iter().find_map(|r| {
-        let ra = norm(r["artistName"].as_str().unwrap_or(""));
-        let rt = norm(r["collectionName"].as_str().unwrap_or(""));
+        let ra = fold(r["artistName"].as_str().unwrap_or(""));
+        let rt = fold(r["collectionName"].as_str().unwrap_or(""));
         let fits = !a.is_empty()
             && (ra.contains(&a) || a.contains(&ra))
             && (rt.starts_with(&t) || t.starts_with(&rt));

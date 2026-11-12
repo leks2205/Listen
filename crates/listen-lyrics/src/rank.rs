@@ -7,7 +7,8 @@ use crate::providers::{Query, SearchHit};
 /// Results scoring above this are not trusted for the automatic lookup.
 pub const AUTO_THRESHOLD: f32 = 0.55;
 
-/// Lowercase, letters and digits only, single spaces.
+/// Lowercase, letters and digits only, single spaces. It keeps the word breaks; a key without them is
+/// `listen_core::text::fold`.
 pub fn normalize(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut space = true;

@@ -129,7 +129,8 @@ fn sung_text(text: &str) -> Option<String> {
     Some(t.to_string())
 }
 
-/// Lower-case letters and digits only, without parenthesised ad-libs ("(neon)").
+/// Lower-case letters and digits only, without parenthesised ad-libs ("(neon)"). Names without that
+/// rule fold with `listen_core::text::fold`.
 fn normalise(text: &str) -> String {
     let mut depth = 0i32;
     let mut out = String::new();
