@@ -177,11 +177,13 @@ fn radio_queues_the_loaded_songs() {
     let mut s = page(demo::navidrome_album());
     let songs = demo::album_songs(1);
     let n = songs.len();
+    // The demo boot already fills the queue: count what the radio adds.
+    let before = s.queue.len();
     let _ = s.update(Message::AlbumPage(AlbumPageMsg::RadioLoaded(
         listen_core::settings::PlayBehavior::Last,
         Ok(songs),
     )));
-    assert!(s.queue.len() >= n);
+    assert_eq!(s.queue.len(), before + n);
     // Nothing found: a toast, no change.
     let before = s.queue.len();
     let _ = s.update(Message::AlbumPage(AlbumPageMsg::RadioLoaded(
@@ -189,6 +191,7 @@ fn radio_queues_the_loaded_songs() {
         Ok(vec![]),
     )));
     assert_eq!(s.queue.len(), before);
+    assert!(s.overlay.toasts.iter().any(|t| t.message == "No radio found for this album."));
 }
 
 #[test]
