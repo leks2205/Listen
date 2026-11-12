@@ -1,5 +1,8 @@
 # DJ transitions
 
+Design record with measurements. The current behaviour is described in
+`docs/book/src/development/dj-transitions.md`; where the two differ, the book is right.
+
 Design notes and measurements for beat-matched, phrase-aligned mixing of
 Navidrome and YouTube Music songs (Auto-DJ and AI DJ). This file collects
 what the prototypes found.
@@ -36,7 +39,7 @@ Instead:
 2. **The 37 real tracks** for timing and agreement between analysers.
 
 The Stage 1 gate (≥ 85 % octave-tolerant agreement with BPM tags) still has
-to be measured on a larger tagged library (`--validate-analysis`, or this bench
+to be measured on a larger tagged library (`listen --check-analysis N`, or this bench
 with an account that sees the K-pop library and its tags).
 
 ### Results: synthetic songs (40, MP3 via mpv)
@@ -514,7 +517,7 @@ config; `--login` writes no credentials):
    60–95 s synthetic pop songs (`examples/synth`) with known beat grids
    (`truth.json`), tagged MP3 and FLAC. A three-track album "Run" at 124 BPM
    (must stay gapless), and nine singles on their own albums: 118, 120, 122,
-   123, 125, 126, 128 BPM (2–5 % apart), 136 BPM (≥ 6 % from all: a Fade) and
+   123, 125, 126, 128 BPM (2–5 % apart), 136 BPM (≥ 6 % from all: a Fade in the run below, an echo-out or cut today) and
    a 62 BPM half-time song. Layouts: drum intro and instrumental outro of 8
    or 16 bars, or a vocal-like melody from the first bar to the last.
 2. Starts the latest Navidrome (`~/navidrome/navidrome`, override with
@@ -596,9 +599,9 @@ config; `--login` writes no credentials):
 
 ## Vocal edges
 
-The planner (`listen-mix::plan::best_candidate`) rejects long blends whose
+The planner (`listen_mix::plan::candidates`) rejects long blends whose
 overlap has vocals on both decks (`clash > 0.1 * bars`) and short blends with
-`clash > 0.25`; without a quiet pair it falls to a filter-out or fade.
+`clash > 0.25`; without a quiet pair it falls to an echo-out, cut, filter-out or fade.
 `settings.mixing.transition_edges` relaxes that:
 
 | Mode | Outgoing outro | Incoming intro |
@@ -610,7 +613,7 @@ overlap has vocals on both decks (`clash > 0.1 * bars`) and short blends with
 A relaxed edge contributes no clash, so a blend is never refused for its
 vocals; the cover term in the score still favours quieter sections. Tempo,
 key and beat-confidence rules are untouched. Club genres live in
-`listen-mix::genre::CLUB_GENRE_TERMS` (whole-word, case-insensitive match per
+`listen_mix::genre::CLUB_GENRE_TERMS` (whole-word, case-insensitive match per
 tag part; tags with rock, punk, metal, pop, folk or country words are
 excluded). Genres come from the song's tags (Navidrome, Jellyfin, local files).
 YouTube Music songs carry none, so Smart treats them as strict. `--check-mix`
