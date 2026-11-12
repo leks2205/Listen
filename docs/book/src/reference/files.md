@@ -30,7 +30,7 @@ If `config.toml` cannot be read (damaged, a typo in a hand edit, or a value only
 
 | Path | Content |
 |---|---|
-| `logs/` | `listen.log`, `mpv.log` (and the previous run as `.log.1`) and `rip-*.log` from CD rips. |
+| `logs/` | `listen.log`, `mpv.log`, `video-mpv.log` (and the previous run as `.log.1`) and `rip-*.log` from CD rips. |
 | `history.jsonl` | Your listening history, one line per play. Local only. |
 | `flow-weights.json` | The DJ flow weights learnt from your early skips (Auto-DJ setting **Learn from my skips**); rebuilt from the history (or taken from another device through listen-server), safe to delete. |
 | `queue.json` | The play queue, restored at the next start. |
@@ -40,6 +40,8 @@ If `config.toml` cannot be read (damaged, a typo in a hand edit, or a value only
 | `lyrics_overrides.json` | Which lyrics match you picked for songs. |
 | `ai-dj-quota.json` | The count of AI DJ spoken breaks voiced today, and whether Google reported the speech quota as used up. |
 | `rips.json` | Discs you have ripped, including those listed under **Rips to fix**. |
+| `ai-dj-requests.json` | Your active **Tell the DJ** requests. |
+| `lastfm/` | Last.fm scrobbles waiting to be sent (`lastfm-queue.json`) and remembered name corrections (`lastfm-names.json`). |
 | `models/` | The optional singing-voice detector (`djustify-svdnet.pt`, 2 MB) when you downloaded it in the analysis settings. |
 
 ## Cache folder
@@ -55,6 +57,10 @@ Everything here is created again when needed.
 | `dj/` | Clips of the AI DJ's spoken breaks | not listed |
 | `updates/` | Downloaded update files | not listed |
 | `rips/` | Work files of CD rips (Linux) | not listed |
+| `listen-local/` | Scan results of local music folders, one file per folder | not listed |
+| `song-cards/` | The **About** cards of songs | not listed |
+| `lyrics-ai/` | Lyrics translations and word glosses from Gemini | not listed |
+| `lyrics-words.json` | Korean words found in lyrics, for the lyrics' words mode and the Learnable songs mix | not listed |
 
 ## Other places
 
@@ -65,6 +71,7 @@ Everything here is created again when needed.
 | `~/.config/whipper/whipper.conf` | whipper's own configuration, including the drive offset found by **Verify offset**. Linux only. |
 | `$XDG_RUNTIME_DIR/io.github.leks2205.Listen.sock` | Local socket through which a second start reaches the running Listen (Linux). The file `io.github.leks2205.Listen.lock` plays this role on Windows. Without `XDG_RUNTIME_DIR` a private folder `listen-<user>` in the temp folder is used. |
 | `$XDG_RUNTIME_DIR` | Also holds the private socket of the audio player (mpv). |
+| `~/.cache/listen-runtime` | Takes the place of `listen-<user>` when that temp folder belongs to someone else (Linux). |
 | `%LOCALAPPDATA%\Listen\bin` | Helper programs (mpv, yt-dlp, Deno) when they are installed there. Listen looks for helpers next to `listen.exe`, then on the `PATH`, then here and in winget's folders. |
 | `%LOCALAPPDATA%\Programs\Listen` | The Windows installation (installer without administrator rights). |
 | Your KDE colour scheme and theme-switcher files | Read, never written, when **Follow desktop theme** is on (Linux). |
