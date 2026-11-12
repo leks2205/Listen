@@ -11,9 +11,10 @@ details.
   CI can't run them (see [Tests](tests.md) for what CI runs), so run them yourself.
 - App unit tests live in the lib target: `cargo test -p listen --lib <name>` (`--bin listen` has none
   and passes vacuously).
-- A user-visible change updates `docs/book/src/` in the same commit; new UI strings get their German
-  text in `app/i18n/listen/de.json` and the same entry in the generated `app/i18n/de.json` (see
-  [Translations](translations.md); `merged_tables_carry_every_listen_entry` checks the pair).
+- A user-visible change updates `docs/book/src/` in the same commit; new UI strings get their translations
+  in `app/i18n/listen/<code>.json` (German and the other UI languages) and the same entries in the generated
+  `app/i18n/<code>.json` (see [Translations](translations.md); `merged_tables_carry_every_listen_entry` checks the
+  pairs, `no_new_ui_string_is_translated_only_into_german` that no new string exists only in German).
 
 ## Rules that break things far away
 
@@ -47,14 +48,16 @@ Look here before writing a helper; the tests in `app/src/source_rules.rs` fail o
 |---|---|---|
 | `Song::new`, `Album::new` | `crates/listen-core/src/model.rs` | every song or album outside a source mapper (tests too); set the rest on top |
 | `text::fold` | `crates/listen-core/src/text.rs` | comparing names: lower case, letters and digits only |
-| `USER_AGENT`, `USER_AGENT_WITH_CONTACT` | `crates/listen-core/src/lib.rs` | every reqwest client; the second one for MusicBrainz |
-| `Listen::listen_server`, `ListenServer` | `app/src/app/history_sync.rs` | every listen-server feature: address, token, URLs |
+| `USER_AGENT`, `MUSICBRAINZ_USER_AGENT` | `crates/listen-core/src/lib.rs` | every reqwest client; the second one for MusicBrainz |
+| `markup::notification_body` | `crates/listen-core/src/markup.rs` | every desktop notification body (escapes for servers that read markup) |
+| `Listen::listen_server`, `ListenServer` | `app/src/app/history_sync.rs` | every listen-server feature: address, token, URLs; requests go through `self.http` with a per-request `.timeout` (`listen_server_features_use_the_shared_client` checks) |
 | `bind`, `serve`, `read_head`, `respond` | `app/src/remote/mod.rs` | every local HTTP server (remote control, MCP) |
 | `tray_menu::menu`, `TrayCmd` | `app/src/tray_menu.rs` | tray entries, on Linux and Windows |
 | `Continuation`, `next_token`, `song_page` | `crates/listen-ytmusic/src/home.rs` | parsing YouTube Music pages and their next-page tokens |
 | `YtDlp::stream_url` | `crates/listen-ytmusic/src/ytdlp.rs` | every yt-dlp stream lookup, audio or video |
 | `listen_lastfm::Client` | `crates/listen-lastfm/src/lib.rs` | every Last.fm API call (add a method there) |
-| `gpu()`, `iced_settings()`, `save_png()` | `app/tests/common/mod.rs` | simulator tests: GPU check, iced settings, snapshots |
+| `rank::synced_first` | `crates/listen-lyrics/src/rank.rs` | ordering lyric search results (synced lyrics first) |
+| `gpu()`, `iced_settings()`, `save_png()`, `layout` | `app/tests/common/` | app tests: hold `gpu()` while a `Simulator` lives, the app's iced settings, render-check PNGs (they compare nothing), click points from the app's layout constants (`shared_test_helpers.rs` checks) |
 
 ## Traps that already cost a bug
 

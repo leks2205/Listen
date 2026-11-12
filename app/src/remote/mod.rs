@@ -381,7 +381,9 @@ pub(crate) async fn bind(bind: &str, port: u16) -> Result<TcpListener, String> {
 /// Serves `listener` in the background until `stop` changes: each client gets its own task running
 /// `connection`, at most `max_clients` at once (more are dropped at once, so a flood can't pile up
 /// tasks). Errors of a connection are logged at debug under `name`. Shared by the remote and the
-/// MCP server; a new HTTP-ish server should use it too.
+/// MCP server; a new HTTP-ish server should use it too. Stopping ends the accept loop only:
+/// connections already accepted run to their end (the remote's websockets watch their own copy of
+/// `stop`). A failed accept pauses [`ACCEPT_RETRY`] instead of spinning.
 pub(crate) fn serve<S, C, F, Fut>(
     listener: TcpListener,
     max_clients: usize,

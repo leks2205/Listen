@@ -192,8 +192,8 @@ impl YtDlp {
     }
 
     /// Runs yt-dlp with [`stream_args`] (no config files, `-g -f <format>`) for `video_id` (45 s
-    /// timeout) and returns the first URL it prints, `None` if it printed none. A failure is logged with the last lines of yt-dlp's
-    /// output and returned as its `ERROR` line. Every stream lookup goes through here; the caller
+    /// timeout) and returns the first URL it prints, `None` if it printed none. A failure is logged
+    /// with the last lines of yt-dlp's output and returned as its `ERROR` line. Every stream lookup goes through here; the caller
     /// notes the [`BUDGET`](crate::budget::BUDGET) use and caches.
     async fn stream_url(&self, video_id: &str, format: &str) -> Result<Option<String>, String> {
         let mut cmd = Command::new(&self.binary);

@@ -47,7 +47,8 @@ pub struct HistorySettings {
     pub retention: HistoryRetention,
     /// Merge the plays with the other devices through listen-server (`docs/history-sync.md`).
     pub sync: bool,
-    /// listen-server's address. Its token lives in the keyring.
+    /// listen-server's address, used by every listen-server feature (not only the history); the app
+    /// reads it with the token through `Listen::listen_server`. Its token lives in the keyring.
     pub sync_server: String,
     /// Show what the other devices play and take it over (Play here, or a new audio output) through
     /// the same listen-server (`docs/handoff.md`).
