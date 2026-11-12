@@ -1,10 +1,10 @@
 //! The hotkey editor and the action coverage: recording a combo through the
 //! editor, duplicates, the global flag, and what every action dispatches.
 
-use iced::keyboard::key::{Code, Named, NativeCode, Physical};
+use iced::keyboard::key::{Code, Named, Physical};
 use iced::keyboard::{Event as KeyEvent, Key, Location, Modifiers};
 use iced_test::simulator::Simulator;
-use listen::app::hotkeys::{FavoriteMode, HotkeysMsg, ListHotkey, SongRef, ZoomStep};
+use listen::app::hotkeys::{FavoriteMode, HotkeysMsg, SongRef};
 use listen::app::{INTER, Listen, Message, Route, SourceHandle};
 use listen::{Args, FONTS, demo};
 use listen_core::config::ServerConfig;
@@ -149,7 +149,6 @@ fn every_action_dispatches_the_right_message() {
         assert!(handled, "{} has no handler", action.id);
     }
     assert!(s.hotkey_message("nope").is_none());
-    let _ = (ZoomStep::Reset, ListHotkey::PlayLast, SongRef::Current, FavoriteMode::Add);
 }
 
 #[test]
@@ -207,7 +206,6 @@ fn recording_stores_the_pressed_combo() {
     );
     assert_eq!(s.hotkey_recording, None);
     assert!(!s.config.settings.hotkeys.contains_key("zoomOut"));
-    let _ = NativeCode::Unidentified;
 }
 
 #[test]

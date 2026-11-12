@@ -1,7 +1,7 @@
 //! The analysis helper process gives the same results as in-process analysis
 //! and stops when idle. Needs mpv; skipped (with a SKIPPED line on stderr) where it isn't installed.
 
-use listen_analysis::{Cancel, Opts, Worker, analyze_url, worker::IDLE_EXIT};
+use listen_analysis::{Cancel, Opts, Worker, analyze_url};
 use std::path::Path;
 
 fn have_mpv() -> bool {
@@ -78,6 +78,5 @@ async fn helper_matches_in_process_analysis_and_stops() {
     // A stopped helper starts again on demand.
     assert_eq!(worker.analyze(input, &opts, &Cancel::default()).await.unwrap(), direct);
     worker.stop().await;
-    let _ = IDLE_EXIT;
     std::fs::remove_dir_all(&dir).ok();
 }

@@ -7,7 +7,6 @@ use iced::Point;
 use iced_test::simulator::Simulator;
 use listen::app::item::ItemMsg;
 use listen::app::item::details::{DetailsMsg, Load};
-use listen::app::item::save::SaveMsg;
 use listen::app::item::share::ShareMsg;
 use listen::app::item::tags::{Step, TagsMsg};
 use listen::app::menu::{ContextMenu, MenuAction, MenuMsg, MenuTarget};
@@ -596,5 +595,4 @@ fn the_tag_editor_preview_button_clicks() {
     let m = click_text(&s, "Preview changes");
     assert!(m.iter().any(|m| m.contains("Preview")), "{m:?}");
     let _ = std::fs::remove_dir_all(dir);
-    let _ = SaveMsg::Finished;
 }
