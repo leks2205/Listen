@@ -1,6 +1,6 @@
 # MCP tools
 
-Every tool of Listen's [MCP server](../integration/mcp.md), with its arguments. The server offers 43 tools, which a client reads with `tools/list`. Arguments marked "required" must be given; the rest are optional.
+Every tool of Listen's [MCP server](../integration/mcp.md), with its arguments. A client reads the tools with `tools/list`; this page lists all of them. Arguments marked "required" must be given; the rest are optional.
 
 ## References
 
