@@ -415,9 +415,9 @@ impl AiDjCheck {
     }
 }
 
-/// `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt] [--request R]…`: AI DJ rounds against
-/// Gemini on a fixed song pool with listening-history tags and measured tempo/key/energy; prints picks,
-/// lines, timings and tokens, grades every break with a judge call, saves the first two spoken breaks as
+/// `listen --check-ai-dj [--no-voice] [--rounds N] [--no-judge] [--dump-prompt] [--request R]… [--offline]`:
+/// AI DJ rounds against Gemini on a fixed song pool with listening-history tags and measured
+/// tempo/key/energy; prints picks, lines, timings and tokens, grades every break with a judge call, saves the first two spoken breaks as
 /// WAVs in the temp dir. Key: `$LISTEN_GEMINI_API_KEY` or the app's keyring entry. Costs one text request
 /// per round, one more per round with the judge, and up to 2 speech requests. Fails (see [`PASS_SHARE`])
 /// when fewer than 80 % of the breaks pass the judge, fewer than 80 % of the sets with a new-to-you song
