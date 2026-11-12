@@ -278,12 +278,12 @@ pub fn app_background(t: Tokens) -> impl Fn(&Theme) -> container::Style {
     }
 }
 
-/// Window bar: `background` with a structural bottom border.
+/// Window bar: `background` only. The line under it is the `ui::divider_h` the window layout puts below
+/// the bar (an iced border would frame all four sides, not just the bottom).
 pub fn title_bar(t: Tokens) -> impl Fn(&Theme) -> container::Style {
     move |_| container::Style {
         background: bg(t.background),
         text_color: Some(t.foreground),
-        border: Border { color: t.divider, width: 0.0, radius: 0.0.into() },
         ..Default::default()
     }
 }
