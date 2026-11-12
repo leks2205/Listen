@@ -95,7 +95,7 @@ Everything is in **Settings → Playback → DJ transitions & song analysis**.
 | **Bridge songs** | On | on/off | Put a short part of an analysed song between two songs that are far apart and mix through it (see [Bridge songs](#bridge-songs)). |
 | **How often to bridge** | 50 % | 10 to 100 % | Share of far-apart pairs that get a bridge when one fits. Pairs that cannot be beat-matched always try one. |
 
-One more value has no switch in the window. Set it in the `[mixing]` section of the settings file (see [Files and folders](../reference/files.md)) or with the `set_settings` [MCP tool](../reference/mcp-tools.md):
+One more value has no switch in the window. Set it in the `[settings.mixing]` table of the settings file (see [Files and folders](../reference/files.md)) or with the `set_settings` [MCP tool](../reference/mcp-tools.md):
 
 | Key | Default | Range | What it does |
 |---|---|---|---|

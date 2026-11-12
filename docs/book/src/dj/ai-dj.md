@@ -90,7 +90,7 @@ Listen uses two Gemini models. They are chosen for the free tier:
   - **Flash-Lite TTS (fast)**, `gemini-3.8-flash-lite-tts`, the default.
   - **Flash TTS (best voice acting)**, `gemini-3.8-flash-tts`, with more expressive delivery.
 
-The text model can also be changed in the `[ai_dj]` section of the settings file (`text_model`). Use a model name that your key can access.
+The text model can also be changed in the `[settings.ai_dj]` table of the settings file (`text_model`). Use a model name that your key can access.
 
 ### Location and Pronunciation
 

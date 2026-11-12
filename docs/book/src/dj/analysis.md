@@ -86,7 +86,7 @@ On a laptop that is running on battery, library analysis pauses. Work for the qu
 
 ### Threads
 
-Beat detection uses several processor threads. By default Listen uses a quarter of your cores (at least one). To change that, set `threads` in the `[analysis]` section of the settings file (see [Files and folders](../reference/files.md)). `0` means automatic; any other number is limited to the number of cores you have. The change takes effect after a restart. There is no switch for it in the settings window.
+Beat detection uses several processor threads. By default Listen uses a quarter of your cores (at least one). To change that, set `threads` in the `[settings.analysis]` table of the settings file (see [Files and folders](../reference/files.md)). `0` means automatic; any other number is limited to the number of cores you have. The change takes effect after a restart. There is no switch for it in the settings window.
 
 ## Settings
 
