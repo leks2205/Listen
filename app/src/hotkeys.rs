@@ -64,9 +64,20 @@ impl Binding {
     }
 }
 
-/// X11 keysym name of a Feishin key name.
+/// X11 keysym name of a Feishin key name. The portal only takes keysym names, never the character
+/// itself: every key [`code_to_key`] can record needs a name here unless it is already one
+/// (letters, digits, `space`, `minus`, `equal`).
 fn keysym(key: &str) -> String {
     let fixed = match key {
+        "`" => "grave",
+        "\\" => "backslash",
+        "[" => "bracketleft",
+        "]" => "bracketright",
+        "," => "comma",
+        "." => "period",
+        "'" => "apostrophe",
+        ";" => "semicolon",
+        "/" => "slash",
         "arrowleft" => "Left",
         "arrowright" => "Right",
         "arrowup" => "Up",
@@ -105,39 +116,41 @@ fn keysym(key: &str) -> String {
     key.to_string()
 }
 
+/// The W3C code names with a fixed Feishin key name; letters, digits, F-keys and the numpad follow
+/// in [`code_to_key`]. A new entry needs a keysym name in [`keysym`] unless the key name is one.
+const NAMED_CODES: &[(&str, &str)] = &[
+    ("ArrowDown", "arrowdown"),
+    ("ArrowLeft", "arrowleft"),
+    ("ArrowRight", "arrowright"),
+    ("ArrowUp", "arrowup"),
+    ("Backquote", "`"),
+    ("Backslash", "\\"),
+    ("Backspace", "backspace"),
+    ("BracketLeft", "["),
+    ("BracketRight", "]"),
+    ("Comma", ","),
+    ("Delete", "delete"),
+    ("End", "end"),
+    ("Enter", "enter"),
+    ("Equal", "equal"),
+    ("Escape", "escape"),
+    ("Home", "home"),
+    ("Insert", "insert"),
+    ("Minus", "minus"),
+    ("PageDown", "pagedown"),
+    ("PageUp", "pageup"),
+    ("Period", "."),
+    ("Quote", "'"),
+    ("Semicolon", ";"),
+    ("Slash", "/"),
+    ("Space", "space"),
+    ("Tab", "tab"),
+];
+
 /// Feishin's `keyboardCodeToHotkeyKey` over the W3C code name (`KeyA`, `Digit1`, `ArrowUp`).
 pub fn code_to_key(code: &str) -> Option<String> {
-    let fixed = match code {
-        "ArrowDown" => "arrowdown",
-        "ArrowLeft" => "arrowleft",
-        "ArrowRight" => "arrowright",
-        "ArrowUp" => "arrowup",
-        "Backquote" => "`",
-        "Backslash" => "\\",
-        "Backspace" => "backspace",
-        "BracketLeft" => "[",
-        "BracketRight" => "]",
-        "Comma" => ",",
-        "Delete" => "delete",
-        "End" => "end",
-        "Enter" => "enter",
-        "Equal" => "equal",
-        "Escape" => "escape",
-        "Home" => "home",
-        "Insert" => "insert",
-        "Minus" => "minus",
-        "PageDown" => "pagedown",
-        "PageUp" => "pageup",
-        "Period" => ".",
-        "Quote" => "'",
-        "Semicolon" => ";",
-        "Slash" => "/",
-        "Space" => "space",
-        "Tab" => "tab",
-        _ => "",
-    };
-    if !fixed.is_empty() {
-        return Some(fixed.into());
+    if let Some((_, key)) = NAMED_CODES.iter().find(|(c, _)| *c == code) {
+        return Some((*key).into());
     }
     if let Some(k) = code.strip_prefix("Key") {
         return Some(k.to_lowercase());
@@ -345,6 +358,28 @@ mod tests {
         let global: BTreeSet<String> = ["play".to_string()].into();
         assert!(actions_for(&b, &global, "f5", Modifiers::empty()).is_empty());
         assert_eq!(actions_for(&b, &global, "f6", Modifiers::empty()), ["pause"]);
+    }
+
+    #[test]
+    fn every_recordable_key_has_a_keysym_trigger() {
+        let generated = ('A'..='Z')
+            .map(|c| format!("Key{c}"))
+            .chain((0..10).map(|d| format!("Digit{d}")))
+            .chain((0..10).map(|d| format!("Numpad{d}")))
+            .chain((1..=24).map(|n| format!("F{n}")))
+            .chain(
+                ["Add", "Decimal", "Divide", "Enter", "Multiply", "Subtract"].map(|n| format!("Numpad{n}")),
+            );
+        for code in NAMED_CODES.iter().map(|(c, _)| c.to_string()).chain(generated) {
+            let key = code_to_key(&code).unwrap_or_else(|| panic!("{code} is not recordable"));
+            let trigger = parse(&format!("mod+{key}")).unwrap().portal_trigger();
+            let sym = trigger.strip_prefix("CTRL+").unwrap();
+            assert!(
+                !sym.is_empty() && sym.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+                "{code}: portal trigger {trigger:?} is not a keysym name"
+            );
+        }
+        assert_eq!(parse("mod+,").unwrap().portal_trigger(), "CTRL+comma");
     }
 
     #[test]
