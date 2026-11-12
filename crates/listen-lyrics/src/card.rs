@@ -525,9 +525,12 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "live: needs LISTEN_GEMINI_KEY and network"]
+    #[ignore = "live: needs LISTEN_GEMINI_API_KEY and network"]
     async fn live_card() {
-        let key = std::env::var("LISTEN_GEMINI_KEY").unwrap_or_default();
+        let Ok(key) = std::env::var("LISTEN_GEMINI_API_KEY") else {
+            eprintln!("SKIPPED live_card: LISTEN_GEMINI_API_KEY not set");
+            return;
+        };
         let model = std::env::var("LISTEN_GEMINI_MODEL").unwrap_or_else(|_| "gemini-3.5-flash-lite".into());
         let http = reqwest::Client::new();
         let c = card(&http, &key, &model, "German", &song(), 0).await.unwrap();

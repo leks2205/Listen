@@ -574,11 +574,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Live check against Gemini: `LISTEN_GEMINI_KEY=… cargo test -p listen-lyrics live_gemini -- --ignored --nocapture`.
+    /// Live check against Gemini: `LISTEN_GEMINI_API_KEY=… cargo test -p listen-lyrics live_gemini -- --ignored --nocapture`.
     #[tokio::test]
-    #[ignore = "live: Gemini, needs LISTEN_GEMINI_KEY"]
+    #[ignore = "live: Gemini, needs LISTEN_GEMINI_API_KEY"]
     async fn live_gemini() {
-        let key = std::env::var("LISTEN_GEMINI_KEY").unwrap_or_default();
+        let Ok(key) = std::env::var("LISTEN_GEMINI_API_KEY") else {
+            eprintln!("SKIPPED live_gemini: LISTEN_GEMINI_API_KEY not set");
+            return;
+        };
         let model = std::env::var("LISTEN_GEMINI_MODEL").unwrap_or_else(|_| "gemini-3.5-flash-lite".into());
         let l = lines(&[
             "I got you, baby",
