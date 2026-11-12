@@ -28,7 +28,7 @@ Each entry stores the time, which server and song it was, whether it was played 
 
 ## Settings
 
-Open **Settings → Advanced → History**.
+Open **Settings → Advanced → Listening history**.
 
 | Setting | What it does |
 |---|---|
@@ -50,7 +50,7 @@ Turn it on or off in any of these places; they all control the same switch:
 
 - **Menu → Private mode** in the sidebar's [app menu](window.md#the-app-menu),
 - **Settings → Window → Private mode**,
-- **Settings → Advanced → History → Don't record this session**.
+- **Settings → Advanced → Listening history → Don't record this session**.
 
 ## Recently played
 
