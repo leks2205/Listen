@@ -2,7 +2,7 @@
 
 Listen keeps a listening history on your computer. It feeds three pages: **Recently played**, **Statistics** (with a year review) and **Mixes**. This page explains what is recorded, how to control it, how to export or delete it, and what the pages show.
 
-The history is never uploaded or shared. It is a plain text file on your computer, and everything on the three pages is calculated from it on demand. Deleting entries therefore also removes whatever was derived from them.
+The history is a plain text file on your computer. It leaves your computer only if you switch on **Merge with other devices** (**Settings → Advanced → Listening history**), which sends your plays to your own listen-server and takes in the plays of your other devices. Everything on the three pages is calculated from it on demand. Deleting entries therefore also removes whatever was derived from them.
 
 ## What is recorded
 
