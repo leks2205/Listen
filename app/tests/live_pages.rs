@@ -48,7 +48,8 @@ async fn pages_with_real_data() {
     let (Ok(url), Ok(user), Ok(pass)) =
         (std::env::var("LISTEN_ND_URL"), std::env::var("LISTEN_ND_USER"), std::env::var("LISTEN_ND_PASS"))
     else {
-        panic!("set LISTEN_ND_URL, LISTEN_ND_USER and LISTEN_ND_PASS to run this ignored live test");
+        eprintln!("SKIPPED pages_with_real_data: LISTEN_ND_URL, LISTEN_ND_USER and LISTEN_ND_PASS not set");
+        return;
     };
     let source: Arc<dyn MusicSource> =
         Arc::new(listen_subsonic::Subsonic::new(ServerId("live".into()), &url, &user, &pass).unwrap());
