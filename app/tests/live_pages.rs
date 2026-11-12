@@ -12,6 +12,14 @@ use listen_source::{ListQuery, MusicSource};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
+/// Vulkan loader and intermittently crashes the process.
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu() -> std::sync::MutexGuard<'static, ()> {
+    GPU.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn snapshot(state: &Listen, name: &str) {
     let settings = iced::Settings {
         fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
@@ -19,6 +27,7 @@ fn snapshot(state: &Listen, name: &str) {
         ..Default::default()
     };
     let theme = state.theme();
+    let _gpu = gpu();
     let mut ui = Simulator::with_size(settings, iced::Size::new(1600.0, 950.0), state.view());
     let snap = ui.snapshot(&theme).expect("snapshot");
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");

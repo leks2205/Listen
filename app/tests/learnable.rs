@@ -4,6 +4,14 @@ use iced_test::simulator::Simulator;
 use listen::app::{INTER, Listen, Message, Route};
 use listen::{Args, FONTS};
 
+/// Held while a `Simulator` lives: creating several Vulkan instances at once races in the
+/// Vulkan loader and intermittently crashes the process.
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu() -> std::sync::MutexGuard<'static, ()> {
+    GPU.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn settings() -> iced::Settings {
     iced::Settings {
         fonts: FONTS.iter().map(|f| std::borrow::Cow::Borrowed(*f)).collect(),
@@ -30,6 +38,7 @@ fn the_progress_line_wraps_at_960_px() {
         "Looking at the lyrics of your liked songs: 396 of 962 • 0 % to 0 % known words • 3 songs • {}",
         listen_core::model::format_duration(total)
     );
+    let _gpu = gpu();
     let mut ui = Simulator::with_size(settings(), iced::Size::new(960.0, 935.0), s.view());
     let line = ui.find(meta.as_str()).map(|l| l.bounds());
     let line = line.expect("the progress line");
