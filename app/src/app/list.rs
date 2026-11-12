@@ -308,6 +308,9 @@ pub struct Press {
     pub list: ListId,
     pub index: usize,
     origin: Option<iced::Point>,
+    /// A plain press on a selected row: the selection stays so it can be dragged, and the
+    /// release clears it when no drag started (a click still ends the selection).
+    clear_on_release: bool,
 }
 
 /// A header being dragged to another place.
@@ -719,13 +722,18 @@ impl Listen {
                 let mods = Mods::from_iced(self.modifiers);
                 self.lists.menu = None;
                 self.lists.click_gen += 1;
-                self.lists.press = Some(Press { list: id.clone(), index, origin: None });
+                let on_selected =
+                    !(mods.toggle || mods.range) && self.lists.get(&id).selection.contains(index);
+                self.lists.press =
+                    Some(Press { list: id.clone(), index, origin: None, clear_on_release: on_selected });
                 if mods.toggle || mods.range {
                     let total = self.selection_total(&id);
                     self.lists.entry(&id).selection.click(index, mods, total);
                     return Task::none();
                 }
-                self.lists.entry(&id).selection.clear();
+                if !on_selected {
+                    self.lists.entry(&id).selection.clear();
+                }
                 let generation = self.lists.click_gen;
                 return Task::perform(
                     async move {
@@ -1399,7 +1407,10 @@ impl Listen {
     }
 
     fn pointer_released(&mut self) -> Task<Message> {
-        self.lists.press = None;
+        // A press that did not become a drag was a click: a plain click ends the selection.
+        if let Some(press) = self.lists.press.take().filter(|p| p.clear_on_release) {
+            self.lists.entry(&press.list).selection.clear();
+        }
         // A drop target takes the payload in its own `Drop` message first; whatever
         // is left was dropped on nothing.
         self.lists.drag = None;

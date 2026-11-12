@@ -232,6 +232,8 @@ fn ctrl_click_toggles_and_shift_click_adds_a_range() {
     assert_eq!(selected(&s, &ListId::Songs), [3, 4, 5, 6]);
     s.modifiers = Modifiers::default();
     click_text(&mut s, &t[5], 1);
+    // On a selected row the button's release (a window event the simulated click does not send) clears.
+    let _ = s.update(Message::List(ListMsg::PointerReleased));
     assert!(selected(&s, &ListId::Songs).is_empty(), "a plain click clears the selection");
 }
 
@@ -364,22 +366,21 @@ fn navigate_to_page_opens_the_selected_album() {
 fn dragging_selected_rows_makes_a_payload_a_drop_target_takes() {
     let mut s = tracks();
     let t = titles();
-    click_text(&mut s, &t[1], 1);
-    s.modifiers = Modifiers::CTRL;
-    click_text(&mut s, &t[2], 1);
-    s.modifiers = Modifiers::default();
-    // The button goes down on a selected row and the pointer moves.
+    ctrl_click(&mut s, &t[1]);
+    ctrl_click(&mut s, &t[2]);
+    assert_eq!(selected(&s, &ListId::Songs), [1, 2]);
+    // The button goes down on a selected row (no modifier: the selection stays) and the pointer moves.
     let _ = s.update(Message::List(ListMsg::Press(ListId::Songs, 2)));
     let _ = s.update(Message::List(ListMsg::PointerMoved(iced::Point::new(400.0, 300.0))));
     assert!(s.lists.drag.is_none(), "not yet: the pointer has to move a few px");
     let _ = s.update(Message::List(ListMsg::PointerMoved(iced::Point::new(430.0, 330.0))));
     let drag = s.lists.drag.as_ref().expect("drag started");
     assert_eq!(drag.payload.from, ListId::Songs);
-    // The selected rows (the click on a selected row with Ctrl toggled it off, so 1 remains).
+    // Both selected rows travel.
     let n = drag.payload.songs().len();
-    assert!(n >= 1);
-    assert_eq!(drag.payload.label(), if n == 1 { "1 song".to_string() } else { format!("{n} songs") });
-    assert!(shows(&s, &drag.payload.label()));
+    assert_eq!(n, 2);
+    assert_eq!(drag.payload.label(), "2 songs");
+    assert!(shows(&s, "2 songs"));
 
     let before = s.queue.iter().count();
     let _ = s.update(Message::List(ListMsg::Drop(DropTarget::Queue)));
@@ -401,6 +402,25 @@ fn dragging_an_unselected_row_drags_just_that_row() {
     let _ = s.update(Message::List(ListMsg::PointerReleased));
     assert!(s.lists.drag.is_none());
     assert_eq!(s.queue.iter().count(), before);
+}
+
+#[test]
+fn a_plain_click_on_a_selected_row_keeps_the_selection_until_the_release() {
+    let mut s = tracks();
+    let t = titles();
+    ctrl_click(&mut s, &t[1]);
+    ctrl_click(&mut s, &t[2]);
+    let _ = s.update(Message::List(ListMsg::Press(ListId::Songs, 2)));
+    assert_eq!(selected(&s, &ListId::Songs), [1, 2], "kept while the button is down, so it can be dragged");
+    let _ = s.update(Message::List(ListMsg::PointerReleased));
+    assert!(selected(&s, &ListId::Songs).is_empty(), "released without a drag: a plain click clears");
+    // A Ctrl press toggles at once and its release changes nothing.
+    ctrl_click(&mut s, &t[1]);
+    s.modifiers = Modifiers::CTRL;
+    let _ = s.update(Message::List(ListMsg::Press(ListId::Songs, 3)));
+    s.modifiers = Modifiers::default();
+    let _ = s.update(Message::List(ListMsg::PointerReleased));
+    assert_eq!(selected(&s, &ListId::Songs), [1, 3]);
 }
 
 #[test]
