@@ -20,6 +20,8 @@ const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 const HEAD_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_HEAD: usize = 16 * 1024;
 const MAX_CLIENTS: usize = 32;
+/// Pause of [`serve`] after a failed accept (out of file descriptors keeps failing at once).
+const ACCEPT_RETRY: Duration = Duration::from_millis(100);
 /// Close code of a deliberate stop (the client does not retry).
 pub const CLOSE_DOWN: u16 = 4000;
 /// Close code for "settings changed": the page reloads and reconnects.
@@ -394,7 +396,16 @@ pub(crate) fn serve<S, C, F, Fut>(
             tokio::select! {
                 _ = stop.changed() => break,
                 accepted = listener.accept() => {
-                    let Ok((stream, _)) = accepted else { continue };
+                    let stream = match accepted {
+                        Ok((stream, _)) => stream,
+                        // Out of file descriptors and the like: the socket stays readable, so an
+                        // immediate retry would spin a core. Wait a moment, keep serving.
+                        Err(e) => {
+                            tracing::debug!("{name}: accept failed: {e}");
+                            tokio::time::sleep(ACCEPT_RETRY).await;
+                            continue;
+                        }
+                    };
                     let Ok(permit) = slots.clone().try_acquire_owned() else { continue };
                     let task = connection(stream, ctx.clone());
                     tokio::spawn(async move {
