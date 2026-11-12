@@ -212,7 +212,8 @@ fn set(name: &str) -> (SourceKind, Capabilities) {
         "jellyfin" => (SourceKind::Jellyfin, listen_jellyfin::capabilities()),
         "ytm" => (SourceKind::YouTubeMusic, listen_ytmusic::capabilities(false)),
         "ytm-guest" => (SourceKind::YouTubeMusic, listen_ytmusic::capabilities(true)),
-        _ => (SourceKind::Local, Capabilities::GENRES | Capabilities::ALBUM_ARTISTS),
+        "local" => (SourceKind::Local, Capabilities::GENRES | Capabilities::ALBUM_ARTISTS),
+        other => panic!("unknown capability set {other:?}"),
     }
 }
 
@@ -263,10 +264,11 @@ fn target(kind_name: &str, kind: SourceKind) -> MenuTarget {
             album_count: Some(3),
             song_count: Some(30),
         }]),
-        _ => MenuTarget::Folders(vec![listen_core::model::FolderEntry {
+        "folder" => MenuTarget::Folders(vec![listen_core::model::FolderEntry {
             id: "f1".into(),
             name: "Folder".into(),
         }]),
+        other => panic!("unknown menu kind {other:?}"),
     }
 }
 
@@ -892,6 +894,14 @@ fn entries_of_every_kind_per_capability_set() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // Every (kind, set) pair has exactly one row.
+    let pairs: std::collections::BTreeSet<_> = EXPECTED.iter().map(|(k, s, _)| (*k, *s)).collect();
+    assert_eq!(pairs.len(), EXPECTED.len(), "a (kind, set) row is duplicated");
+    for set in SETS {
+        for kind in ["song", "songs", "queue", "album", "albums", "artist", "genre", "folder"] {
+            assert!(pairs.contains(&(kind, set)), "no row for {kind} / {set}");
+        }
+    }
     assert_eq!(EXPECTED.len(), 8 * SETS.len());
 }
 
