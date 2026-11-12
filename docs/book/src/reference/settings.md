@@ -45,7 +45,7 @@ See [Themes and colours](../appearance/themes.md) for details.
 | Light theme | Shown when **Follow system theme** is on. Used when the desktop is light. | Default Light | `settings.appearance.theme_light` (`"defaultLight"`) |
 | Theme | Shown when **Follow system theme** is off. The theme that is always used. | Default Dark | `settings.appearance.theme` (`"defaultDark"`) |
 | Use the theme's accent colour | On: the theme keeps its own accent. Off: your accent colour replaces it. | Off | `settings.appearance.use_theme_accent` |
-| Accent colour | Five swatches and a field for a CSS colour such as `rgb(53, 116, 252)` or `#3574fc`. Disabled while the previous row is on. | `rgb(53, 116, 252)` | `settings.appearance.accent` |
+| Accent colour | Five swatches and a field for a CSS colour such as `rgb(53, 116, 252)` or `#3574fc`. Disabled while the previous row is on. | `rgb(53, 116, 252)` | `settings.appearance.accent` (stored as `[53, 116, 252]`: red, green, blue) |
 | Use the theme's primary shade | On: buttons and links use the theme's shade. | On | `settings.appearance.use_theme_primary_shade` |
 | Primary shade | 0 (lightest) to 9 (darkest) shade of the accent for buttons and links. Used when the previous row is off. | 6 | `settings.appearance.primary_shade` |
 | Custom themes folder | Shows how many custom themes were found and any problems; **Open folder** opens the folder. See [Custom themes](../appearance/custom-themes.md). | | |
