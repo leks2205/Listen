@@ -1,5 +1,6 @@
 //! Cover-art cache: decoded handles in memory, original bytes on disk
-//! (`~/.cache/Listen/covers`). Fetches are deduplicated.
+//! (`~/.cache/Listen/covers`). Fetches are deduplicated. Only bytes that decode as an image are cached,
+//! written atomically; a cached file that is not an image counts as a miss.
 
 use iced::widget::image::Handle;
 use std::collections::{HashMap, HashSet};
@@ -54,11 +55,10 @@ impl Images {
 
     pub fn loaded(&mut self, key: Key, bytes: Option<Arc<Vec<u8>>>) {
         self.pending.remove(&key);
-        match bytes {
-            Some(bytes) => {
-                if let Some(r) = aspect_ratio(&bytes) {
-                    self.ratios.insert(key.clone(), r);
-                }
+        // Bytes that are no image would stay a blank cover for good: they count as failed.
+        match bytes.and_then(|b| Some((aspect_ratio(&b)?, b))) {
+            Some((r, bytes)) => {
+                self.ratios.insert(key.clone(), r);
                 self.handles.insert(key, Handle::from_bytes(bytes.as_ref().clone()));
             }
             None => {
@@ -156,7 +156,8 @@ impl Images {
     }
 }
 
-/// Fetches bytes from the disk cache or the network (and fills the disk cache).
+/// Fetches bytes from the disk cache or the network (and fills the disk cache). `None` when the source
+/// gives no image: an error page served with HTTP 200 is neither returned nor cached.
 pub async fn fetch(http: reqwest::Client, url: String, disk: Option<PathBuf>) -> Option<Arc<Vec<u8>>> {
     let bytes = fetch_bytes(http, url, disk.clone()).await?;
     if let Some(path) = disk {
@@ -171,31 +172,52 @@ async fn fetch_bytes(http: reqwest::Client, url: String, disk: Option<PathBuf>) 
     if let Some(path) = &disk
         && let Ok(bytes) = tokio::fs::read(path).await
     {
-        return Some(Arc::new(bytes));
-    }
-    if url.starts_with("file://") {
-        let bytes = tokio::task::spawn_blocking(move || listen_local::load_cover(&url)).await.ok()??;
-        if let Some(path) = disk {
-            if let Some(dir) = path.parent() {
-                let _ = tokio::fs::create_dir_all(dir).await;
-            }
-            let _ = tokio::fs::write(&path, &bytes).await;
+        if aspect_ratio(&bytes).is_some() {
+            return Some(Arc::new(bytes));
         }
-        return Some(Arc::new(bytes));
+        // Not an image (e.g. an error page an older version cached): a miss, fetched again below.
+        let _ = tokio::fs::remove_file(path).await;
+        let _ = tokio::fs::remove_file(thumbhash_path(path)).await;
     }
-    let resp = http.get(&url).send().await.ok()?;
-    if !resp.status().is_success() {
-        tracing::debug!("cover fetch failed: HTTP {}", resp.status());
+    let bytes = if url.starts_with("file://") {
+        tokio::task::spawn_blocking(move || listen_local::load_cover(&url)).await.ok()??
+    } else {
+        let resp = http.get(&url).send().await.ok()?;
+        if !resp.status().is_success() {
+            tracing::debug!("cover fetch failed: HTTP {}", resp.status());
+            return None;
+        }
+        resp.bytes().await.ok()?.to_vec()
+    };
+    let (bytes, decodes) = tokio::task::spawn_blocking(move || {
+        let ok = image::load_from_memory(&bytes).is_ok();
+        (bytes, ok)
+    })
+    .await
+    .ok()?;
+    if !decodes {
+        tracing::debug!("cover fetch returned no decodable image");
         return None;
     }
-    let bytes = resp.bytes().await.ok()?.to_vec();
     if let Some(path) = disk {
-        if let Some(dir) = path.parent() {
-            let _ = tokio::fs::create_dir_all(dir).await;
-        }
-        let _ = tokio::fs::write(&path, &bytes).await;
+        store(&path, &bytes).await;
     }
     Some(Arc::new(bytes))
+}
+
+/// Writes a cover into the disk cache through a temporary file and a rename, so a quit mid-write
+/// never leaves a cut-off file at `path` that later starts would take for the cover.
+async fn store(path: &std::path::Path, bytes: &[u8]) {
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if let Some(dir) = path.parent() {
+        let _ = tokio::fs::create_dir_all(dir).await;
+    }
+    let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_extension(format!("{}-{n}.tmp", std::process::id()));
+    let stored = tokio::fs::write(&tmp, bytes).await.is_ok() && tokio::fs::rename(&tmp, path).await.is_ok();
+    if !stored {
+        let _ = tokio::fs::remove_file(&tmp).await;
+    }
 }
 
 /// A small, heavily blurred version of a cover, like Feishin's `filter: blur(<n>rem)` header art.
@@ -283,6 +305,45 @@ mod tests {
         assert_eq!(aspect_ratio(&png(200, 100)), Some(2.0));
         assert_eq!(aspect_ratio(&png(50, 100)), Some(0.5));
         assert_eq!(aspect_ratio(b"not an image"), None);
+    }
+
+    fn run<T>(f: impl std::future::Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(f)
+    }
+
+    /// A local cover (file:// URL, never the network) and the cache file `fetch_bytes` keeps for it.
+    fn local_cover(name: &str, bytes: &[u8]) -> (PathBuf, String, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("listen-cover-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("cover.png");
+        std::fs::write(&src, bytes).unwrap();
+        let url = url::Url::from_file_path(&src).unwrap().to_string();
+        (dir.clone(), url, dir.join("cache").join("0123456789abcdef"))
+    }
+
+    #[test]
+    fn a_cached_cover_that_is_no_image_is_fetched_again() {
+        let (dir, url, cached) = local_cover("corrupt", &png(8, 4));
+        std::fs::create_dir_all(cached.parent().unwrap()).unwrap();
+        std::fs::write(&cached, b"<html>captive portal</html>").unwrap();
+        let bytes = run(fetch_bytes(reqwest::Client::new(), url, Some(cached.clone()))).unwrap();
+        assert_eq!(aspect_ratio(&bytes), Some(2.0));
+        assert_eq!(std::fs::read(&cached).unwrap(), *bytes, "the cache now holds the image");
+        let left: Vec<_> =
+            std::fs::read_dir(cached.parent().unwrap()).unwrap().flatten().map(|e| e.path()).collect();
+        assert_eq!(left, [cached], "no temporary file is left behind");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn bytes_that_are_no_image_are_never_cached() {
+        let (dir, url, cached) = local_cover("html", b"<html>not a cover</html>");
+        assert!(run(fetch_bytes(reqwest::Client::new(), url, Some(cached.clone()))).is_none());
+        assert!(!cached.exists());
+        let mut images = Images::default();
+        images.loaded("k".into(), Some(Arc::new(b"<html>".to_vec())));
+        assert!(images.get("k").is_none() && !images.should_fetch("k"), "no image counts as failed");
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]
