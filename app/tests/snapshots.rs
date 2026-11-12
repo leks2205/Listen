@@ -2385,11 +2385,12 @@ fn sidebar_item_hovered() {
         iced::Size::new(1600.0, 950.0),
         state.view(),
     );
-    // "Albums" row of the sidebar.
-    ui.point_at((100.0, 232.0));
-    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved {
-        position: iced::Point::new(100.0, 232.0),
-    })]);
+    // The "Albums" row of the sidebar, found by its text.
+    let albums = ui.find("Albums").expect("the sidebar lists Albums");
+    let at = iced_test::selector::Bounded::visible_bounds(&albums).expect("Albums is visible").center();
+    assert!(at.x < 300.0, "the sidebar row, not another Albums text: {at:?}");
+    ui.point_at(at);
+    let _ = ui.simulate([iced::Event::Mouse(iced::mouse::Event::CursorMoved { position: at })]);
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target/snapshots");
     std::fs::create_dir_all(&dir).unwrap();

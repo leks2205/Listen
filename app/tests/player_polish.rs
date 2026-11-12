@@ -50,6 +50,20 @@ fn render(name: &str, state: &Listen) {
     snapshot.matches_image(&path).expect("png written"); // writes a fresh PNG, compares nothing
 }
 
+/// Presses at every `xs` along `y` in one interface and returns what was sent (the state is not changed).
+fn presses(s: &Listen, y: f32, xs: &[f32]) -> Vec<Message> {
+    let _gpu = gpu();
+    let mut ui = Simulator::with_size(settings(), s.window_size, s.view());
+    for x in xs {
+        ui.point_at((*x, y));
+        let _ = ui.simulate([
+            iced::Event::Mouse(MouseEvent::ButtonPressed(Button::Left)),
+            iced::Event::Mouse(MouseEvent::ButtonReleased(Button::Left)),
+        ]);
+    }
+    ui.into_messages().collect()
+}
+
 fn click(s: &mut Listen, at: (f32, f32)) -> Vec<Message> {
     let messages: Vec<Message> = {
         let _gpu = gpu();
@@ -131,10 +145,18 @@ fn squeezed_bar_snapshots() {
 #[test]
 fn compact_bar_has_no_player_config_button() {
     let (w, h) = (500.0, 700.0);
-    let mut s = state(w, h);
-    let messages = click(&mut s, (w - 8.0 - 18.0 - 4.0 * 40.0, h - 38.0));
-    assert!(!messages.iter().any(|m| matches!(m, Message::Audio(AudioMsg::TogglePopover))), "{messages:?}");
-    assert!(s.audio.popup.is_none());
+    let s = state(w, h);
+    // Press across the whole bar, not at one spot that a layout change could move.
+    let xs: Vec<f32> = (0..500).step_by(4).map(|x| x as f32).collect();
+    let mut sent = Vec::new();
+    for dy in [20.0, 30.0, 38.0, 45.0, 60.0] {
+        sent.extend(presses(&s, h - dy, &xs));
+    }
+    assert!(
+        sent.iter().any(|m| matches!(m, Message::ToggleVolumePopup)),
+        "the presses reach the bar: {sent:?}"
+    );
+    assert!(!sent.iter().any(|m| matches!(m, Message::Audio(AudioMsg::TogglePopover))), "{sent:?}");
 }
 
 #[test]
