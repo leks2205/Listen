@@ -64,4 +64,24 @@ mod tests {
             assert_eq!(entry.map(|(label, _)| label), Some(play_pause_label(playing)));
         }
     }
+
+    /// Both platform trays render `menu` as it is: neither names an entry's label or command itself
+    /// (only the icon click, `Toggle`, and the Play/Pause relabelling, which finds its entry by
+    /// `PlayPause`), so an entry added here shows on Linux and Windows alike.
+    #[test]
+    fn platform_trays_take_every_entry_from_tray_menu() {
+        let labels: Vec<&str> = menu(false).into_iter().chain(menu(true)).flatten().map(|(l, _)| l).collect();
+        for (file, src) in
+            [("tray.rs", include_str!("tray.rs")), ("tray_win.rs", include_str!("tray_win.rs"))]
+        {
+            assert!(src.contains("crate::tray_menu::menu"), "{file} does not render tray_menu::menu");
+            for cmd in src.split("TrayCmd::").skip(1).map(|r| r.split(|c: char| !c.is_alphanumeric()).next())
+            {
+                assert!(matches!(cmd, Some("Toggle" | "PlayPause")), "{file} handles a menu command itself");
+            }
+            for label in labels.iter().filter(|l| !["Play", "Pause"].contains(l)) {
+                assert!(!src.contains(&format!("\"{label}\"")), "{file} spells the entry {label:?}");
+            }
+        }
+    }
 }

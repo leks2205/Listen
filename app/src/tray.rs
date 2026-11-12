@@ -1,5 +1,6 @@
 //! System tray icon (StatusNotifierItem via `ksni`; GNOME needs the AppIndicator extension), with
-//! Feishin's menu.
+//! Feishin's menu. The entries and their commands come from `tray_menu`, shared with the Windows tray
+//! (`tray_win.rs`, not compiled on Linux): add or change an entry there, not here.
 
 use crate::app::Message;
 use iced::Subscription;

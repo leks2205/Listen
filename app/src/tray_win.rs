@@ -1,5 +1,6 @@
 //! Windows tray icon (`tray-icon`), same shape as the Linux `tray` module: Feishin's
-//! menu, and a click on the icon toggles the window. The icon runs on its own thread
+//! menu (entries and commands from `tray_menu`, shared with the Linux tray: add or change an entry
+//! there, not here), and a click on the icon toggles the window. The icon runs on its own thread
 //! with a Win32 message loop (required on the creating thread); the app talks to it
 //! through a channel.
 
