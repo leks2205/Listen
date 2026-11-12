@@ -6,14 +6,14 @@ This page describes the test suite, the tests that need extra programs or a live
 
 ```bash
 cargo test --workspace            # everything
-cargo test --workspace --lib      # unit tests only (what CI runs)
+cargo test --workspace --lib      # unit tests only
 cargo test -p listen --test mcp   # one integration test file of the app
 cargo test -p listen-mix          # one crate
 ```
 
 Unit tests live next to the code in `#[cfg(test)]` modules. The `app/tests/` folder holds integration tests that boot the real `Listen` state with the demo library and `ephemeral` set (nothing is written to disk) and drive it through `update(Message)`. They cover the queue, play modes, Auto-DJ, playlists, settings, hotkeys, the MCP and remote servers, the updater, layouts at different window sizes, and more. Crates have their own `tests/` folders, for example the fake-server tests in `listen-subsonic`, `listen-dlna` and `listen-jellyfin`.
 
-CI (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace --lib`.
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --exclude listen --lib --tests` (the crates' unit and integration tests, with mpv installed) and `cargo test -p listen --lib` (the app's unit tests). It does not run the app's `app/tests/`, which need a GPU session, or the doc tests.
 
 ## Snapshot tests
 

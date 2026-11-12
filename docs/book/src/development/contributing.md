@@ -7,7 +7,8 @@ details.
 ## Before you commit
 
 - `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`. The iced simulator tests in `app/tests/` need a desktop (GPU) session.
+  `cargo test --workspace`. The iced simulator tests in `app/tests/` need a desktop (GPU) session, and
+  CI can't run them (see [Tests](tests.md) for what CI runs), so run them yourself.
 - App unit tests live in the lib target: `cargo test -p listen --lib <name>` (`--bin listen` has none
   and passes vacuously).
 - A user-visible change updates `docs/book/src/` in the same commit; new UI strings get their German

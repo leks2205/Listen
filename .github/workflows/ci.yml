@@ -19,12 +19,15 @@ jobs:
       - name: System packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libwayland-dev libudev-dev
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libwayland-dev libudev-dev mpv
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Unit tests
-        run: cargo test --workspace --lib
+      # app/tests/ (iced simulator tests) need a GPU session, so the app runs only its unit tests here.
+      - name: Crate unit and integration tests
+        run: cargo test --workspace --exclude listen --lib --tests
+      - name: App unit tests
+        run: cargo test -p listen --lib

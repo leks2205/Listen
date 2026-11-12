@@ -18,7 +18,7 @@ cd Listen
 
 ## Linux packages
 
-The window, the GPU and the keyboard libraries are loaded at run time with `dlopen`, so a build needs only a few development headers. The list below matches what the CI workflow installs.
+The window, the GPU and the keyboard libraries are loaded at run time with `dlopen`, so a build needs only a few development headers. The list below is what the CI workflow installs, plus a C compiler (`build-essential`).
 
 **Debian and Ubuntu**
 
@@ -93,6 +93,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-CI runs the first two plus `cargo test --workspace --lib` on Ubuntu for every push to `main` and every pull request. Live tests are `#[ignore]`d, and tests that need mpv print `SKIPPED` and pass without it; see [Tests](tests.md). Keep a pull request focused on one change, and add or update a test when you fix a bug. New user-visible text must go through the translation system; see [Translations](translations.md).
+CI runs the first two on Ubuntu for every push to `main` and every pull request, then the unit and integration tests of every crate (`cargo test --workspace --exclude listen --lib --tests`, with mpv installed) and the app's unit tests (`cargo test -p listen --lib`). It does not run `app/tests/`, which needs a GPU session, or the doc tests, so run `cargo test --workspace` yourself. Live tests are `#[ignore]`d, and tests that need mpv print `SKIPPED` and pass without it; see [Tests](tests.md). Keep a pull request focused on one change, and add or update a test when you fix a bug. New user-visible text must go through the translation system; see [Translations](translations.md).
 
 Listen is licensed under AGPL-3.0-or-later. By contributing you agree that your change is released under that license.
