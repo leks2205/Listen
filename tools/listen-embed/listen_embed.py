@@ -252,15 +252,23 @@ def clip_subsonic(song_id, start, wav):
     url = subsonic_url(song_id)
     if not url:
         raise RuntimeError("no Navidrome credentials (LISTEN_ND_URL/USER/PASS)")
-    to_wav(url, wav, start=start)
+    # The URL carries the login (u/t/s) and every local user can read a process's arguments, so it never goes
+    # into ffmpeg's command line: fetch it here and pipe the audio in.
+    with urllib.request.urlopen(url, timeout=180) as r:
+        data = r.read()
+    to_wav("pipe:0", wav, start=start, stdin=data)
 
 
-def to_wav(src, wav, start=None):
+def to_wav(src, wav, start=None, stdin=None):
+    """`src` is a local file, a public URL or `pipe:0` with the audio in `stdin` (bytes)."""
     cmd = ["ffmpeg", "-loglevel", "error", "-y"]
     if start is not None:
         cmd += ["-ss", str(start)]
     cmd += ["-i", src, "-t", str(CLIP_S), "-ac", "1", "-ar", "24000", wav]
-    subprocess.run(cmd, check=True, timeout=180, stdin=subprocess.DEVNULL, capture_output=True)
+    if stdin is None:
+        subprocess.run(cmd, check=True, timeout=180, stdin=subprocess.DEVNULL, capture_output=True)
+    else:
+        subprocess.run(cmd, check=True, timeout=180, input=stdin, capture_output=True)
     if os.path.getsize(wav) < 24000 * 2 * 5:
         raise RuntimeError("clip shorter than 5 s")
 
