@@ -6,7 +6,6 @@
 use crate::scan::Scanned;
 use listen_core::model::ServerId;
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -176,8 +175,9 @@ pub(crate) fn encode(
     out
 }
 
-/// Removes temp files a killed writer left behind. Only files matching our own
-/// `.library-*.tmp` pattern and older than an hour are touched, so another
+/// Removes temp files a killed writer left behind. Only temp files of our own
+/// cache files (`library-*.tmp-*` from `listen_core::files::write_atomic`, and
+/// `.library-*.tmp` of older versions) older than an hour are touched, so another
 /// process's fresh temp file is never deleted.
 fn sweep_stale_tmp(dir: &Path) {
     const STALE: Duration = Duration::from_secs(60 * 60);
@@ -186,7 +186,9 @@ fn sweep_stale_tmp(dir: &Path) {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
-        if !(name.starts_with(".library-") && name.ends_with(".tmp")) {
+        let ours = (name.starts_with("library-") && name.contains(".tmp-"))
+            || (name.starts_with(".library-") && name.ends_with(".tmp"));
+        if !ours {
             continue;
         }
         let stale = entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < cutoff);
@@ -196,33 +198,13 @@ fn sweep_stale_tmp(dir: &Path) {
     }
 }
 
-/// Writes next to the target and renames, so a reader sees the old file or the new one.
+/// Creates the cache folder, sweeps stale temp files and saves through
+/// `listen_core::files::write_atomic`, so a reader sees the old file or the new one.
 pub(crate) fn write_atomic(path: &Path, data: &[u8]) -> std::io::Result<()> {
     let Some(dir) = path.parent() else { return Err(std::io::Error::other("cache path has no folder")) };
     std::fs::create_dir_all(dir)?;
     sweep_stale_tmp(dir);
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("cache.bin");
-    static WRITES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let tmp = dir.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
-    let write = || -> std::io::Result<()> {
-        let mut file = std::fs::File::create(&tmp)?;
-        file.write_all(data)?;
-        // Flush the data to disk before the rename, so a crash cannot leave a
-        // renamed file with unflushed contents.
-        file.sync_all()
-    };
-    if let Err(e) = write() {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    // std::fs::rename replaces the target on Unix and on Windows (MoveFileEx with
-    // MOVEFILE_REPLACE_EXISTING), so there is no window without a cache file.
-    if let Err(e) = std::fs::rename(&tmp, path) {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(e);
-    }
-    Ok(())
+    listen_core::files::write_atomic(path, data)
 }
 
 /// The start of every cache file name of `server`: the part that does not depend on

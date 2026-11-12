@@ -636,14 +636,18 @@ mod tests {
     fn stale_temp_files_are_swept_but_another_process_fresh_one_is_kept() {
         let root = temp("tmp-sweep");
         let cache = cache_path(&root);
-        let stale = root.join(".library-old.1.0.tmp");
-        let fresh = root.join(".library-new.2.0.tmp");
+        let stale = root.join("library-old.bin.tmp-1-0");
+        let stale_old_name = root.join(".library-old.1.0.tmp");
+        let fresh = root.join("library-new.bin.tmp-2-0");
         std::fs::write(&stale, b"old").unwrap();
+        std::fs::write(&stale_old_name, b"old").unwrap();
         std::fs::write(&fresh, b"fresh").unwrap();
         let two_hours_ago = SystemTime::now() - Duration::from_secs(2 * 60 * 60);
         set_mtime(&stale, two_hours_ago);
+        set_mtime(&stale_old_name, two_hours_ago);
         cache::write_atomic(&cache, b"data").unwrap();
         assert!(!stale.exists(), "a temp file older than an hour is removed");
+        assert!(!stale_old_name.exists(), "so is one named the way older versions named them");
         assert!(fresh.exists(), "a fresh temp file belongs to another writer");
         let _ = std::fs::remove_dir_all(&root);
     }
