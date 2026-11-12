@@ -637,10 +637,15 @@ fn youtube_music_songs_keep_the_like_cell_and_the_links() {
     let m = click_text(&mut s, "Yt Album 2", 1);
     assert!(m.iter().any(|m| matches!(m, Message::OpenAlbum(id) if id == "MPREb_2")), "{m:?}");
 
-    // The heart: a click asks to like the song (Liked Music), no rating stars are offered.
-    let mut s = ytm_tracks();
-    let _ = s.update(Message::List(ListMsg::Favorite(ListId::Songs, 0)));
-    assert!(s.library.songs[0].favorite || true);
+    // The heart cell stays on YouTube Music rows (it likes the song in Liked Music); no rating stars.
+    use listen::ui::list::columns::ListItem;
+    let s = ytm_tracks();
+    let columns = s.config.settings.lists.config(ListKind::Songs).table.visible();
+    assert!(columns.iter().any(|c| c.id == ColumnId::UserFavorite), "the heart column is shown");
+    assert!(s.show_favorites());
+    let song = &s.library.songs[0];
+    assert_eq!(song.favorite(&s), Some(song.favorite), "YouTube Music rows have a heart cell");
+    assert_eq!(song.rating(&s), None, "YouTube Music rows have no rating stars");
     assert!(!shows(&s, "Rating"));
 }
 
