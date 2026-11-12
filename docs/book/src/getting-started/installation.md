@@ -42,7 +42,7 @@ Install the RPM with dnf:
 sudo dnf install ./listen-<version>-1.fc44.x86_64.rpm
 ```
 
-Pick the file that matches your Fedora release (the `fc44` part). The RPM pulls in mpv, PipeWire's `pw-record` (for the visualizer) and the graphics libraries Listen needs. It recommends yt-dlp and Node.js for YouTube Music, plus a few optional packages (for example `udisks2` for CD ripping and `cifs-utils`). If your setup skips recommended packages, install `yt-dlp` and `nodejs` (or Deno) yourself if you use YouTube Music.
+Pick the file that matches your Fedora release (the `fc44` part). The RPM pulls in mpv, PipeWire's `pw-record` (for the visualizer), the graphics libraries Listen needs and the CD-ripping tools `whipper`, `flac` and `cdrdao`. It recommends yt-dlp and Node.js for YouTube Music, plus a few optional packages (for example `udisks2` for CD ripping and `cifs-utils`). If your setup skips recommended packages, install `yt-dlp` and `nodejs` (or Deno) yourself if you use YouTube Music.
 
 The RPM installs the program under `/usr`, adds the menu entry and icon, and lets the built-in updater update it later (see [Updates](updates.md)).
 
