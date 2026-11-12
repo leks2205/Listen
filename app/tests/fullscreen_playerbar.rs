@@ -227,28 +227,27 @@ fn the_gear_opens_the_settings_and_changes_apply() {
 #[test]
 fn the_full_screen_player_shows_badges_and_links() {
     let mut s = state();
-    let song = s.queue.current().unwrap().song.clone();
-    let mut with_data = song.clone();
-    with_data.bit_rate = Some(320);
+    let id = s.queue.current().unwrap().song.id.clone();
+    // Demo songs carry no artist ids (no link); give the playing one an id so its name is a link.
     s.queue.for_each_song_mut(|x| {
-        if x.id == song.id {
+        if x.id == id {
             x.bit_rate = Some(320);
+            x.artists[0].id = Some("ar-1".into());
         }
     });
+    let song = s.queue.current().unwrap().song.clone();
     let _ = s.update(fs(FullscreenMsg::Setting(FsSetting::Badge("bit_rate".into(), true))));
     let _ = s.update(Message::OpenFullscreenTab(FullscreenTab::Hidden));
     assert!(has_text(&s, "320 kbps"));
+    assert!(s.fullscreen);
     // The artist is a link; going to its page closes the player.
     let artist = song.artists[0].name.clone();
     let messages = click_text(&mut s, &artist);
     assert!(
-        messages.iter().any(|m| matches!(m, Message::Navigate(Route::Artist(_))))
-            || song.artists[0].id.is_none(),
+        messages.iter().any(|m| matches!(m, Message::Navigate(Route::Artist(id)) if id == "ar-1")),
         "{messages:?}"
     );
-    if song.artists[0].id.is_some() {
-        assert!(!s.fullscreen, "a page change closes the player");
-    }
+    assert!(!s.fullscreen, "a page change closes the player");
 }
 
 #[test]
