@@ -16,3 +16,6 @@ AGENTS.md
 scripts/ship.sh
 docs/PROGRESS.md
 docs/ytm-dj-research.md
+
+# Python bytecode
+__pycache__/
