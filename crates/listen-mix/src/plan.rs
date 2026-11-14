@@ -1827,8 +1827,8 @@ mod tests {
         // Every bar in the window: no outgoing vocal; within the blend no incoming vocal either.
         let first = bar_of(a + 0.01);
         let last = bar_of(b - 0.01);
-        for bar in first..=last {
-            assert_eq!(out.bars.vocal[bar], 0, "bar {bar}");
+        for (bar, &vocal) in out.bars.vocal.iter().enumerate().take(last + 1).skip(first) {
+            assert_eq!(vocal, 0, "bar {bar}");
         }
         assert!(b <= p.out_stop_s + 1e-6 && a >= c.out_position_s);
         assert!(a >= p.out_mix_start_s - 1e-6, "window inside the instrumental blend");
