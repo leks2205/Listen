@@ -15,11 +15,11 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: System packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libwayland-dev libudev-dev mpv
+          sudo apt-get install -y --no-install-recommends pkg-config libxkbcommon-dev libwayland-dev libudev-dev libdbus-1-dev mpv
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
