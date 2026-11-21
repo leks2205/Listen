@@ -123,7 +123,7 @@ Listen's selection rules differ a little from Feishin's, so they are worth knowi
 
 When something is selected, a bar at the bottom of the list shows "3 selected" with **Clear** and **More**. **More** opens the context menu for the whole selection.
 
-A double-click on a song plays it and, with the default **Play button behavior** of **Play now**, queues up to 50 songs before and after it from the same list, so playback continues through the list. The queue panel itself behaves differently: a double-click there jumps to that song without replacing the queue.
+A double-click on a song, or its play button in the `#` column, plays it and, with the default **Play button behavior** of **Play now**, queues up to 50 songs before and after it from the same list, so playback continues through the list. The queue panel itself behaves differently: a double-click there jumps to that song without replacing the queue.
 
 In a grid the same rules apply to the whole card. If you turn off **Settings → General → Lists → Grid multi-select**, a click on the cover opens the item immediately.
 

@@ -2346,22 +2346,65 @@ impl Listen {
         ])
     }
 
-    /// Feishin's Auto-DJ: when few songs are left, append similar (or random) ones.
+    /// Feishin's Auto-DJ: when few songs are left, append similar (or random) ones. With the
+    /// Auto-DJ off, autoplay does the same once the last song starts (see [`Self::autoplay_due`]).
     fn maybe_autodj(&mut self) -> Task<Message> {
         let s = &self.config.settings.auto_dj;
-        if !s.enabled || self.queue.upcoming() > s.timing as usize {
+        if s.enabled {
+            if self.queue.upcoming() > s.timing as usize {
+                return Task::none();
+            }
+            return self.fetch_autodj();
+        }
+        if !self.autoplay_due() {
             return Task::none();
         }
-        self.fetch_autodj()
+        tracing::info!("autoplay: the queue reached its last song; adding similar songs");
+        self.fetch_autodj_with(true)
+    }
+
+    /// Autoplay (like Spotify's): an album, playlist or single song that plays to its end goes on
+    /// with similar songs instead of stopping, in every play mode. Repeat (one or all) keeps the
+    /// queue as it is; the AI DJ plans its own sets; a radio station or a remote player is left alone.
+    pub(super) fn autoplay_due(&self) -> bool {
+        self.queue.repeat == listen_core::queue::Repeat::Off
+            && !self.config.settings.auto_dj.enabled
+            && !self.ai_dj_on()
+            && self.queue.current().is_some()
+            && self.queue.upcoming() == 0
+            && self.radio.active.is_none()
+            && !self.jukebox_active()
+            && !self.dlna_casting()
     }
 
     /// Appends similar (or random) songs to the current one (the Auto-DJ, and
     /// the AI DJ's fallback).
     fn fetch_autodj(&mut self) -> Task<Message> {
+        self.fetch_autodj_with(false)
+    }
+
+    /// [`Self::fetch_autodj`]; `context`: seeded by the songs that played in this queue (the album or
+    /// playlist that is ending, the way its "Recommended" strip is), not only by the current song.
+    fn fetch_autodj_with(&mut self, context: bool) -> Task<Message> {
         let s = &self.config.settings.auto_dj;
         if self.demo || self.autodj_busy {
             return Task::none();
         }
+        // The queue up to the current song, newest last (the source seeds with its last, first and
+        // middle song); bridges and DJ clips are not part of the music.
+        let played: Vec<Song> = if context {
+            let mut played: Vec<Song> =
+                self.queue.iter().filter(|i| i.bridge.is_none()).map(|i| i.song.clone()).collect();
+            if let Some(at) =
+                self.queue.current().and_then(|c| played.iter().rposition(|s| s.id == c.song.id))
+            {
+                played.truncate(at + 1);
+            }
+            let skip = played.len().saturating_sub(50);
+            played.split_off(skip)
+        } else {
+            vec![]
+        };
         let seed = self.queue.current().map(|i| i.song.clone());
         let (Some(source), Some(seed)) =
             (seed.as_ref().and_then(|s| self.sources.get(&s.server_id).cloned()), seed)
@@ -2379,10 +2422,17 @@ impl Listen {
         let similar = s.strategy != "random";
         Task::perform(
             async move {
-                let mut songs = if similar {
-                    source.similar_songs(&seed, count * 3).await.unwrap_or_default()
-                } else {
+                let mut songs = if !similar {
                     vec![]
+                } else if played.len() > 1 {
+                    // Several seeds from the finished album/playlist; the current song alone if the
+                    // source can't do that.
+                    match source.playlist_recommendations(&played, count * 3).await {
+                        Ok(songs) if !songs.is_empty() => songs,
+                        _ => source.similar_songs(&seed, count * 3).await.unwrap_or_default(),
+                    }
+                } else {
+                    source.similar_songs(&seed, count * 3).await.unwrap_or_default()
                 };
                 let similar = songs.iter().map(|s| s.id.clone()).collect();
                 // Random songs fill in when the similar ones already played this session.
@@ -3567,7 +3617,8 @@ impl Listen {
             Message::SetPlayMode(mode) => return self.set_play_mode(mode),
             Message::CycleRepeat => {
                 self.queue.repeat = self.queue.repeat.cycle();
-                return self.refresh_next();
+                let refill = if self.playback.playing { self.maybe_autodj() } else { Task::none() };
+                return Task::batch([self.refresh_next(), refill]);
             }
             Message::ToggleQueue => {
                 self.show_queue = !self.show_queue;
@@ -4897,6 +4948,77 @@ mod search_generation_tests {
         s.search.loading = true;
         let _ = s.update(late);
         assert!(s.search.loading, "a result of the previous server's search is dropped");
+    }
+}
+
+#[cfg(test)]
+mod autoplay_tests {
+    use super::*;
+    use listen_core::queue::Repeat;
+
+    fn on_last_song() -> Listen {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.config.settings.auto_dj.enabled = false;
+        s.config.settings.ai_dj.enabled = false;
+        let songs = crate::demo::album_songs(0);
+        let last = songs.len() - 1;
+        s.queue.set(songs, last);
+        s.queue.repeat = Repeat::Off;
+        s
+    }
+
+    #[test]
+    fn an_album_on_its_last_song_asks_for_similar_songs() {
+        let s = on_last_song();
+        assert!(s.autoplay_due());
+    }
+
+    #[test]
+    fn songs_still_queued_or_repeat_on_keep_the_queue_as_it_is() {
+        let mut s = on_last_song();
+        s.queue.repeat = Repeat::All;
+        assert!(!s.autoplay_due(), "repeat all loops the album");
+        s.queue.repeat = Repeat::One;
+        assert!(!s.autoplay_due(), "repeat one loops the song");
+        s.queue.repeat = Repeat::Off;
+        s.queue.set(crate::demo::album_songs(0), 0);
+        assert!(!s.autoplay_due(), "the album is not finished yet");
+    }
+
+    #[test]
+    fn the_auto_dj_and_the_ai_dj_fill_on_their_own() {
+        let mut s = on_last_song();
+        s.config.settings.auto_dj.enabled = true;
+        assert!(!s.autoplay_due());
+    }
+
+    #[test]
+    fn a_finished_album_plays_on_with_what_autoplay_added() {
+        let mut s = on_last_song();
+        s.playback.playing = true;
+        let _ = s.update(Message::Deck(0, crate::playback::PlayerMsg::Event(PlayerEvent::Ended)));
+        assert!(s.playback.idle, "the album ran out");
+        s.autodj_gen += 1;
+        s.autodj_busy = true;
+        s.autodj_for_ai = false;
+        let fill =
+            AutoDjFill { songs: crate::demo::album_songs(2), similar: Default::default(), seed: "x".into() };
+        let _ = s.update(Message::AutoDjFilled(s.autodj_generation(), Ok(fill)));
+        assert!(!s.playback.idle, "a similar song started");
+        let current = s.queue.current().map(|i| i.song.id.clone()).expect("something plays");
+        assert!(crate::demo::album_songs(2).iter().any(|song| song.id == current));
+    }
+    #[test]
+    fn a_song_rows_play_button_plays_the_list_from_that_song() {
+        let (mut s, _) = Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        s.config.settings.queue.confirm_queue_changes = false;
+        s.config.settings.ai_dj.enabled = false;
+        s.config.settings.lists.play_behavior = listen_core::settings::PlayBehavior::Now;
+        s.library.songs = crate::demo::album_songs(1);
+        let row = list::ListMsg::PlayRow(list::ListId::Songs, 2, listen_core::settings::PlayBehavior::Now);
+        let _ = s.update(Message::List(row));
+        assert_eq!(s.queue.len(), s.library.songs.len(), "the whole list is queued, not the one song");
+        assert_eq!(s.queue.current().map(|i| i.song.id.clone()), Some(s.library.songs[2].id.clone()));
     }
 }
 

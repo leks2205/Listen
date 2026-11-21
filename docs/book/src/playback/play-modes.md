@@ -14,7 +14,7 @@ The modes exclude each other. If several settings were on together (for example 
 
 | Mode | What happens |
 |---|---|
-| **Off** | The queue plays in order and stops at its end. |
+| **Off** | The queue plays in order. At its end, [autoplay](#autoplay) goes on with similar songs. |
 | **Shuffle** | The play order of the queue is shuffled. The playing song keeps playing, and songs in the Up Next block still come first, in the order you queued them. Switching away from Shuffle restores the order from before shuffling, including songs you moved; songs added meanwhile follow after it. A DJ bridge always stays right before the song it leads into. |
 | **Auto-DJ** | When few songs are left, Listen appends similar songs to the queue. |
 | **AI DJ** | Gemini picks sets of songs and talks between them. Needs your own Gemini API key. |
@@ -33,11 +33,17 @@ With the AI DJ on, clicking a single song in a list plays that song alone and ma
 
 The repeat button cycles **Off, One, All**:
 
-- **Off:** the queue stops after its last song.
+- **Off:** after the last song, [autoplay](#autoplay) adds similar songs and plays on.
 - **One:** the playing song repeats. Pressing Next still moves on, but stays on the last song instead of wrapping around.
 - **All:** after the last song the queue starts again from the top.
 
 The button is highlighted whenever repeat is on, and shows a "1" symbol for **One**. The hotkey is "Toggle repeat".
+
+## Autoplay
+
+With the Auto-DJ and the AI DJ off, the music still doesn't stop when the queue ends. When the last song of the queue starts (the last song of an album, a playlist, or a single song you played), Listen appends similar songs, picked the way the **Recommended** strip under a playlist picks them: several songs of the queue that just played are the seeds, not only the last one. They then go on through the same rules as the Auto-DJ below (no repeats from this session, one version per song, the same scene, best flow first), so the music goes on until you stop it.
+
+Repeat turns autoplay off: with **One** the song loops, with **All** the album or playlist starts again. Turning repeat off during the last song adds the similar songs right away. A radio station, Jukebox mode and casting to a DLNA speaker are left alone.
 
 ## Auto-DJ
 

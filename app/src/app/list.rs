@@ -826,6 +826,11 @@ impl Listen {
                 if id.is_queue() && behavior == PlayBehavior::Now {
                     return self.queue_activate(index);
                 }
+                // A song row's Play button plays the list from that song, like a double-click (an
+                // album goes on after the clicked track instead of stopping after it).
+                if behavior == PlayBehavior::Now && matches!(self.list_data(&id), Some(ListData::Songs(_))) {
+                    return self.play_from_row(&id, index);
+                }
                 let picks = self.list_data(&id).map(|d| d.pick(&[index])).unwrap_or_default();
                 return self.play_items(picks, behavior);
             }
@@ -1009,18 +1014,7 @@ impl Listen {
                     return Task::none();
                 }
                 match behavior {
-                    PlayBehavior::Now => {
-                        // Feishin queues 50 songs before and after the clicked one.
-                        let from = index.saturating_sub(50);
-                        let to = (index + 51).min(songs.len());
-                        let window = songs[from..to].to_vec();
-                        // In a playlist, the songs hidden in it are left out (the clicked one plays).
-                        let (window, start) = match id {
-                            ListId::Playlist(p) => self.without_hidden(p, window, index - from, true),
-                            _ => (window, index - from),
-                        };
-                        self.play_picked(window, start)
-                    }
+                    PlayBehavior::Now => self.play_from_row(id, index),
                     other => {
                         let song = songs[index].clone();
                         self.play_items(vec![Picked::Song(song)], other)
@@ -1033,6 +1027,23 @@ impl Listen {
             },
             None => Task::none(),
         }
+    }
+
+    /// Plays a song list from row `index`: Feishin queues 50 songs before and after the clicked one.
+    /// In a playlist, the songs hidden in it are left out (the clicked one plays).
+    fn play_from_row(&mut self, id: &ListId, index: usize) -> Task<Message> {
+        let Some(ListData::Songs(songs)) = self.list_data(id) else { return Task::none() };
+        if index >= songs.len() {
+            return Task::none();
+        }
+        let from = index.saturating_sub(50);
+        let to = (index + 51).min(songs.len());
+        let window = songs[from..to].to_vec();
+        let (window, start) = match id {
+            ListId::Playlist(p) => self.without_hidden(p, window, index - from, true),
+            _ => (window, index - from),
+        };
+        self.play_picked(window, start)
     }
 
     /// Plays or queues rows with a behaviour. Songs go straight to the
