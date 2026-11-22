@@ -593,6 +593,7 @@ pub async fn install(release: Release, mode: InstallMode, work: PathBuf) -> Resu
     }
     let package = package_for(&mode).expect("every mode but Unsupported has a package");
     let (asset, sums) = select_assets(&release, package, fedora_dist_tag().as_deref())?;
+    tracing::info!("update: installing {} ({}) from {}", release.version, asset.name, release.tag);
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
     let result = install_in(&release, &mode, &work, &asset, &sums).await;
@@ -616,6 +617,7 @@ async fn install_in(
     download_asset(asset, &file).await?;
     let sums_text = std::fs::read_to_string(&sums_path).map_err(|e| e.to_string())?;
     verify_sha256(&file, &asset.name, &sums_text)?;
+    tracing::info!("update: {} downloaded and verified ({} bytes)", asset.name, asset.size);
     match mode {
         InstallMode::Rpm => {
             run(tokio::process::Command::new("pkexec").args(["dnf", "install", "-y"]).arg(&file), "pkexec")
@@ -635,6 +637,7 @@ async fn install_in(
         }
         InstallMode::WindowsInstaller => {
             run_windows_installer(&file)?;
+            tracing::info!("update: installer started ({})", file.display());
             Ok(Installed::Windows)
         }
         InstallMode::Unsupported(why) => Err(why.clone()),
@@ -656,6 +659,17 @@ fn run_windows_installer(installer: &Path) -> Result<(), String> {
         cmd.creation_flags(0x0000_0008 | 0x0000_0200);
     }
     cmd.spawn().map(|_| ()).map_err(|e| format!("cannot start the installer: {e}"))
+}
+
+/// Ends the process for the installer even when iced's shutdown stalls: a window that stops
+/// repainting keeps the installer waiting for it to close, and the user is left with a frozen
+/// Listen instead of the new version. Queue and window state are saved before this runs.
+fn exit_for_installer() {
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(8));
+        tracing::warn!("shutdown for the update took longer than 8 s; ending the process");
+        std::process::exit(0);
+    });
 }
 
 /// The `listen` file one folder down in an unpacked release tarball.
@@ -811,6 +825,7 @@ impl Listen {
                     return Task::none();
                 };
                 self.adv.update.phase = Phase::Installing;
+                tracing::info!("update: {} chosen; starting the download", release.tag);
                 return Task::future(install(release, mode, cache))
                     .map(|r| Message::Update(UpdateMsg::Installed(r)));
             }
@@ -819,6 +834,8 @@ impl Listen {
                     // The installer replaces the files and starts the new Listen.
                     self.save_queue_now();
                     self.save_window_state_now();
+                    tracing::info!("update: leaving so the installer can replace the files");
+                    exit_for_installer();
                     return iced::exit();
                 }
                 Ok(done) => {
