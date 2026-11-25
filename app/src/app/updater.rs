@@ -652,6 +652,11 @@ pub const WINDOWS_INSTALLER_ARGS: [&str; 5] =
 fn run_windows_installer(installer: &Path) -> Result<(), String> {
     let mut cmd = std::process::Command::new(installer);
     cmd.args(WINDOWS_INSTALLER_ARGS);
+    // Silent Inno Setup logs nothing unless asked to.
+    if let Some(log) = crate::logging::dir().map(|d| d.join("setup.log")) {
+        tracing::info!("update: installer log {}", log.display());
+        cmd.arg(format!("/LOG={}", log.display()));
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

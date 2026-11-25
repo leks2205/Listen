@@ -73,6 +73,8 @@ Filename: "{app}\listen.exe"; Flags: nowait; Check: ShouldRelaunch
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+function GetTickCount: DWORD; external 'GetTickCount@kernel32.dll stdcall';
+
 function ShouldRelaunch: Boolean;
 var
   I: Integer;
@@ -81,4 +83,76 @@ begin
   for I := 1 to ParamCount do
     if CompareText(ParamStr(I), '/RELAUNCH') = 0 then
       Result := True;
+end;
+
+// Ids of the processes running from the install folder; ListenRunning: listen.exe is one of them.
+function AppProcesses(var ListenRunning: Boolean): TArrayOfString;
+var
+  Locator, Service, Procs, P, Path: Variant;
+  Dir, Exe: String;
+  I, N, Pid: Integer;
+begin
+  SetArrayLength(Result, 0);
+  ListenRunning := False;
+  Dir := Lowercase(AddBackslash(ExpandConstant('{app}')));
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\CIMV2');
+    Procs := Service.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process');
+    N := 0;
+    for I := 0 to Procs.Count - 1 do
+    begin
+      P := Procs.ItemIndex(I);
+      Path := P.ExecutablePath;
+      if not VarIsNull(Path) then
+      begin
+        Exe := Path;
+        Exe := Lowercase(Exe);
+        if Pos(Dir, Exe) = 1 then
+        begin
+          Pid := P.ProcessId;
+          SetArrayLength(Result, N + 1);
+          Result[N] := IntToStr(Pid);
+          N := N + 1;
+          if Exe = Dir + 'listen.exe' then
+            ListenRunning := True;
+        end;
+      end;
+    end;
+  except
+    Log('Listen: cannot list running processes: ' + GetExceptionMessage);
+  end;
+end;
+
+// Silent update: the Restart Manager cannot close a Listen that hangs on exit, so wait for it,
+// then end whatever still runs from the install folder (including orphaned mpv players).
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Pids: TArrayOfString;
+  ListenRunning: Boolean;
+  Waited, I, Code: Integer;
+  Start: DWORD;
+begin
+  Result := '';
+  if not ShouldRelaunch then
+    Exit;
+  Start := GetTickCount;
+  Pids := AppProcesses(ListenRunning);
+  Waited := 0;
+  while ListenRunning and (Waited < 15000) do
+  begin
+    Sleep(500);
+    Pids := AppProcesses(ListenRunning);
+    Waited := GetTickCount - Start;
+  end;
+  // Kept on one line: a line starting with "[" opens a new section.
+  Log(Format('Listen: waited %d ms; listen.exe still running: %d; processes left: %d', [Waited, Ord(ListenRunning), GetArrayLength(Pids)]));
+  for I := 0 to GetArrayLength(Pids) - 1 do
+  begin
+    Log('Listen: ending process ' + Pids[I]);
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /PID ' + Pids[I], '', SW_HIDE,
+      ewWaitUntilTerminated, Code);
+  end;
+  if GetArrayLength(Pids) > 0 then
+    Sleep(1000);
 end;
