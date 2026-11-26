@@ -67,6 +67,14 @@ pub async fn recompress(path: &Path) -> Result<(), String> {
     result
 }
 
+/// Encodes a ripped WAV (default level, checked by decoding while writing); the pipeline
+/// re-encodes at [`LEVEL`] when tagging.
+pub async fn encode(wav: &Path, flac: &Path) -> Result<(), String> {
+    run("flac", &[os("--verify"), os("--silent"), os("--force"), os("-o"), flac.as_os_str(), wav.as_os_str()])
+        .await
+        .map(|_| ())
+}
+
 /// Replaces all Vorbis comments with `tags` (UTF-8 as is).
 pub async fn write_tags(path: &Path, tags: &[(String, String)]) -> Result<(), String> {
     let list: PathBuf = path.with_extension("tags.txt");

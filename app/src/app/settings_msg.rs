@@ -102,6 +102,7 @@ pub enum Setting {
     RipReplayGain(bool),
     RipScan(bool),
     RipPickerTimeout(u32),
+    RipMode(listen_core::settings::RipMode),
     /// Typing in the destination field; `RipSaveDestination` stores it.
     RipDestination(String),
     RipSaveDestination,
@@ -344,6 +345,7 @@ impl Listen {
             | Setting::RipReplayGain(_)
             | Setting::RipScan(_)
             | Setting::RipPickerTimeout(_)
+            | Setting::RipMode(_)
             | Setting::RipDestination(_)
             | Setting::RipSaveDestination
             | Setting::RipOffset(_)

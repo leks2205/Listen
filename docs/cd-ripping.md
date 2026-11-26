@@ -1,7 +1,8 @@
 # CD ripping (Linux)
 
-Insert an audio CD and Listen rips it, much like MusicBee's auto-rip: a secure rip with
-[whipper](https://github.com/whipper-team/whipper) (Test & Copy, AccurateRip), always FLAC level 8,
+Insert an audio CD and Listen rips it, much like MusicBee's auto-rip: a Fast rip (one burst read with
+`cd-paranoia`, checked against AccurateRip) or a Secure rip with [whipper](https://github.com/whipper-team/whipper)
+(Test & Copy, AccurateRip), always FLAC level 8,
 MusicBrainz tags, cover art and ReplayGain, filed as `Album Artist/Album/NN Title.flac` into your music
 folder. When it is done the disc is ejected and you get a notification.
 
@@ -15,12 +16,32 @@ listen --check-cd                           # tools, drive, read offset, music f
 Pick the destination in **Settings → Advanced → CD ripping**. It can be a network share (for example the
 folder Navidrome scans); Listen waits for it if it isn't mounted and never deletes or overwrites anything there.
 
+## Rip modes
+
+**Settings → Advanced → CD ripping → Rip mode**, Fast by default; each rip's card has a Secure / Fast
+switch that works until the first track is being read.
+
+| | Fast | Secure |
+|---|---|---|
+| Reads | each track once, `cd-paranoia -Z` (burst), drive at full speed (`eject -x`) | `cdrdao read-toc`, then every track twice with paranoia, compared |
+| 15:53 CD (LG GU70N, CD-R) | ≈ 4.2 min: 953 s of audio at 3.79x | ≈ 19 min: 202 s table scan + two 1.84x reads |
+| Verification | AccurateRip v1/v2 (Listen computes the checksums and fetches `dBAR-….bin`) | the second read + AccurateRip (whipper) |
+| CD-Text | READ TOC format 5 from the drive | whipper's cdrdao `.toc` |
+
+Measured on track 1 of that disc (167 s): paranoia read 90.6 s, whipper's verify read another 90.6 s,
+burst 51.6 s, burst at full speed 44.0 s; the burst output was byte-identical to the paranoia output.
+
+What Fast gives up: no second read. A read error the drive doesn't report is only caught when AccurateRip
+knows the disc (it then shows as a mismatch; the files are kept). On a disc AccurateRip doesn't know, a Fast
+rip is unchecked. A track cd-paranoia can't read in burst mode is read once more with paranoia before it
+counts as unreadable.
+
 ## What it does
 
 | Step | Listen |
 |---|---|
 | Detect | UDisks2; also while Listen sits in the tray |
-| Rip | whipper secure rip, drive offset from the AccurateRip drive database (or **Verify offset**) |
+| Rip | Fast: `cd-paranoia` burst read + AccurateRip; Secure: whipper secure rip. Drive offset from the AccurateRip drive database (or **Verify offset**) |
 | Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → CD-Text → "Unknown Album (…)" (listed under "Rips to fix") |
 | Several matching releases | a picker; the best match is taken after 30 s |
 | Cover | Cover Art Archive (release → release group) → iTunes; 1200 px, embedded + `cover.jpg` |

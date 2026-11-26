@@ -1,11 +1,17 @@
 //! Rips a disc into a local folder as `NN.flac` plus whipper's log and TOC.
-//! `Ripper::Whipper` runs the real thing; `Ripper::Mock` makes sine-wave
-//! FLACs and a whipper-style log so the whole pipeline can be tested
-//! without a drive.
+//! `Ripper::Whipper` runs the real thing (Secure); `Ripper::Fast` reads the disc
+//! once with cd-paranoia and checks it with AccurateRip ([`crate::fast`]);
+//! `Ripper::Mock` makes sine-wave FLACs and a whipper-style log so the whole
+//! pipeline can be tested without a drive. `Ripper::Either` runs one of two
+//! rippers and lets the user switch until the first track is read.
 
+use crate::fast::FastRipper;
+use crate::toc::Toc;
 use crate::whipper::{self, Ar, Line, RipLog};
+use listen_core::settings::RipMode;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::sync::{mpsc, watch};
@@ -18,6 +24,8 @@ pub struct RipRequest {
     pub out_dir: PathBuf,
     /// Everything whipper prints is copied here (Listen's logs dir).
     pub output_log: PathBuf,
+    /// The disc's table of contents (from the drive).
+    pub toc: Toc,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,6 +74,8 @@ pub struct MockRipper {
     pub step: Duration,
     /// cdrdao `.toc` text to leave behind (CD-Text).
     pub toc_text: Option<String>,
+    /// How long "Reading table" takes (Secure only).
+    pub table: Duration,
 }
 
 impl Default for MockRipper {
@@ -77,14 +87,71 @@ impl Default for MockRipper {
             fail_track: None,
             step: Duration::from_millis(5),
             toc_text: None,
+            table: Duration::ZERO,
         }
+    }
+}
+
+impl MockRipper {
+    /// The tone of track `number`.
+    pub fn freq(number: u32) -> f32 {
+        220.0 * number as f32
+    }
+
+    /// The 16-bit stereo samples the mock "disc" holds for track `number` (1-based).
+    pub fn pcm(&self, number: u32) -> Vec<u8> {
+        let secs = self.track_secs.get(number as usize - 1).copied().unwrap_or(1.0);
+        sine_pcm(secs, Self::freq(number))
+    }
+}
+
+/// The rip mode of one rip, switchable until its first track is being read. Clones share it: the
+/// app keeps one to show and switch it, [`Ripper::Either`] one to follow it.
+#[derive(Debug, Clone)]
+pub struct ModeSwitch(Arc<watch::Sender<(RipMode, bool)>>);
+
+impl ModeSwitch {
+    pub fn new(mode: RipMode) -> Self {
+        Self(Arc::new(watch::Sender::new((mode, false))))
+    }
+    pub fn mode(&self) -> RipMode {
+        self.0.borrow().0
+    }
+    /// The first track is being read: the mode can't change any more.
+    pub fn locked(&self) -> bool {
+        self.0.borrow().1
+    }
+    /// Switches to `mode` unless locked; true when `mode` is the mode now.
+    pub fn set(&self, mode: RipMode) -> bool {
+        self.0.send_if_modified(|(m, locked)| {
+            if *locked || *m == mode {
+                return false;
+            }
+            *m = mode;
+            true
+        });
+        self.mode() == mode
+    }
+    /// Locks the mode; returns the one that stays.
+    fn lock(&self) -> RipMode {
+        self.0.send_modify(|(_, locked)| *locked = true);
+        self.mode()
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Ripper {
+    /// Secure: whipper.
     Whipper,
+    /// Fast: one burst read with cd-paranoia, AccurateRip by Listen.
+    Fast(FastRipper),
     Mock(MockRipper),
+    /// `fast` or `secure`, as `mode` says; a switch before the first track restarts the rip.
+    Either {
+        mode: ModeSwitch,
+        fast: Box<Ripper>,
+        secure: Box<Ripper>,
+    },
 }
 
 impl Ripper {
@@ -97,9 +164,78 @@ impl Ripper {
         std::fs::create_dir_all(&req.out_dir).map_err(|e| RipError::Failed(e.to_string()))?;
         match self {
             Ripper::Whipper => rip_whipper(req, events, cancel).await?,
+            Ripper::Fast(f) => crate::fast::rip_fast(f, req, events, cancel).await?,
             Ripper::Mock(m) => rip_mock(m, req, events, cancel).await?,
+            Ripper::Either { mode, fast, secure } => {
+                return Box::pin(rip_either(mode, fast, secure, req, events, cancel)).await;
+            }
         }
         collect(&req.out_dir)
+    }
+}
+
+/// Runs the ripper of the current mode; until its first track starts, a switch stops it, empties the
+/// output folder and starts the other one.
+async fn rip_either(
+    switch: &ModeSwitch,
+    fast: &Ripper,
+    secure: &Ripper,
+    req: &RipRequest,
+    events: &mpsc::UnboundedSender<RipEvent>,
+    mut cancel: watch::Receiver<bool>,
+) -> Result<RipOutcome, RipError> {
+    let mut modes = switch.0.subscribe();
+    loop {
+        let mode = switch.mode();
+        tracing::info!("rip mode {mode:?}");
+        let inner = if mode == RipMode::Fast { fast } else { secure };
+        let (inner_tx, mut inner_events) = mpsc::unbounded_channel();
+        let (stop_tx, stop_rx) = watch::channel(false);
+        let rip = inner.rip(req, &inner_tx, stop_rx);
+        let mut rip = Box::pin(rip);
+        let mut locked = switch.locked();
+        modes.mark_unchanged();
+        let restart = loop {
+            tokio::select! {
+                r = &mut rip => {
+                    while let Ok(ev) = inner_events.try_recv() {
+                        let _ = events.send(ev);
+                    }
+                    return r;
+                }
+                Some(ev) = inner_events.recv() => {
+                    if !locked && matches!(ev, RipEvent::Track { .. }) {
+                        locked = true;
+                        if switch.lock() != mode {
+                            // Switched in the same moment: the switch wins, nothing was read yet.
+                            break true;
+                        }
+                    }
+                    let _ = events.send(ev);
+                }
+                changed = modes.changed(), if !locked => {
+                    if changed.is_ok() && switch.mode() != mode {
+                        break true;
+                    }
+                }
+                changed = cancel.changed() => {
+                    if changed.is_err() || *cancel.borrow() {
+                        let _ = stop_tx.send(true);
+                        let _ = rip.await;
+                        return Err(RipError::Cancelled);
+                    }
+                }
+            }
+        };
+        if restart {
+            tracing::info!("rip mode switched, restarting");
+            let _ = stop_tx.send(true);
+            let _ = rip.await;
+            drop(inner_events);
+            // Only the rip's own scratch folder.
+            let _ = std::fs::remove_dir_all(&req.out_dir);
+            std::fs::create_dir_all(&req.out_dir).map_err(|e| RipError::Failed(e.to_string()))?;
+        }
     }
 }
 
@@ -122,7 +258,7 @@ fn collect(dir: &Path) -> Result<RipOutcome, RipError> {
     Ok(out)
 }
 
-fn stop_group(child: &tokio::process::Child, signal: i32) {
+pub(crate) fn stop_group(child: &tokio::process::Child, signal: i32) {
     #[cfg(unix)]
     if let Some(pid) = child.id() {
         // SAFETY: signalling our own child's process group (whipper and the
@@ -269,26 +405,39 @@ async fn rip_whipper(
 }
 
 #[cfg(unix)]
-fn libc_sigterm() -> i32 {
+pub(crate) fn libc_sigterm() -> i32 {
     libc::SIGTERM
 }
 #[cfg(unix)]
-fn libc_sigkill() -> i32 {
+pub(crate) fn libc_sigkill() -> i32 {
     libc::SIGKILL
 }
 #[cfg(not(unix))]
-fn libc_sigterm() -> i32 {
+pub(crate) fn libc_sigterm() -> i32 {
     15
 }
 #[cfg(not(unix))]
-fn libc_sigkill() -> i32 {
+pub(crate) fn libc_sigkill() -> i32 {
     9
 }
 
-/// 44.1 kHz 16-bit stereo sine WAV.
-fn write_wav(path: &Path, secs: f32, freq: f32) -> std::io::Result<()> {
+/// 44.1 kHz 16-bit stereo sine samples.
+fn sine_pcm(secs: f32, freq: f32) -> Vec<u8> {
     let frames = (44_100.0 * secs) as u32;
-    let data_len = frames * 4;
+    let mut out = Vec::with_capacity(frames as usize * 4);
+    for i in 0..frames {
+        let t = i as f32 / 44_100.0;
+        let s = ((t * freq * std::f32::consts::TAU).sin() * 12_000.0) as i16;
+        out.extend_from_slice(&s.to_le_bytes());
+        out.extend_from_slice(&s.to_le_bytes());
+    }
+    out
+}
+
+/// 44.1 kHz 16-bit stereo sine WAV.
+pub(crate) fn write_wav(path: &Path, secs: f32, freq: f32) -> std::io::Result<()> {
+    let pcm = sine_pcm(secs, freq);
+    let data_len = pcm.len() as u32;
     let mut f = std::io::BufWriter::new(std::fs::File::create(path)?);
     f.write_all(b"RIFF")?;
     f.write_all(&(36 + data_len).to_le_bytes())?;
@@ -302,12 +451,7 @@ fn write_wav(path: &Path, secs: f32, freq: f32) -> std::io::Result<()> {
     f.write_all(&16u16.to_le_bytes())?;
     f.write_all(b"data")?;
     f.write_all(&data_len.to_le_bytes())?;
-    for i in 0..frames {
-        let t = i as f32 / 44_100.0;
-        let s = ((t * freq * std::f32::consts::TAU).sin() * 12_000.0) as i16;
-        f.write_all(&s.to_le_bytes())?;
-        f.write_all(&s.to_le_bytes())?;
-    }
+    f.write_all(&pcm)?;
     f.flush()
 }
 
@@ -329,6 +473,14 @@ async fn rip_mock(
 ) -> Result<(), RipError> {
     let total = m.track_secs.len() as u32;
     let _ = events.send(RipEvent::Stage("Reading table".into()));
+    let mut waited = Duration::ZERO;
+    while waited < m.table {
+        if *cancel.borrow() {
+            return Err(RipError::Cancelled);
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        waited += Duration::from_millis(10);
+    }
     let mut log = String::from(
         "Log created by: whipper 0.10.0 (internal logger)\nLog creation date: 2026-10-01T12:00:00Z\n\nRipping phase information:\n  Drive: MOCK (revision 1)\n  Read offset correction: 48\n\nTracks:\n",
     );
@@ -355,7 +507,7 @@ async fn rip_mock(
         }
         let wav = req.out_dir.join(format!("{n:02}.wav"));
         let flac = req.out_dir.join(&name);
-        write_wav(&wav, *secs, 220.0 * n as f32).map_err(|e| RipError::Failed(e.to_string()))?;
+        write_wav(&wav, *secs, MockRipper::freq(n)).map_err(|e| RipError::Failed(e.to_string()))?;
         let out = tokio::process::Command::new("flac")
             .args(["-5", "--silent", "--force", "-o"])
             .arg(&flac)

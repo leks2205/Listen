@@ -51,6 +51,18 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
         ),
         line(
             state,
+            "Rip mode",
+            "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with \
+             AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).",
+            pick_list(
+                listen_core::settings::RipMode::ALL.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(r.mode)),
+                |m| Message::Setting(Setting::RipMode(m.0)),
+            )
+            .into(),
+        ),
+        line(
+            state,
             "Music folder",
             "Albums go to Album Artist/Album/NN Title.flac here — the folder Navidrome scans (the NAS \
              share, e.g. /mnt/nas/Music). Listen never deletes or overwrites anything in it.",

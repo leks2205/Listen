@@ -2376,5 +2376,9 @@
 "Already downloading.": "Wird bereits heruntergeladen.",
 "Downloading {} songs; {}. Remove some downloads first.": "{} Titel werden heruntergeladen; {}. Entferne zuerst einige Downloads.",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz kennt diese CD nicht; {} passt nur zur Gesamtlänge, nicht zu den Titeln, und wurde nicht verwendet",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz kennt diese CD nicht genau; {} passt zu jeder Titellänge und wurde verwendet"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz kennt diese CD nicht genau; {} passt zu jeder Titellänge und wurde verwendet",
+"Rip mode": "Rip-Modus",
+"Fast": "Schnell",
+"Secure": "Sicher",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Schnell liest die CD einmal mit voller Laufwerksgeschwindigkeit (etwa 4 Minuten) und prüft sie mit AccurateRip. Sicher (whipper) liest jeden Titel zweimal und vergleicht (etwa 20 Minuten)."
 }

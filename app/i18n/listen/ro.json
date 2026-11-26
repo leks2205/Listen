@@ -2651,5 +2651,9 @@
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ Cookie-uri youtube.com încărcate ({}) — fă clic pe Conectează.",
 "✗ {}: {}": "✗ {}: {}",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz nu cunoaște acest disc; {} se potrivește doar cu durata totală, nu cu piesele, și nu a fost folosit",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz nu cunoaște exact acest disc; {} se potrivește cu durata fiecărei piese și a fost folosit"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz nu cunoaște exact acest disc; {} se potrivește cu durata fiecărei piese și a fost folosit",
+"Rip mode": "Mod de extragere",
+"Fast": "Rapid",
+"Secure": "Sigur",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Rapid citește CD-ul o singură dată la viteza maximă a unității (aproximativ 4 minute) și îl verifică cu AccurateRip. Sigur (whipper) citește fiecare piesă de două ori și compară (aproximativ 20 de minute)."
 }

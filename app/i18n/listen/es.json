@@ -1989,5 +1989,9 @@
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} cookies de youtube.com cargadas: haz clic en Conectar.",
 "✗ {}: {}": "✗ {}: {}",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz no conoce este disco; {} solo coincide con la duración total, no con las pistas, y no se usó",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz no conoce este disco con exactitud; {} coincide con la duración de todas las pistas y se usó"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz no conoce este disco con exactitud; {} coincide con la duración de todas las pistas y se usó",
+"Rip mode": "Modo de copia",
+"Fast": "Rápido",
+"Secure": "Seguro",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Rápido lee el CD una vez a la velocidad máxima de la unidad (unos 4 minutos) y lo comprueba con AccurateRip. Seguro (whipper) lee cada pista dos veces y compara (unos 20 minutos)."
 }

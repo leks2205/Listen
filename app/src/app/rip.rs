@@ -4,11 +4,13 @@
 use super::{Listen, Message, Setting};
 use iced::Task;
 use iced::futures::SinkExt;
+use listen_core::settings::RipMode;
 use listen_rip::detect::DriveEvent;
+use listen_rip::fast::FastRipper;
 use listen_rip::history::{Entry, History};
 use listen_rip::pipeline::{self, Candidate, Command, JobConfig, Lookup, Report, Stage, Update};
 use listen_rip::queue::RipQueue;
-use listen_rip::{DriveInfo, Ripper, whipper};
+use listen_rip::{DriveInfo, ModeSwitch, Ripper, whipper};
 use listen_source::SourceError;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -36,6 +38,8 @@ pub struct RipJob {
     /// Ripped and ejected: the drive is free again.
     drive_free: bool,
     commands: Option<mpsc::UnboundedSender<Command>>,
+    /// This rip's Secure/Fast mode (switchable until its first track is read).
+    pub mode: Option<ModeSwitch>,
 }
 
 impl RipJob {
@@ -97,8 +101,19 @@ impl RipState {
             report: None,
             drive_free: false,
             commands: None,
+            mode: None,
         });
         self.next_id
+    }
+
+    /// [`Self::test_job`] with a rip mode switch.
+    #[doc(hidden)]
+    pub fn test_job_with_mode(&mut self, device: &str, mode: ModeSwitch) -> u64 {
+        let id = self.test_job(device);
+        if let Some(j) = self.jobs.iter_mut().find(|j| j.id == id) {
+            j.mode = Some(mode);
+        }
+        id
     }
 }
 
@@ -112,6 +127,8 @@ pub enum RipMsg {
     Discard(u64),
     Retry(u64),
     Dismiss(u64),
+    /// The rip card's Secure/Fast switch (only before the first track is read).
+    Mode(u64, RipMode),
     /// "Rip CD": the given drive, or the first with a disc.
     RipNow(Option<PathBuf>),
     BrowseDestination,
@@ -195,6 +212,13 @@ impl Listen {
             RipMsg::Discard(id) => self.rip_command(id, Command::Discard),
             RipMsg::Retry(id) => self.rip_command(id, Command::RetryPublish),
             RipMsg::Dismiss(id) => self.rip.jobs.retain(|j| j.id != id || !j.stage.finished()),
+            RipMsg::Mode(id, mode) => {
+                if let Some(switch) = self.rip.jobs.iter().find(|j| j.id == id).and_then(|j| j.mode.as_ref())
+                    && !switch.set(mode)
+                {
+                    tracing::info!("rip {id}: the first track is being read, the mode stays");
+                }
+            }
             RipMsg::RipNow(device) => {
                 let device = device.or_else(|| self.rip.waiting_discs.first().cloned()).or_else(|| {
                     self.rip
@@ -325,6 +349,7 @@ impl Listen {
             report: None,
             drive_free: false,
             commands: None,
+            mode: None,
         };
         let fail = |this: &mut Self, mut job: RipJob, why: String| {
             tracing::warn!("rip of {}: {why}", job.device.display());
@@ -379,13 +404,20 @@ impl Listen {
         };
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         job.commands = Some(cmd_tx);
+        let switch = ModeSwitch::new(s.mode);
+        job.mode = Some(switch.clone());
         self.rip.jobs.push(job);
         let http = listen_rip::musicbrainz::http_client();
+        let ripper = Ripper::Either {
+            mode: switch,
+            fast: Box::new(Ripper::Fast(FastRipper::drive(http.clone()))),
+            secure: Box::new(Ripper::Whipper),
+        };
         Task::stream(iced::stream::channel(
             64,
             move |mut out: iced::futures::channel::mpsc::Sender<Message>| async move {
                 let (tx, mut rx) = mpsc::unbounded_channel();
-                let run = pipeline::run(cfg, Ripper::Whipper, http, tx, cmd_rx);
+                let run = pipeline::run(cfg, ripper, http, tx, cmd_rx);
                 tokio::pin!(run);
                 let mut done = false;
                 loop {
@@ -548,6 +580,7 @@ impl Listen {
             Setting::RipReplayGain(v) => s.replay_gain = v,
             Setting::RipScan(v) => s.scan_navidrome = v,
             Setting::RipPickerTimeout(v) => s.picker_timeout_secs = v.clamp(5, 300),
+            Setting::RipMode(m) => s.mode = m,
             Setting::RipDestination(text) => {
                 self.rip.dest_input = text;
                 return Task::none();

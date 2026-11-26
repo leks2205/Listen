@@ -1,12 +1,12 @@
 # CD ripping
 
-Listen can rip audio CDs on Linux. Put a disc in the drive and Listen makes a secure copy, tags it from MusicBrainz, adds cover art and files the album into your music folder, much like the auto-rip of MusicBee. This page covers the setup, every option under **Settings → Advanced → CD ripping**, and how to check a rip.
+Listen can rip audio CDs on Linux. Put a disc in the drive and Listen copies it, checks the copy against AccurateRip, tags it from MusicBrainz, adds cover art and files the album into your music folder, much like the auto-rip of MusicBee. This page covers the setup, every option under **Settings → Advanced → CD ripping**, and how to check a rip.
 
-> **Note:** CD ripping is available on Linux only. It uses the separately installed program [whipper](https://github.com/whipper-team/whipper). On Windows the **CD ripping** section does not do anything.
+> **Note:** CD ripping is available on Linux only. It uses the separately installed programs `cd-paranoia` (Fast mode) and [whipper](https://github.com/whipper-team/whipper) (Secure mode). On Windows the **CD ripping** section does not do anything.
 
 ## What you get
 
-- A secure rip with whipper (Test & Copy, checked against AccurateRip).
+- A Fast rip (one read at the drive's full speed, about 4 minutes) or a Secure rip with whipper (Test & Copy, about 20 minutes), both checked against AccurateRip. See [Rip modes](#rip-modes).
 - Always FLAC at compression level 8.
 - Tags and track names from MusicBrainz, cover art embedded in every file and saved as `cover.jpg`.
 - ReplayGain tags for each track and for the album.
@@ -38,6 +38,7 @@ If you plug in a USB drive later, Listen picks it up. The section shows the driv
 | Setting | Default | What it does |
 |---|---|---|
 | **Auto-rip inserted CDs** | on | Starts ripping as soon as an audio CD goes into the drive, also while Listen sits in the tray. Turn it off to rip only with **Rip CD**. |
+| **Rip mode** | Fast | **Fast** or **Secure**, see [Rip modes](#rip-modes). Each rip can still be switched on its card until the first track is read. |
 | **Music folder** | your system Music folder, such as `~/Music` | Where albums are filed. Type a path and press **Save**, or use **Choose…** to pick a folder. It can be a network share, for example the folder your Navidrome server scans (`/mnt/nas/Music`). Listen never deletes or overwrites anything in it. |
 | **Eject when done** | on | Ejects the disc after the rip. |
 | **Notification sound** | on | Plays a sound with the "Album ripped" notification. The sound needs `pw-play` (PipeWire); without it you get the notification only. |
@@ -46,6 +47,21 @@ If you plug in a USB drive later, Listen picks it up. The section shows the driv
 | **Version picker** | 30 s (5 to 120 s, in steps of 5) | How long Listen waits when several MusicBrainz releases match the disc (for example regional editions) before it takes the best match. |
 | **Drive read offset** | automatic | The read offset of your drive in samples. See below. |
 | **Rip now** | | The **Rip CD** button rips the disc in the drive, also one you ripped before. It appears when a drive is connected. |
+
+### Rip modes
+
+| | Fast | Secure |
+|---|---|---|
+| How | `cd-paranoia` in burst mode reads every track once, the drive set to its full speed | whipper reads the table of contents (`cdrdao`), then every track twice and compares the two reads |
+| Time for a 15:53 CD | about 4 minutes (one read at 3.8x) | about 19 minutes |
+| Checked by | AccurateRip | the second read, and AccurateRip |
+| CD-Text | read from the drive | from whipper's table scan |
+
+The times were measured on an LG GU70N with a 6-track CD-R of 15:53: whipper's table scan alone took 202 s before any audio was read, each of its two paranoia reads of the first track (2:47) took 91 s, while one burst read of the same track at full speed took 44 s. The burst copy was byte-identical to the paranoia copy.
+
+What Fast gives up: there is no second read to compare with. A read error that the drive does not report goes unnoticed unless AccurateRip knows the disc; then the track shows up as a mismatch ("AccurateRip: 11/12 tracks verified, 1 mismatch") and the files are kept. For a disc AccurateRip does not know ("not in the AccurateRip database"), a Fast rip is unchecked; rip it again in Secure mode if it matters. A track that cd-paranoia cannot read at all in burst mode is read once more with paranoia's checks before it counts as unreadable.
+
+While the rip card shows **Ripping**, its **Secure** / **Fast** switch changes the mode of this rip. It works until the first track is being read; switching during whipper's table scan starts the rip over in Fast mode.
 
 ### Destination that is not available
 
@@ -68,7 +84,7 @@ If the drive is not in the list, the line says the offset is unknown and a rip s
 | Step | What Listen does |
 |---|---|
 | Detect | Notices the disc through UDisks2. This also works while Listen is only in the tray. |
-| Rip | Runs a whipper secure rip with the drive's read offset. |
+| Rip | Fast: sets the drive to full speed and reads each track once with `cd-paranoia`, then checks it with AccurateRip. Secure: runs a whipper secure rip. Both use the drive's read offset. |
 | Identify | Looks up the MusicBrainz disc ID; if that fails, uses CD-Text; if that fails, names the album "Unknown Album (…)". See [How a disc is identified](#how-a-disc-is-identified). |
 | Several matches | Shows a picker with the matching releases. You can change the choice until tagging starts; after the timeout the best match is taken. |
 | Cover | Cover Art Archive first (the release, then the release group), then iTunes. The image is scaled to 1200 px, embedded and saved as `cover.jpg`. |
@@ -92,7 +108,7 @@ If MusicBrainz does not know the disc, Listen still rips and files it as "Unknow
 ## Checking a rip
 
 1. Run `listen --check-cd` with a disc inserted. It shows the track list, the disc ID, the MusicBrainz matches (best first, marked with an arrow), the cover it found and the exact folder and file name the album would get. It does not rip anything.
-2. After a rip, open the album folder. You should see `NN Title.flac` files, `cover.jpg` and `<Album>.log` (whipper's log). No `.listen-incoming` folder should remain. `metaflac --list` on a file shows the tags, MusicBrainz IDs, cover and ReplayGain values.
+2. After a rip, open the album folder. You should see `NN Title.flac` files, `cover.jpg` and `<Album>.log` (the rip log; in Fast mode Listen writes it in whipper's layout, with the AccurateRip result per track). No `.listen-incoming` folder should remain. `metaflac --list` on a file shows the tags, MusicBrainz IDs, cover and ReplayGain values.
 3. Logs: Listen's own `listen.log` and one `rip-<date>-<disc id>.log` per rip are in the logs folder, `~/.local/share/listen/logs/`. See [Backup, logs and diagnostics](backup.md).
 
 For problems with the tools, drive or share, see [Troubleshooting](troubleshooting.md).

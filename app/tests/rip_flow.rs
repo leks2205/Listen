@@ -155,3 +155,27 @@ fn snapshot_rip_panel() {
 fn snapshot_rip_panel_narrow() {
     shoot(900.0, 700.0, "rip-panel-narrow");
 }
+
+/// The rip card's Secure / Fast switch changes this rip's mode before its first track.
+#[test]
+fn rip_card_switches_the_mode() {
+    use listen_core::settings::RipMode;
+    let mut s = demo();
+    let switch = listen_rip::ModeSwitch::new(RipMode::Fast);
+    let id = s.rip.test_job_with_mode("/dev/sr0", switch.clone());
+    up(&mut s, id, Update::Activity("Reading the disc".into()));
+    let messages: Vec<Message> = {
+        let _gpu = common::gpu();
+        let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1600.0, 950.0), s.view());
+        assert!(ui.find("Fast").is_ok());
+        ui.click("Secure").expect("the Secure switch on the rip card");
+        ui.into_messages().collect()
+    };
+    assert!(messages.iter().any(|m| matches!(m, Message::Rip(RipMsg::Mode(i, RipMode::Secure)) if *i == id)));
+    for m in messages {
+        let _ = s.update(m);
+    }
+    assert_eq!(switch.mode(), RipMode::Secure);
+    let _ = s.update(Message::Rip(RipMsg::Mode(id, RipMode::Fast)));
+    assert_eq!(switch.mode(), RipMode::Fast);
+}

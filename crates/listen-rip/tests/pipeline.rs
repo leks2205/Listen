@@ -2,12 +2,15 @@
 //! whipper-style log) into a temporary "NAS" folder. Needs `flac` and
 //! `metaflac` on PATH (skipped otherwise).
 
+use listen_core::settings::RipMode;
+use listen_rip::accuraterip::{self, DiscIds, Response};
 use listen_rip::drive::DriveInfo;
+use listen_rip::fast::{ArSource, FastRipper, Reader};
 use listen_rip::musicbrainz::{Credit, Medium, Release, Track, parse_lookup};
 use listen_rip::pipeline::{self, Candidate, Command, JobConfig, Lookup, Stage, Update};
-use listen_rip::ripper::{MockRipper, Ripper};
+use listen_rip::ripper::{MockRipper, ModeSwitch, Ripper};
 use listen_rip::toc::Toc;
-use listen_rip::whipper::Ar;
+use listen_rip::whipper::{self, Ar};
 use listen_rip::{flac, publish};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -124,11 +127,39 @@ fn mock(tracks: usize) -> MockRipper {
 async fn drive_job(
     cfg: JobConfig,
     ripper: MockRipper,
+    react: impl FnMut(&Update) -> Option<Command>,
+) -> (Vec<Update>, Stage) {
+    run_job(cfg, Ripper::Mock(ripper), react).await
+}
+
+/// AccurateRip's answer for the mock's disc: one entry with every track's v1 checksum, one with its
+/// v2 checksum (the database keeps both), `wrong` tracks (1-based) with a checksum that doesn't fit.
+fn ar_bin(m: &MockRipper, toc: &Toc, confidence: u8, wrong: &[u32]) -> Vec<u8> {
+    let n = m.track_secs.len() as u32;
+    let sums: Vec<(u32, u32)> = (1..=n).map(|t| accuraterip::checksums(&m.pcm(t), t, n)).collect();
+    let entry = |pick: fn(&(u32, u32)) -> u32| Response {
+        ids: DiscIds::from_toc(toc),
+        tracks: sums
+            .iter()
+            .enumerate()
+            .map(|(i, s)| (confidence, if wrong.contains(&(i as u32 + 1)) { !pick(s) } else { pick(s) }))
+            .collect(),
+    };
+    accuraterip::encode(&[entry(|s| s.0), entry(|s| s.1)])
+}
+
+fn fast(m: MockRipper, bin: Option<Vec<u8>>) -> Ripper {
+    Ripper::Fast(FastRipper { reader: Reader::Mock(m), accuraterip: ArSource::Given(bin) })
+}
+
+async fn run_job(
+    cfg: JobConfig,
+    ripper: Ripper,
     mut react: impl FnMut(&Update) -> Option<Command>,
 ) -> (Vec<Update>, Stage) {
     let (tx, mut updates) = mpsc::unbounded_channel();
     let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
-    let job = tokio::spawn(pipeline::run(cfg, Ripper::Mock(ripper), reqwest::Client::new(), tx, cmd_rx));
+    let job = tokio::spawn(pipeline::run(cfg, ripper, reqwest::Client::new(), tx, cmd_rx));
     let mut seen = Vec::new();
     let end = loop {
         let u = tokio::time::timeout(Duration::from_secs(120), updates.recv()).await.expect("job stalled");
@@ -517,4 +548,249 @@ async fn accuraterip_mismatch_keeps_the_files_and_warns() {
             .count(),
         3
     );
+}
+
+fn report_of(updates: &[Update]) -> Box<pipeline::Report> {
+    updates
+        .iter()
+        .find_map(|u| if let Update::Finished(r) = u { Some(r.clone()) } else { None })
+        .expect("a report")
+}
+
+/// File name → (tags without the ones that differ per run, audio MD5) of every FLAC in `dir`,
+/// plus the parsed rip log.
+async fn album_of(dir: &Path) -> (Vec<(String, Vec<(String, String)>, String)>, whipper::RipLog) {
+    let mut files = Vec::new();
+    let mut log = None;
+    let mut entries: Vec<PathBuf> = std::fs::read_dir(dir).unwrap().flatten().map(|e| e.path()).collect();
+    entries.sort();
+    for p in entries {
+        let name = p.file_name().unwrap().to_string_lossy().into_owned();
+        if name.ends_with(".flac") {
+            let tags = flac::read_tags(&p).await.unwrap();
+            files.push((name, tags, flac::md5(&p).await.unwrap()));
+        } else if name.ends_with(".log") {
+            log = Some(whipper::parse_log(&std::fs::read_to_string(&p).unwrap()));
+        }
+    }
+    (files, log.expect("the rip log is filed with the album"))
+}
+
+/// Fast and Secure file the same album: same names, tags, audio and AccurateRip result.
+#[tokio::test(flavor = "multi_thread")]
+async fn fast_rip_files_the_same_album_as_secure() {
+    if !tools() {
+        return;
+    }
+    let lookup = || Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()), exact: true };
+    let secure = Sandbox::new("same-secure");
+    let (s_updates, end) = drive_job(secure.cfg(revive_toc(), lookup()), mock(12), |_| None).await;
+    assert_eq!(end, Stage::Done, "{s_updates:?}");
+
+    let quick = Sandbox::new("same-fast");
+    let m = mock(12);
+    let bin = ar_bin(&m, &revive_toc(), 7, &[]);
+    let (f_updates, end) = run_job(quick.cfg(revive_toc(), lookup()), fast(m, Some(bin)), |_| None).await;
+    assert_eq!(end, Stage::Done, "{f_updates:?}");
+
+    let (s_report, f_report) = (report_of(&s_updates), report_of(&f_updates));
+    assert_eq!(f_report.accuraterip_line(), "AccurateRip: 12/12 tracks verified");
+    assert_eq!(f_report.accuraterip_line(), s_report.accuraterip_line());
+    assert_eq!(f_report.accuraterip, s_report.accuraterip);
+    assert_eq!(
+        f_report.folder.strip_prefix(quick.dest()).unwrap(),
+        s_report.folder.strip_prefix(secure.dest()).unwrap()
+    );
+
+    let (s_files, s_log) = album_of(&s_report.folder).await;
+    let (f_files, f_log) = album_of(&f_report.folder).await;
+    assert_eq!(f_files.len(), 12);
+    assert_eq!(f_files, s_files, "same file names, tags (ReplayGain included) and audio");
+    assert_eq!(f_log.summary(), s_log.summary());
+    for (f, s) in f_log.tracks.iter().zip(&s_log.tracks) {
+        assert_eq!((f.number, f.v1, f.v2), (s.number, s.v1, s.v2));
+        assert!(f.filename.ends_with(&format!("{:02}.flac", f.number)), "{}", f.filename);
+    }
+    assert!(f_report.folder.join("cover.jpg").exists());
+    // Fast reads every track once, in order, with progress.
+    let mut tracks: Vec<u32> = f_updates
+        .iter()
+        .take_while(|u| !matches!(u, Update::Stage(Stage::Tagging)))
+        .filter_map(|u| if let Update::Progress { track, percent: 0, .. } = u { Some(*track) } else { None })
+        .collect();
+    tracks.dedup();
+    assert_eq!(tracks, (1..=12).collect::<Vec<_>>());
+    assert!(f_updates.iter().any(|u| matches!(u, Update::Activity(a) if a == "Reading track 12 of 12")));
+    assert!(!f_updates.iter().any(|u| matches!(u, Update::Activity(a) if a == "Reading table")));
+}
+
+/// CD-Text, unreadable tracks and AccurateRip's verdicts in Fast mode.
+#[tokio::test(flavor = "multi_thread")]
+async fn fast_rip_cd_text_mismatch_and_unknown_discs() {
+    if !tools() {
+        return;
+    }
+    let toc = || Toc::from_offsets(1, 30_000, &[150, 10_000, 20_000]);
+    let sb = Sandbox::new("fast-cdtext");
+    let m = MockRipper {
+        toc_text: Some(
+            "CD_DA\nCD_TEXT {\n  LANGUAGE 0 {\n    TITLE \"Mixtape\"\n    PERFORMER \"Café Band\"\n  }\n}\nTRACK AUDIO\nCD_TEXT {\n  LANGUAGE 0 {\n    TITLE \"Intro\"\n  }\n}\n"
+                .into(),
+        ),
+        ..mock(3)
+    };
+    let bin = ar_bin(&m, &toc(), 4, &[2]);
+    let (updates, end) = run_job(sb.cfg(toc(), Lookup::Offline), fast(m, Some(bin)), |_| None).await;
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    let report = report_of(&updates);
+    assert_eq!(report.accuraterip_line(), "AccurateRip: 2/3 tracks verified, 1 mismatch");
+    assert!(report.warnings.iter().any(|w| w.contains("didn't match (files kept)")));
+    let dir = sb.dest().join("Café Band/Mixtape");
+    let tags = flac::read_tags(&dir.join("01 Intro.flac")).await.unwrap();
+    assert_eq!(tags_of(&tags, "ALBUMARTIST"), ["Café Band"]);
+    assert_eq!(tags_of(&tags, "LISTEN_NEEDS_FIX"), ["1"]);
+    assert!(dir.join("02 Track 02.flac").exists());
+
+    // No CD-Text, not in AccurateRip: as today, an unknown album, nothing verified.
+    let sb = Sandbox::new("fast-unknown");
+    let (updates, end) = run_job(sb.cfg(toc(), Lookup::Offline), fast(mock(3), None), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert_eq!(
+        report_of(&updates).accuraterip_line(),
+        "AccurateRip: 0/3 tracks verified, 3 not in the AccurateRip database"
+    );
+    assert!(sb.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)/01 Track 01.flac").exists());
+
+    // An unreadable track asks, like whipper's skipped ones.
+    let sb = Sandbox::new("fast-skip");
+    let (_, end) = run_job(
+        sb.cfg(toc(), Lookup::Offline),
+        fast(MockRipper { skip_track: Some(2), ..mock(3) }, None),
+        |u| match u {
+            Update::Stage(Stage::NeedsDecision(why)) => {
+                assert!(why.contains("[2]"), "{why}");
+                Some(Command::PublishAnyway)
+            }
+            _ => None,
+        },
+    )
+    .await;
+    assert_eq!(end, Stage::Done);
+    let dir = sb.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)");
+    assert!(dir.join("01 Track 01.flac").exists() && !dir.join("02 Track 02.flac").exists());
+
+    // The disc is gone, or the user cancels.
+    let sb = Sandbox::new("fast-gone");
+    let (_, end) = run_job(
+        sb.cfg(toc(), Lookup::Offline),
+        fast(MockRipper { fail_track: Some(2), ..mock(3) }, None),
+        |_| None,
+    )
+    .await;
+    assert!(matches!(&end, Stage::Failed(r) if r.contains("no CD")), "{end:?}");
+    let sb = Sandbox::new("fast-cancel");
+    let slow = MockRipper { step: Duration::from_millis(200), ..mock(3) };
+    let (_, end) = run_job(sb.cfg(toc(), Lookup::Offline), fast(slow, None), |u| {
+        matches!(u, Update::Progress { track: 1, percent: 50, .. }).then_some(Command::Cancel)
+    })
+    .await;
+    assert_eq!(end, Stage::Cancelled);
+    assert_eq!(std::fs::read_dir(sb.dest()).unwrap().count(), 0);
+}
+
+/// The rip card's Secure/Fast switch: while whipper still reads the table the rip starts over in
+/// the other mode; once a track is read the mode stays.
+#[tokio::test(flavor = "multi_thread")]
+async fn rip_mode_switches_until_the_first_track() {
+    if !tools() {
+        return;
+    }
+    let toc = || Toc::from_offsets(1, 30_000, &[150, 10_000, 20_000]);
+    let either = |switch: &ModeSwitch| Ripper::Either {
+        mode: switch.clone(),
+        fast: Box::new(fast(mock(3), None)),
+        secure: Box::new(Ripper::Mock(MockRipper { table: Duration::from_secs(20), ..mock(3) })),
+    };
+    let sb = Sandbox::new("switch");
+    let switch = ModeSwitch::new(RipMode::Secure);
+    let s2 = switch.clone();
+    let (updates, end) = run_job(sb.cfg(toc(), Lookup::Offline), either(&switch), move |u| {
+        if matches!(u, Update::Activity(a) if a == "Reading table") {
+            assert!(s2.set(RipMode::Fast), "switchable while the table is read");
+        }
+        None
+    })
+    .await;
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    assert!(switch.locked());
+    assert_eq!(switch.mode(), RipMode::Fast);
+    assert!(!switch.set(RipMode::Secure), "locked once a track was read");
+    let dir = sb.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)");
+    let log = std::fs::read_to_string(dir.join("Unknown Album (2026-10-01 14.32).log")).unwrap();
+    assert!(log.contains("(Fast mode)"), "{log}");
+
+    // Fast to Secure after the first track: ignored, the rip stays Fast.
+    let sb = Sandbox::new("switch-late");
+    let switch = ModeSwitch::new(RipMode::Fast);
+    let s2 = switch.clone();
+    let (_, end) = run_job(sb.cfg(toc(), Lookup::Offline), either(&switch), move |u| {
+        if matches!(u, Update::Progress { track: 1, percent: 50, .. }) {
+            assert!(!s2.set(RipMode::Secure));
+        }
+        None
+    })
+    .await;
+    assert_eq!(end, Stage::Done);
+    assert_eq!(switch.mode(), RipMode::Fast);
+
+    // Cancelled during the table: nothing is left.
+    let sb = Sandbox::new("switch-cancel");
+    let switch = ModeSwitch::new(RipMode::Secure);
+    let (_, end) = run_job(sb.cfg(toc(), Lookup::Offline), either(&switch), |u| {
+        matches!(u, Update::Activity(a) if a == "Reading table").then_some(Command::Cancel)
+    })
+    .await;
+    assert_eq!(end, Stage::Cancelled);
+    assert!(!sb.root.join("work").exists());
+}
+
+/// A real Fast rip of the disc in the drive into a temporary folder, timed. Needs a CD and the
+/// network (MusicBrainz, AccurateRip):
+/// `LISTEN_RIP_DEVICE=/dev/sr0 cargo test -p listen-rip --test pipeline live_fast_rip -- --ignored --nocapture`
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "live: needs an audio CD in the drive"]
+async fn live_fast_rip() {
+    let device = PathBuf::from(std::env::var("LISTEN_RIP_DEVICE").unwrap_or_else(|_| "/dev/sr0".into()));
+    let toc = listen_rip::drive::read_toc(&device).expect("an audio CD in the drive");
+    let drive = listen_rip::drive::info(&device);
+    let (offset, source) = whipper::resolve_offset(None, &drive).expect("the drive's read offset");
+    let sb = Sandbox::new("live-fast");
+    let mut cfg = sb.cfg(toc, Lookup::Online);
+    cfg.drive = drive;
+    cfg.offset = offset;
+    cfg.eject = false;
+    let http = listen_rip::musicbrainz::http_client();
+    let started = std::time::Instant::now();
+    let mut ripped_after = None;
+    let (updates, end) = run_job(cfg, Ripper::Fast(FastRipper::drive(http)), |u| {
+        if matches!(u, Update::DriveFree) {
+            ripped_after = Some(started.elapsed());
+        }
+        if let Update::Activity(a) = u {
+            eprintln!("{:>6.1} s  {a}", started.elapsed().as_secs_f32());
+        }
+        None
+    })
+    .await;
+    let total = started.elapsed();
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    let report = report_of(&updates);
+    eprintln!("offset {offset:+} ({})", source.label());
+    eprintln!(
+        "disc read in {:.1} s, done (tagged and filed) after {:.1} s",
+        ripped_after.unwrap_or_default().as_secs_f32(),
+        total.as_secs_f32()
+    );
+    eprintln!("{}", report.accuraterip_line());
+    eprintln!("{} – {} ({:?}); warnings: {:?}", report.artist, report.album, report.source, report.warnings);
 }

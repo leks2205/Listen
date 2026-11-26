@@ -2031,5 +2031,9 @@
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ Cookies youtube.com завантажено ({}) — натисніть «Підключитися».",
 "✗ {}: {}": "✗ {}: {}",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz не знає цей диск; {} збігається лише за загальною тривалістю, а не за треками, і не використано",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz не знає цей диск точно; {} збігається за тривалістю кожного треку й використано"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz не знає цей диск точно; {} збігається за тривалістю кожного треку й використано",
+"Rip mode": "Режим ріпінгу",
+"Fast": "Швидкий",
+"Secure": "Надійний",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Швидкий читає CD один раз на повній швидкості приводу (близько 4 хвилин) і перевіряє його через AccurateRip. Надійний (whipper) читає кожен трек двічі й порівнює (близько 20 хвилин)."
 }

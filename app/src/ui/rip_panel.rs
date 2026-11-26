@@ -125,6 +125,11 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
                 .push(small_button(state, "Discard", false, RipMsg::Discard(id)));
         }
         s if !s.finished() => {
+            if *s == Stage::Ripping
+                && let Some(switch) = &job.mode
+            {
+                actions = actions.push(mode_toggle(state, id, switch));
+            }
             actions = actions.push(small_button(state, "Cancel", false, RipMsg::Cancel(id)))
         }
         _ => {
@@ -149,6 +154,26 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
             ..Default::default()
         })
         .into()
+}
+
+/// Secure / Fast for this rip; only active until the first track is being read.
+fn mode_toggle<'a>(state: &'a Listen, id: u64, switch: &listen_rip::ModeSwitch) -> Element<'a, Message> {
+    use listen_core::settings::RipMode;
+    let t = state.tokens;
+    let (current, locked) = (switch.mode(), switch.locked());
+    let segment = |mode: RipMode| {
+        let selected = mode == current;
+        let b = button(label_w(
+            mode.label(),
+            metrics::font_sm(),
+            if selected { Color::WHITE } else { t.foreground },
+            Weight::Semibold,
+        ))
+        .padding(Padding::from([6.0, 12.0]))
+        .on_press_maybe((!locked && !selected).then_some(Message::Rip(RipMsg::Mode(id, mode))));
+        if selected { b.style(style::primary_button(t)) } else { b.style(style::default_button(t)) }
+    };
+    row![segment(RipMode::Secure), segment(RipMode::Fast)].spacing(2).into()
 }
 
 /// Several releases match: pick the version (best one pre-selected).

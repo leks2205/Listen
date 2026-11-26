@@ -2535,5 +2535,9 @@
 "“{}” is not an IP address": "“{}” कोई IP पता नहीं है",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} youtube.com कुकीज़ लोड हुईं — कनेक्ट करें पर क्लिक करें।",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz इस डिस्क को नहीं जानता; {} केवल कुल अवधि से मेल खाता है, ट्रैक से नहीं, इसलिए इसका उपयोग नहीं किया गया",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz इस डिस्क को ठीक-ठीक नहीं जानता; {} हर ट्रैक की अवधि से मेल खाता है, इसलिए इसका उपयोग किया गया"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz इस डिस्क को ठीक-ठीक नहीं जानता; {} हर ट्रैक की अवधि से मेल खाता है, इसलिए इसका उपयोग किया गया",
+"Rip mode": "रिप मोड",
+"Fast": "तेज़",
+"Secure": "सुरक्षित",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "तेज़ मोड ड्राइव की पूरी गति पर CD को एक बार पढ़ता है (लगभग 4 मिनट) और AccurateRip से जाँचता है। सुरक्षित मोड (whipper) हर ट्रैक को दो बार पढ़कर मिलान करता है (लगभग 20 मिनट)।"
 }

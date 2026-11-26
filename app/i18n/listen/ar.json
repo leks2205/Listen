@@ -2473,5 +2473,9 @@
 "“{}” is not an IP address": "“{}” ليس عنوان IP",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ تم تحميل {} من ملفات تعريف الارتباط youtube.com — انقر على اتصال.",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "لا يعرف MusicBrainz هذا القرص؛ {} يطابق المدة الإجمالية فقط دون المقطوعات، ولم يُستخدم",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "لا يعرف MusicBrainz هذا القرص بدقة؛ {} يطابق مدة كل مقطوعة وقد استُخدم"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "لا يعرف MusicBrainz هذا القرص بدقة؛ {} يطابق مدة كل مقطوعة وقد استُخدم",
+"Rip mode": "وضع النسخ",
+"Fast": "سريع",
+"Secure": "آمن",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "السريع يقرأ القرص مرة واحدة بأقصى سرعة للمحرك (نحو 4 دقائق) ويتحقق منه عبر AccurateRip. الآمن (whipper) يقرأ كل مقطع مرتين ويقارن بينهما (نحو 20 دقيقة)."
 }

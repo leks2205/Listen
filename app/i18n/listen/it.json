@@ -2035,5 +2035,9 @@
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} cookie di youtube.com caricati — fai clic su Connetti.",
 "✗ {}: {}": "✗ {}: {}",
 "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz non conosce questo disco; {} corrisponde solo alla durata totale, non alle tracce, e non è stato usato",
-"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz non conosce esattamente questo disco; {} corrisponde alla durata di ogni traccia ed è stato usato"
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz non conosce esattamente questo disco; {} corrisponde alla durata di ogni traccia ed è stato usato",
+"Rip mode": "Modalità di estrazione",
+"Fast": "Veloce",
+"Secure": "Sicura",
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Veloce legge il CD una sola volta alla massima velocità del lettore (circa 4 minuti) e lo verifica con AccurateRip. Sicura (whipper) legge ogni traccia due volte e confronta (circa 20 minuti)."
 }
