@@ -11,7 +11,7 @@ use crate::cover;
 use crate::drive::DriveInfo;
 use crate::flac;
 use crate::layout;
-use crate::musicbrainz::{self, Release};
+use crate::musicbrainz::{self, Found, Release};
 use crate::publish;
 use crate::ripper::{RipError, RipEvent, RipOutcome, RipRequest, Ripper};
 use crate::tags::{AlbumMeta, MetaSource, TrackMeta};
@@ -48,8 +48,9 @@ pub enum Lookup {
     Online,
     /// Nothing (CD-Text or "Unknown").
     Offline,
-    /// Already known (tests): these releases, this cover.
-    Given { releases: Vec<Release>, cover: Option<Vec<u8>> },
+    /// Already known (tests): these releases, this cover. `exact` = the disc ID
+    /// matched; `false` makes them fuzzy TOC candidates that have to fit.
+    Given { releases: Vec<Release>, cover: Option<Vec<u8>>, exact: bool },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -175,10 +176,38 @@ impl Job {
         self.warnings.push(w);
     }
 
-    fn set_releases(&mut self, releases: Vec<Release>) {
+    /// What the lookup found. A disc MusicBrainz doesn't know by its disc ID is
+    /// only identified by a release whose every track length fits: its fuzzy TOC
+    /// search answers with albums that are merely as long overall, and tagging a
+    /// CD from one of those files it under a wrong album.
+    fn set_releases(&mut self, found: Found) {
+        let Found { mut releases, exact } = found;
+        if !exact {
+            let disc_id = self.cfg.toc.musicbrainz_id();
+            let wrong: Vec<String> = releases
+                .iter()
+                .filter(|r| !r.fits_toc(&disc_id, &self.cfg.toc))
+                .map(|r| format!("{} – {}", r.artist(), r.title))
+                .collect();
+            releases.retain(|r| r.fits_toc(&disc_id, &self.cfg.toc));
+            if !wrong.is_empty() {
+                self.warn(format!(
+                    "MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used",
+                    wrong.join(", ")
+                ));
+            }
+        }
         let order = musicbrainz::rank(&releases, &self.cfg.toc);
         self.releases = order.into_iter().map(|i| releases[i].clone()).collect();
         self.chosen = 0;
+        let fuzzy = (!exact)
+            .then(|| self.releases.first().map(|r| format!("{} – {}", r.artist(), r.title)))
+            .flatten();
+        if let Some(name) = fuzzy {
+            self.warn(format!(
+                "MusicBrainz doesn't know this disc exactly; {name} matches every track length and was used"
+            ));
+        }
         match self.releases.len() {
             0 => {}
             1 => self.identify_release(),
@@ -272,8 +301,8 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         tokio::spawn(async move {
             match mode {
                 Lookup::Online => musicbrainz::lookup(&http, &toc).await.map_err(|e| e.to_string()),
-                Lookup::Offline => Ok(Vec::new()),
-                Lookup::Given { releases, .. } => Ok(releases),
+                Lookup::Offline => Ok(Found::default()),
+                Lookup::Given { releases, exact, .. } => Ok(Found { releases, exact }),
             }
         })
     };

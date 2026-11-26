@@ -2271,5 +2271,7 @@
 "· {} waiting": "· {}개 대기 중",
 "“Title”": "“제목”",
 "“{}” is not an IP address": "“{}”은(는) IP 주소가 아님",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ youtube.com 쿠키 {}개를 불러왔습니다. 연결을 클릭하세요."
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ youtube.com 쿠키 {}개를 불러왔습니다. 연결을 클릭하세요.",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz가 이 디스크를 모릅니다. {}은 전체 길이만 맞고 트랙은 맞지 않아 사용하지 않았습니다.",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz가 이 디스크를 정확히 모릅니다. {}이 모든 트랙 길이와 맞아 사용했습니다."
 }

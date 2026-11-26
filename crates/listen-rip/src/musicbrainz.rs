@@ -9,6 +9,12 @@ pub const USER_AGENT: &str = listen_core::MUSICBRAINZ_USER_AGENT;
 const API: &str = "https://musicbrainz.org/ws/2";
 /// Countries preferred when several releases fit equally (Germany, Europe, worldwide).
 const PREFERRED_COUNTRIES: [&str; 3] = ["DE", "XE", "XW"];
+/// How far a track of a release may be from the disc's track of the same
+/// number before it is a different disc. MusicBrainz's fuzzy TOC search
+/// compares the disc as a whole, so it also answers with albums that merely
+/// happen to be as long; tagging a CD from one of those files it under a
+/// wrong album.
+const TRACK_TOLERANCE_MS: i64 = 3_000;
 /// MusicBrainz's "Various Artists".
 pub const VARIOUS_ARTISTS_ID: &str = "89ad4ac3-39f7-470e-963a-56509c546377";
 
@@ -96,6 +102,28 @@ impl Release {
             .iter()
             .position(|m| m.disc_ids.iter().any(|d| d == disc_id))
             .or_else(|| self.media.iter().position(|m| m.tracks.len() == audio_tracks))
+    }
+
+    /// Is this disc listed on the release? Then MusicBrainz knows its disc ID
+    /// and this release *is* the disc.
+    pub fn has_disc_id(&self, disc_id: &str) -> bool {
+        self.media.iter().any(|m| m.disc_ids.iter().any(|d| d == disc_id))
+    }
+
+    /// Could this release be this disc: as many tracks, each within
+    /// [`TRACK_TOLERANCE_MS`] of the disc's. Tracks MusicBrainz has no length
+    /// for don't count against it.
+    pub fn fits_toc(&self, disc_id: &str, toc: &Toc) -> bool {
+        let lengths = toc.track_lengths_ms();
+        let Some(m) = self.medium_for(disc_id, lengths.len()) else {
+            return false;
+        };
+        let tracks = &self.media[m].tracks;
+        tracks.len() == lengths.len()
+            && tracks.iter().zip(&lengths).all(|(t, &want)| match t.length_ms {
+                Some(have) => (have as i64 - want as i64).abs() <= TRACK_TOLERANCE_MS,
+                None => true,
+            })
     }
 
     pub fn year(&self) -> &str {
@@ -227,6 +255,17 @@ pub fn parse_release(r: &Value) -> Release {
     }
 }
 
+/// What [`lookup`] found.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Found {
+    /// In MusicBrainz's order.
+    pub releases: Vec<Release>,
+    /// MusicBrainz knows this disc ID, so these releases are this disc.
+    /// `false`: they come from its fuzzy TOC search and are candidates that
+    /// still have to fit ([`Release::fits_toc`]).
+    pub exact: bool,
+}
+
 /// `/discid/…` answer: `{"releases": [...]}` (or a single release object).
 pub fn parse_lookup(body: &Value) -> Vec<Release> {
     match body["releases"].as_array() {
@@ -278,12 +317,14 @@ pub fn http_client() -> reqwest::Client {
         .expect("http client")
 }
 
-/// Releases for this disc (empty: MusicBrainz doesn't know it). Retries
-/// MusicBrainz's rate limiting (503) a few times.
-pub async fn lookup(http: &reqwest::Client, toc: &Toc) -> Result<Vec<Release>, LookupError> {
+/// Releases for this disc (empty: MusicBrainz doesn't know it). The TOC in the
+/// query makes MusicBrainz fall back to its fuzzy search when the disc ID is
+/// unknown, which is why the answer says whether the disc ID itself matched.
+/// Retries MusicBrainz's rate limiting (503) a few times.
+pub async fn lookup(http: &reqwest::Client, toc: &Toc) -> Result<Found, LookupError> {
+    let disc_id = toc.musicbrainz_id();
     let url = format!(
-        "{API}/discid/{}?toc={}&cdstubs=no&inc=artist-credits+labels+recordings+release-groups+isrcs&fmt=json",
-        toc.musicbrainz_id(),
+        "{API}/discid/{disc_id}?toc={}&cdstubs=no&inc=artist-credits+labels+recordings+release-groups+isrcs&fmt=json",
         toc.toc_string().replace(' ', "+")
     );
     let mut last = LookupError::Status(0);
@@ -302,9 +343,11 @@ pub async fn lookup(http: &reqwest::Client, toc: &Toc) -> Result<Vec<Release>, L
             200 => {
                 let body: Value =
                     resp.json().await.map_err(|e| LookupError::Network(e.without_url().to_string()))?;
-                return Ok(parse_lookup(&body));
+                let releases = parse_lookup(&body);
+                let exact = releases.iter().any(|r| r.has_disc_id(&disc_id));
+                return Ok(Found { releases, exact });
             }
-            404 => return Ok(Vec::new()),
+            404 => return Ok(Found::default()),
             503 | 502 | 500 => last = LookupError::Status(resp.status().as_u16()),
             code => return Err(LookupError::Status(code)),
         }
@@ -381,12 +424,83 @@ mod tests {
         assert_eq!(r.medium_for("g5YUIa02dIrQzXqsX__dciVdFDo-", 0), Some(1));
     }
 
+    /// A 6-track CD (15:53) that MusicBrainz does not know.
+    fn unknown_toc() -> Toc {
+        Toc::from_offsets(1, 71625, &[150, 12675, 22950, 35175, 46875, 60225])
+    }
+
+    /// The one release MusicBrainz's fuzzy TOC search answers with for that
+    /// disc: as many tracks and the same total length to within a second, but
+    /// two of its tracks are 5.5 s and 8.2 s off, so it is a different album.
+    fn same_length_other_album(lengths: &[u64]) -> Release {
+        Release {
+            id: "e4e0b05a-01df-4e5d-af4e-d479cfc83780".into(),
+            title: "ORIGINAL SOUND TRACK".into(),
+            credits: vec![Credit { name: "Various Artists".into(), ..Default::default() }],
+            media: vec![Medium {
+                position: 1,
+                format: "CD".into(),
+                disc_ids: vec!["d2sA8pwMLzvc3mgfypRWeEcvXUQ-".into()],
+                tracks: lengths
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &ms)| Track {
+                        position: i as u32 + 1,
+                        length_ms: Some(ms),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_fuzzy_match_of_the_same_length_but_other_tracks_does_not_fit() {
+        let toc = unknown_toc();
+        let r = same_length_other_album(&[172_520, 137_786, 162_093, 155_280, 169_786, 154_533]);
+        assert!(!r.has_disc_id(&toc.musicbrainz_id()));
+        // The whole disc fits within a second, which is why ranking alone took it.
+        let whole = r.media[0].length_ms() as i64 - toc.duration_ms() as i64;
+        assert!(whole.abs() < 2_000, "{whole} ms");
+        assert!(!r.fits_toc(&toc.musicbrainz_id(), &toc));
+    }
+
+    #[test]
+    fn a_fuzzy_match_whose_tracks_all_fit_is_kept() {
+        let toc = unknown_toc();
+        let mut lengths = toc.track_lengths_ms();
+        // Another pressing: gaps shift the tracks by a moment, not by seconds.
+        lengths[0] += 900;
+        lengths[4] -= 1_100;
+        let r = same_length_other_album(&lengths);
+        assert!(r.fits_toc(&toc.musicbrainz_id(), &toc));
+    }
+
+    #[test]
+    fn a_fuzzy_match_with_another_track_count_does_not_fit() {
+        let toc = unknown_toc();
+        let mut lengths = toc.track_lengths_ms();
+        lengths.pop();
+        assert!(!same_length_other_album(&lengths).fits_toc(&toc.musicbrainz_id(), &toc));
+    }
+
+    /// The disc ID match stays authoritative: its tracks are not second-guessed.
+    #[test]
+    fn an_exact_disc_id_answer_is_exact() {
+        let rs = revive();
+        let toc = revive_toc();
+        assert!(rs.iter().any(|r| r.has_disc_id(&toc.musicbrainz_id())));
+    }
+
     /// Live: the REVIVE+ disc on musicbrainz.org (run with --ignored).
     #[tokio::test]
     #[ignore = "live: musicbrainz.org"]
     async fn live_lookup() {
-        let rs = lookup(&http_client(), &revive_toc()).await.unwrap();
-        assert!(rs.len() >= 5, "{} releases", rs.len());
-        assert!(rs.iter().all(|r| r.title == "REVIVE+"));
+        let found = lookup(&http_client(), &revive_toc()).await.unwrap();
+        assert!(found.exact, "the disc ID is in MusicBrainz");
+        assert!(found.releases.len() >= 5, "{} releases", found.releases.len());
+        assert!(found.releases.iter().all(|r| r.title == "REVIVE+"));
     }
 }

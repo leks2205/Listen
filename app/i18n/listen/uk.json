@@ -2029,5 +2029,7 @@
 "“Title”": "«Назва»",
 "“{}” is not an IP address": "«{}» не є IP-адресою",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ Cookies youtube.com завантажено ({}) — натисніть «Підключитися».",
-"✗ {}: {}": "✗ {}: {}"
+"✗ {}: {}": "✗ {}: {}",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz не знає цей диск; {} збігається лише за загальною тривалістю, а не за треками, і не використано",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz не знає цей диск точно; {} збігається за тривалістю кожного треку й використано"
 }

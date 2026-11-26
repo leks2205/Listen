@@ -3,7 +3,7 @@
 //! `metaflac` on PATH (skipped otherwise).
 
 use listen_rip::drive::DriveInfo;
-use listen_rip::musicbrainz::{Release, parse_lookup};
+use listen_rip::musicbrainz::{Credit, Medium, Release, Track, parse_lookup};
 use listen_rip::pipeline::{self, Candidate, Command, JobConfig, Lookup, Stage, Update};
 use listen_rip::ripper::{MockRipper, Ripper};
 use listen_rip::toc::Toc;
@@ -41,6 +41,37 @@ fn revive_toc() -> Toc {
 
 fn revive_releases() -> Vec<Release> {
     parse_lookup(&serde_json::from_str(include_str!("fixtures/discid_revive.json")).unwrap())
+}
+
+/// A one-CD release of `lengths` (ms) by "Band", with its own disc ID.
+fn other_album(lengths: &[u64]) -> Release {
+    Release {
+        id: "e4e0b05a-01df-4e5d-af4e-d479cfc83780".into(),
+        title: "Soundtrack".into(),
+        credits: vec![Credit { name: "Band".into(), ..Default::default() }],
+        media: vec![Medium {
+            position: 1,
+            format: "CD".into(),
+            disc_ids: vec!["d2sA8pwMLzvc3mgfypRWeEcvXUQ-".into()],
+            tracks: lengths
+                .iter()
+                .enumerate()
+                .map(|(i, &ms)| Track {
+                    position: i as u32 + 1,
+                    title: format!("Song {}", i + 1),
+                    length_ms: Some(ms),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    }
+}
+
+/// A 6-track CD (15:53) whose disc ID MusicBrainz does not have.
+fn unknown_toc() -> Toc {
+    Toc::from_offsets(1, 71_625, &[150, 12_675, 22_950, 35_175, 46_875, 60_225])
 }
 
 struct Sandbox {
@@ -163,8 +194,10 @@ async fn musicbrainz_album_with_picker() {
     std::fs::write(sb.dest().join("IVE/Other/01 Keep.flac"), b"not really flac").unwrap();
 
     let (stop, watcher) = watch_dest(sb.dest());
-    let cfg =
-        sb.cfg(revive_toc(), Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()) });
+    let cfg = sb.cfg(
+        revive_toc(),
+        Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()), exact: true },
+    );
     let candidates: Arc<Mutex<Vec<Candidate>>> = Arc::default();
     let c2 = candidates.clone();
     let (updates, end) = drive_job(cfg, mock(12), move |u| match u {
@@ -272,7 +305,7 @@ async fn picker_times_out_to_the_best_match() {
         return;
     }
     let sb = Sandbox::new("timeout");
-    let cfg = sb.cfg(revive_toc(), Lookup::Given { releases: revive_releases(), cover: None });
+    let cfg = sb.cfg(revive_toc(), Lookup::Given { releases: revive_releases(), cover: None, exact: true });
     let best: Arc<Mutex<String>> = Arc::default();
     let b2 = best.clone();
     let (_, end) = drive_job(cfg, mock(12), move |u| {
@@ -285,6 +318,44 @@ async fn picker_times_out_to_the_best_match() {
     assert_eq!(end, Stage::Done);
     let tags = flac::read_tags(&sb.dest().join("IVE/REVIVE+/01 BLACKHOLE.flac")).await.unwrap();
     assert_eq!(tags_of(&tags, "MUSICBRAINZ_ALBUMID"), [best.lock().unwrap().clone()]);
+}
+
+/// For a disc it doesn't know, MusicBrainz's fuzzy TOC search answers with
+/// albums of the same total length. One whose tracks differ is a different
+/// album (a 6-track CD came back as a Japanese OST) and may not tag the rip.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fuzzy_match_with_other_tracks_leaves_the_disc_untagged() {
+    if !tools() {
+        return;
+    }
+    let sb = Sandbox::new("fuzzy-wrong");
+    // Same track count, total length within a second, two tracks 5.5 s and 8.2 s off.
+    let other = other_album(&[172_520, 137_786, 162_093, 155_280, 169_786, 154_533]);
+    let cfg = sb.cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false });
+    let (updates, end) = drive_job(cfg, mock(6), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert!(updates.iter().any(|u| matches!(u, Update::Warning(w) if w.contains("not its tracks"))));
+    assert!(!updates.iter().any(|u| matches!(u, Update::Candidates { .. })));
+    assert!(!sb.dest().join("Band").exists(), "it was filed under the wrong album");
+    assert!(sb.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)/01 Track 01.flac").exists());
+}
+
+/// A fuzzy match whose every track fits is the disc (another pressing) and is used.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fuzzy_match_whose_tracks_fit_tags_the_disc() {
+    if !tools() {
+        return;
+    }
+    let sb = Sandbox::new("fuzzy-fits");
+    let mut lengths = unknown_toc().track_lengths_ms();
+    lengths[0] += 900;
+    lengths[4] -= 1_100;
+    let other = other_album(&lengths);
+    let cfg = sb.cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false });
+    let (updates, end) = drive_job(cfg, mock(6), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert!(updates.iter().any(|u| matches!(u, Update::Warning(w) if w.contains("every track length"))));
+    assert!(sb.dest().join("Band/Soundtrack/01 Song 1.flac").exists());
 }
 
 #[tokio::test(flavor = "multi_thread")]

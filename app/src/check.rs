@@ -922,16 +922,30 @@ async fn run_cd() -> i32 {
         }
         println!("  MusicBrainz disc ID: {}", toc.musicbrainz_id());
         println!("  TOC string: {}", toc.toc_string());
-        match musicbrainz::lookup(&http, &toc).await {
-            Ok(rs) if rs.is_empty() => {
+        match musicbrainz::lookup(&http, &toc).await.map(|f| {
+            let (mut rs, exact) = (f.releases, f.exact);
+            if !exact {
+                rs.retain(|r| r.fits_toc(&toc.musicbrainz_id(), &toc));
+            }
+            (rs, exact)
+        }) {
+            Ok((rs, _)) if rs.is_empty() => {
                 println!(
                     "  MusicBrainz: unknown disc — it would be tagged from CD-Text or as “Unknown Album”."
                 );
                 println!("  Add it: {}", toc.submit_url());
             }
-            Ok(rs) => {
+            Ok((rs, exact)) => {
                 let order = musicbrainz::rank(&rs, &toc);
-                println!("  MusicBrainz: {} matching release(s), best first:", rs.len());
+                println!(
+                    "  MusicBrainz: {} {} release(s), best first:",
+                    rs.len(),
+                    if exact {
+                        "release(s) for this disc ID"
+                    } else {
+                        "fuzzy TOC match(es) whose tracks fit"
+                    }
+                );
                 for (n, i) in order.iter().enumerate() {
                     let r = &rs[*i];
                     let medium = r.medium_for(&toc.musicbrainz_id(), toc.audio_count());

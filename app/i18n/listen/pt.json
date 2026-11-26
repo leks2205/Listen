@@ -2257,5 +2257,7 @@
 "“Title”": "«Título»",
 "“{}” is not an IP address": "«{}» não é um endereço IP",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} cookies do youtube.com carregados — clique em Ligar.",
-"✗ {}: {}": "✗ {}: {}"
+"✗ {}: {}": "✗ {}: {}",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "O MusicBrainz não conhece este disco; {} corresponde apenas à duração total, não às faixas, e não foi usado",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "O MusicBrainz não conhece este disco com exatidão; {} corresponde à duração de todas as faixas e foi usado"
 }

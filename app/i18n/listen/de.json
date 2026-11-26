@@ -2374,5 +2374,7 @@
 "None yet": "Noch keiner",
 "Toggle heart-rate tempo": "Herzfrequenz-Tempo umschalten",
 "Already downloading.": "Wird bereits heruntergeladen.",
-"Downloading {} songs; {}. Remove some downloads first.": "{} Titel werden heruntergeladen; {}. Entferne zuerst einige Downloads."
+"Downloading {} songs; {}. Remove some downloads first.": "{} Titel werden heruntergeladen; {}. Entferne zuerst einige Downloads.",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz kennt diese CD nicht; {} passt nur zur Gesamtlänge, nicht zu den Titeln, und wurde nicht verwendet",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz kennt diese CD nicht genau; {} passt zu jeder Titellänge und wurde verwendet"
 }

@@ -2045,5 +2045,7 @@
 "· {} waiting": "· {} 个等待中",
 "“Title”": "“标题”",
 "“{}” is not an IP address": "“{}”不是 IP 地址",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ 已加载 {} 个 youtube.com cookies — 点击“连接”。"
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ 已加载 {} 个 youtube.com cookies — 点击“连接”。",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz 不认识这张唱片；{} 只有总时长相符，曲目并不相符，因此未使用。",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz 并不确切认识这张唱片；{} 的每首曲目时长都相符，因此已使用。"
 }

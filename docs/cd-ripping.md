@@ -21,7 +21,7 @@ folder Navidrome scans); Listen waits for it if it isn't mounted and never delet
 |---|---|
 | Detect | UDisks2; also while Listen sits in the tray |
 | Rip | whipper secure rip, drive offset from the AccurateRip drive database (or **Verify offset**) |
-| Identify | MusicBrainz disc ID → CD-Text → "Unknown Album (…)" (listed under "Rips to fix") |
+| Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → CD-Text → "Unknown Album (…)" (listed under "Rips to fix") |
 | Several matching releases | a picker; the best match is taken after 30 s |
 | Cover | Cover Art Archive (release → release group) → iTunes; 1200 px, embedded + `cover.jpg` |
 | Files | `Album Artist/Album/NN Title.flac`, multi-disc `D-NN Title.flac`, ReplayGain track + album |

@@ -2017,5 +2017,7 @@
 "“Title”": "« Titre »",
 "“{}” is not an IP address": "« {} » n'est pas une adresse IP",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} cookies youtube.com chargés — cliquez sur Se connecter.",
-"✗ {}: {}": "✗ {} : {}"
+"✗ {}: {}": "✗ {} : {}",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz ne connaît pas ce disque ; {} ne correspond qu'à la durée totale, pas aux pistes, et n'a pas été utilisé",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz ne connaît pas exactement ce disque ; {} correspond à la durée de chaque piste et a été utilisé"
 }

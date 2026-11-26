@@ -69,7 +69,7 @@ If the drive is not in the list, the line says the offset is unknown and a rip s
 |---|---|
 | Detect | Notices the disc through UDisks2. This also works while Listen is only in the tray. |
 | Rip | Runs a whipper secure rip with the drive's read offset. |
-| Identify | Looks up the MusicBrainz disc ID; if that fails, uses CD-Text; if that fails, names the album "Unknown Album (…)". |
+| Identify | Looks up the MusicBrainz disc ID; if that fails, uses CD-Text; if that fails, names the album "Unknown Album (…)". See [How a disc is identified](#how-a-disc-is-identified). |
 | Several matches | Shows a picker with the matching releases. You can change the choice until tagging starts; after the timeout the best match is taken. |
 | Cover | Cover Art Archive first (the release, then the release group), then iTunes. The image is scaled to 1200 px, embedded and saved as `cover.jpg`. |
 | Publish | Copies the album into `.listen-incoming` and renames it into place. |
@@ -80,6 +80,12 @@ The panel shows progress ("Ripping track 3 of 12", "Tagging", "Copying to the mu
 If some tracks could not be read perfectly, the panel asks "Publish the rest anyway?" with **Publish anyway** and **Discard**.
 
 ## Rips to fix
+
+### How a disc is identified
+
+A CD carries no title, only the lengths of its tracks. Listen turns those into the MusicBrainz *disc ID* and asks MusicBrainz for it. When the disc ID is in the database, that release is the disc.
+
+When it is not, MusicBrainz falls back to searching by the table of contents, and that search compares the disc as a whole: it answers with releases that are about as long in total, which is frequently a completely different album. Listen therefore checks every candidate track by track and only uses one whose every track is within three seconds of the disc's. A release that merely has the same total length is discarded with a note in the rip card, and the disc counts as unknown. One that fits is used, also with a note, because it is a guess — usually a different pressing of the same album.
 
 If MusicBrainz does not know the disc, Listen still rips and files it as "Unknown Album (…)", using CD-Text if the disc has it. Such discs are listed under **Rips to fix (not on MusicBrainz)** in the CD ripping section, newest first, with the album folder and a link: "Add the disc: …". Open the link, add the release to MusicBrainz, then press **Rip CD** again to rip the disc with proper tags. The list shows the last 10.
 

@@ -2471,5 +2471,7 @@
 "· library {} songs{}": "· المكتبة {} أغنية{}",
 "· {} waiting": "· {} في الانتظار",
 "“{}” is not an IP address": "“{}” ليس عنوان IP",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ تم تحميل {} من ملفات تعريف الارتباط youtube.com — انقر على اتصال."
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ تم تحميل {} من ملفات تعريف الارتباط youtube.com — انقر على اتصال.",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "لا يعرف MusicBrainz هذا القرص؛ {} يطابق المدة الإجمالية فقط دون المقطوعات، ولم يُستخدم",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "لا يعرف MusicBrainz هذا القرص بدقة؛ {} يطابق مدة كل مقطوعة وقد استُخدم"
 }

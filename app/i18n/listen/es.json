@@ -1987,5 +1987,7 @@
 "“Title”": "«Título»",
 "“{}” is not an IP address": "«{}» no es una dirección IP",
 "✓ {} youtube.com cookies loaded — click Connect.": "✓ {} cookies de youtube.com cargadas: haz clic en Conectar.",
-"✗ {}: {}": "✗ {}: {}"
+"✗ {}: {}": "✗ {}: {}",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz no conoce este disco; {} solo coincide con la duración total, no con las pistas, y no se usó",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz no conoce este disco con exactitud; {} coincide con la duración de todas las pistas y se usó"
 }

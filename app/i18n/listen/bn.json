@@ -2533,5 +2533,7 @@
 "· library {} songs{}": "· লাইব্রেরিতে {}টি গান{}",
 "· {} waiting": "· {}টি অপেক্ষমাণ",
 "“{}” is not an IP address": "“{}” কোনো IP ঠিকানা নয়",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ {}টি youtube.com কুকি লোড হয়েছে — সংযুক্ত করুন-এ ক্লিক করুন।"
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ {}টি youtube.com কুকি লোড হয়েছে — সংযুক্ত করুন-এ ক্লিক করুন।",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz এই ডিস্কটি চেনে না; {} কেবল মোট দৈর্ঘ্যের সঙ্গে মেলে, ট্র্যাকগুলির সঙ্গে নয়, তাই এটি ব্যবহার করা হয়নি",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz এই ডিস্কটি ঠিকভাবে চেনে না; {} প্রতিটি ট্র্যাকের দৈর্ঘ্যের সঙ্গে মেলে, তাই এটি ব্যবহার করা হয়েছে"
 }

@@ -2024,5 +2024,7 @@
 "· library {} songs{}": "· bibliotheek {} nummers{}",
 "· {} waiting": "· {} wachtend",
 "“{}” is not an IP address": "„{}“ is geen IP-adres",
-"✓ {} youtube.com cookies loaded — click Connect.": "✓ {} youtube.com-cookies geladen — klik op Verbinden."
+"✓ {} youtube.com cookies loaded — click Connect.": "✓ {} youtube.com-cookies geladen — klik op Verbinden.",
+"MusicBrainz doesn't know this disc; {} only matches its total length, not its tracks, and was not used": "MusicBrainz kent deze cd niet; {} past alleen bij de totale lengte, niet bij de nummers, en is niet gebruikt",
+"MusicBrainz doesn't know this disc exactly; {} matches every track length and was used": "MusicBrainz kent deze cd niet precies; {} past bij elke nummerlengte en is gebruikt"
 }
