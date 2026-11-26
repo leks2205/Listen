@@ -2479,5 +2479,22 @@
 "Secure": "آمن",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "السريع يقرأ القرص مرة واحدة بأقصى سرعة للمحرك (نحو 4 دقائق) ويتحقق منه عبر AccurateRip. الآمن (whipper) يقرأ كل مقطع مرتين ويقارن بينهما (نحو 20 دقيقة).",
 "gnudb e-mail address": "عنوان البريد الإلكتروني لـ gnudb",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "يُسمّي gnudb الأقراص التي لا يعرفها MusicBrainz. ويطلب عنوانًا للتواصل، ويرسل Listen هذا العنوان مع كل استعلام. ما دام الحقل فارغًا فلن يُسأل gnudb، وتأتي أسماء الألبومات من MusicBrainz ومن CD-Text الخاص بالقرص فقط."
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "يُسمّي gnudb الأقراص التي لا يعرفها MusicBrainz. ويطلب عنوانًا للتواصل، ويرسل Listen هذا العنوان مع كل استعلام. ما دام الحقل فارغًا فلن يُسأل gnudb، وتأتي أسماء الألبومات من MusicBrainz ومن CD-Text الخاص بالقرص فقط.",
+"Details": "التفاصيل",
+"No CD is being ripped.": "لا يتم نسخ أي قرص CD.",
+"Metadata from {}": "البيانات الوصفية من {}",
+"Elapsed {}": "المنقضي {}",
+"{} left": "متبقٍ {}",
+"{}× real time": "{}× الوقت الفعلي",
+"Progress": "التقدم",
+"Waiting": "في الانتظار",
+"Reading": "قراءة",
+"Verifying": "تحقق",
+"Encoding": "ترميز",
+"Tagged": "تم الوسم",
+"Failed": "فشل",
+"Skipped": "تم التخطي",
+"Mismatch": "غير مطابق",
+"Not in database": "غير موجود في قاعدة البيانات",
+"Log": "السجل"
 }

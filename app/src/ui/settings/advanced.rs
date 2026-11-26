@@ -157,12 +157,20 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
             .into(),
         ),
     ];
-    if state.rip_available() {
+    if state.rip_available() || !state.rip.jobs.is_empty() {
+        let window = small("Details", Message::Navigate(crate::app::Route::Rips), false);
+        let control = if state.rip_available() {
+            row![small("Rip CD", Message::Rip(RipMsg::RipNow(None)), true), window]
+                .spacing(metrics::space_sm())
+                .into()
+        } else {
+            window
+        };
         rows.push(line(
             state,
             "Rip now",
             "Rip the CD that is in the drive (also one ripped before).",
-            small("Rip CD", Message::Rip(RipMsg::RipNow(None)), true),
+            control,
         ));
     }
     let to_fix: Vec<_> = state.rip.history.to_fix().collect();

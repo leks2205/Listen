@@ -141,6 +141,15 @@ pub enum Update {
     /// The drive is free (ripped and ejected): the next disc can start.
     DriveFree,
     Finished(Box<Report>),
+    /// The track titles (TOC track number, title), sent with every [`Update::Identified`] that has them.
+    Tracks(Vec<(u32, String)>),
+    /// The disc is read: each track's log entry (AccurateRip, skipped) and the tracks without a file.
+    Read {
+        tracks: Vec<whipper::TrackLog>,
+        unread: Vec<u32>,
+    },
+    /// A warning from the ripper itself (whipper's, a re-read), for the rip window's log.
+    Log(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -244,6 +253,9 @@ impl Job {
                 album: r.title.clone(),
                 source: MetaSource::MusicBrainz,
             });
+            let (disc_id, count) = (self.cfg.toc.musicbrainz_id(), self.cfg.toc.audio_count());
+            let medium = r.medium_for(&disc_id, count).unwrap_or(0);
+            self.send(titles(&AlbumMeta::from_release(r, medium, &self.cfg.toc)));
         }
     }
 
@@ -337,7 +349,10 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
                     job.send(Update::Progress { track: number, total, percent: 0 });
                 }
                 RipEvent::Percent(p) => job.send(Update::Progress { track: track.0, total: track.1, percent: p }),
-                RipEvent::Warning(w) => tracing::info!("whipper: {w}"),
+                RipEvent::Warning(w) => {
+                    tracing::info!("whipper: {w}");
+                    job.send(Update::Log(w));
+                }
             },
             Ok(found) = async { lookup.as_mut().expect("guarded").await }, if lookup.is_some() => {
                 lookup = None;
@@ -364,6 +379,15 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         Err(RipError::Cancelled) => return Stage::Cancelled,
         Err(e) => return Stage::Failed(e.to_string()),
     };
+    job.send(Update::Read {
+        tracks: outcome.log.tracks.clone(),
+        unread: cfg
+            .toc
+            .audio_tracks()
+            .map(|t| u32::from(t.number))
+            .filter(|n| !outcome.files.iter().any(|(f, _)| f == n))
+            .collect(),
+    });
     if outcome.files.is_empty() {
         return Stage::Failed("whipper produced no files".into());
     }
@@ -419,6 +443,7 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         album: meta.album.clone(),
         source: meta.source,
     });
+    job.send(titles(&meta));
     if meta.needs_fix {
         job.warn(format!(
             "MusicBrainz doesn't know this disc — tagged from {}",
@@ -541,6 +566,11 @@ async fn ask_gnudb(cfg: &JobConfig, http: &reqwest::Client) -> Option<gnudb::Ent
             }
         }
     }
+}
+
+/// The track titles of `meta` for the rip window.
+fn titles(meta: &AlbumMeta) -> Update {
+    Update::Tracks(meta.tracks.iter().map(|t| (t.number, t.title.clone())).collect())
 }
 
 /// Level 8, tags, cover, ReplayGain and names, into `album_dir`.

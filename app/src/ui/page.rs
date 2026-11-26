@@ -33,12 +33,16 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         Route::Downloads => super::downloads::view(state),
         Route::Radio => super::radio::view(state),
         Route::NowPlaying => super::queue::page(state),
+        Route::Rips => super::rip_window::view(state),
         // Pages not built yet show a stub.
         #[allow(unreachable_patterns)]
         route => placeholder(state, route),
     };
     let mut page = column![container(body).width(Length::Fill).height(Length::Fill)];
-    if let Some(rips) = super::rip_panel::view(state) {
+    // The rip window shows everything the cards do.
+    if state.route != Route::Rips
+        && let Some(rips) = super::rip_panel::view(state)
+    {
         page = page.push(rips);
     }
     page.into()

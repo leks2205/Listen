@@ -2382,5 +2382,22 @@
 "Secure": "Sicher",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Schnell liest die CD einmal mit voller Laufwerksgeschwindigkeit (etwa 4 Minuten) und prüft sie mit AccurateRip. Sicher (whipper) liest jeden Titel zweimal und vergleicht (etwa 20 Minuten).",
 "gnudb e-mail address": "gnudb-E-Mail-Adresse",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb benennt CDs, die MusicBrainz nicht kennt. gnudb verlangt eine Kontaktadresse, und Listen schickt diese bei jeder Abfrage mit. Solange das Feld leer ist, wird gnudb nicht gefragt und Albumnamen kommen nur von MusicBrainz und dem CD-Text der CD."
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb benennt CDs, die MusicBrainz nicht kennt. gnudb verlangt eine Kontaktadresse, und Listen schickt diese bei jeder Abfrage mit. Solange das Feld leer ist, wird gnudb nicht gefragt und Albumnamen kommen nur von MusicBrainz und dem CD-Text der CD.",
+"Details": "Details",
+"No CD is being ripped.": "Es wird keine CD gerippt.",
+"Metadata from {}": "Metadaten von {}",
+"Elapsed {}": "Vergangen {}",
+"{} left": "noch {}",
+"{}× real time": "{}× Echtzeit",
+"Progress": "Fortschritt",
+"Waiting": "Wartet",
+"Reading": "Liest",
+"Verifying": "Prüft",
+"Encoding": "Kodiert",
+"Tagged": "Getaggt",
+"Failed": "Fehlgeschlagen",
+"Skipped": "Übersprungen",
+"Mismatch": "Abweichung",
+"Not in database": "Nicht in der Datenbank",
+"Log": "Protokoll"
 }

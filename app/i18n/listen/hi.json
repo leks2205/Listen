@@ -2541,5 +2541,22 @@
 "Secure": "सुरक्षित",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "तेज़ मोड ड्राइव की पूरी गति पर CD को एक बार पढ़ता है (लगभग 4 मिनट) और AccurateRip से जाँचता है। सुरक्षित मोड (whipper) हर ट्रैक को दो बार पढ़कर मिलान करता है (लगभग 20 मिनट)।",
 "gnudb e-mail address": "gnudb ईमेल पता",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb उन CD के नाम बताता है जिन्हें MusicBrainz नहीं जानता। यह एक संपर्क पता माँगता है, और Listen हर खोज के साथ यह पता भेजता है। जब तक यह खाली है, gnudb से नहीं पूछा जाता और एल्बम के नाम केवल MusicBrainz और CD के अपने CD-Text से आते हैं।"
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb उन CD के नाम बताता है जिन्हें MusicBrainz नहीं जानता। यह एक संपर्क पता माँगता है, और Listen हर खोज के साथ यह पता भेजता है। जब तक यह खाली है, gnudb से नहीं पूछा जाता और एल्बम के नाम केवल MusicBrainz और CD के अपने CD-Text से आते हैं।",
+"Details": "विवरण",
+"No CD is being ripped.": "कोई CD रिप नहीं हो रही है।",
+"Metadata from {}": "{} से मेटाडेटा",
+"Elapsed {}": "बीता {}",
+"{} left": "{} बाकी",
+"{}× real time": "रियल टाइम का {}×",
+"Progress": "प्रगति",
+"Waiting": "प्रतीक्षा में",
+"Reading": "पढ़ रहा है",
+"Verifying": "जाँच रहा है",
+"Encoding": "एन्कोड हो रहा है",
+"Tagged": "टैग हो गया",
+"Failed": "विफल",
+"Skipped": "छोड़ा गया",
+"Mismatch": "मेल नहीं खाता",
+"Not in database": "डेटाबेस में नहीं",
+"Log": "लॉग"
 }

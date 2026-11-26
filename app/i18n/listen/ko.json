@@ -2279,5 +2279,22 @@
 "Secure": "안전",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "빠름은 드라이브 최대 속도로 CD를 한 번 읽고(약 4분) AccurateRip으로 확인합니다. 안전(whipper)은 모든 트랙을 두 번 읽어 비교합니다(약 20분).",
 "gnudb e-mail address": "gnudb 이메일 주소",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb는 MusicBrainz가 모르는 CD의 이름을 알려 줍니다. gnudb는 연락처 주소를 요구하며, Listen은 조회할 때마다 이 주소를 보냅니다. 비어 있으면 gnudb에 묻지 않으며 앨범 이름은 MusicBrainz와 CD 자체의 CD-Text에서만 가져옵니다."
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb는 MusicBrainz가 모르는 CD의 이름을 알려 줍니다. gnudb는 연락처 주소를 요구하며, Listen은 조회할 때마다 이 주소를 보냅니다. 비어 있으면 gnudb에 묻지 않으며 앨범 이름은 MusicBrainz와 CD 자체의 CD-Text에서만 가져옵니다.",
+"Details": "자세히",
+"No CD is being ripped.": "립핑 중인 CD가 없습니다.",
+"Metadata from {}": "{}의 메타데이터",
+"Elapsed {}": "경과 {}",
+"{} left": "{} 남음",
+"{}× real time": "실시간의 {}배",
+"Progress": "진행",
+"Waiting": "대기 중",
+"Reading": "읽는 중",
+"Verifying": "검증 중",
+"Encoding": "인코딩 중",
+"Tagged": "태그 완료",
+"Failed": "실패",
+"Skipped": "건너뜀",
+"Mismatch": "불일치",
+"Not in database": "데이터베이스에 없음",
+"Log": "로그"
 }

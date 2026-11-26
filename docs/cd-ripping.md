@@ -63,6 +63,25 @@ tracks as the disc. gnudb entries are submitted by other people and nobody check
 The album gets no MusicBrainz IDs, stays `LISTEN_NEEDS_FIX=1` and is listed under "Rips to fix" with the link
 for adding the disc to MusicBrainz.
 
+## The rip window
+
+**Details** on the rip card, or next to **Rip CD** in Settings → Advanced → CD ripping, opens the rip
+window (a page, `--route rips`; it never opens by itself). Per rip (several drives: one below the other):
+
+- header: cover, album artist – album, metadata source (MusicBrainz / gnudb / CD-Text / unknown), mode, drive and
+  read offset, destination;
+- the card's actions (mode switch, Cancel, version picker, Publish anyway / Discard, Choose folder… / Retry);
+- one bar for the disc, elapsed time, time left and read speed ("3.8× real time" = audio seconds read ÷
+  seconds spent reading, measured from the first track on; the time left is the unread audio at that speed);
+- a table with every TOC track from the start: number, title ("Track NN" until identified), length, state
+  (Waiting → Reading → Verifying (Secure) → Encoding → Tagged ✓, or Failed / Skipped), the track's progress
+  and its AccurateRip result once the disc is read; the current row is highlighted;
+- the log: the ripper's steps and warnings with the time into the rip, scrollable.
+
+The track states are derived in the app from the `Progress` / `Activity` updates the pipeline already sent;
+the pipeline adds the track titles (`Update::Tracks`), the per-track read result (`Update::Read`: whipper-style
+track log entries and the tracks without a file) and the ripper's own warnings (`Update::Log`).
+
 ## Checking a rip
 
 1. `listen --check-cd` with a disc inserted shows the TOC, disc ID, the MusicBrainz match (or, when there

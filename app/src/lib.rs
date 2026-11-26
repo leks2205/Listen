@@ -78,8 +78,8 @@ Options:
   --screenshot-delay <MS>  Wait before the screenshot (default 2500)
   --login <URL> <USER>   Sign in for this run only (password from $LISTEN_PASSWORD;
                          nothing is saved)
-  --route <PAGE>         Start on home, albums, artists, tracks, favorites, recent, stats, mixes, radio
-                         or settings
+  --route <PAGE>         Start on home, albums, artists, tracks, favorites, recent, stats, mixes, radio,
+                         rips (the rip window) or settings
   --autoplay             Start playing the first home album (with --login)
   --ephemeral            Don't save settings or credentials (tests, demos)
   --onboarding           Show the first-start wizard (with --ephemeral: screenshots)

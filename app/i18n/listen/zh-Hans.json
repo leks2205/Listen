@@ -2053,5 +2053,22 @@
 "Secure": "安全",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "快速模式以驱动器的最高速度读取光盘一次（约 4 分钟），并用 AccurateRip 校验。安全模式（whipper）将每首曲目读取两次并进行比较（约 20 分钟）。",
 "gnudb e-mail address": "gnudb 电子邮件地址",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb 可为 MusicBrainz 不认识的 CD 命名。它要求提供联系地址，Listen 每次查询时都会发送此地址。留空时不会查询 gnudb，专辑名称只来自 MusicBrainz 和光盘自带的 CD-Text。"
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb 可为 MusicBrainz 不认识的 CD 命名。它要求提供联系地址，Listen 每次查询时都会发送此地址。留空时不会查询 gnudb，专辑名称只来自 MusicBrainz 和光盘自带的 CD-Text。",
+"Details": "详细信息",
+"No CD is being ripped.": "没有正在抓轨的 CD。",
+"Metadata from {}": "元数据来自 {}",
+"Elapsed {}": "已用 {}",
+"{} left": "剩余 {}",
+"{}× real time": "实时的 {}×",
+"Progress": "进度",
+"Waiting": "等待中",
+"Reading": "读取中",
+"Verifying": "校验中",
+"Encoding": "编码中",
+"Tagged": "已打标签",
+"Failed": "失败",
+"Skipped": "已跳过",
+"Mismatch": "不匹配",
+"Not in database": "不在数据库中",
+"Log": "日志"
 }

@@ -10,11 +10,11 @@ use crate::icons::Icon;
 use crate::style::{self, metrics};
 use iced::font::Weight;
 use iced::widget::text::Wrapping;
-use iced::widget::{Column, button, column, container, image, progress_bar, row, space};
+use iced::widget::{Column, Row, button, column, container, image, progress_bar, row, space};
 use iced::{Alignment, Color, Element, Length, Padding};
 use listen_rip::pipeline::Stage;
 
-const WARN: Color = Color::from_rgb(0.95, 0.62, 0.22);
+pub(super) const WARN: Color = Color::from_rgb(0.95, 0.62, 0.22);
 
 pub fn view(state: &Listen) -> Option<Element<'_, Message>> {
     if state.rip.jobs.is_empty() {
@@ -27,7 +27,12 @@ pub fn view(state: &Listen) -> Option<Element<'_, Message>> {
     Some(container(col).padding(Padding::from([metrics::space_sm(), metrics::space_lg()])).into())
 }
 
-fn small_button<'a>(state: &'a Listen, text: &'a str, primary: bool, m: RipMsg) -> Element<'a, Message> {
+pub(super) fn small_button<'a>(
+    state: &'a Listen,
+    text: &'a str,
+    primary: bool,
+    m: RipMsg,
+) -> Element<'a, Message> {
     let t = state.tokens;
     let b = button(label_w(
         text,
@@ -40,15 +45,19 @@ fn small_button<'a>(state: &'a Listen, text: &'a str, primary: bool, m: RipMsg) 
     if primary { b.style(style::primary_button(t)).into() } else { b.style(style::default_button(t)).into() }
 }
 
-fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
+/// The cover, or a disc where there is none.
+pub(super) fn cover<'a>(job: &RipJob, size: f32) -> Element<'a, Message> {
+    match &job.cover {
+        Some(h) => image(h.clone()).width(size).height(size).into(),
+        None => super::art((60, 60, 70), size, metrics::radius_md(), Icon::LuDisc3),
+    }
+}
+
+/// The status line (translated) and its colour.
+pub(super) fn status(state: &Listen, job: &RipJob) -> (String, Color) {
     let t = state.tokens;
-    let id = job.id;
-    let cover: Element<'_, Message> = match &job.cover {
-        Some(h) => image(h.clone()).width(56).height(56).into(),
-        None => super::art((60, 60, 70), 56.0, metrics::radius_md(), Icon::LuDisc3),
-    };
     let activity = crate::i18n::tr_cow(job.activity.as_str().into());
-    let (status, color): (String, Color) = match &job.stage {
+    match &job.stage {
         Stage::Ripping => {
             // listen-rip's per-track activities ("Reading track 3 of 12") carry the counter themselves;
             // keep that wording in listen-rip's pipeline or the counter shows twice.
@@ -79,7 +88,25 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         Stage::Cancelled => {
             (crate::i18n::tr("Cancelled — nothing was copied to the music folder.").to_string(), t.muted)
         }
-    };
+    }
+}
+
+/// The disc's progress bar (0-100).
+pub(super) fn bar<'a>(state: &Listen, value: f32) -> Element<'a, Message> {
+    let t = state.tokens;
+    progress_bar(0.0..=100.0, value)
+        .girth(6)
+        .style(move |_| progress_bar::Style {
+            background: t.border.into(),
+            bar: t.primary.into(),
+            border: iced::Border { radius: 3.0.into(), ..Default::default() },
+        })
+        .into()
+}
+
+fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
+    let t = state.tokens;
+    let (status, color) = status(state, job);
     let mut info = column![
         label_w(job.title(), metrics::font_md(), t.foreground, Weight::Semibold),
         // Built translated above; error texts and paths inside stay as they are.
@@ -95,11 +122,7 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         } else {
             0.0
         };
-        info = info.push(progress_bar(0.0..=100.0, value).girth(6).style(move |_| progress_bar::Style {
-            background: t.border.into(),
-            bar: t.primary.into(),
-            border: iced::Border { radius: 3.0.into(), ..Default::default() },
-        }));
+        info = info.push(bar(state, value));
     }
     for w in job.warnings.iter().rev().take(2) {
         // A warning names an album or a path and is longer than the card is wide.
@@ -111,7 +134,31 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         info = info.push(picker(state, job));
     }
 
+    let actions = actions(state, job, true);
+    container(row![cover(job, 56.0), info, actions].spacing(metrics::space_md()).align_y(Alignment::Center))
+        .padding(metrics::space_md())
+        .width(Length::Fill)
+        .style(move |_| container::Style {
+            background: Some(iced::Background::Color(t.surface)),
+            border: iced::Border { color: t.border, width: 1.0, radius: metrics::radius_md().into() },
+            ..Default::default()
+        })
+        .into()
+}
+
+/// What can be done with a rip right now; `details` adds the button that opens the rip window.
+pub(super) fn actions<'a>(state: &'a Listen, job: &'a RipJob, details: bool) -> Row<'a, Message> {
+    let t = state.tokens;
+    let id = job.id;
     let mut actions = row![].spacing(metrics::space_sm()).align_y(Alignment::Center);
+    if details {
+        actions = actions.push(
+            button(label_w("Details", metrics::font_sm(), t.foreground, Weight::Semibold))
+                .padding(Padding::from([6.0, 12.0]))
+                .style(style::default_button(t))
+                .on_press(Message::Navigate(crate::app::Route::Rips)),
+        );
+    }
     match &job.stage {
         Stage::NeedsDecision(_) => {
             actions = actions
@@ -132,7 +179,7 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
             }
             actions = actions.push(small_button(state, "Cancel", false, RipMsg::Cancel(id)))
         }
-        _ => {
+        _ if details => {
             actions = actions.push(crate::ui::tip::tip(
                 state,
                 button(icon(Icon::LuX, metrics::font_md(), t.muted))
@@ -144,20 +191,17 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
                 crate::ui::tip::Position::Bottom,
             ))
         }
+        _ => {}
     }
-    container(row![cover, info, actions].spacing(metrics::space_md()).align_y(Alignment::Center))
-        .padding(metrics::space_md())
-        .width(Length::Fill)
-        .style(move |_| container::Style {
-            background: Some(iced::Background::Color(t.surface)),
-            border: iced::Border { color: t.border, width: 1.0, radius: metrics::radius_md().into() },
-            ..Default::default()
-        })
-        .into()
+    actions
 }
 
 /// Secure / Fast for this rip; only active until the first track is being read.
-fn mode_toggle<'a>(state: &'a Listen, id: u64, switch: &listen_rip::ModeSwitch) -> Element<'a, Message> {
+pub(super) fn mode_toggle<'a>(
+    state: &'a Listen,
+    id: u64,
+    switch: &listen_rip::ModeSwitch,
+) -> Element<'a, Message> {
     use listen_core::settings::RipMode;
     let t = state.tokens;
     let (current, locked) = (switch.mode(), switch.locked());
@@ -177,7 +221,7 @@ fn mode_toggle<'a>(state: &'a Listen, id: u64, switch: &listen_rip::ModeSwitch) 
 }
 
 /// Several releases match: pick the version (best one pre-selected).
-fn picker<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
+pub(super) fn picker<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
     let t = state.tokens;
     let head = match job.seconds_left() {
         Some(s) => format!("Which version is this CD? Taking the highlighted one in {s} s."),

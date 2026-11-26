@@ -41,6 +41,7 @@ pub mod queue;
 pub mod radio;
 pub mod right_click;
 pub mod rip_panel;
+pub mod rip_window;
 pub mod search;
 pub mod servers;
 pub mod settings;

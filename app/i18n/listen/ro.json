@@ -2657,5 +2657,22 @@
 "Secure": "Sigur",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Rapid citește CD-ul o singură dată la viteza maximă a unității (aproximativ 4 minute) și îl verifică cu AccurateRip. Sigur (whipper) citește fiecare piesă de două ori și compară (aproximativ 20 de minute).",
 "gnudb e-mail address": "Adresă de e-mail pentru gnudb",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb denumește CD-urile pe care MusicBrainz nu le cunoaște. Cere o adresă de contact, iar Listen o trimite pe aceasta la fiecare căutare. Cât timp câmpul este gol, gnudb nu este întrebat, iar numele albumelor vin doar de la MusicBrainz și din CD-Text-ul discului."
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb denumește CD-urile pe care MusicBrainz nu le cunoaște. Cere o adresă de contact, iar Listen o trimite pe aceasta la fiecare căutare. Cât timp câmpul este gol, gnudb nu este întrebat, iar numele albumelor vin doar de la MusicBrainz și din CD-Text-ul discului.",
+"Details": "Detalii",
+"No CD is being ripped.": "Nu se extrage niciun CD.",
+"Metadata from {}": "Metadate de la {}",
+"Elapsed {}": "Scurs {}",
+"{} left": "Mai rămân {}",
+"{}× real time": "{}× timp real",
+"Progress": "Progres",
+"Waiting": "În așteptare",
+"Reading": "Citire",
+"Verifying": "Verificare",
+"Encoding": "Codare",
+"Tagged": "Etichetat",
+"Failed": "Eșuat",
+"Skipped": "Omis",
+"Mismatch": "Nu se potrivește",
+"Not in database": "Nu este în baza de date",
+"Log": "Jurnal"
 }

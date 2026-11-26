@@ -2037,5 +2037,22 @@
 "Secure": "Надійний",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Швидкий читає CD один раз на повній швидкості приводу (близько 4 хвилин) і перевіряє його через AccurateRip. Надійний (whipper) читає кожен трек двічі й порівнює (близько 20 хвилин).",
 "gnudb e-mail address": "Адреса e-mail для gnudb",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb дає назви CD, яких не знає MusicBrainz. Він вимагає контактну адресу, і Listen надсилає цю адресу з кожним запитом. Поки поле порожнє, gnudb не опитується, а назви альбомів беруться лише з MusicBrainz і з CD-Text самого диска."
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb дає назви CD, яких не знає MusicBrainz. Він вимагає контактну адресу, і Listen надсилає цю адресу з кожним запитом. Поки поле порожнє, gnudb не опитується, а назви альбомів беруться лише з MusicBrainz і з CD-Text самого диска.",
+"Details": "Подробиці",
+"No CD is being ripped.": "Зараз не копіюється жоден CD.",
+"Metadata from {}": "Метадані з {}",
+"Elapsed {}": "Минуло {}",
+"{} left": "Залишилося {}",
+"{}× real time": "{}× реального часу",
+"Progress": "Перебіг",
+"Waiting": "Очікує",
+"Reading": "Читання",
+"Verifying": "Перевірка",
+"Encoding": "Кодування",
+"Tagged": "Теги записано",
+"Failed": "Помилка",
+"Skipped": "Пропущено",
+"Mismatch": "Не збігається",
+"Not in database": "Немає в базі",
+"Log": "Журнал"
 }

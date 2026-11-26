@@ -96,6 +96,20 @@ The panel shows progress ("Ripping track 3 of 12", "Tagging", "Copying to the mu
 
 If some tracks could not be read perfectly, the panel asks "Publish the rest anyway?" with **Publish anyway** and **Discard**.
 
+### The rip window
+
+The card above the player bar is the short view. For the whole picture, press **Details** on the card, or **Details** next to **Rip CD** in **Settings → Advanced → CD ripping**. The rip window is a page of its own; it never opens by itself. When two drives rip at once, it shows both rips one below the other.
+
+For each rip it shows:
+
+- **The header**: the cover, album artist and album, where the metadata came from (MusicBrainz, CD-Text or unknown), the rip mode, the drive with its read offset, and the folder rips go to.
+- **The card's buttons**: the **Secure** / **Fast** switch, **Cancel**, the version picker, **Publish anyway** / **Discard**, and **Choose folder…** / **Retry**.
+- **The disc's progress**: one bar for the whole disc, the time since the rip started, the estimated time left and the read speed as a multiple of real time (for example "3.8× real time" means 3.8 seconds of audio per second). The time left is worked out from the speed measured so far in this rip, so it gets more accurate as the rip goes on.
+- **The tracks**: one row per track of the disc, there from the start, with its number, title (once the album is identified, "Track 03" until then), length, state, its own progress and its AccurateRip result once the disc is read (✓ with the database's confidence, **Mismatch** or **Not in database**). A track goes through **Waiting**, **Reading**, **Verifying** (Secure only), **Encoding** and **Tagged ✓**; a track that could not be read shows **Failed**, and the tracks a cancelled or failed rip never got to show **Skipped**. The row being read or tagged is highlighted.
+- **The log**: the steps and warnings the ripper reported, newest at the bottom, each with the time into the rip. If a rip seems stuck, the last lines show what it is doing.
+
+When the rip is done the window keeps it as a record: the folder it was filed into, the AccurateRip line and every warning.
+
 ## Rips to fix
 
 ### How a disc is identified

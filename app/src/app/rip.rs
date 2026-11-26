@@ -10,6 +10,7 @@ use listen_rip::fast::FastRipper;
 use listen_rip::history::{Entry, History};
 use listen_rip::pipeline::{self, Candidate, Command, JobConfig, Lookup, Report, Stage, Update};
 use listen_rip::queue::RipQueue;
+use listen_rip::tags::MetaSource;
 use listen_rip::{DriveInfo, ModeSwitch, Ripper, whipper};
 use listen_source::SourceError;
 use std::path::{Path, PathBuf};
@@ -40,6 +41,342 @@ pub struct RipJob {
     commands: Option<mpsc::UnboundedSender<Command>>,
     /// This rip's Secure/Fast mode (switchable until its first track is read).
     pub mode: Option<ModeSwitch>,
+    /// One row per audio track of the TOC (the rip window's table).
+    pub tracks: Vec<TrackProgress>,
+    /// The row being read or encoded right now.
+    pub current: Option<usize>,
+    /// The drive ("TSSTcorp CDDVDW SE-218GN") and its read offset with where it came from.
+    pub drive_label: String,
+    pub offset: Option<(i32, &'static str)>,
+    pub destination: PathBuf,
+    /// Where the album's metadata came from (known once identified).
+    pub source: Option<MetaSource>,
+    /// What the ripper reported: (time into the rip, line, is a warning).
+    pub log: Vec<(Duration, String, bool)>,
+    pub clock: RipClock,
+    /// Every track has been read (the drive is done).
+    read: bool,
+}
+
+/// Where one track of a rip is, in the order it goes through them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackState {
+    Waiting,
+    Reading,
+    /// Secure only: whipper's second pass.
+    Verifying,
+    /// Read; being (or about to be) compressed and tagged.
+    Encoding,
+    Tagged,
+    Failed,
+    Skipped,
+}
+
+impl TrackState {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Waiting => "Waiting",
+            Self::Reading => "Reading",
+            Self::Verifying => "Verifying",
+            Self::Encoding => "Encoding",
+            Self::Tagged => "Tagged",
+            Self::Failed => "Failed",
+            Self::Skipped => "Skipped",
+        }
+    }
+}
+
+/// A track's AccurateRip result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackAr {
+    /// Matched, with the database's confidence.
+    Verified(u32),
+    Mismatch,
+    NotInDb,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrackProgress {
+    /// The TOC's track number.
+    pub number: u32,
+    /// From the lookup; empty until known.
+    pub title: String,
+    pub length_ms: u64,
+    pub state: TrackState,
+    /// This track's read progress (0-100).
+    pub percent: u32,
+    pub accuraterip: Option<TrackAr>,
+    /// The ripper couldn't read it (skipped, or no file).
+    pub unread: bool,
+}
+
+impl TrackProgress {
+    /// The title, else "Track 03".
+    pub fn display_title(&self) -> String {
+        if self.title.is_empty() {
+            crate::i18n::trf("Track {}", &[&format!("{:02}", self.number)])
+        } else {
+            self.title.clone()
+        }
+    }
+}
+
+/// How long a rip has been running. A job without a start (tests, snapshots) keeps the times it is
+/// given, so what is shown doesn't depend on the wall clock.
+#[derive(Debug, Clone, Default)]
+pub struct RipClock {
+    started: Option<Instant>,
+    reading_since: Option<Instant>,
+    /// Since the rip started.
+    pub elapsed: Duration,
+    /// Since the first track started being read (the read speed is measured over this).
+    pub reading: Duration,
+}
+
+impl RipJob {
+    fn new(id: u64, device: PathBuf, activity: &str) -> Self {
+        Self {
+            id,
+            device,
+            stage: Stage::Ripping,
+            activity: activity.into(),
+            track: 0,
+            total: 0,
+            percent: 0,
+            artist: String::new(),
+            album: String::new(),
+            candidates: Vec::new(),
+            chosen: 0,
+            picker_until: None,
+            cover: None,
+            warnings: Vec::new(),
+            report: None,
+            drive_free: false,
+            commands: None,
+            mode: None,
+            tracks: Vec::new(),
+            current: None,
+            drive_label: String::new(),
+            offset: None,
+            destination: PathBuf::new(),
+            source: None,
+            log: Vec::new(),
+            clock: RipClock::default(),
+            read: false,
+        }
+    }
+
+    /// One waiting row per audio track; `lengths_ms` in TOC order.
+    pub fn set_tracks(&mut self, numbers: impl IntoIterator<Item = u32>, lengths_ms: &[u64]) {
+        self.tracks = numbers
+            .into_iter()
+            .zip(lengths_ms)
+            .map(|(number, &length_ms)| TrackProgress {
+                number,
+                title: String::new(),
+                length_ms,
+                state: TrackState::Waiting,
+                percent: 0,
+                accuraterip: None,
+                unread: false,
+            })
+            .collect();
+        self.total = self.tracks.len() as u32;
+    }
+
+    fn secure(&self) -> bool {
+        self.mode.as_ref().is_some_and(|m| m.mode() == RipMode::Secure)
+    }
+
+    fn log_line(&mut self, line: String, warning: bool) {
+        if self.log.last().is_some_and(|(_, l, _)| *l == line) {
+            return;
+        }
+        self.log.push((self.clock.elapsed, line, warning));
+        if self.log.len() > 200 {
+            self.log.drain(..self.log.len() - 200);
+        }
+    }
+
+    fn tick(&mut self) {
+        let now = Instant::now();
+        if let Some(s) = self.clock.started
+            && !self.stage.finished()
+        {
+            self.clock.elapsed = now.saturating_duration_since(s);
+        }
+        if let Some(r) = self.clock.reading_since
+            && !self.read
+            && self.stage == Stage::Ripping
+        {
+            self.clock.reading = now.saturating_duration_since(r);
+        }
+    }
+
+    /// What an update says about the tracks, the clock and the log (before it is applied).
+    fn observe(&mut self, u: &Update) {
+        self.tick();
+        match u {
+            Update::Activity(a) => self.log_line(a.clone(), false),
+            Update::Warning(w) | Update::Log(w) => self.log_line(w.clone(), true),
+            Update::Progress { track, .. } => {
+                if *track >= 1
+                    && self.stage == Stage::Ripping
+                    && self.clock.reading_since.is_none()
+                    && self.clock.started.is_some()
+                {
+                    self.clock.reading_since = Some(Instant::now());
+                }
+            }
+            Update::Identified { source, .. } => self.source = Some(*source),
+            Update::Tracks(titles) => {
+                for (number, title) in titles {
+                    if let Some(t) = self.tracks.iter_mut().find(|t| t.number == *number) {
+                        t.title.clone_from(title);
+                    }
+                }
+            }
+            Update::Read { tracks, unread } => {
+                self.read = true;
+                for t in &mut self.tracks {
+                    let log = tracks.iter().find(|l| l.number == t.number);
+                    t.unread = unread.contains(&t.number) || log.is_some_and(|l| l.skipped());
+                    t.accuraterip = log.filter(|_| !t.unread).map(track_ar);
+                }
+            }
+            Update::Stage(Stage::Tagging) if self.stage != Stage::Tagging => {
+                // From here `track` counts the files being tagged.
+                self.track = 0;
+                self.percent = 0;
+            }
+            _ => {}
+        }
+    }
+
+    /// The rows from the stage, the current track/percent and what is known about each track: before
+    /// the current one finished, the current one at `percent`, later ones waiting.
+    fn refresh_tracks(&mut self) {
+        use TrackState as S;
+        let secure = self.secure();
+        let verifying = secure && self.activity.to_lowercase().contains("verif");
+        let pos = self.track as usize;
+        let previous = self.current.take();
+        let read = self.read;
+        match &self.stage {
+            Stage::Ripping => {
+                for (i, t) in self.tracks.iter_mut().enumerate() {
+                    (t.state, t.percent) = if t.unread {
+                        (S::Failed, 100)
+                    } else if read || i + 1 < pos {
+                        (S::Encoding, 100)
+                    } else if i + 1 == pos {
+                        (if verifying { S::Verifying } else { S::Reading }, self.percent.min(100))
+                    } else {
+                        (S::Waiting, 0)
+                    };
+                }
+                if !read && (1..=self.tracks.len()).contains(&pos) {
+                    self.current = Some(pos - 1);
+                }
+            }
+            Stage::Tagging => {
+                // `track` is the file being tagged: the readable tracks in order; ReplayGain comes last.
+                let all = self.activity == "ReplayGain";
+                let mut k = 0;
+                for (i, t) in self.tracks.iter_mut().enumerate() {
+                    if t.unread {
+                        (t.state, t.percent) = (S::Failed, 100);
+                        continue;
+                    }
+                    k += 1;
+                    t.percent = 100;
+                    t.state = if all || k < pos { S::Tagged } else { S::Encoding };
+                    if !all && k == pos {
+                        self.current = Some(i);
+                    }
+                }
+            }
+            Stage::NeedsDecision(_) | Stage::Publishing | Stage::WaitingForDestination(_) | Stage::Done => {
+                for t in &mut self.tracks {
+                    (t.state, t.percent) = (if t.unread { S::Failed } else { S::Tagged }, 100);
+                }
+            }
+            Stage::Failed(_) | Stage::Cancelled => {
+                let failed = matches!(self.stage, Stage::Failed(_));
+                for (i, t) in self.tracks.iter_mut().enumerate() {
+                    if t.unread || (failed && previous == Some(i)) {
+                        t.state = S::Failed;
+                    } else if t.state != S::Tagged {
+                        t.state = S::Skipped;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Milliseconds of audio read so far (a Secure track is read twice: half per pass).
+    pub fn audio_read_ms(&self) -> u64 {
+        let secure = self.secure();
+        self.tracks
+            .iter()
+            .map(|t| {
+                let p = u64::from(t.percent.min(100));
+                match t.state {
+                    TrackState::Waiting | TrackState::Skipped => 0,
+                    TrackState::Reading if secure => t.length_ms * p / 200,
+                    TrackState::Reading => t.length_ms * p / 100,
+                    TrackState::Verifying => t.length_ms * (50 + p / 2) / 100,
+                    _ => t.length_ms,
+                }
+            })
+            .sum()
+    }
+
+    pub fn audio_total_ms(&self) -> u64 {
+        self.tracks.iter().map(|t| t.length_ms).sum()
+    }
+
+    /// Audio seconds read per second of reading, once a few seconds were measured.
+    pub fn read_speed(&self) -> Option<f32> {
+        let read = self.audio_read_ms();
+        let ms = self.clock.reading.as_millis() as u64;
+        (ms >= 3000 && read > 0).then(|| read as f32 / ms as f32)
+    }
+
+    /// The rest of the disc at the speed measured so far.
+    pub fn time_left(&self) -> Option<Duration> {
+        if self.read || self.stage != Stage::Ripping {
+            return None;
+        }
+        let speed = self.read_speed()?;
+        let rest = self.audio_total_ms().saturating_sub(self.audio_read_ms());
+        Some(Duration::from_millis((rest as f32 / speed) as u64))
+    }
+
+    /// The whole job, 0-1: reading is most of it, tagging the rest.
+    pub fn overall(&self) -> f32 {
+        if self.stage == Stage::Done {
+            return 1.0;
+        }
+        let total = self.audio_total_ms();
+        if total == 0 {
+            return 0.0;
+        }
+        let tagged = self.tracks.iter().filter(|t| t.state == TrackState::Tagged).count();
+        0.9 * self.audio_read_ms() as f32 / total as f32 + 0.1 * tagged as f32 / self.tracks.len() as f32
+    }
+}
+
+fn track_ar(l: &listen_rip::whipper::TrackLog) -> TrackAr {
+    use listen_rip::whipper::Ar;
+    let confidence = |a: Ar| if let Ar::Match { confidence } = a { confidence } else { 0 };
+    if l.verified() {
+        TrackAr::Verified(confidence(l.v1).max(confidence(l.v2)))
+    } else if l.in_db() {
+        TrackAr::Mismatch
+    } else {
+        TrackAr::NotInDb
+    }
 }
 
 impl RipJob {
@@ -83,27 +420,18 @@ impl RipState {
     #[doc(hidden)]
     pub fn test_job(&mut self, device: &str) -> u64 {
         self.next_id += 1;
-        self.jobs.push(RipJob {
-            id: self.next_id,
-            device: device.into(),
-            stage: Stage::Ripping,
-            activity: "Reading table".into(),
-            track: 0,
-            total: 0,
-            percent: 0,
-            artist: String::new(),
-            album: String::new(),
-            candidates: Vec::new(),
-            chosen: 0,
-            picker_until: None,
-            cover: None,
-            warnings: Vec::new(),
-            report: None,
-            drive_free: false,
-            commands: None,
-            mode: None,
-        });
+        self.jobs.push(RipJob::new(self.next_id, device.into(), "Reading table"));
         self.next_id
+    }
+
+    /// [`Self::test_job`] with a TOC of these track lengths (tracks 1, 2, …).
+    #[doc(hidden)]
+    pub fn test_job_with_tracks(&mut self, device: &str, lengths_ms: &[u64]) -> u64 {
+        let id = self.test_job(device);
+        if let Some(j) = self.jobs.iter_mut().find(|j| j.id == id) {
+            j.set_tracks(1..=lengths_ms.len() as u32, lengths_ms);
+        }
+        id
     }
 
     /// [`Self::test_job`] with a rip mode switch.
@@ -183,6 +511,7 @@ impl Listen {
 
     pub(super) fn rip_ticking(&self) -> bool {
         self.rip.jobs.iter().any(|j| j.picker_until.is_some())
+            || (self.route == super::Route::Rips && self.rip.active())
     }
 
     fn drive(&self, device: &Path) -> DriveInfo {
@@ -256,6 +585,7 @@ impl Listen {
             }
             RipMsg::Tick => {
                 for j in &mut self.rip.jobs {
+                    j.tick();
                     if j.picker_until.is_some_and(|t| Instant::now() >= t) {
                         j.picker_until = None;
                     }
@@ -331,26 +661,8 @@ impl Listen {
     fn start_rip(&mut self, device: PathBuf) -> Task<Message> {
         self.rip.next_id += 1;
         let id = self.rip.next_id;
-        let mut job = RipJob {
-            id,
-            device: device.clone(),
-            stage: Stage::Ripping,
-            activity: "Reading the disc".into(),
-            track: 0,
-            total: 0,
-            percent: 0,
-            artist: String::new(),
-            album: String::new(),
-            candidates: Vec::new(),
-            chosen: 0,
-            picker_until: None,
-            cover: None,
-            warnings: Vec::new(),
-            report: None,
-            drive_free: false,
-            commands: None,
-            mode: None,
-        };
+        let mut job = RipJob::new(id, device.clone(), "Reading the disc");
+        job.clock.started = Some(Instant::now());
         let fail = |this: &mut Self, mut job: RipJob, why: String| {
             tracing::warn!("rip of {}: {why}", job.device.display());
             job.stage = Stage::Failed(why);
@@ -380,7 +692,10 @@ impl Listen {
             drive.label(),
             source.label()
         );
-        job.total = toc.audio_count() as u32;
+        job.set_tracks(toc.audio_tracks().map(|t| u32::from(t.number)), &toc.track_lengths_ms());
+        job.drive_label = drive.label();
+        job.offset = Some((offset, source.label()));
+        job.destination = PathBuf::from(s.destination.trim());
         let Some(paths) = self.paths.clone() else {
             return fail(self, job, "no data directory".into());
         };
@@ -443,6 +758,17 @@ impl Listen {
     }
 
     fn on_rip_update(&mut self, id: u64, u: Update) -> Task<Message> {
+        if let Some(j) = self.rip.jobs.iter_mut().find(|j| j.id == id) {
+            j.observe(&u);
+        }
+        let task = self.apply_rip_update(id, u);
+        if let Some(j) = self.rip.jobs.iter_mut().find(|j| j.id == id) {
+            j.refresh_tracks();
+        }
+        task
+    }
+
+    fn apply_rip_update(&mut self, id: u64, u: Update) -> Task<Message> {
         let Some(j) = self.rip.jobs.iter_mut().find(|j| j.id == id) else { return Task::none() };
         match u {
             Update::Activity(a) => j.activity = a,
@@ -494,6 +820,8 @@ impl Listen {
                 j.report = Some(report.clone());
                 return self.rip_finished(&report);
             }
+            // Taken in by `RipJob::observe`.
+            Update::Tracks(_) | Update::Read { .. } | Update::Log(_) => {}
         }
         Task::none()
     }

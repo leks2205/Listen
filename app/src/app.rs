@@ -133,6 +133,8 @@ pub enum Route {
     Learnable,
     /// Internet radio stations.
     Radio,
+    /// The rip window: every rip with its tracks, times and log.
+    Rips,
 }
 
 impl Route {
@@ -182,6 +184,7 @@ impl Route {
             Route::Stats => "Statistics",
             Route::Mixes | Route::Mix(_) | Route::Learnable => "Mixes",
             Route::Radio => "Radio",
+            Route::Rips => "CD ripping",
         }
     }
 }
@@ -4845,6 +4848,7 @@ pub fn parse_route(name: &str) -> Option<Route> {
         "stats" => Some(Route::Stats),
         "mixes" => Some(Route::Mixes),
         "radio" => Some(Route::Radio),
+        "rips" => Some(Route::Rips),
         _ => None,
     }
 }

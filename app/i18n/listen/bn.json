@@ -2541,5 +2541,22 @@
 "Secure": "নিরাপদ",
 "Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "দ্রুত মোড ড্রাইভের পূর্ণ গতিতে CD একবার পড়ে (প্রায় 4 মিনিট) এবং AccurateRip দিয়ে যাচাই করে। নিরাপদ মোড (whipper) প্রতিটি ট্র্যাক দুবার পড়ে তুলনা করে (প্রায় 20 মিনিট)।",
 "gnudb e-mail address": "gnudb ইমেল ঠিকানা",
-"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "MusicBrainz যে CD চেনে না, gnudb সেগুলোর নাম দেয়। এটি একটি যোগাযোগের ঠিকানা চায়, এবং Listen প্রতিটি খোঁজের সাথে এই ঠিকানাটি পাঠায়। এটি খালি থাকলে gnudb-কে জিজ্ঞাসা করা হয় না এবং অ্যালবামের নাম কেবল MusicBrainz ও CD-এর নিজস্ব CD-Text থেকে আসে।"
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "MusicBrainz যে CD চেনে না, gnudb সেগুলোর নাম দেয়। এটি একটি যোগাযোগের ঠিকানা চায়, এবং Listen প্রতিটি খোঁজের সাথে এই ঠিকানাটি পাঠায়। এটি খালি থাকলে gnudb-কে জিজ্ঞাসা করা হয় না এবং অ্যালবামের নাম কেবল MusicBrainz ও CD-এর নিজস্ব CD-Text থেকে আসে।",
+"Details": "বিস্তারিত",
+"No CD is being ripped.": "কোনো CD রিপ হচ্ছে না।",
+"Metadata from {}": "{} থেকে মেটাডেটা",
+"Elapsed {}": "অতিবাহিত {}",
+"{} left": "{} বাকি",
+"{}× real time": "রিয়েল টাইমের {}×",
+"Progress": "অগ্রগতি",
+"Waiting": "অপেক্ষমাণ",
+"Reading": "পড়া হচ্ছে",
+"Verifying": "যাচাই হচ্ছে",
+"Encoding": "এনকোড হচ্ছে",
+"Tagged": "ট্যাগ হয়েছে",
+"Failed": "ব্যর্থ",
+"Skipped": "বাদ দেওয়া হয়েছে",
+"Mismatch": "মেলেনি",
+"Not in database": "ডেটাবেসে নেই",
+"Log": "লগ"
 }
