@@ -108,10 +108,9 @@ fn header<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
     if let Some(source) = job.source {
         let name = match source {
             MetaSource::MusicBrainz => "MusicBrainz".to_string(),
+            MetaSource::Gnudb => "gnudb".to_string(),
             MetaSource::CdText => "CD-Text".to_string(),
             MetaSource::Unknown => crate::i18n::tr("Unknown").to_string(),
-            #[allow(unreachable_patterns)]
-            other => format!("{other:?}"),
         };
         first.push(crate::i18n::trf("Metadata from {}", &[&name]));
     }
