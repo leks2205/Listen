@@ -399,6 +399,7 @@ impl Listen {
             picker_timeout: Duration::from_secs(u64::from(s.picker_timeout_secs.max(5))),
             stamp: pipeline::local_stamp(),
             lookup: Lookup::Online,
+            gnudb_email: s.gnudb_email.trim().to_string(),
             destination_retry: Duration::from_secs(30),
             toc,
         };
@@ -581,6 +582,7 @@ impl Listen {
             Setting::RipScan(v) => s.scan_navidrome = v,
             Setting::RipPickerTimeout(v) => s.picker_timeout_secs = v.clamp(5, 300),
             Setting::RipMode(m) => s.mode = m,
+            Setting::RipGnudbEmail(v) => s.gnudb_email = v,
             Setting::RipDestination(text) => {
                 self.rip.dest_input = text;
                 return Task::none();

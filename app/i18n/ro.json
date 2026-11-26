@@ -2305,6 +2305,8 @@
 "fingers lifted": "degete ridicate",
 "fragment order": "ordinea fragmentelor",
 "full at once (and no fade-in of its own)": "complet deodată (și fără apariție treptată proprie)",
+"gnudb e-mail address": "Adresă de e-mail pentru gnudb",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb denumește CD-urile pe care MusicBrainz nu le cunoaște. Cere o adresă de contact, iar Listen o trimite pe aceasta la fiecare căutare. Cât timp câmpul este gol, gnudb nu este întrebat, iar numele albumelor vin doar de la MusicBrainz și din CD-Text-ul discului.",
 "hand-started album": "album pornit manual",
 "iTunes Search API": "iTunes Search API",
 "ignore SSL": "ignoră SSL",

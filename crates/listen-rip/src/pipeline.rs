@@ -1,7 +1,8 @@
 //! One disc, start to finish; the app sends [`Command`]s and receives [`Update`]s.
 //!
 //! 1. Rip (whipper) while MusicBrainz is asked; the best match is taken after `picker_timeout`
-//!    unless the user picks another first.
+//!    unless the user picks another first. A disc MusicBrainz doesn't know is named from gnudb
+//!    (when an e-mail address is set), else from CD-Text, else "Unknown Album (…)".
 //! 2. Eject.
 //! 3. In the work folder: FLAC -8 (MD5 checked), tags, cover, ReplayGain, file names, rip log.
 //! 4. Unreadable tracks: ask whether to publish or discard.
@@ -10,6 +11,7 @@
 use crate::cover;
 use crate::drive::DriveInfo;
 use crate::flac;
+use crate::gnudb;
 use crate::layout;
 use crate::musicbrainz::{self, Found, Release};
 use crate::publish;
@@ -38,6 +40,8 @@ pub struct JobConfig {
     pub stamp: String,
     /// Where the metadata comes from.
     pub lookup: Lookup,
+    /// Contact address gnudb asks for; empty = gnudb is never asked.
+    pub gnudb_email: String,
     /// Retry interval while the destination isn't available.
     pub destination_retry: Duration,
 }
@@ -49,8 +53,9 @@ pub enum Lookup {
     /// Nothing (CD-Text or "Unknown").
     Offline,
     /// Already known (tests): these releases, this cover. `exact` = the disc ID
-    /// matched; `false` makes them fuzzy TOC candidates that have to fit.
-    Given { releases: Vec<Release>, cover: Option<Vec<u8>>, exact: bool },
+    /// matched; `false` makes them fuzzy TOC candidates that have to fit. `gnudb` is what gnudb
+    /// would answer when MusicBrainz has nothing (and an address is set).
+    Given { releases: Vec<Release>, cover: Option<Vec<u8>>, exact: bool, gnudb: Option<Box<gnudb::Entry>> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -392,16 +397,20 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
             AlbumMeta::from_release(r, medium, &cfg.toc)
         }
         None => {
-            let text = outcome
-                .toc_file
-                .as_ref()
-                .and_then(|p| std::fs::read_to_string(p).ok())
-                .map(|t| whipper::parse_toc_cdtext(&t))
-                .unwrap_or_default();
-            if text.is_empty() {
-                AlbumMeta::unknown(&cfg.toc, &cfg.stamp)
+            if let Some(entry) = ask_gnudb(&cfg, http).await {
+                AlbumMeta::from_gnudb(&entry, &cfg.toc, &cfg.stamp)
             } else {
-                AlbumMeta::from_cdtext(&text, &cfg.toc, &cfg.stamp)
+                let text = outcome
+                    .toc_file
+                    .as_ref()
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .map(|t| whipper::parse_toc_cdtext(&t))
+                    .unwrap_or_default();
+                if text.is_empty() {
+                    AlbumMeta::unknown(&cfg.toc, &cfg.stamp)
+                } else {
+                    AlbumMeta::from_cdtext(&text, &cfg.toc, &cfg.stamp)
+                }
             }
         }
     };
@@ -414,6 +423,7 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         job.warn(format!(
             "MusicBrainz doesn't know this disc — tagged from {}",
             match meta.source {
+                MetaSource::Gnudb => "gnudb",
                 MetaSource::CdText => "CD-Text",
                 _ => "nothing (Unknown Album)",
             }
@@ -502,6 +512,37 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
     Stage::Done
 }
 
+/// gnudb's entry for a disc MusicBrainz doesn't know; `None` when no address is set, when the
+/// lookup is offline, or when gnudb has nothing usable (failures are logged, the disc then falls
+/// through to CD-Text).
+async fn ask_gnudb(cfg: &JobConfig, http: &reqwest::Client) -> Option<gnudb::Entry> {
+    if matches!(cfg.lookup, Lookup::Offline) {
+        return None;
+    }
+    let email = cfg.gnudb_email.trim();
+    if email.is_empty() {
+        tracing::info!("gnudb lookup skipped: no e-mail address set (Settings → Advanced → CD ripping)");
+        return None;
+    }
+    match &cfg.lookup {
+        Lookup::Given { gnudb, .. } => gnudb.as_deref().cloned(),
+        Lookup::Offline => None,
+        Lookup::Online => {
+            match tokio::time::timeout(Duration::from_secs(30), gnudb::lookup(http, &cfg.toc, email)).await {
+                Ok(Ok(entry)) => entry,
+                Ok(Err(e)) => {
+                    tracing::warn!("gnudb lookup failed: {e}");
+                    None
+                }
+                Err(_) => {
+                    tracing::warn!("gnudb didn't answer in time");
+                    None
+                }
+            }
+        }
+    }
+}
+
 /// Level 8, tags, cover, ReplayGain and names, into `album_dir`.
 async fn tag_album(
     job: &mut Job,
@@ -520,7 +561,7 @@ async fn tag_album(
         }
         Lookup::Online => match job.releases.get(job.chosen) {
             Some(r) => cover::fetch(http, r).await,
-            None if meta.source == MetaSource::CdText => {
+            None if matches!(meta.source, MetaSource::CdText | MetaSource::Gnudb) => {
                 cover::fetch_itunes(http, &meta.album_artist, &meta.album).await
             }
             None => None,

@@ -2223,6 +2223,8 @@
 "fingers lifted": "उँगलियाँ उठाई गईं",
 "fragment order": "खंड क्रम",
 "full at once (and no fade-in of its own)": "एक साथ पूरा (अपने फ़ेड-इन के बिना)",
+"gnudb e-mail address": "gnudb ईमेल पता",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb उन CD के नाम बताता है जिन्हें MusicBrainz नहीं जानता। यह एक संपर्क पता माँगता है, और Listen हर खोज के साथ यह पता भेजता है। जब तक यह खाली है, gnudb से नहीं पूछा जाता और एल्बम के नाम केवल MusicBrainz और CD के अपने CD-Text से आते हैं।",
 "hand-started album": "हाथ से शुरू किया एल्बम",
 "iTunes Search API": "iTunes Search API",
 "ignore SSL": "SSL अनदेखा करें",

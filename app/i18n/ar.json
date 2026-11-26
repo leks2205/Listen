@@ -2320,6 +2320,8 @@
 "flac: {}": "flac: {}",
 "fragment order": "ترتيب المقاطع",
 "full at once (and no fade-in of its own)": "كاملة دفعة واحدة (ودون تلاشٍ تدريجي خاص بها)",
+"gnudb e-mail address": "عنوان البريد الإلكتروني لـ gnudb",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "يُسمّي gnudb الأقراص التي لا يعرفها MusicBrainz. ويطلب عنوانًا للتواصل، ويرسل Listen هذا العنوان مع كل استعلام. ما دام الحقل فارغًا فلن يُسأل gnudb، وتأتي أسماء الألبومات من MusicBrainz ومن CD-Text الخاص بالقرص فقط.",
 "hand-started album": "ألبوم بدأ يدويًا",
 "iTunes Search API": "iTunes Search API",
 "ignore SSL": "تجاهل SSL",

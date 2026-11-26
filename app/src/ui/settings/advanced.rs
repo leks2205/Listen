@@ -118,6 +118,18 @@ pub(super) fn ripping(state: &Listen) -> Element<'_, Message> {
         ),
         line(
             state,
+            "gnudb e-mail address",
+            "gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen \
+             sends this one with every lookup. While it is empty, gnudb is not asked and album names \
+             come only from MusicBrainz and the CD's own CD-Text.",
+            text_input("", &r.gnudb_email)
+                .on_input(|v| Message::Setting(Setting::RipGnudbEmail(v)))
+                .style(style::input(t))
+                .width(240)
+                .into(),
+        ),
+        line(
+            state,
             "Drive read offset",
             drive_line,
             row![

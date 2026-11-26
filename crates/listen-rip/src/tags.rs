@@ -1,14 +1,17 @@
 //! What an album is called and how its FLAC files are tagged: from a
 //! MusicBrainz release (Picard's tag names, so Navidrome groups albums and
-//! artists by MusicBrainz IDs), from CD-Text, or "Unknown …" (flagged for
-//! fixing).
+//! artists by MusicBrainz IDs), from gnudb, from CD-Text, or "Unknown …"
+//! (all but MusicBrainz flagged for fixing).
 
+use crate::gnudb;
 use crate::musicbrainz::{Credit, Release, VARIOUS_ARTISTS_ID, credit_line, credit_sort_line};
 use crate::toc::Toc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetaSource {
     MusicBrainz,
+    /// gnudb (FreeDB) named it; still not on MusicBrainz.
+    Gnudb,
     CdText,
     Unknown,
 }
@@ -156,6 +159,30 @@ impl AlbumMeta {
                 t.title = title;
             }
             t.artist = if performer.is_empty() { meta.album_artist.clone() } else { performer };
+            t.artists = vec![t.artist.clone()];
+        }
+        meta
+    }
+
+    /// From a gnudb entry (album, album artist, track titles, a plausible year); no MusicBrainz
+    /// IDs, flagged for fixing. Tracks the entry doesn't name stay "Track NN".
+    pub fn from_gnudb(entry: &gnudb::Entry, toc: &Toc, stamp: &str) -> Self {
+        let mut meta = Self::unknown(toc, stamp);
+        meta.source = MetaSource::Gnudb;
+        if !entry.album.is_empty() {
+            meta.album = entry.album.clone();
+        }
+        if !entry.artist.is_empty() {
+            meta.album_artist = entry.artist.clone();
+        }
+        if let Some(y) = entry.year {
+            meta.date = y.to_string();
+        }
+        for (i, t) in meta.tracks.iter_mut().enumerate() {
+            if let Some(title) = entry.tracks.get(i).filter(|t| !t.is_empty()) {
+                t.title = title.clone();
+            }
+            t.artist = meta.album_artist.clone();
             t.artists = vec![t.artist.clone()];
         }
         meta
@@ -350,5 +377,29 @@ mod tests {
         assert_eq!(m.tracks[1].artist, "Guest");
         assert_eq!(m.tracks[2].title, "Track 03");
         assert!(m.needs_fix);
+    }
+
+    #[test]
+    fn from_gnudb_names_the_album_but_stays_flagged() {
+        let toc = Toc::from_offsets(1, 71_625, &[150, 12_675, 22_950, 35_175, 46_875, 60_225]);
+        let entry = gnudb::parse_read(include_str!("../tests/fixtures/gnudb_read_heart.txt")).unwrap();
+        let m = AlbumMeta::from_gnudb(&entry, &toc, "x");
+        assert_eq!(m.source, MetaSource::Gnudb);
+        assert!(m.needs_fix);
+        assert_eq!((m.album_artist.as_str(), m.album.as_str()), ("HEART OF WOMAN", "ETERNAL FADE"));
+        let c = m.vorbis_comments(&m.tracks[4]);
+        assert_eq!(get(&c, "TITLE"), ["LIT IT"]);
+        assert_eq!(get(&c, "ARTIST"), ["HEART OF WOMAN"]);
+        assert_eq!(get(&c, "DATE"), ["2026"]);
+        assert_eq!(get(&c, "LISTEN_NEEDS_FIX"), ["1"]);
+        assert!(c.iter().all(|(k, _)| !k.starts_with("MUSICBRAINZ_") || k == "MUSICBRAINZ_DISCID"));
+        // A track the entry leaves empty, and one it doesn't have.
+        let mut short = entry.clone();
+        short.tracks = vec!["Footsteps".into(), String::new()];
+        short.year = None;
+        let m = AlbumMeta::from_gnudb(&short, &toc, "x");
+        assert_eq!(m.tracks[1].title, "Track 02");
+        assert_eq!(m.tracks[5].title, "Track 06");
+        assert_eq!(m.date, "");
     }
 }

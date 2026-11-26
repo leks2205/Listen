@@ -1993,5 +1993,7 @@
 "Rip mode": "Modo de copia",
 "Fast": "Rápido",
 "Secure": "Seguro",
-"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Rápido lee el CD una vez a la velocidad máxima de la unidad (unos 4 minutos) y lo comprueba con AccurateRip. Seguro (whipper) lee cada pista dos veces y compara (unos 20 minutos)."
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "Rápido lee el CD una vez a la velocidad máxima de la unidad (unos 4 minutos) y lo comprueba con AccurateRip. Seguro (whipper) lee cada pista dos veces y compara (unos 20 minutos).",
+"gnudb e-mail address": "Correo electrónico para gnudb",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb pone nombre a los CD que MusicBrainz no conoce. Pide una dirección de contacto, y Listen envía esta con cada consulta. Mientras esté vacío, no se consulta gnudb y los nombres de álbum solo vienen de MusicBrainz y del CD-Text del propio CD."
 }

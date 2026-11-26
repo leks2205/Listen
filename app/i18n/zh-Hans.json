@@ -2227,6 +2227,8 @@
 "flac: {}": "flac：{}",
 "fragment order": "片段顺序",
 "full at once (and no fade-in of its own)": "一次性完全进入（自身无淡入）",
+"gnudb e-mail address": "gnudb 电子邮件地址",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb 可为 MusicBrainz 不认识的 CD 命名。它要求提供联系地址，Listen 每次查询时都会发送此地址。留空时不会查询 gnudb，专辑名称只来自 MusicBrainz 和光盘自带的 CD-Text。",
 "hand-started album": "手动开始的专辑",
 "ignore SSL": "忽略 SSL",
 "in {}": "在 {} 中",

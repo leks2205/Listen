@@ -10,6 +10,7 @@ pub mod detect;
 pub mod drive;
 pub mod fast;
 pub mod flac;
+pub mod gnudb;
 pub mod history;
 pub mod layout;
 pub mod musicbrainz;

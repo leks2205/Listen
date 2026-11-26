@@ -1,0 +1,7 @@
+210 soundtrack 0a0b0c03 CD database entry follows (until terminating `.')
+DTITLE=  Soundtrack Sampler  
+DYEAR=
+TTITLE0=Opening
+TTITLE1=
+TTITLE2=Closing
+.

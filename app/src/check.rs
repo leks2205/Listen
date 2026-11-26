@@ -930,10 +930,57 @@ async fn run_cd() -> i32 {
             (rs, exact)
         }) {
             Ok((rs, _)) if rs.is_empty() => {
-                println!(
-                    "  MusicBrainz: unknown disc — it would be tagged from CD-Text or as “Unknown Album”."
-                );
+                println!("  MusicBrainz: unknown disc");
                 println!("  Add it: {}", toc.submit_url());
+                println!("  gnudb query: {}", listen_rip::gnudb::query_command(&toc));
+                let email = settings.gnudb_email.trim();
+                let entry = if email.is_empty() {
+                    println!("  gnudb: no address set (Settings → Advanced → CD ripping)");
+                    None
+                } else {
+                    match listen_rip::gnudb::lookup(&http, &toc, email).await {
+                        Ok(Some(e)) => {
+                            println!(
+                                "  gnudb: {} / {} ({} {}, {} tracks{})",
+                                e.artist,
+                                e.album,
+                                e.category,
+                                e.id,
+                                e.tracks.len(),
+                                e.year.map(|y| format!(", {y}")).unwrap_or_default()
+                            );
+                            for (i, t) in e.tracks.iter().enumerate() {
+                                println!("    {:2}  {t}", i + 1);
+                            }
+                            Some(e)
+                        }
+                        Ok(None) => {
+                            println!("  gnudb: unknown disc");
+                            None
+                        }
+                        Err(e) => {
+                            println!("  ✗ gnudb: {e}");
+                            None
+                        }
+                    }
+                };
+                match entry {
+                    Some(e) => {
+                        let meta = listen_rip::tags::AlbumMeta::from_gnudb(
+                            &e,
+                            &toc,
+                            &listen_rip::pipeline::local_stamp(),
+                        );
+                        println!(
+                            "  would file into: {}/ (tagged from gnudb, marked for fixing)",
+                            listen_rip::layout::album_dir(&meta).display()
+                        );
+                        if let Some(t) = meta.tracks.first() {
+                            println!("    e.g. {}", listen_rip::layout::track_file(&meta, t));
+                        }
+                    }
+                    None => println!("  it would be tagged from CD-Text or as “Unknown Album”"),
+                }
             }
             Ok((rs, exact)) => {
                 let order = musicbrainz::rank(&rs, &toc);

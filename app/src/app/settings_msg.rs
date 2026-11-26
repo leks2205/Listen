@@ -103,6 +103,8 @@ pub enum Setting {
     RipScan(bool),
     RipPickerTimeout(u32),
     RipMode(listen_core::settings::RipMode),
+    /// The gnudb contact address (saved as typed; empty = gnudb is never asked).
+    RipGnudbEmail(String),
     /// Typing in the destination field; `RipSaveDestination` stores it.
     RipDestination(String),
     RipSaveDestination,
@@ -346,6 +348,7 @@ impl Listen {
             | Setting::RipScan(_)
             | Setting::RipPickerTimeout(_)
             | Setting::RipMode(_)
+            | Setting::RipGnudbEmail(_)
             | Setting::RipDestination(_)
             | Setting::RipSaveDestination
             | Setting::RipOffset(_)

@@ -2223,6 +2223,8 @@
 "fingers lifted": "আঙুল তোলা হয়েছে",
 "fragment order": "খণ্ডের ক্রম",
 "full at once (and no fade-in of its own)": "একবারে পুরো (নিজস্ব ফেড-ইন ছাড়া)",
+"gnudb e-mail address": "gnudb ইমেল ঠিকানা",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "MusicBrainz যে CD চেনে না, gnudb সেগুলোর নাম দেয়। এটি একটি যোগাযোগের ঠিকানা চায়, এবং Listen প্রতিটি খোঁজের সাথে এই ঠিকানাটি পাঠায়। এটি খালি থাকলে gnudb-কে জিজ্ঞাসা করা হয় না এবং অ্যালবামের নাম কেবল MusicBrainz ও CD-এর নিজস্ব CD-Text থেকে আসে।",
 "hand-started album": "হাতে শুরু করা অ্যালবাম",
 "iTunes Search API": "iTunes Search API",
 "ignore SSL": "SSL উপেক্ষা করুন",

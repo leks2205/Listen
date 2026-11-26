@@ -2051,5 +2051,7 @@
 "Rip mode": "抓轨模式",
 "Fast": "快速",
 "Secure": "安全",
-"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "快速模式以驱动器的最高速度读取光盘一次（约 4 分钟），并用 AccurateRip 校验。安全模式（whipper）将每首曲目读取两次并进行比较（约 20 分钟）。"
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "快速模式以驱动器的最高速度读取光盘一次（约 4 分钟），并用 AccurateRip 校验。安全模式（whipper）将每首曲目读取两次并进行比较（约 20 分钟）。",
+"gnudb e-mail address": "gnudb 电子邮件地址",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb 可为 MusicBrainz 不认识的 CD 命名。它要求提供联系地址，Listen 每次查询时都会发送此地址。留空时不会查询 gnudb，专辑名称只来自 MusicBrainz 和光盘自带的 CD-Text。"
 }

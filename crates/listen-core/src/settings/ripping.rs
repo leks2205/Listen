@@ -50,6 +50,10 @@ pub struct Ripping {
     pub read_offset: Option<i32>,
     /// How discs are read (each rip can still switch before its first track).
     pub mode: RipMode,
+    /// Contact address sent with every gnudb lookup (gnudb asks for one). Empty = gnudb is never
+    /// asked and a disc MusicBrainz doesn't know is named from CD-Text or "Unknown Album". No
+    /// default: Listen ships no address of its own.
+    pub gnudb_email: String,
 }
 
 impl Default for Ripping {
@@ -66,6 +70,7 @@ impl Default for Ripping {
             picker_timeout_secs: 30,
             read_offset: None,
             mode: RipMode::Fast,
+            gnudb_email: String::new(),
         }
     }
 }
@@ -81,5 +86,14 @@ mod tests {
         let secure: Ripping = toml::from_str("mode = \"secure\"\n").unwrap();
         assert_eq!(secure.mode, RipMode::Secure);
         assert!(toml::to_string(&Ripping::default()).unwrap().contains("mode = \"fast\""));
+    }
+
+    #[test]
+    fn gnudb_needs_an_address_the_user_enters() {
+        assert_eq!(Ripping::default().gnudb_email, "");
+        let old: Ripping = toml::from_str("auto_rip = true\n").unwrap();
+        assert_eq!(old.gnudb_email, "");
+        let set: Ripping = toml::from_str("gnudb_email = \"me@example.org\"\n").unwrap();
+        assert_eq!(set.gnudb_email, "me@example.org");
     }
 }

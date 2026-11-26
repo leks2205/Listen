@@ -6,9 +6,11 @@ use listen_core::settings::RipMode;
 use listen_rip::accuraterip::{self, DiscIds, Response};
 use listen_rip::drive::DriveInfo;
 use listen_rip::fast::{ArSource, FastRipper, Reader};
+use listen_rip::gnudb;
 use listen_rip::musicbrainz::{Credit, Medium, Release, Track, parse_lookup};
 use listen_rip::pipeline::{self, Candidate, Command, JobConfig, Lookup, Stage, Update};
 use listen_rip::ripper::{MockRipper, ModeSwitch, Ripper};
+use listen_rip::tags::MetaSource;
 use listen_rip::toc::Toc;
 use listen_rip::whipper::{self, Ar};
 use listen_rip::{flac, publish};
@@ -108,6 +110,7 @@ impl Sandbox {
             picker_timeout: Duration::from_millis(800),
             stamp: "2026-10-01 14.32".into(),
             lookup,
+            gnudb_email: String::new(),
             destination_retry: Duration::from_millis(100),
         }
     }
@@ -227,7 +230,7 @@ async fn musicbrainz_album_with_picker() {
     let (stop, watcher) = watch_dest(sb.dest());
     let cfg = sb.cfg(
         revive_toc(),
-        Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()), exact: true },
+        Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()), exact: true, gnudb: None },
     );
     let candidates: Arc<Mutex<Vec<Candidate>>> = Arc::default();
     let c2 = candidates.clone();
@@ -336,7 +339,10 @@ async fn picker_times_out_to_the_best_match() {
         return;
     }
     let sb = Sandbox::new("timeout");
-    let cfg = sb.cfg(revive_toc(), Lookup::Given { releases: revive_releases(), cover: None, exact: true });
+    let cfg = sb.cfg(
+        revive_toc(),
+        Lookup::Given { releases: revive_releases(), cover: None, exact: true, gnudb: None },
+    );
     let best: Arc<Mutex<String>> = Arc::default();
     let b2 = best.clone();
     let (_, end) = drive_job(cfg, mock(12), move |u| {
@@ -362,7 +368,8 @@ async fn a_fuzzy_match_with_other_tracks_leaves_the_disc_untagged() {
     let sb = Sandbox::new("fuzzy-wrong");
     // Same track count, total length within a second, two tracks 5.5 s and 8.2 s off.
     let other = other_album(&[172_520, 137_786, 162_093, 155_280, 169_786, 154_533]);
-    let cfg = sb.cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false });
+    let cfg = sb
+        .cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false, gnudb: None });
     let (updates, end) = drive_job(cfg, mock(6), |_| None).await;
     assert_eq!(end, Stage::Done);
     assert!(updates.iter().any(|u| matches!(u, Update::Warning(w) if w.contains("not its tracks"))));
@@ -382,7 +389,8 @@ async fn a_fuzzy_match_whose_tracks_fit_tags_the_disc() {
     lengths[0] += 900;
     lengths[4] -= 1_100;
     let other = other_album(&lengths);
-    let cfg = sb.cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false });
+    let cfg = sb
+        .cfg(unknown_toc(), Lookup::Given { releases: vec![other], cover: None, exact: false, gnudb: None });
     let (updates, end) = drive_job(cfg, mock(6), |_| None).await;
     assert_eq!(end, Stage::Done);
     assert!(updates.iter().any(|u| matches!(u, Update::Warning(w) if w.contains("every track length"))));
@@ -418,6 +426,80 @@ async fn unknown_disc_uses_cd_text_and_is_flagged() {
     let (_, end) = drive_job(sb2.cfg(toc, Lookup::Offline), mock(3), |_| None).await;
     assert_eq!(end, Stage::Done);
     assert!(sb2.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)/01 Track 01.flac").exists());
+}
+
+/// The disc from the bug report: MusicBrainz 404s its disc ID, gnudb knows it. It is filed under
+/// gnudb's name but stays flagged (still not on MusicBrainz); gnudb wins over CD-Text, is never
+/// asked when MusicBrainz knows the disc, and never without an e-mail address.
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_disc_is_named_from_gnudb_and_still_flagged() {
+    if !tools() {
+        return;
+    }
+    let entry = || Some(Box::new(gnudb::parse_read(include_str!("fixtures/gnudb_read_heart.txt")).unwrap()));
+    let cd_text = "CD_DA\nCD_TEXT {\n  LANGUAGE 0 {\n    TITLE \"Mixtape\"\n    PERFORMER \"Band\"\n  }\n}\n";
+    let ripper = || MockRipper { toc_text: Some(cd_text.into()), ..mock(6) };
+
+    let sb = Sandbox::new("gnudb");
+    let mut cfg = sb.cfg(
+        unknown_toc(),
+        Lookup::Given { releases: vec![], cover: Some(COVER.to_vec()), exact: false, gnudb: entry() },
+    );
+    cfg.gnudb_email = "someone@example.com".into();
+    let (updates, end) = drive_job(cfg, ripper(), |_| None).await;
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    assert!(updates.iter().any(
+        |u| matches!(u, Update::Warning(w) if w == "MusicBrainz doesn't know this disc — tagged from gnudb")
+    ));
+    let report = report_of(&updates);
+    assert_eq!(report.source, MetaSource::Gnudb);
+    let dir = sb.dest().join("HEART OF WOMAN/ETERNAL FADE");
+    assert_eq!(report.folder, dir);
+    let tags = flac::read_tags(&dir.join("01 Footsteps.flac")).await.unwrap();
+    assert_eq!(tags_of(&tags, "ALBUM"), ["ETERNAL FADE"]);
+    assert_eq!(tags_of(&tags, "ALBUMARTIST"), ["HEART OF WOMAN"]);
+    assert_eq!(tags_of(&tags, "ARTIST"), ["HEART OF WOMAN"]);
+    assert_eq!(tags_of(&tags, "TITLE"), ["Footsteps"]);
+    assert_eq!(tags_of(&tags, "DATE"), ["2026"]);
+    assert_eq!(tags_of(&tags, "LISTEN_NEEDS_FIX"), ["1"]);
+    assert!(tags_of(&tags, "MUSICBRAINZ_ALBUMID").is_empty());
+    assert!(tags_of(&tags, "MUSICBRAINZ_TRACKID").is_empty());
+    assert!(dir.join("05 LIT IT.flac").exists() && dir.join("06 Find U.flac").exists());
+    assert!(!sb.dest().join("Band").exists(), "CD-Text only comes after gnudb");
+
+    // MusicBrainz knows the disc: gnudb's answer is not used.
+    let sb2 = Sandbox::new("gnudb-mb");
+    let mut cfg = sb2.cfg(
+        revive_toc(),
+        Lookup::Given { releases: revive_releases(), cover: None, exact: true, gnudb: entry() },
+    );
+    cfg.gnudb_email = "someone@example.com".into();
+    cfg.picker_timeout = Duration::from_millis(50);
+    let (updates, end) = drive_job(cfg, mock(12), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert_eq!(report_of(&updates).source, MetaSource::MusicBrainz);
+    assert!(sb2.dest().join("IVE/REVIVE+/01 BLACKHOLE.flac").exists());
+    assert!(!sb2.dest().join("HEART OF WOMAN").exists());
+
+    // No address: gnudb is not asked; CD-Text names the disc.
+    let sb3 = Sandbox::new("gnudb-noaddr");
+    let cfg =
+        sb3.cfg(unknown_toc(), Lookup::Given { releases: vec![], cover: None, exact: false, gnudb: entry() });
+    assert!(cfg.gnudb_email.is_empty());
+    let (updates, end) = drive_job(cfg, ripper(), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert_eq!(report_of(&updates).source, MetaSource::CdText);
+    assert!(!sb3.dest().join("HEART OF WOMAN").exists());
+    assert!(sb3.dest().join("Band/Mixtape/01 Track 01.flac").exists());
+
+    // gnudb has nothing either: CD-Text.
+    let sb4 = Sandbox::new("gnudb-none");
+    let mut cfg =
+        sb4.cfg(unknown_toc(), Lookup::Given { releases: vec![], cover: None, exact: false, gnudb: None });
+    cfg.gnudb_email = "someone@example.com".into();
+    let (updates, end) = drive_job(cfg, ripper(), |_| None).await;
+    assert_eq!(end, Stage::Done);
+    assert_eq!(report_of(&updates).source, MetaSource::CdText);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -582,7 +664,12 @@ async fn fast_rip_files_the_same_album_as_secure() {
     if !tools() {
         return;
     }
-    let lookup = || Lookup::Given { releases: revive_releases(), cover: Some(COVER.to_vec()), exact: true };
+    let lookup = || Lookup::Given {
+        releases: revive_releases(),
+        cover: Some(COVER.to_vec()),
+        exact: true,
+        gnudb: None,
+    };
     let secure = Sandbox::new("same-secure");
     let (s_updates, end) = drive_job(secure.cfg(revive_toc(), lookup()), mock(12), |_| None).await;
     assert_eq!(end, Stage::Done, "{s_updates:?}");

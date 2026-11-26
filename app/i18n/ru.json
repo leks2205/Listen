@@ -2247,6 +2247,8 @@
 "fingers lifted": "пальцы подняты",
 "fragment order": "порядок фрагментов",
 "full at once (and no fade-in of its own)": "сразу целиком (и без собственного нарастания)",
+"gnudb e-mail address": "Адрес e-mail для gnudb",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb даёт названия CD, которых не знает MusicBrainz. Он требует контактный адрес, и Listen отправляет этот адрес при каждом запросе. Пока поле пустое, gnudb не опрашивается, а названия альбомов берутся только из MusicBrainz и из CD-Text самого диска.",
 "hand-started album": "альбом, запущенный вручную",
 "ignore SSL": "игнорировать SSL",
 "in {}": "через {}",

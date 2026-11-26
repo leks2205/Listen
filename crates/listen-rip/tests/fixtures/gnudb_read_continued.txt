@@ -1,0 +1,11 @@
+210 misc 2b0c4e0a CD database entry follows (until terminating `.')
+DISCID=2b0c4e0a
+DTITLE=The Long Names Orchestra / A Very Long Album Title That Did Not Fit
+DTITLE= On One Line
+DYEAR=19xx
+TTITLE0=A song whose title is so long that the database had to sp
+TTITLE0=lit it across two lines
+TTITLE1=Short
+TTITLE2=Back\\slash and\ttab
+EXTD=
+.

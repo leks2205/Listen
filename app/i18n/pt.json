@@ -2230,6 +2230,8 @@
 "flac: {}": "flac: {}",
 "fragment order": "ordem dos fragmentos",
 "full at once (and no fade-in of its own)": "completa de uma vez (e sem esbatimento de entrada próprio)",
+"gnudb e-mail address": "Endereço de e-mail para o gnudb",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "O gnudb dá nome aos CDs que o MusicBrainz não conhece. Pede um endereço de contacto, e o Listen envia este em cada consulta. Enquanto estiver vazio, o gnudb não é consultado e os nomes dos álbuns vêm apenas do MusicBrainz e do CD-Text do próprio CD.",
 "hand-started album": "álbum iniciado manualmente",
 "ignore SSL": "ignorar SSL",
 "in {}": "em {}",

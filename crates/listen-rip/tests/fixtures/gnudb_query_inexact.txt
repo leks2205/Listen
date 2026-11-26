@@ -1,0 +1,4 @@
+211 Found inexact matches, list follows (until terminating `.')
+rock 7a0b3c06 Some Band / Close Enough
+misc 7a0b3c07 Other Band / Also Close
+.

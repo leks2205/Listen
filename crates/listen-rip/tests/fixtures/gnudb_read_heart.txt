@@ -1,0 +1,12 @@
+210 data 4603b98a CD database entry follows (until terminating `.')
+DTITLE=HEART OF WOMAN / ETERNAL FADE
+DYEAR=2026
+DGENRE=
+TTITLE0=Footsteps
+TTITLE1=Melt
+TTITLE2=Blue
+TTITLE3=Glow
+TTITLE4=LIT IT
+TTITLE5=Find U
+EXTD=
+.

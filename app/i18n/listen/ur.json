@@ -2671,5 +2671,7 @@
 "Rip mode": "ریپ موڈ",
 "Fast": "تیز",
 "Secure": "محفوظ",
-"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "تیز موڈ ڈرائیو کی پوری رفتار پر سی ڈی کو ایک بار پڑھتا ہے (تقریباً 4 منٹ) اور AccurateRip سے جانچتا ہے۔ محفوظ موڈ (whipper) ہر ٹریک کو دو بار پڑھ کر موازنہ کرتا ہے (تقریباً 20 منٹ)۔"
+"Fast reads the CD once at the drive's full speed (about 4 minutes) and checks it with AccurateRip. Secure (whipper) reads every track twice and compares (about 20 minutes).": "تیز موڈ ڈرائیو کی پوری رفتار پر سی ڈی کو ایک بار پڑھتا ہے (تقریباً 4 منٹ) اور AccurateRip سے جانچتا ہے۔ محفوظ موڈ (whipper) ہر ٹریک کو دو بار پڑھ کر موازنہ کرتا ہے (تقریباً 20 منٹ)۔",
+"gnudb e-mail address": "gnudb ای میل پتہ",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb اُن CD کے نام بتاتا ہے جنہیں MusicBrainz نہیں جانتا۔ یہ رابطے کا پتہ مانگتا ہے، اور Listen ہر تلاش کے ساتھ یہ پتہ بھیجتا ہے۔ جب تک یہ خالی ہے، gnudb سے نہیں پوچھا جاتا اور البم کے نام صرف MusicBrainz اور CD کے اپنے CD-Text سے آتے ہیں۔"
 }

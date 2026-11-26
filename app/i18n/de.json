@@ -2448,6 +2448,8 @@
 "from YouTube": "von YouTube",
 "from analysis": "aus der Analyse",
 "full at once (and no fade-in of its own)": "sofort voll (und ohne eigenes Einblenden)",
+"gnudb e-mail address": "gnudb-E-Mail-Adresse",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb benennt CDs, die MusicBrainz nicht kennt. gnudb verlangt eine Kontaktadresse, und Listen schickt diese bei jeder Abfrage mit. Solange das Feld leer ist, wird gnudb nicht gefragt und Albumnamen kommen nur von MusicBrainz und dem CD-Text der CD.",
 "hand-started album": "von Hand gestartetes Album",
 "hr": "Std.",
 "ignore SSL": "SSL ignorieren",

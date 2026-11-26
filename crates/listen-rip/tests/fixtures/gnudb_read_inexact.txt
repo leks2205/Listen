@@ -1,0 +1,17 @@
+210 rock 7a0b3c06 CD database entry follows (until terminating `.')
+# xmcd
+#
+# Track frame offsets:
+#	150
+DISCID=7a0b3c06
+DTITLE=Some Band / Close Enough
+DYEAR=1999
+DGENRE=Rock
+TTITLE0=One
+TTITLE1=Two
+TTITLE2=Three
+TTITLE3=Four
+TTITLE4=Five
+EXTD=
+PLAYORDER=
+.

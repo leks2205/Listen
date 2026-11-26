@@ -42,17 +42,31 @@ counts as unreadable.
 |---|---|
 | Detect | UDisks2; also while Listen sits in the tray |
 | Rip | Fast: `cd-paranoia` burst read + AccurateRip; Secure: whipper secure rip. Drive offset from the AccurateRip drive database (or **Verify offset**) |
-| Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → CD-Text → "Unknown Album (…)" (listed under "Rips to fix") |
+| Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → gnudb (only with an e-mail address set) → CD-Text → "Unknown Album (…)"; everything after MusicBrainz is listed under "Rips to fix" |
 | Several matching releases | a picker; the best match is taken after 30 s |
-| Cover | Cover Art Archive (release → release group) → iTunes; 1200 px, embedded + `cover.jpg` |
+| Cover | Cover Art Archive (release → release group) → iTunes (by artist and album for gnudb and CD-Text discs); 1200 px, embedded + `cover.jpg` |
 | Files | `Album Artist/Album/NN Title.flac`, multi-disc `D-NN Title.flac`, ReplayGain track + album |
 | Publish | copied into a hidden `.listen-incoming` folder, then renamed into place in one step |
 | Navidrome | asked to scan when you are signed in as an admin; otherwise its watcher picks the album up |
 
+## gnudb
+
+A disc MusicBrainz doesn't know is looked up on [gnudb](https://gnudb.org) (the FreeDB successor), but only
+after you enter an address in **Settings → Advanced → CD ripping → gnudb e-mail address**. gnudb asks every
+program for a contact address and Listen sends it with every lookup (`hello=<user> <host>
+ListenMusicPlayer <version>`); Listen ships no address of its own, so with the field empty gnudb is never asked.
+
+Listen sends `cddb query` with the disc's CDDB ID, track offsets and length, then `cddb read` with the
+category and ID the query answered (which can differ from the computed one). An exact match (`200`/`210`)
+names the album, album artist, track titles and year; an inexact one (`211`) is only used when it has as many
+tracks as the disc. gnudb entries are submitted by other people and nobody checks them; they can be wrong.
+The album gets no MusicBrainz IDs, stays `LISTEN_NEEDS_FIX=1` and is listed under "Rips to fix" with the link
+for adding the disc to MusicBrainz.
+
 ## Checking a rip
 
-1. `listen --check-cd` with a disc inserted shows the TOC, disc ID, the MusicBrainz match and where the
-   album would be filed.
+1. `listen --check-cd` with a disc inserted shows the TOC, disc ID, the MusicBrainz match (or, when there
+   is none, gnudb's answer) and where the album would be filed.
 2. After the rip, open the album folder: `NN Title.flac`, `cover.jpg`, `<Album>.log`, and no
    `.listen-incoming` left behind. `metaflac --list` shows the tags, MusicBrainz IDs, cover and ReplayGain.
 3. Pulling the disc mid-rip (or pressing Cancel) leaves nothing in the music folder.

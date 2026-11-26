@@ -45,6 +45,7 @@ If you plug in a USB drive later, Listen picks it up. The section shows the driv
 | **ReplayGain tags** | on | Measures track and album loudness while tagging, so players can even out volume. |
 | **Scan Navidrome afterwards** | on | Asks the active Navidrome server to scan for the new album. This needs an admin login. Without one, the server's own file watcher finds the album within a minute or two. |
 | **Version picker** | 30 s (5 to 120 s, in steps of 5) | How long Listen waits when several MusicBrainz releases match the disc (for example regional editions) before it takes the best match. |
+| **gnudb e-mail address** | empty | Your e-mail address, for naming discs MusicBrainz does not know from [gnudb](https://gnudb.org) (the successor of FreeDB). gnudb asks every program for a contact address, and Listen sends this one with every gnudb lookup. Listen has no address of its own: while the field is empty, gnudb is never asked and album names come only from MusicBrainz and the disc's CD-Text. See [How a disc is identified](#how-a-disc-is-identified). |
 | **Drive read offset** | automatic | The read offset of your drive in samples. See below. |
 | **Rip now** | | The **Rip CD** button rips the disc in the drive, also one you ripped before. It appears when a drive is connected. |
 
@@ -85,9 +86,9 @@ If the drive is not in the list, the line says the offset is unknown and a rip s
 |---|---|
 | Detect | Notices the disc through UDisks2. This also works while Listen is only in the tray. |
 | Rip | Fast: sets the drive to full speed and reads each track once with `cd-paranoia`, then checks it with AccurateRip. Secure: runs a whipper secure rip. Both use the drive's read offset. |
-| Identify | Looks up the MusicBrainz disc ID; if that fails, uses CD-Text; if that fails, names the album "Unknown Album (…)". See [How a disc is identified](#how-a-disc-is-identified). |
+| Identify | Looks up the MusicBrainz disc ID; if that fails, asks gnudb (when an e-mail address is set); if that fails, uses CD-Text; if that fails, names the album "Unknown Album (…)". See [How a disc is identified](#how-a-disc-is-identified). |
 | Several matches | Shows a picker with the matching releases. You can change the choice until tagging starts; after the timeout the best match is taken. |
-| Cover | Cover Art Archive first (the release, then the release group), then iTunes. The image is scaled to 1200 px, embedded and saved as `cover.jpg`. |
+| Cover | Cover Art Archive first (the release, then the release group), then iTunes. A disc named from gnudb or CD-Text has no MusicBrainz release, so its cover is looked up on iTunes by artist and album. The image is scaled to 1200 px, embedded and saved as `cover.jpg`. |
 | Publish | Copies the album into `.listen-incoming` and renames it into place. |
 | Navidrome | Asks for a scan if the option is on and you are signed in as an admin. |
 
@@ -103,11 +104,13 @@ A CD carries no title, only the lengths of its tracks. Listen turns those into t
 
 When it is not, MusicBrainz falls back to searching by the table of contents, and that search compares the disc as a whole: it answers with releases that are about as long in total, which is frequently a completely different album. Listen therefore checks every candidate track by track and only uses one whose every track is within three seconds of the disc's. A release that merely has the same total length is discarded with a note in the rip card, and the disc counts as unknown. One that fits is used, also with a note, because it is a guess — usually a different pressing of the same album.
 
-If MusicBrainz does not know the disc, Listen still rips and files it as "Unknown Album (…)", using CD-Text if the disc has it. Such discs are listed under **Rips to fix (not on MusicBrainz)** in the CD ripping section, newest first, with the album folder and a link: "Add the disc: …". Open the link, add the release to MusicBrainz, then press **Rip CD** again to rip the disc with proper tags. The list shows the last 10.
+If MusicBrainz does not know the disc and you entered a **gnudb e-mail address**, Listen asks [gnudb](https://gnudb.org) next. gnudb is the old FreeDB database: anyone can submit an entry, nobody checks them, and entries can be misspelled, in the wrong order or simply wrong. Listen sends gnudb the disc's table of contents and reads the entry gnudb answers with. An exact match names the album, the album artist, the track titles and the year. When gnudb only has an inexact match (a disc that is merely close), Listen uses it only if it has exactly as many tracks as the disc; otherwise it ignores it. A gnudb entry carries no MusicBrainz IDs. The rip card says "MusicBrainz doesn't know this disc — tagged from gnudb", and the album folder gets the gnudb name, for example `HEART OF WOMAN/ETERNAL FADE/01 Footsteps.flac`.
+
+If gnudb does not know the disc either, or no address is set, Listen uses CD-Text if the disc has it, and otherwise files it as "Unknown Album (…)". All of these discs, including the ones gnudb named, are still not on MusicBrainz. They are listed under **Rips to fix (not on MusicBrainz)** in the CD ripping section, newest first, with the album folder and a link: "Add the disc: …". Open the link, add the release to MusicBrainz, then press **Rip CD** again to rip the disc with proper tags. The list shows the last 10.
 
 ## Checking a rip
 
-1. Run `listen --check-cd` with a disc inserted. It shows the track list, the disc ID, the MusicBrainz matches (best first, marked with an arrow), the cover it found and the exact folder and file name the album would get. It does not rip anything.
+1. Run `listen --check-cd` with a disc inserted. It shows the track list, the disc ID, the MusicBrainz matches (best first, marked with an arrow), gnudb's answer when MusicBrainz has nothing ("gnudb: no address set" or "gnudb: unknown disc" otherwise), the cover it found and the exact folder and file name the album would get. It does not rip anything.
 2. After a rip, open the album folder. You should see `NN Title.flac` files, `cover.jpg` and `<Album>.log` (the rip log; in Fast mode Listen writes it in whipper's layout, with the AccurateRip result per track). No `.listen-incoming` folder should remain. `metaflac --list` on a file shows the tags, MusicBrainz IDs, cover and ReplayGain values.
 3. Logs: Listen's own `listen.log` and one `rip-<date>-<disc id>.log` per rip are in the logs folder, `~/.local/share/listen/logs/`. See [Backup, logs and diagnostics](backup.md).
 

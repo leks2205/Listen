@@ -2236,6 +2236,8 @@
 "flac: {}": "flac: {}",
 "fragment order": "조각 순서",
 "full at once (and no fade-in of its own)": "한 번에 전부(자체 페이드 인 없음)",
+"gnudb e-mail address": "gnudb 이메일 주소",
+"gnudb names CDs that MusicBrainz doesn't know. It asks for a contact address, and Listen sends this one with every lookup. While it is empty, gnudb is not asked and album names come only from MusicBrainz and the CD's own CD-Text.": "gnudb는 MusicBrainz가 모르는 CD의 이름을 알려 줍니다. gnudb는 연락처 주소를 요구하며, Listen은 조회할 때마다 이 주소를 보냅니다. 비어 있으면 gnudb에 묻지 않으며 앨범 이름은 MusicBrainz와 CD 자체의 CD-Text에서만 가져옵니다.",
 "hand-started album": "직접 시작한 앨범",
 "iTunes Search API": "iTunes Search API",
 "ignore SSL": "SSL 무시",
