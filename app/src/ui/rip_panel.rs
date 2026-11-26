@@ -9,6 +9,7 @@ use crate::app::{Listen, Message};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
 use iced::font::Weight;
+use iced::widget::text::Wrapping;
 use iced::widget::{Column, button, column, container, image, progress_bar, row, space};
 use iced::{Alignment, Color, Element, Length, Padding};
 use listen_rip::pipeline::Stage;
@@ -82,7 +83,9 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
     let mut info = column![
         label_w(job.title(), metrics::font_md(), t.foreground, Weight::Semibold),
         // Built translated above; error texts and paths inside stay as they are.
-        crate::ui::data_label(status, metrics::font_sm(), color),
+        crate::ui::data_label(status, metrics::font_sm(), color)
+            .width(Length::Fill)
+            .wrapping(Wrapping::WordOrGlyph),
     ]
     .spacing(4)
     .width(Length::Fill);
@@ -99,7 +102,10 @@ fn card<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         }));
     }
     for w in job.warnings.iter().rev().take(2) {
-        info = info.push(label(w.as_str(), metrics::font_xs(), WARN));
+        // A warning names an album or a path and is longer than the card is wide.
+        info = info.push(
+            label(w.as_str(), metrics::font_xs(), WARN).width(Length::Fill).wrapping(Wrapping::WordOrGlyph),
+        );
     }
     if !job.candidates.is_empty() && !job.stage.finished() && job.stage != Stage::Publishing {
         info = info.push(picker(state, job));
@@ -152,7 +158,9 @@ fn picker<'a>(state: &'a Listen, job: &'a RipJob) -> Element<'a, Message> {
         Some(s) => format!("Which version is this CD? Taking the highlighted one in {s} s."),
         None => "Version (you can still change it until tagging starts):".into(),
     };
-    let mut col = column![label(head, metrics::font_sm(), t.muted)].spacing(2);
+    let mut col =
+        column![label(head, metrics::font_sm(), t.muted).width(Length::Fill).wrapping(Wrapping::WordOrGlyph)]
+            .spacing(2);
     for (i, c) in job.candidates.iter().enumerate().take(8) {
         let chosen = i == job.chosen;
         let text =

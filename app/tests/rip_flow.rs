@@ -93,8 +93,8 @@ fn a_failed_rip_frees_the_queue() {
     assert_eq!(s.rip.jobs.len(), 2);
 }
 
-#[test]
-fn snapshot_rip_panel() {
+/// The panel mid-rip: a picker, a warning longer than the card, and a finished rip.
+fn panel_state() -> Listen {
     let mut s = demo();
     let a = s.rip.test_job("/dev/sr0");
     up(&mut s, a, Update::Activity("Reading track 3 of 12".into()));
@@ -109,6 +109,16 @@ fn snapshot_rip_panel() {
         a,
         Update::Identified { artist: "IVE".into(), album: "REVIVE+".into(), source: MetaSource::MusicBrainz },
     );
+    up(
+        &mut s,
+        a,
+        // Longer than the card is wide: it has to wrap, not run out of the card.
+        Update::Warning(
+            "MusicBrainz doesn't know this disc; Various Artists – GUMIN WORKS ORIGINAL SOUND \
+             TRACK only matches its total length, not its tracks, and was not used"
+                .into(),
+        ),
+    );
     let b = s.rip.test_job("/dev/sr1");
     up(
         &mut s,
@@ -121,11 +131,27 @@ fn snapshot_rip_panel() {
     );
     up(&mut s, b, Update::Finished(report()));
     up(&mut s, b, Update::Stage(Stage::Done));
+    s
+}
 
+fn shoot(width: f32, height: f32, name: &str) {
+    let s = panel_state();
     let settings = common::iced_settings();
     let theme = s.theme();
     let _gpu = common::gpu();
-    let mut ui = Simulator::with_size(settings, iced::Size::new(1600.0, 950.0), s.view());
+    let mut ui = Simulator::with_size(settings, iced::Size::new(width, height), s.view());
     let snapshot = ui.snapshot(&theme).expect("snapshot renders");
-    common::save_png(&snapshot, "rip-panel");
+    common::save_png(&snapshot, name);
+}
+
+#[test]
+fn snapshot_rip_panel() {
+    shoot(1600.0, 950.0, "rip-panel");
+}
+
+/// Narrow: the warning, the status line and the picker header are all longer
+/// than the card and have to wrap instead of running over the Cancel button.
+#[test]
+fn snapshot_rip_panel_narrow() {
+    shoot(900.0, 700.0, "rip-panel-narrow");
 }
