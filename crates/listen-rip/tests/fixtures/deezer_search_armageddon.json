@@ -1,0 +1,92 @@
+{
+    "data": [
+        {
+            "id": 653112011,
+            "title": "Armageddon - The 1st Album",
+            "link": "https://www.deezer.com/album/653112011",
+            "cover": "https://api.deezer.com/album/653112011/image",
+            "cover_small": "https://cdn-images.dzcdn.net/images/cover/40c12f3b196ddad8dd006f430e586613/56x56-000000-80-0-0.jpg",
+            "cover_medium": "https://cdn-images.dzcdn.net/images/cover/40c12f3b196ddad8dd006f430e586613/250x250-000000-80-0-0.jpg",
+            "cover_big": "https://cdn-images.dzcdn.net/images/cover/40c12f3b196ddad8dd006f430e586613/500x500-000000-80-0-0.jpg",
+            "cover_xl": "https://cdn-images.dzcdn.net/images/cover/40c12f3b196ddad8dd006f430e586613/1000x1000-000000-80-0-0.jpg",
+            "md5_image": "40c12f3b196ddad8dd006f430e586613",
+            "genre_id": 16,
+            "nb_tracks": 10,
+            "record_type": "album",
+            "tracklist": "https://api.deezer.com/album/653112011/tracks",
+            "explicit_lyrics": false,
+            "artist": {
+                "id": 113547672,
+                "name": "aespa",
+                "link": "https://www.deezer.com/artist/113547672",
+                "picture": "https://api.deezer.com/artist/113547672/image",
+                "picture_small": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/56x56-000000-80-0-0.jpg",
+                "picture_medium": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/250x250-000000-80-0-0.jpg",
+                "picture_big": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/500x500-000000-80-0-0.jpg",
+                "picture_xl": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/1000x1000-000000-80-0-0.jpg",
+                "tracklist": "https://api.deezer.com/artist/113547672/top?limit=50",
+                "type": "artist"
+            },
+            "type": "album"
+        },
+        {
+            "id": 211535232,
+            "title": "Speedcore Armageddon",
+            "link": "https://www.deezer.com/album/211535232",
+            "cover": "https://api.deezer.com/album/211535232/image",
+            "cover_small": "https://cdn-images.dzcdn.net/images/cover/cbf6509feff9d25c8731cbda73d9075f/56x56-000000-80-0-0.jpg",
+            "cover_medium": "https://cdn-images.dzcdn.net/images/cover/cbf6509feff9d25c8731cbda73d9075f/250x250-000000-80-0-0.jpg",
+            "cover_big": "https://cdn-images.dzcdn.net/images/cover/cbf6509feff9d25c8731cbda73d9075f/500x500-000000-80-0-0.jpg",
+            "cover_xl": "https://cdn-images.dzcdn.net/images/cover/cbf6509feff9d25c8731cbda73d9075f/1000x1000-000000-80-0-0.jpg",
+            "md5_image": "cbf6509feff9d25c8731cbda73d9075f",
+            "genre_id": 106,
+            "nb_tracks": 1,
+            "record_type": "single",
+            "tracklist": "https://api.deezer.com/album/211535232/tracks",
+            "explicit_lyrics": true,
+            "artist": {
+                "id": 125146862,
+                "name": "Aeswa",
+                "link": "https://www.deezer.com/artist/125146862",
+                "picture": "https://api.deezer.com/artist/125146862/image",
+                "picture_small": "https://cdn-images.dzcdn.net/images/artist/7558f0afde89b82c190e0be8b4d1e71b/56x56-000000-80-0-0.jpg",
+                "picture_medium": "https://cdn-images.dzcdn.net/images/artist/7558f0afde89b82c190e0be8b4d1e71b/250x250-000000-80-0-0.jpg",
+                "picture_big": "https://cdn-images.dzcdn.net/images/artist/7558f0afde89b82c190e0be8b4d1e71b/500x500-000000-80-0-0.jpg",
+                "picture_xl": "https://cdn-images.dzcdn.net/images/artist/7558f0afde89b82c190e0be8b4d1e71b/1000x1000-000000-80-0-0.jpg",
+                "tracklist": "https://api.deezer.com/artist/125146862/top?limit=50",
+                "type": "artist"
+            },
+            "type": "album"
+        },
+        {
+            "id": 639291471,
+            "title": "iScreaM Vol.33 : Supernova / Armageddon Remixes",
+            "link": "https://www.deezer.com/album/639291471",
+            "cover": "https://api.deezer.com/album/639291471/image",
+            "cover_small": "https://cdn-images.dzcdn.net/images/cover/42cf1962fcc0a275c86ab20c3abd7784/56x56-000000-80-0-0.jpg",
+            "cover_medium": "https://cdn-images.dzcdn.net/images/cover/42cf1962fcc0a275c86ab20c3abd7784/250x250-000000-80-0-0.jpg",
+            "cover_big": "https://cdn-images.dzcdn.net/images/cover/42cf1962fcc0a275c86ab20c3abd7784/500x500-000000-80-0-0.jpg",
+            "cover_xl": "https://cdn-images.dzcdn.net/images/cover/42cf1962fcc0a275c86ab20c3abd7784/1000x1000-000000-80-0-0.jpg",
+            "md5_image": "42cf1962fcc0a275c86ab20c3abd7784",
+            "genre_id": 16,
+            "nb_tracks": 6,
+            "record_type": "single",
+            "tracklist": "https://api.deezer.com/album/639291471/tracks",
+            "explicit_lyrics": false,
+            "artist": {
+                "id": 113547672,
+                "name": "aespa",
+                "link": "https://www.deezer.com/artist/113547672",
+                "picture": "https://api.deezer.com/artist/113547672/image",
+                "picture_small": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/56x56-000000-80-0-0.jpg",
+                "picture_medium": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/250x250-000000-80-0-0.jpg",
+                "picture_big": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/500x500-000000-80-0-0.jpg",
+                "picture_xl": "https://cdn-images.dzcdn.net/images/artist/c963d7469a999feb764ad6f16c31dd74/1000x1000-000000-80-0-0.jpg",
+                "tracklist": "https://api.deezer.com/artist/113547672/top?limit=50",
+                "type": "artist"
+            },
+            "type": "album"
+        }
+    ],
+    "total": 3
+}

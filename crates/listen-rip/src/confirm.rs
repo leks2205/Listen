@@ -3,11 +3,11 @@
 //! disc's track count and every track within [`TOLERANCE_MS`] of the disc's; Deezer (track count
 //! only) is the second opinion when iTunes has no album of that name.
 //!
-//! Names are matched like the iTunes cover ([`crate::cover::album_fits`]), on the album title
+//! Names are matched like the iTunes cover ([`crate::cover::fits`]), on the album title
 //! without its bracketed parts: gnudb's "PULSE (미니4집)" is "PULSE - EP" on iTunes, and a search
 //! for the whole title finds nothing.
 
-use crate::cover::album_fits;
+use crate::cover::fits;
 use crate::gnudb::Net;
 use crate::toc::Toc;
 use listen_core::text::{fold, without_brackets};
@@ -66,7 +66,7 @@ pub fn itunes_albums(body: &Value, artist: &str, album: &str) -> Vec<Found> {
                 album: r["collectionName"].as_str().unwrap_or("").to_string(),
                 tracks: r["trackCount"].as_u64().unwrap_or(0) as usize,
             };
-            album_fits(&found.artist, &found.album, artist, album).then_some(found)
+            fits(artist, album, &found.artist, &found.album).then_some(found)
         })
         .collect()
 }
@@ -111,7 +111,7 @@ pub fn deezer_albums(body: &Value, artist: &str, album: &str) -> Vec<Found> {
                 album: r["title"].as_str().unwrap_or("").to_string(),
                 tracks: r["nb_tracks"].as_u64().unwrap_or(0) as usize,
             };
-            album_fits(&found.artist, &found.album, artist, album).then_some(found)
+            fits(artist, album, &found.artist, &found.album).then_some(found)
         })
         .collect()
 }

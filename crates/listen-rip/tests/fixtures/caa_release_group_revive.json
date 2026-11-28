@@ -1,0 +1,43 @@
+{
+    "images": [
+        {
+            "approved": true,
+            "back": false,
+            "comment": "",
+            "edit": 141702467,
+            "front": true,
+            "id": 44431520000,
+            "image": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000.jpg",
+            "thumbnails": {
+                "1200": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000-1200.jpg",
+                "250": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000-250.jpg",
+                "500": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000-500.jpg",
+                "large": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000-500.jpg",
+                "small": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44431520000-250.jpg"
+            },
+            "types": [
+                "Front"
+            ]
+        },
+        {
+            "approved": true,
+            "back": false,
+            "comment": "placeholder cover art",
+            "edit": 141188531,
+            "front": false,
+            "id": 44348296073,
+            "image": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073.jpg",
+            "thumbnails": {
+                "1200": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073-1200.jpg",
+                "250": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073-250.jpg",
+                "500": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073-500.jpg",
+                "large": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073-500.jpg",
+                "small": "https://coverartarchive.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66/44348296073-250.jpg"
+            },
+            "types": [
+                "Front"
+            ]
+        }
+    ],
+    "release": "https://musicbrainz.org/release/e1fd68fc-309e-413b-ae40-a4698fbf5b66"
+}

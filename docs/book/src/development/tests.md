@@ -45,7 +45,7 @@ Live tests talk to a real server, service or device. Every one of them is `#[ign
 | none | `listen-visualizer/tests/live_capture.rs` | Linux with PipeWire and mpv |
 | `LISTEN_YTM_COOKIE` (optional) | `listen-ytmusic/tests/live_ytdlp.rs`, `app/tests/live_pages.rs` (`youtube_music_pages`) | Internet, `yt-dlp` and a JavaScript runtime. `LISTEN_YTM_COOKIE` can supply a cookie header; the default is a guest cookie. |
 | none | `listen-ytmusic` `loudness::tests::loudness_live` | Internet access (YouTube) |
-| none | `listen-rip` `musicbrainz::tests::live_lookup`, `cover::tests::live_cover_chain` | Internet access (musicbrainz.org and the Cover Art Archive) |
+| none | `listen-rip` `musicbrainz::tests::live_lookup`, `cover::tests::live_cover_chain` | Internet access (musicbrainz.org, the Cover Art Archive, iTunes and Deezer) |
 | `LISTEN_GEMINI_KEY`, `LISTEN_GEMINI_MODEL` (optional) | `listen-lyrics` `gemini::tests::live_gemini` | A Gemini API key |
 | none | `listen-analysis` `voice::tests::downloads_the_pinned_weights` | Internet access (downloads the singing-voice weights) |
 | `LISTEN_TEST_URL=<stream URL>` | `listen-ytmusic/src/audio.rs`, run with `-- --ignored download_url` | A stream URL you resolved yourself |

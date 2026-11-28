@@ -4227,6 +4227,7 @@ version = "0.43.2"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
+ "image",
  "libc",
  "listen-core",
  "reqwest 0.12.28",

@@ -44,7 +44,7 @@ counts as unreadable.
 | Rip | Fast: `cd-paranoia` burst read + AccurateRip; Secure: whipper secure rip. Drive offset from the AccurateRip drive database (or **Verify offset**) |
 | Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → gnudb (only with an e-mail address set; colliding entries only when iTunes/Deezer confirm exactly one) → CD-Text → "Unknown Album (…)"; everything after MusicBrainz is listed under "Rips to fix" |
 | Several matching releases | a picker; the best match is taken after 30 s |
-| Cover | Cover Art Archive (release → release group) → iTunes (by artist and album for gnudb and CD-Text discs); 1200 px, embedded + `cover.jpg` |
+| Cover | Apple Music (iTunes Search API, full size), Cover Art Archive (original image; release → release group) and Deezer (1000 px), asked at the same time; gnudb and CD-Text discs get Apple Music and Deezer by artist and album. Each image is measured from its bytes; under 500 px, not square within 1:1.15, under 10 KB or not JPEG/PNG is rejected. Highest resolution wins; within 10 % the order is Apple → Cover Art Archive → Deezer. Over 3000 px or 8 MB is scaled to 3000 px (JPEG). Embedded + `cover.jpg`/`cover.png` |
 | Files | `Album Artist/Album/NN Title.flac`, multi-disc `D-NN Title.flac`, ReplayGain track + album |
 | Publish | copied into a hidden `.listen-incoming` folder, then renamed into place in one step |
 | Navidrome | asked to scan when you are signed in as an admin; otherwise its watcher picks the album up |
