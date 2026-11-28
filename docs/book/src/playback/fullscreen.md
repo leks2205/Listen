@@ -66,7 +66,7 @@ There are two places:
 | **Title lines** | 1 to 10 | 1 | Lines for a wrapped title. Shown only for **Wrapped**. |
 | **Metadata badges** | checkboxes | Codec, Release year | The badges under the title. |
 
-The available badges are **Codec**, **Bit rate**, **Bit depth**, **Sample rate**, **BPM**, **Year**, **Release year**, **Date**, **Release date**, **Release type**, **Genres**, **Disc number** and **Track number**. A badge is skipped when the song has no data for it.
+The available badges are **Codec**, **Bit rate**, **Bit depth**, **Sample rate**, **BPM**, **Year**, **Release year**, **Date**, **Release date**, **Genres**, **Disc number** and **Track number**. A badge is skipped when the song has no data for it.
 
 ## Auto-open
 

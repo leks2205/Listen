@@ -320,7 +320,8 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let mut page = Column::new().spacing(metrics::space_xl());
     let searching = query(state).is_some();
     let sections: Vec<_> = if searching {
-        let build = || SettingsTab::ALL.into_iter().flat_map(|tab| tab_sections(state, tab)).collect::<Vec<_>>();
+        let build =
+            || SettingsTab::ALL.into_iter().flat_map(|tab| tab_sections(state, tab)).collect::<Vec<_>>();
         TITLE_HITS.with(|h| h.borrow_mut().clear());
         let mut sections = build();
         let hits = TITLE_HITS.with(|h| std::mem::take(&mut *h.borrow_mut()));
@@ -333,7 +334,8 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             ROWS.with(|r| r.set(counts.0));
             MATCHES.with(|m| m.set(counts.1));
             if full.len() == sections.len() {
-                sections = sections.into_iter().zip(full).map(|(a, b)| if is_hidden(&b) { a } else { b }).collect();
+                sections =
+                    sections.into_iter().zip(full).map(|(a, b)| if is_hidden(&b) { a } else { b }).collect();
             }
         }
         sections

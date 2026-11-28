@@ -37,7 +37,7 @@ pub fn query_builder(state: &Listen) -> Option<Element<'_, Message>> {
         fields = fields.push(
             row![
                 input("Label", &f.label, QueryTagSetting::Label, i),
-                pick_list(kinds.clone().map(crate::ui::Tr), Some(crate::ui::Tr(kind)), move |k| change(
+                pick_list(kinds.map(crate::ui::Tr), Some(crate::ui::Tr(kind)), move |k| change(
                     QueryTagSetting::Kind(i, k.0.into())
                 ))
                 .text_size(metrics::font_sm())

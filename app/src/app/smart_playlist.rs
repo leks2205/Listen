@@ -388,7 +388,7 @@ mod tag_tests {
         let blank = QueryTag { kind: "string".into(), ..Default::default() };
         let full = QueryTag { label: "Mood".into(), kind: "string".into(), tag: "mood".into() };
         let without = Editor::new(None, &[]).fields.len();
-        assert_eq!(Editor::new(None, &[blank.clone()]).fields.len(), without);
+        assert_eq!(Editor::new(None, std::slice::from_ref(&blank)).fields.len(), without);
         assert_eq!(Editor::new(None, &[blank, full]).fields.len(), without + 1);
     }
 }

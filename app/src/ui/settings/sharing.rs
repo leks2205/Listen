@@ -36,7 +36,12 @@ pub(super) fn sharing(state: &Listen) -> Element<'_, Message> {
                         .padding(Padding::from([6.0, 10.0]))
                         .style(style::input(t))
                         .width(80),
-                    crate::ui::label(crate::i18n::tr_cow(e.unit.to_string().into()).into_owned(), metrics::font_md(), t.muted).width(120),
+                    crate::ui::label(
+                        crate::i18n::tr_cow(e.unit.to_string().into()).into_owned(),
+                        metrics::font_md(),
+                        t.muted
+                    )
+                    .width(120),
                 ]
             } else {
                 row![
