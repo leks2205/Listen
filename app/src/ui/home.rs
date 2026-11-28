@@ -228,6 +228,8 @@ const FEATURE_H: f32 = 248.0;
 /// The single feature's cover side, the room for the arrows on each side and the backdrop's padding.
 const FEATURE_COVER: f32 = 200.0;
 const ARROW_ROOM: f32 = 40.0;
+/// The least width of the single feature's text column (the Play button must fit).
+const FEATURE_TEXT_MIN: f32 = 190.0;
 const FEATURE_PAD: f32 = 24.0;
 
 /// The dark gradient over a blurred cover (Feishin: art at .8 under the dominant colour at .7).
@@ -301,16 +303,14 @@ fn feature_single<'a>(state: &'a Listen, album: &'a Album) -> Element<'a, Messag
         listen_core::settings::PlayBehavior::Now => Message::PlayAlbum(album.id.clone()),
         other => Message::PlayAlbumWith(Box::new(album.clone()), other),
     });
-    // Page width minus the arrows' room, the cover, the gaps and the backdrop's padding.
-    let text_w = (state.page_width()
-        - 2.0 * ARROW_ROOM
-        - FEATURE_COVER
-        - metrics::space_md() * 2.0
-        - 2.0 * FEATURE_PAD)
-        .max(120.0);
+    // Page width minus the arrows' room, the cover, the gaps and the backdrop's padding. The text keeps
+    // room for the Play button (about 170 px): a narrow window gets a smaller cover instead.
+    let room = state.page_width() - 2.0 * ARROW_ROOM - metrics::space_md() * 2.0 - 2.0 * FEATURE_PAD;
+    let cover = (room - FEATURE_TEXT_MIN).clamp(80.0, FEATURE_COVER);
+    let text_w = (room - cover).max(120.0);
     let content = row![
         super::with_menu(
-            button(album_cover(state, album, FEATURE_COVER, metrics::radius_md()))
+            button(album_cover(state, album, cover, metrics::radius_md()))
                 .padding(0)
                 .style(style::bare_button(state.tokens))
                 .on_press(Message::OpenAlbum(album.id.clone())),

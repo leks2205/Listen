@@ -312,7 +312,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     {
         // Where they really go (keyring or the private file), as on the settings page.
         let store = crate::i18n::tr_cow(store.into()).into_owned();
-        form = form.push(label(
+        form = form.push(super::wrapped(
             crate::i18n::trf("Passwords are kept in {}.", &[&store]),
             metrics::font_xs(),
             t.muted,

@@ -221,6 +221,11 @@ pub fn label<'a>(content: impl text::IntoFragment<'a>, size: f32, color: Color) 
     label_w(content, size, color, Weight::Normal)
 }
 
+/// Translated UI text that wraps at word boundaries inside its width (a sentence, not a one-line label).
+pub fn wrapped<'a>(content: impl text::IntoFragment<'a>, size: f32, color: Color) -> Text<'a> {
+    text_in(content, font(Weight::Normal)).size(size).color(color)
+}
+
 /// Like [`label`] with an explicit weight.
 pub fn label_w<'a>(
     content: impl text::IntoFragment<'a>,

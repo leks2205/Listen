@@ -2,7 +2,7 @@
 //! info on the left (drag to move, double-click to maximize), minimize / maximize / close on the right;
 //! right-click opens the desktop's window menu.
 
-use super::{icon, label};
+use super::icon;
 use crate::app::{Listen, Message, WindowAction};
 use crate::icons::Icon;
 use crate::style::{self, metrics};
@@ -29,9 +29,16 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     if state.config.settings.window.bar_style() == listen_core::settings::WindowBarStyle::Macos {
         return macos(state, info);
     }
+    // Left inset, icon and gap on one side, the three 50 px buttons on the other: a longer title ends in
+    // an ellipsis instead of being cut mid-glyph by the buttons.
+    let info = super::ellipsize_px(
+        &info,
+        state.window_size.width - 16.0 - ICON_SIZE - 8.0 - 150.0 - 8.0,
+        metrics::font_sm(),
+    );
     let drag_area = mouse_area(
         container(
-            row![app_icon, label(info, metrics::font_sm(), t.foreground)]
+            row![app_icon, super::data_label(info, metrics::font_sm(), t.foreground)]
                 .spacing(8)
                 .align_y(Alignment::Center),
         )
@@ -82,6 +89,9 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
 /// the title centered.
 fn macos(state: &Listen, info: String) -> Element<'_, Message> {
     let t = state.tokens;
+    // The dots' column (12 + 3 × 12 + 2 × 8 + 12) is mirrored on the right so the title is centred in the window.
+    const DOTS_W: f32 = 76.0;
+    let info = super::ellipsize_px(&info, state.window_size.width - 2.0 * DOTS_W - 8.0, metrics::font_sm());
     let dot = |color: iced::Color, action: WindowAction, name: &str| -> Element<'_, Message> {
         let b = button(space().width(12).height(12))
             .padding(0)
@@ -108,7 +118,7 @@ fn macos(state: &Listen, info: String) -> Element<'_, Message> {
     .spacing(8)
     .align_y(Alignment::Center);
     let drag_area = mouse_area(
-        container(label(info, metrics::font_sm(), t.foreground))
+        container(super::data_label(info, metrics::font_sm(), t.foreground))
             .width(Length::Fill)
             .height(HEIGHT)
             .center_x(Length::Fill)
@@ -119,8 +129,12 @@ fn macos(state: &Listen, info: String) -> Element<'_, Message> {
     .on_double_click(Message::Window(WindowAction::ToggleMaximize))
     .on_right_press(Message::Window(WindowAction::SystemMenu));
     container(
-        row![container(buttons).padding(Padding { left: 12.0, right: 12.0, ..Padding::ZERO }), drag_area]
-            .align_y(Alignment::Center),
+        row![
+            container(buttons).padding(Padding { left: 12.0, right: 12.0, ..Padding::ZERO }),
+            drag_area,
+            space().width(DOTS_W)
+        ]
+        .align_y(Alignment::Center),
     )
     .height(HEIGHT)
     .width(Length::Fill)

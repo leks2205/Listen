@@ -324,7 +324,10 @@ fn body<'a>(
     let Some(lyrics) = &state.lyrics else {
         let text =
             if state.lyrics_loading { "Looking for lyrics…" } else { "No lyrics found for this song." };
-        let message = container(label(text, metrics::font_lg(), t.muted)).center_x(Length::Fill).padding(24);
+        let message =
+            container(super::wrapped(text, metrics::font_lg(), t.muted).align_x(Horizontal::Center))
+                .center_x(Length::Fill)
+                .padding(24);
         return match below {
             Some(below) => {
                 scrollable(column![message, below]).style(style::scrollbar(t)).height(Length::Fill).into()

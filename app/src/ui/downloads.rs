@@ -63,7 +63,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     });
 
     let body: Element<'_, Message> = if songs_list.is_empty() {
-        container(label(
+        container(super::wrapped(
             "Nothing downloaded yet. Right-click a song, album or playlist and choose Download.",
             metrics::font_md(),
             t.muted,
