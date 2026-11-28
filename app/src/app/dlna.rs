@@ -613,8 +613,9 @@ impl Listen {
             self.playback.position = Duration::ZERO;
             return Task::none();
         }
+        let finished = self.queue.current().map(|i| i.song.title.clone());
         self.queue.advance();
-        let sleep = self.sleep_advanced();
+        let sleep = self.sleep_advanced(finished);
         if !self.playback.playing {
             // The sleep timer ended it: the next song waits, paused.
             self.bump_token();

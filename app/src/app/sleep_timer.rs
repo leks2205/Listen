@@ -179,7 +179,7 @@ impl Listen {
                 // After a pause the first tick would count the whole pause.
                 let by = by.min(Duration::from_secs(2));
                 if self.sleep_timer.as_mut().is_some_and(|t| t.tick(by, playing)) {
-                    return self.sleep_fire();
+                    return self.sleep_fire(None);
                 }
             }
         }
@@ -193,10 +193,14 @@ impl Listen {
     }
 
     /// Time is up (or the song / album ended): pause and clear the timer.
-    fn sleep_fire(&mut self) -> Task<Message> {
+    fn sleep_fire(&mut self, finished: Option<String>) -> Task<Message> {
         self.sleep_timer = None;
         self.fs.sleep_tick = None;
-        self.toast_info("Sleep timer: playback paused.".into());
+        // At the end of a song the queue has moved on already: say which song it stopped after.
+        match finished {
+            Some(title) => self.toast_info(crate::i18n::trf("Sleep timer: paused after {}.", &[&title])),
+            None => self.toast_info("Sleep timer: playback paused.".into()),
+        }
         if self.sleep_counts() { self.handle(Message::TogglePlay) } else { Task::none() }
     }
 
@@ -208,12 +212,12 @@ impl Listen {
     }
 
     /// The previous song ended on its own and the next one has started.
-    pub(super) fn sleep_advanced(&mut self) -> Task<Message> {
+    pub(super) fn sleep_advanced(&mut self, finished: Option<String>) -> Task<Message> {
         let verdict = {
             let next = self.queue.current().map(|i| &i.song);
             self.sleep_timer.as_ref().map(|t| t.on_advance(next))
         };
-        if verdict == Some(Verdict::Pause) { self.sleep_fire() } else { Task::none() }
+        if verdict == Some(Verdict::Pause) { self.sleep_fire(finished) } else { Task::none() }
     }
 
     /// A song was started by the listener (not by the previous one ending).

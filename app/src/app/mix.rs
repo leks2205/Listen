@@ -991,8 +991,9 @@ impl Listen {
         // cancels a mix into a song with a break before it and `mix_plan_next` never plans one.
         let aired = self.dj_on_advanced();
         debug_assert!(aired.is_none(), "a between-songs DJ clip went on air at a mix handover");
+        let finished = self.queue.current().map(|i| i.song.title.clone());
         self.queue.advance();
-        let sleep = self.sleep_advanced();
+        let sleep = self.sleep_advanced(finished);
         if self.queue.current().map(|i| i.uid) != Some(self.mix.in_uid) {
             tracing::warn!("mix handover: the queue moved elsewhere");
         }

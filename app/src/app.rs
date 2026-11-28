@@ -2926,7 +2926,11 @@ impl Listen {
             PlayerEvent::Paused(paused) => {
                 // A fresh mpv reports "not paused" while idle, and a restored queue stays paused
                 // until the user presses play.
-                if !(self.demo_audio && !self.demo_started) && self.restored.is_none() {
+                // With nothing loaded there is nothing playing either.
+                if !(self.demo_audio && !self.demo_started)
+                    && self.restored.is_none()
+                    && (paused || self.queue.current().is_some())
+                {
                     self.playback.playing = !paused;
                 }
             }
@@ -2939,8 +2943,9 @@ impl Listen {
                     return task; // the AI DJ's break went on air
                 }
                 // mpv moved to the prefetched track: rotate the queue and mpv's slots.
+                let finished = self.queue.current().map(|i| i.song.title.clone());
                 self.queue.advance();
-                let sleep = self.sleep_advanced();
+                let sleep = self.sleep_advanced(finished);
                 tracing::info!(
                     "gapless advance to {:?}",
                     self.queue.current().map(|i| i.song.title.as_str()).unwrap_or("<end>")
@@ -3476,7 +3481,11 @@ impl Listen {
                 }
                 if self.queue.current().is_none() {
                     // The queue ran past its end and songs were added since: play goes on with them.
-                    return if self.queue.peek_next().is_some() { self.start_added() } else { Task::none() };
+                    if self.queue.peek_next().is_none() {
+                        self.toast_info("The queue is empty.".into());
+                        return Task::none();
+                    }
+                    return self.start_added();
                 }
                 if let Some(at) = self.restored.take() {
                     let task = self.start_current();
