@@ -179,7 +179,14 @@ fn analysis(state: &Listen) -> Column<'_, Message> {
              the results in this folder. Pick a synced folder (Nextcloud, Syncthing, …) and your other computers \
              reuse the results."
         ),
-        container(label(folder, metrics::font_md(), t.foreground))
+        // A sentence or a long path: wraps (a path with no spaces breaks at any letter) instead of being
+        // cut at the box's edge.
+        container(
+            super::verbatim(folder, super::font(Weight::Normal))
+                .size(metrics::font_md())
+                .color(t.foreground)
+                .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+        )
             .padding(metrics::space_md())
             .width(Length::Fill)
             .style(move |_| container::Style {
@@ -261,7 +268,7 @@ fn helper_rows(state: &Listen) -> Column<'_, Message> {
                     Weight::Bold
                 ),
                 label_w(h.name, metrics::font_md(), t.foreground, Weight::Semibold).width(90),
-                label(crate::i18n::tr(h.what), metrics::font_sm(), t.muted),
+                super::wrapped(h.what, metrics::font_sm(), t.muted).width(Length::Fill),
             ]
             .spacing(metrics::space_md())
             .align_y(Alignment::Center),
