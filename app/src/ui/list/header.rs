@@ -23,16 +23,38 @@ const HEADER_H: f32 = 40.0;
 const RESIZE_W: f32 = 6.0;
 
 /// The label a column has in the header (icons for the narrow ones).
-fn header_label<'a>(state: &Listen, list: &ListId, col: ColumnId) -> Element<'a, Message> {
+/// `room` is the width the label may use, `row_size` the table's row height class (a title cell that
+/// carries its cover is headed from the text, not from the cover).
+fn header_label<'a>(
+    state: &Listen,
+    list: &ListId,
+    col: ColumnId,
+    room: f32,
+    row_size: RowSize,
+) -> Element<'a, Message> {
     let t = state.tokens;
+    let fit = |text: &str| {
+        // Translated first, then cut with an ellipsis: "Duration" at 480 px reads "Dur…", not "Dui".
+        crate::ui::ellipsize_px(crate::i18n::tr(text), room, metrics::font_sm())
+    };
     match col {
+        ColumnId::TitleCombined => {
+            let indent = row_size.height() - 16.0 + metrics::space_md();
+            row![
+                space().width(indent),
+                crate::ui::data_label_w(fit(col.label()), metrics::font_sm(), t.muted, Weight::Medium)
+            ]
+            .into()
+        }
         // The genre's name: not the same "Title" the song-count column ("Songs") is read next to.
         ColumnId::Title if *list == ListId::Genres => {
             label_w("Genre", metrics::font_sm(), t.muted, Weight::Medium).into()
         }
         ColumnId::UserFavorite => icon(Icon::RiHeartLine, metrics::font_md(), t.muted),
         ColumnId::Image | ColumnId::Actions => space().width(0).into(),
-        other => label_w(other.label(), metrics::font_sm(), t.muted, Weight::Medium).into(),
+        other => {
+            crate::ui::data_label_w(fit(other.label()), metrics::font_sm(), t.muted, Weight::Medium).into()
+        }
     }
 }
 
@@ -45,8 +67,17 @@ pub fn table_header<'a, T: ListItem>(body: &Body<'a, T>, shape: &Shape) -> Eleme
         for n in range {
             let (col, width) = (&shape.columns[n], shape.widths[n]);
             let target = drag.is_some_and(|d| d.over == Some(col.id) && d.column != col.id);
-            let title =
-                sized(header_label(body.state, &body.id, col.id), (width - RESIZE_W).max(10.0), col.align);
+            let title = sized(
+                header_label(
+                    body.state,
+                    &body.id,
+                    col.id,
+                    (width - RESIZE_W - 2.0 * metrics::space_sm()).max(10.0),
+                    body.config.table.size,
+                ),
+                (width - RESIZE_W).max(10.0),
+                col.align,
+            );
             let handle = mouse_area(container(space()).width(RESIZE_W).height(HEADER_H - 12.0))
                 .interaction(iced::mouse::Interaction::ResizingHorizontally)
                 .on_press(Message::List(ListMsg::ColumnResizeStart(body.id.clone(), col.id)));
