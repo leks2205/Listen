@@ -88,10 +88,16 @@ fn rail_item<'a>(
 ) -> iced::widget::Button<'a, Message> {
     let t = state.tokens;
     let color = if active { t.primary } else { t.foreground };
+    // A word wider than the rail ("Albuminterpreten") is cut with an ellipsis, not mid-letter at the edge.
+    let label = crate::i18n::tr(&text)
+        .split(' ')
+        .map(|w| super::ellipsize_px(w, RAIL_WIDTH - 16.0, metrics::font_xs()))
+        .collect::<Vec<_>>()
+        .join(" ");
     button(
         column![
             icon(glyph, metrics::font_lg() + 4.0, color),
-            super::text_in(text, super::font(Weight::Medium))
+            super::verbatim(label, super::font(Weight::Medium))
                 .size(metrics::font_xs())
                 .color(color)
                 .align_x(iced::alignment::Horizontal::Center)
