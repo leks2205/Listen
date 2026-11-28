@@ -577,7 +577,10 @@ pub fn genre_grid(width: f32) -> (usize, usize) {
         w if w >= 1200.0 => (15, 5),
         w if w >= 900.0 => (12, 4),
         w if w >= 600.0 => (8, 4),
-        _ => (6, 2),
+        w if w >= 340.0 => (6, 2),
+        // A tile needs about 110 px for its name beside the play button: in a narrow column (the attached
+        // queue open) one tile per row keeps "Rock" readable instead of "R…".
+        _ => (4, 1),
     }
 }
 
