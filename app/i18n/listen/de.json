@@ -1658,7 +1658,7 @@
 "Tree line color": "Farbe der Baumlinien",
 "True LEDs": "Echte LEDs",
 "Try again": "Erneut versuchen",
-"Turn off \"Use the theme's accent colour\" to choose your own.": "Deaktiviere „Akzentfarbe des Designs verwenden“, um eine eigene zu wählen.",
+"Turn off \"Use the theme's accent colour\" to choose your own.": "Deaktiviere „Die Akzentfarbe des Themes verwenden“, um eine eigene zu wählen.",
 "Turn on the AI DJ": "KI-DJ einschalten",
 "Type": "Typ",
 "Type to search your library.": "Tippe, um deine Bibliothek zu durchsuchen.",
@@ -2143,7 +2143,6 @@
 "{} bars": "{} Takte",
 "{} channels": "{} Kanäle",
 "{} could not play this song: {}": "{} konnte diesen Titel nicht abspielen: {}",
-"{} custom theme(s){} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.": "{} benutzerdefinierte(s) Design(s){} in {}. Füge .json- oder .toml-Dateien hinzu; overrides.json|toml ändert Farben, Radien, Abstände und Schriftgrößen jedes Designs.",
 "{} days": "{} Tage",
 "{} doesn't exist": "{} existiert nicht",
 "{} downloads failed (see Downloads).": "{} Downloads fehlgeschlagen (siehe Downloads).",
@@ -2449,5 +2448,8 @@
 "All tracks": "Alle Titel",
 "Song count": "Anzahl Titel",
 "Theme": "Design",
-"Not a colour yet: write it like rgb(53, 116, 252) or #3574fc.": "Noch keine Farbe: Schreibe sie als rgb(53, 116, 252) oder #3574fc."
+"Not a colour yet: write it like rgb(53, 116, 252) or #3574fc.": "Noch keine Farbe: Schreibe sie als rgb(53, 116, 252) oder #3574fc.",
+"{} custom themes{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.": "{} eigene Themes{} in {}. Füge .json- oder .toml-Dateien hinzu; overrides.json|toml ändert Farben, Radien, Abstände und Schriftgrößen jedes Themes.",
+"{} custom theme{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.": "{} eigenes Theme{} in {}. Füge .json- oder .toml-Dateien hinzu; overrides.json|toml ändert Farben, Radien, Abstände und Schriftgrößen jedes Themes.",
+"{}: could not be read as a theme ({})": "{}: konnte nicht als Theme gelesen werden ({})"
 }

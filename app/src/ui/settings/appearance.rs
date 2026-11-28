@@ -142,7 +142,11 @@ fn themes_folder(state: &Listen) -> Element<'_, Message> {
     let loaded = &state.appearance.loaded;
     let hint = match &state.appearance.themes_dir {
         Some(dir) => crate::i18n::trf(
-            "{} custom theme(s){} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.",
+            if loaded.themes.len() == 1 {
+                "{} custom theme{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme."
+            } else {
+                "{} custom themes{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme."
+            },
             &[
                 &loaded.themes.len(),
                 &if loaded.overrides.is_empty() { "" } else { crate::i18n::tr(", overrides active") },
@@ -169,7 +173,14 @@ fn theme_problems(state: &Listen) -> Vec<Element<'_, Message>> {
     let loaded = &state.appearance.loaded;
     let mut out: Vec<Element<'_, Message>> = Vec::new();
     for e in &loaded.errors {
-        out.push(label(format!("{}: {}", e.file, e.message), metrics::font_sm(), t.error).into());
+        out.push(
+            label(
+                crate::i18n::trf("{}: could not be read as a theme ({})", &[&e.file, &e.message]),
+                metrics::font_sm(),
+                t.error,
+            )
+            .into(),
+        );
     }
     for theme in &loaded.themes {
         for w in &theme.warnings {
