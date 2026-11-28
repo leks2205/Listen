@@ -2456,5 +2456,6 @@
 "singing-voice detector": "Gesangserkennung",
 "Enter preset name": "Name eingeben",
 "Player filters": "Wiedergabefilter",
-"Filter rules": "Filterregeln"
+"Filter rules": "Filterregeln",
+"Not a colour yet: write it as #rrggbb, like #3574fc. Until then the lines keep the theme's colour.": "Noch keine Farbe: schreibe sie als #rrggbb, zum Beispiel #3574fc. Bis dahin behalten die Linien die Farbe des Themes."
 }

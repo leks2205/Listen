@@ -274,10 +274,17 @@ pub(super) fn sidebar(state: &Listen) -> Element<'_, Message> {
                 .align_y(Alignment::Center)
                 .into(),
             ));
+            // An unreadable colour is not drawn (the lines stay theme-coloured): say so.
+            let bad_line = !sb.folder_tree_line_color.trim().is_empty()
+                && crate::ui::sidebar::parse_hex(&sb.folder_tree_line_color).is_none();
             rows.push(line(
                 state,
                 "Tree line color",
-                "Color of the connecting tree lines (leave empty for theme default), as #rrggbb",
+                if bad_line {
+                    "Not a colour yet: write it as #rrggbb, like #3574fc. Until then the lines keep the theme's colour."
+                } else {
+                    "Color of the connecting tree lines (leave empty for theme default), as #rrggbb"
+                },
                 text_input(crate::i18n::tr("#rrggbb"), &sb.folder_tree_line_color)
                     .on_input(move |s| set(SidebarSetting::LineColor(s)))
                     .padding(8)

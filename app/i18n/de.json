@@ -1317,6 +1317,7 @@
 "Normalize loudness with ReplayGain tags (when Volume levelling is off).": "Lautstärke mit ReplayGain-Tags normalisieren (wenn der Lautstärkeausgleich aus ist).",
 "Normalize loudness with ReplayGain tags.": "Lautstärke mit ReplayGain-Tags normalisieren.",
 "Not a Feishin settings file: {}": "Keine Feishin-Einstellungsdatei: {}",
+"Not a colour yet: write it as #rrggbb, like #3574fc. Until then the lines keep the theme's colour.": "Noch keine Farbe: schreibe sie als #rrggbb, zum Beispiel #3574fc. Bis dahin behalten die Linien die Farbe des Themes.",
 "Not a colour yet: write it like rgb(53, 116, 252) or #3574fc.": "Noch keine Farbe: Schreibe sie als rgb(53, 116, 252) oder #3574fc.",
 "Not a gradient: {}": "Kein Farbverlauf: {}",
 "Not a valid expression: nothing is hidden": "Kein gültiger Ausdruck: Nichts wird ausgeblendet",
