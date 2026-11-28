@@ -3063,7 +3063,8 @@ impl Listen {
             Route::Playlist(id) => self.open_playlist(id),
             Route::Playlists => self.playlists_enter(),
             Route::Radio => self.radio_enter(),
-            Route::Settings => self.jukebox_probe(),
+            // The Playback tab's output picker lists what mpv reports: ask when the page opens.
+            Route::Settings => Task::batch([self.jukebox_probe(), self.refresh_devices()]),
             Route::Recent | Route::Stats | Route::Mixes | Route::Mix(_) => {
                 self.refresh_history_views();
                 Task::batch([self.reset_list_scroll(), self.list_visible()])

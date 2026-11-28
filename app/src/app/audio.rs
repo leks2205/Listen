@@ -290,7 +290,7 @@ impl Listen {
             || self.config.servers.iter().any(|s| s.kind != listen_core::model::SourceKind::YouTubeMusic)
     }
 
-    fn refresh_devices(&mut self) -> Task<Message> {
+    pub(super) fn refresh_devices(&mut self) -> Task<Message> {
         if self.mock_playback() {
             self.audio.devices = demo_devices();
             return Task::none();

@@ -220,3 +220,18 @@ async fn stop_right_after_play_is_no_queue_end() {
     player.mpv().command(serde_json::json!(["quit"])).await.ok();
     std::fs::remove_dir_all(dir).ok();
 }
+
+/// The device list is mpv's `audio-device-list`: more than the `auto` entry where the machine has outputs.
+#[tokio::test(flavor = "multi_thread")]
+async fn audio_devices_come_from_mpv() {
+    let Some(binary) = mpv_binary() else {
+        eprintln!("SKIPPED audio_devices_come_from_mpv: mpv not found");
+        return;
+    };
+    let opts = MpvOptions { binary, null_audio: true, ..Default::default() };
+    let (player, _rx) = Player::spawn(&opts).await.expect("mpv starts");
+    let devices = player.audio_devices().await.expect("the list is readable");
+    eprintln!("devices: {devices:?}");
+    assert!(devices.iter().any(|(n, _)| n == "auto"), "auto is always listed: {devices:?}");
+    player.mpv().command(serde_json::json!(["quit"])).await.ok();
+}

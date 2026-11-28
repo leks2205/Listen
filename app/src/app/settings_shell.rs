@@ -67,6 +67,10 @@ impl Listen {
             ShellMsg::Tab(tab) => {
                 s.settings_tab = tab;
                 self.settings_search.clear();
+                if tab == SettingsTab::Playback {
+                    self.save_config();
+                    return self.refresh_devices();
+                }
             }
             ShellMsg::ManageServers => {
                 s.settings_tab = SettingsTab::General;
