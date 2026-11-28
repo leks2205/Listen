@@ -1496,6 +1496,10 @@ impl Listen {
 
     /// Width of the middle page area (window minus sidebar and queue panel).
     pub fn page_width(&self) -> f32 {
+        // The compact layout has no sidebar column and no side queue (the sidebar is a drawer).
+        if self.layout_mode() == ui::LayoutMode::Compact {
+            return self.window_size.width.max(200.0);
+        }
         let sidebar = &self.config.settings.sidebar;
         let left = if sidebar.collapsed { ui::sidebar::RAIL_WIDTH + 1.0 } else { sidebar.width + 5.0 };
         let right = if self.queue_attached()

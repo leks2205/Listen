@@ -191,7 +191,8 @@ fn header<'a>(state: &'a Listen, artist: &'a Artist) -> Element<'a, Message> {
         .push(super::header_title(&artist.name, t.foreground))
         // Each fact is translated where it is built; the joined line is no catalog key.
         .push(crate::ui::data_label(facts(artist, albums).join(" · "), metrics::font_md(), t.muted))
-        .push(actions);
+        // Wraps instead of running past the window: in German the text buttons alone fill 1280 px.
+        .push(actions.wrap().vertical_spacing(metrics::space_sm()));
     if page.more_open {
         info = info.push(
             row![
