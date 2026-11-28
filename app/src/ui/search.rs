@@ -33,6 +33,28 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let id = ListId::Search(tab);
     let config = state.config.settings.lists.config(id.kind());
 
+    // 480 px, less when the tabs (with their counts) and the toolbar need the room: the toolbar used to be
+    // pushed out of the window.
+    let tabs_w: f32 = tabs(state)
+        .iter()
+        .filter(|(this, _, _)| !s.describe || *this == SearchTab::Songs)
+        .map(|(_, name, count)| {
+            let text = if s.query.trim().is_empty() {
+                crate::i18n::tr(name).to_string()
+            } else {
+                crate::i18n::trf("{} ({})", &[&crate::i18n::tr(name), count])
+            };
+            super::text_px(&text, metrics::font_md()) * 1.08 + 28.0 + metrics::space_xs()
+        })
+        .sum::<f32>()
+        + if state.describe_available() { 120.0 } else { 0.0 };
+    let room = state.page_width()
+        - 2.0 * metrics::PAGE_PADDING_X
+        - 150.0
+        - 60.0
+        - tabs_w
+        - 4.0 * metrics::space_lg();
+    let input_w = room.clamp(160.0, 480.0);
     let placeholder = if s.describe { "Describe the music, e.g. slow 90s Korean ballad" } else { "Search" };
     let input = row![
         icon(Icon::LuSearch, metrics::font_lg(), t.muted),
@@ -44,7 +66,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             .style(style::input(t))
             .on_input(Message::SearchInput)
             .on_submit(Message::SearchSubmit)
-            .width(Length::Fixed(480.0)),
+            .width(Length::Fixed(input_w)),
     ]
     .spacing(metrics::space_sm())
     .align_y(Alignment::Center);
