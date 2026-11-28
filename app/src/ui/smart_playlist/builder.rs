@@ -195,7 +195,11 @@ pub fn group<'a>(state: &'a Listen, e: &'a Editor, g: &'a QGroup, path: Vec<usiz
     let mut header = Row::new().spacing(metrics::space_sm()).align_y(Alignment::Center).push(kind);
     header = header.push(small(state, "Add rule", SmartMsg::Group(path.clone(), GroupEdit::AddRule)));
     header = header.push(small(state, "Add rule group", SmartMsg::Group(path.clone(), GroupEdit::AddGroup)));
-    header = header.push(space::horizontal());
+    // In a narrow dialog the buttons wrap onto further lines (no Fill gap to push them past the edge).
+    let narrow = state.window_size.width < 900.0;
+    if !narrow {
+        header = header.push(space::horizontal());
+    }
     if root {
         header = header.push(small(state, "Reset to default", SmartMsg::Reset));
         header = header.push(small(state, "Clear filters", SmartMsg::Clear));
@@ -203,6 +207,8 @@ pub fn group<'a>(state: &'a Listen, e: &'a Editor, g: &'a QGroup, path: Vec<usiz
         header =
             header.push(small(state, "Remove rule group", SmartMsg::Group(path.clone(), GroupEdit::Remove)));
     }
+    let header: Element<'a, Message> =
+        if narrow { header.wrap().vertical_spacing(metrics::space_sm()).into() } else { header.into() };
     let mut col = Column::new().spacing(metrics::space_sm()).push(header);
     for (i, r) in g.rules.iter().enumerate() {
         col = col.push(rule_row(state, e, &path, i, r));
@@ -252,7 +258,7 @@ pub fn sort_and_limit<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Messa
         if i == last {
             line = line.push(small(state, "Add sort", SmartMsg::Sort(SortEdit::Add)));
         }
-        sorts = sorts.push(line);
+        sorts = sorts.push(line.wrap().vertical_spacing(metrics::space_xs()));
     }
 
     let (mode, text) = match e.query.limit_mode {
@@ -281,5 +287,8 @@ pub fn sort_and_limit<'a>(state: &'a Listen, e: &'a Editor) -> Element<'a, Messa
             .width(110),
     ]
     .spacing(metrics::space_xs());
+    if state.window_size.width < 900.0 {
+        return column![sorts, limit].spacing(metrics::space_sm()).into();
+    }
     row![sorts, space::horizontal(), limit].align_y(Alignment::End).into()
 }
