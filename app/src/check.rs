@@ -1018,7 +1018,7 @@ async fn run_cd() -> i32 {
                 if let Some(t) = meta.tracks.first() {
                     println!("    e.g. {}", listen_rip::layout::track_file(&meta, t));
                 }
-                match cover::fetch(&http, best).await {
+                match cover::find(&http, &best.artist(), &best.title, Some(best)).await {
                     Some(c) => println!("  cover: {} ({} KB)", c.source, c.bytes.len() / 1024),
                     None => println!("  cover: none found"),
                 }

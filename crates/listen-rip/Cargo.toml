@@ -17,6 +17,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 sha1 = "0.10"
 base64 = "0.22"
 futures-util = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -47,11 +47,8 @@ const SERVICES: &[Credit] = &[
     ("Google Gemini API", "The AI DJ, with your own API key.", "https://ai.google.dev"),
     ("MusicBrainz", "Tags and release data for CD rips.", "https://musicbrainz.org"),
     ("Cover Art Archive", "Album covers for CD rips.", "https://coverartarchive.org"),
-    (
-        "iTunes Search API",
-        "Fallback album covers for CD rips.",
-        "https://performance-partners.apple.com/search-api",
-    ),
+    ("iTunes Search API", "Album covers for CD rips.", "https://performance-partners.apple.com/search-api"),
+    ("Deezer API", "Album covers for CD rips.", "https://developers.deezer.com/api"),
     ("AccurateRip", "Rip verification (through whipper).", "http://www.accuraterip.com"),
     ("Last.fm", "Cover lookup and links for the Discord status.", "https://www.last.fm"),
     ("ListenBrainz", "Links to artists and albums.", "https://listenbrainz.org"),

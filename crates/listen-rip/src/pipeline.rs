@@ -590,9 +590,9 @@ async fn tag_album(
             cover.clone().map(|bytes| cover::Cover { bytes, source: "given".into() })
         }
         Lookup::Online => match job.releases.get(job.chosen) {
-            Some(r) => cover::fetch(http, r).await,
+            Some(r) => cover::find(http, &meta.album_artist, &meta.album, Some(r)).await,
             None if matches!(meta.source, MetaSource::CdText | MetaSource::Gnudb) => {
-                cover::fetch_itunes(http, &meta.album_artist, &meta.album).await
+                cover::find(http, &meta.album_artist, &meta.album, None).await
             }
             None => None,
         },

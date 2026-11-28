@@ -1,0 +1,47 @@
+{
+    "resultCount": 2,
+    "results": [
+        {
+            "wrapperType": "collection",
+            "collectionType": "Album",
+            "artistId": 1540251304,
+            "collectionId": 1773694541,
+            "artistName": "aespa",
+            "collectionName": "Armageddon - The 1st Album",
+            "collectionCensoredName": "Armageddon - The 1st Album",
+            "artistViewUrl": "https://music.apple.com/us/artist/aespa/1540251304?uo=4",
+            "collectionViewUrl": "https://music.apple.com/us/album/armageddon-the-1st-album/1773694541?uo=4",
+            "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/50/7e/e0/507ee09f-ccfd-1e3c-af90-ca5e92b1221b/00888735949869_Cover.jpg/60x60bb.jpg",
+            "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/50/7e/e0/507ee09f-ccfd-1e3c-af90-ca5e92b1221b/00888735949869_Cover.jpg/100x100bb.jpg",
+            "collectionPrice": 12.99,
+            "collectionExplicitness": "notExplicit",
+            "trackCount": 11,
+            "copyright": "\u2117 2024 SM Entertainment",
+            "country": "USA",
+            "currency": "USD",
+            "releaseDate": "2024-05-27T07:00:00Z",
+            "primaryGenreName": "K-Pop"
+        },
+        {
+            "wrapperType": "collection",
+            "collectionType": "Album",
+            "artistId": 1540251304,
+            "collectionId": 1766846514,
+            "artistName": "aespa",
+            "collectionName": "iScreaM Vol.33 : Supernova / Armageddon Remixes - EP",
+            "collectionCensoredName": "iScreaM Vol.33 : Supernova / Armageddon Remixes - EP",
+            "artistViewUrl": "https://music.apple.com/us/artist/aespa/1540251304?uo=4",
+            "collectionViewUrl": "https://music.apple.com/us/album/iscream-vol-33-supernova-armageddon-remixes-ep/1766846514?uo=4",
+            "artworkUrl60": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/a3/f9/89/a3f9893c-cafe-4ea4-69a9-39d4ae089ce6/888735949210_Cover.jpg/60x60bb.jpg",
+            "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/a3/f9/89/a3f9893c-cafe-4ea4-69a9-39d4ae089ce6/888735949210_Cover.jpg/100x100bb.jpg",
+            "collectionPrice": 3.99,
+            "collectionExplicitness": "notExplicit",
+            "trackCount": 6,
+            "copyright": "\u2117 2024 SM Entertainment, ScreaM Records",
+            "country": "USA",
+            "currency": "USD",
+            "releaseDate": "2024-09-20T07:00:00Z",
+            "primaryGenreName": "K-Pop"
+        }
+    ]
+}
