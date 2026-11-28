@@ -237,8 +237,15 @@ impl Listen {
                 }
             }
             Setting::AnalysisDirPick => {
+                // No folder yet: start in Music (else the home folder), not in the process's working directory.
                 let start = Some(super::shellexpand_home(s.analysis.shared_dir.trim()))
-                    .filter(|p| !p.as_os_str().is_empty());
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .or_else(|| {
+                        listen_core::platform::home_dir().map(|h| {
+                            let music = h.join("Music");
+                            if music.is_dir() { music } else { h }
+                        })
+                    });
                 return Task::perform(
                     async move {
                         crate::dialog::open_folder(crate::dialog::Pick {

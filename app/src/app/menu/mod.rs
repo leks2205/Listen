@@ -324,11 +324,10 @@ impl Listen {
             MenuMsg::ToggleSub(i) => {
                 if let Some(m) = &mut self.menu {
                     m.focus = Some(i);
-                    m.sub = if m.sub.as_ref().is_some_and(|s| s.index == i) {
-                        None
-                    } else {
-                        Some(SubState { index: i, focus: None })
-                    };
+                    // A click keeps the submenu that hovering just opened (it used to close it again).
+                    if !m.sub.as_ref().is_some_and(|s| s.index == i) {
+                        m.sub = Some(SubState { index: i, focus: None });
+                    }
                 }
             }
             MenuMsg::Key(key) => return self.menu_key(key),

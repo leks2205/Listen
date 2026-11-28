@@ -3179,6 +3179,15 @@ impl Listen {
         {
             return self.on_menu(menu::MenuMsg::Key(k));
         }
+        // Esc cancels a confirmation or closes a dialog. The palette handles its own Esc (back, then close).
+        if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
+            && self.menu.is_none()
+            && !self.palette_open()
+            && self.overlay.modal.is_some()
+        {
+            self.close_modal();
+            return Task::none();
+        }
         if key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape)
             && self.menu.is_none()
             && !self.drawer_open
