@@ -417,8 +417,11 @@ fn cover_keyed<'a>(
     let a = &state.config.settings.appearance;
     if let Some(handle) = key.as_ref().and_then(|k| state.images.get(k)) {
         // "Native cover aspect ratio": show the whole cover instead of cropping it square.
-        let fit = if a.native_cover_aspect { iced::ContentFit::Contain } else { iced::ContentFit::Cover };
         let ratio = key.as_ref().and_then(|k| state.images.ratio(k));
+        // A cover taller than wide (a 128 x 240 playlist mosaic) is cropped square like the others: shown
+        // whole it left a blank strip beside it in its square slot.
+        let whole = a.native_cover_aspect && ratio.is_none_or(|r| !r.is_finite() || r >= 1.0);
+        let fit = if whole { iced::ContentFit::Contain } else { iced::ContentFit::Cover };
         let height = cover_height(size, ratio, a.native_cover_aspect);
         return iced::widget::image(handle.clone())
             .width(size)
