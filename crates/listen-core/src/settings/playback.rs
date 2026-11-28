@@ -369,9 +369,6 @@ fn nearest_gain(preset: &[EqBand], freq: f32) -> f32 {
 }
 
 impl Playback {
-    /// Sets the band gains from `preset` and the preamp to 0, as Feishin does.
-    /// The bands keep their frequencies: a config from before the twelve-band
-    /// layout (ten bands) takes the gain of the nearest preset band.
     /// Brings a stored band list to [`EQ_FREQS`]: an older version saved ten bands (with 8 kHz, without
     /// 3 k, 6.3 k and 10 k), and the page offers exactly the stored ones. Each new band takes the gain of
     /// the nearest stored one, so the sound stays the same.
@@ -388,6 +385,9 @@ impl Playback {
             .collect();
     }
 
+    /// Sets the band gains from `preset` and the preamp to 0, as Feishin does.
+    /// The bands keep their frequencies: a config from before the twelve-band
+    /// layout (ten bands) takes the gain of the nearest preset band.
     pub fn apply_eq_preset(&mut self, name: &str, preset: &[EqBand]) {
         for band in &mut self.equalizer {
             band.gain = nearest_gain(preset, band.freq);
