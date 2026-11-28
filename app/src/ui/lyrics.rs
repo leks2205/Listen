@@ -302,20 +302,35 @@ fn sub_text<'a>(text: String, size: f32, color: Color, align: Horizontal) -> Ele
 
 /// The lyrics with their controls (what the full-screen Lyrics tab and the panels show).
 pub fn view(state: &Listen) -> Element<'_, Message> {
-    view_in(state, LYRICS_ID)
+    view_in(state, LYRICS_ID, false)
 }
 
 /// [`view`] with its own scroll id, so the sidebar panel can coexist with the full-screen one.
-pub fn view_in<'a>(state: &'a Listen, id: &'static str) -> Element<'a, Message> {
-    column![body(state, id), controls(state)].height(Length::Fill).into()
+/// `compact` (the sidebar panel) puts the buttons at the end of the scrolled lyrics: stacked in
+/// a narrow panel they would take its whole height and leave no line to read.
+pub fn view_in<'a>(state: &'a Listen, id: &'static str, compact: bool) -> Element<'a, Message> {
+    if compact {
+        return body(state, id, Some(controls(state)));
+    }
+    column![body(state, id, None), controls(state)].height(Length::Fill).into()
 }
 
-fn body<'a>(state: &'a Listen, id: &'static str) -> Element<'a, Message> {
+fn body<'a>(
+    state: &'a Listen,
+    id: &'static str,
+    below: Option<Element<'a, Message>>,
+) -> Element<'a, Message> {
     let t = state.tokens;
     let Some(lyrics) = &state.lyrics else {
         let text =
             if state.lyrics_loading { "Looking for lyrics…" } else { "No lyrics found for this song." };
-        return container(label(text, metrics::font_lg(), t.muted)).center(Length::Fill).into();
+        let message = container(label(text, metrics::font_lg(), t.muted)).center_x(Length::Fill).padding(24);
+        return match below {
+            Some(below) => {
+                scrollable(column![message, below]).style(style::scrollbar(t)).height(Length::Fill).into()
+            }
+            None => container(message).center_y(Length::Fill).into(),
+        };
     };
     let s = &state.config.settings.lyrics;
     let m = metrics_of(state, lyrics.synced);
@@ -377,6 +392,9 @@ fn body<'a>(state: &'a Listen, id: &'static str) -> Element<'a, Message> {
         col = col.push(el);
     }
     col = col.push(space().height(Length::Fixed(top_spacer(&m).max(200.0))));
+    if let Some(below) = below {
+        col = col.push(below);
+    }
     scrollable(col)
         .id(iced::widget::Id::new(id))
         .on_scroll(|v| msg(LyricsMsg::Viewport(v.bounds().size())))

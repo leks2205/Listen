@@ -27,6 +27,8 @@ const TAIL_H: f32 = 56.0;
 const TAG_W: f32 = 60.0;
 /// Id of the scrollable of the lyrics panel.
 pub const PANEL_LYRICS_ID: &str = "queue-panel-lyrics";
+/// Least height of the sidebar lyrics panel: about three lines.
+const LYRICS_MIN_H: f32 = 160.0;
 /// Height of the visualizer strip in the panel.
 const VIZ_H: f32 = 120.0;
 /// Height of a panel divider you can drag.
@@ -762,7 +764,7 @@ fn visualizer_panel(state: &Listen) -> Element<'_, Message> {
 /// Lyrics in the sidebar: the full lyrics view (karaoke, translation, romaji
 /// and the controls), scrolled by its own id.
 pub fn lyrics_panel(state: &Listen) -> Element<'_, Message> {
-    super::lyrics::view_in(state, PANEL_LYRICS_ID)
+    super::lyrics::view_in(state, PANEL_LYRICS_ID, true)
 }
 
 fn combined_panel(state: &Listen) -> Element<'_, Message> {
@@ -816,7 +818,9 @@ fn stacked(state: &Listen, width: f32) -> Element<'_, Message> {
         col = col.push(if *panel == Panel::Queue {
             container(body).width(Length::Fill).height(Length::Fill)
         } else {
-            container(body).width(Length::Fill).height(panel_h)
+            // Lyrics need room for the active line and its neighbours, whatever height was dragged.
+            let h = if *panel == Panel::Lyrics { panel_h.max(LYRICS_MIN_H) } else { panel_h };
+            container(body).width(Length::Fill).height(h)
         });
     }
     // Without a queue panel the rest takes all the height.
