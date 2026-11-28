@@ -312,7 +312,9 @@ impl ColumnId {
             ColumnId::AlbumGroup => (240.0, Align::Start),
             ColumnId::RowIndex => (60.0, Align::Center),
             ColumnId::Image => (70.0, Align::Center),
-            ColumnId::Title | ColumnId::TitleCombined | ColumnId::TitleArtist => (300.0, Align::Start),
+            ColumnId::Title | ColumnId::TitleCombined | ColumnId::TitleArtist => {
+                (DEFAULT_TITLE_WIDTH, Align::Start)
+            }
             ColumnId::Duration => (100.0, Align::Center),
             ColumnId::Album
             | ColumnId::AlbumArtists
@@ -333,6 +335,12 @@ impl ColumnId {
         }
     }
 }
+
+/// Default width of the title columns. Columns share the free width in proportion to these
+/// numbers, so a larger title share shows long (CJK) titles whole instead of cut at ~25 characters.
+pub const DEFAULT_TITLE_WIDTH: f32 = 1500.0;
+/// The title width before 0.43.2; a stored list with exactly this width never had it changed.
+const OLD_TITLE_WIDTH: f32 = 300.0;
 
 impl ItemType {
     /// The columns (and card rows) that exist for this kind of row, in
@@ -972,6 +980,15 @@ impl Lists {
         let item = kind.item_type();
         let mut config = self.lists.get(&kind.key()).cloned().unwrap_or_else(|| kind.default_config());
         config.table.normalize(item);
+        // A list saved with the old default title width follows the new default; any other
+        // width is the user's and stays.
+        for c in &mut config.table.columns {
+            if matches!(c.id, ColumnId::Title | ColumnId::TitleCombined | ColumnId::TitleArtist)
+                && c.width == OLD_TITLE_WIDTH
+            {
+                c.width = DEFAULT_TITLE_WIDTH;
+            }
+        }
         config.grid.normalize(item);
         if !item.display_types().contains(&config.display) {
             config.display = DisplayType::Table;
@@ -1053,6 +1070,27 @@ mod tests {
         assert_eq!(ListKind::AlbumSongs.default_config().table.size, RowSize::Compact);
         assert_eq!(songs.pagination, Pagination::Infinite);
         assert_eq!(songs.items_per_page, 100);
+    }
+
+    #[test]
+    fn a_wider_title_is_the_default_but_a_users_width_stays() {
+        let mut lists = Lists::default();
+        assert_eq!(
+            lists.config(ListKind::Songs).table.column(ColumnId::TitleCombined).unwrap().width,
+            DEFAULT_TITLE_WIDTH
+        );
+        // Saved by an older version with its default (300) -> the new default.
+        let mut old = ListKind::Songs.default_config();
+        old.table.column_mut(ColumnId::TitleCombined).unwrap().width = 300.0;
+        old.table.alternate_rows = true;
+        lists.lists.insert(ListKind::Songs.key(), old);
+        assert_eq!(
+            lists.config(ListKind::Songs).table.column(ColumnId::TitleCombined).unwrap().width,
+            DEFAULT_TITLE_WIDTH
+        );
+        // A width the user chose wins.
+        lists.edit(ListKind::Songs, |c| c.table.column_mut(ColumnId::TitleCombined).unwrap().width = 420.0);
+        assert_eq!(lists.config(ListKind::Songs).table.column(ColumnId::TitleCombined).unwrap().width, 420.0);
     }
 
     #[test]

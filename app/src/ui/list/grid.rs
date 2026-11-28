@@ -168,6 +168,7 @@ pub fn view<'a, T: ListItem>(body: &Body<'a, T>) -> Element<'a, Message> {
     }
     let t = body.state.tokens;
     let id = body.id.clone();
+    out = out.push(crate::ui::compact::bottom_space(body.state));
     scrollable(container(out).padding(Padding { top: PAD, ..Padding::from([0.0, PAD]) }))
         .id(body.id.scroll_id())
         .on_scroll(move |v| super::scrolled(&id, &v))

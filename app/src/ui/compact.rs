@@ -14,6 +14,22 @@ pub const MENU_MIN_HEIGHT: f32 = 192.0;
 /// Gap between the Menu button and the window edge / player bar (0.75 rem).
 const MENU_GAP: f32 = 12.0;
 
+/// Height the page keeps free at its bottom so the floating Menu button never covers the last
+/// row of a list: the button (padding + its icon/label line) plus the gap under and above it.
+/// 0 outside the compact layout and when the button is hidden.
+pub fn menu_clearance(state: &Listen) -> f32 {
+    if state.layout_mode() != super::LayoutMode::Compact || state.window_size.height < MENU_MIN_HEIGHT {
+        return 0.0;
+    }
+    let line = (metrics::font_lg().max(metrics::font_md())) * 1.4;
+    2.0 * metrics::space_sm() + line + 2.0 * MENU_GAP
+}
+
+/// Empty space for the end of a scrollable page or list ([`menu_clearance`]).
+pub fn bottom_space<'a, M: 'a>(state: &Listen) -> Element<'a, M> {
+    space().height(menu_clearance(state)).into()
+}
+
 /// Everything below the window bar: the page, divider and the 90 px player bar.
 pub fn body(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;

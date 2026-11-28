@@ -105,7 +105,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
                 .align_y(Alignment::Center),
             );
         }
-        scrollable(container(rows).padding(Padding::from([0.0, 12.0])))
+        scrollable(column![rows, super::compact::bottom_space(state)].padding(Padding::from([0.0, 12.0])))
             .style(style::scrollbar(t))
             .height(Length::Fill)
             .into()

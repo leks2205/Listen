@@ -29,6 +29,17 @@ fn shows(s: &Listen, text: &str) -> bool {
     ui.find(text).is_ok()
 }
 
+/// A table header's label, whole or cut to an ellipsis (the wide title column leaves the others narrow).
+fn shows_label(s: &Listen, text: &str) -> bool {
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
+    ui.find(text).is_ok()
+        || (1..text.chars().count()).any(|n| {
+            let cut: String = text.chars().take(n).collect();
+            ui.find(format!("{cut}…")).is_ok()
+        })
+}
+
 fn list(s: &mut Listen, msg: ListMsg) {
     let _ = s.update(Message::List(msg));
 }
@@ -79,11 +90,7 @@ fn new_columns_have_data_in_the_demo_rows() {
         list(&mut s, ListMsg::Config(ListId::Songs, ConfigEdit::ColumnEnabled(c, true)));
     }
     // With this many columns each is narrow: a header that does not fit ends in an ellipsis.
-    assert!(
-        shows(&s, "Composer")
-            && shows(&s, "Release date")
-            && (shows(&s, "Last played") || shows(&s, "Last p…"))
-    );
+    assert!(shows_label(&s, "Composer") && shows_label(&s, "Release date") && shows_label(&s, "Last played"));
     assert!(shows(&s, "Lena Voss"));
 }
 

@@ -8,7 +8,7 @@ use super::{Body, RowGroup, divider_h};
 use crate::app::list::{HPart, ListMsg, ListState};
 use crate::app::{Message, ScrollState};
 use crate::style::{self, metrics};
-use iced::widget::{Column, Row, column, container, mouse_area, scrollable, space};
+use iced::widget::{Column, Row, column, container, mouse_area, opaque, scrollable, space, stack};
 use iced::{Element, Length, Padding};
 use listen_core::settings::{ColumnConfig, ColumnId, Pin, TableConfig};
 use std::ops::Range;
@@ -29,6 +29,46 @@ pub fn visible_rows(scroll: ScrollState, row_height: f32, total: usize) -> (usiz
 /// Width the columns share: the list width minus its padding and the scrollbar.
 pub fn inner_width(width: f32) -> f32 {
     (width - 2.0 * PAD - 14.0).max(100.0)
+}
+
+/// A column is not squeezed below this (or its own width when that is smaller) while the others
+/// can still give: the wide default title column would otherwise take its width from the short
+/// ones (a duration of '1:…') in a narrow window. The title keeps room for a few words, the
+/// duration for its header.
+fn squeeze_floor(id: ColumnId) -> f32 {
+    match id {
+        ColumnId::Title | ColumnId::TitleCombined | ColumnId::TitleArtist => 150.0,
+        ColumnId::Duration => 84.0,
+        _ => 56.0,
+    }
+}
+
+/// `room` shared among columns of `base` widths in proportion; a column that would fall under
+/// its floor keeps the floor and the others share what is left. When the floors alone do not
+/// fit, the floors themselves shrink in proportion.
+fn share(base: &[f32], ids: &[ColumnId], room: f32) -> Vec<f32> {
+    let total: f32 = base.iter().sum();
+    let plain = |scale: f32| base.iter().map(|w| (w * scale).floor().max(24.0)).collect::<Vec<f32>>();
+    let floors: Vec<f32> = base.iter().zip(ids).map(|(w, id)| w.min(squeeze_floor(*id))).collect();
+    let floor_sum: f32 = floors.iter().sum();
+    if total <= 0.0 {
+        return plain(1.0);
+    }
+    if floor_sum > room {
+        return floors.iter().map(|w| (w * room / floor_sum).floor().max(24.0)).collect();
+    }
+    let mut fixed = vec![false; base.len()];
+    loop {
+        let fixed_sum: f32 = (0..base.len()).filter(|i| fixed[*i]).map(|i| floors[i]).sum();
+        let weight: f32 = (0..base.len()).filter(|i| !fixed[*i]).map(|i| base[i]).sum();
+        let scale = (room - fixed_sum) / weight.max(1.0);
+        let Some(i) = (0..base.len()).find(|i| !fixed[*i] && base[*i] * scale < floors[*i]) else {
+            return (0..base.len())
+                .map(|i| if fixed[i] { floors[i] } else { (base[i] * scale).floor() })
+                .collect();
+        };
+        fixed[i] = true;
+    }
 }
 
 /// Drawn widths of `columns`. With `scroll`, pinned columns keep their width and auto-fit
@@ -52,8 +92,8 @@ pub fn resolve_widths(
     }
     let room = (available - borders).max(40.0);
     if !scroll {
-        let scale = if config.auto_fit { room / total } else { (room / total).min(1.0) };
-        return base.iter().map(|w| (w * scale).floor().max(24.0)).collect();
+        let ids: Vec<ColumnId> = columns.iter().map(|c| c.id).collect();
+        return share(&base, &ids, if config.auto_fit { room } else { room.min(total) });
     }
     let pinned = |c: &ColumnConfig| c.pinned.is_some();
     let pinned_sum: f32 = columns.iter().zip(&base).filter(|(c, _)| pinned(c)).map(|(_, w)| w).sum();
@@ -66,9 +106,10 @@ pub fn resolve_widths(
     if config.auto_fit {
         let for_free = room - pinned_sum;
         if free_sum > 0.0 && for_free >= 40.0 * free.len() as f32 {
-            let scale = for_free / free_sum;
-            for i in &free {
-                out[*i] = (base[*i] * scale).floor();
+            let part: Vec<f32> = free.iter().map(|i| base[*i]).collect();
+            let ids: Vec<ColumnId> = free.iter().map(|i| columns[*i].id).collect();
+            for (i, w) in free.iter().zip(share(&part, &ids, for_free)) {
+                out[*i] = w;
             }
         }
     } else {
@@ -369,12 +410,30 @@ pub fn view<'a, T: ListItem>(body: &Body<'a, T>) -> Element<'a, Message> {
         if let Some((_, build)) = &extras.tail {
             rows = rows.push(build());
         }
+        rows = rows.push(crate::ui::compact::bottom_space(body.state));
         let id = body.id.clone();
         let list = scrollable(rows)
             .id(body.id.scroll_id())
             .on_scroll(move |v| super::scrolled(&id, &v))
             .style(style::scrollbar(t))
             .height(Length::Fill);
+        // Once the header has scrolled out of view a copy stays pinned at the top (same widths,
+        // same sideways offset, so its cells line up with the rows).
+        // Only while rows are under it (not over the tail below the last row).
+        let rows_end = lead_h + header_h + count as f32 * row_h + before.iter().map(|g| g.1).sum::<f32>();
+        let offset = body.list.scroll.offset;
+        let pinned = table.header && offset > lead_h && offset + HEADER_BLOCK < rows_end;
+        // (Always a stack, so the scrollable keeps its state when the copy appears.)
+        let sticky: Element<'a, Message> = if pinned {
+            opaque(
+                container(column![header(), divider_h(t)])
+                    .width(Length::Fill)
+                    .style(style::app_background(t)),
+            )
+        } else {
+            space().into()
+        };
+        let list: Element<'a, Message> = stack![list, sticky].into();
         let mut out = Column::new().push(list);
         if let Some(bar) = bar {
             out = out.push(container(bar).padding(Padding::from([0.0, PAD])));
@@ -394,7 +453,8 @@ pub fn view<'a, T: ListItem>(body: &Body<'a, T>) -> Element<'a, Message> {
         parts.push(Part::Space(count.saturating_sub(last) as f32 * row_h));
         parts
     };
-    let rows = rows_block(body, &shape, parts, &groups);
+    let rows =
+        column![rows_block(body, &shape, parts, &groups), crate::ui::compact::bottom_space(body.state)];
     let id = body.id.clone();
     let list = scrollable(rows)
         .id(body.id.scroll_id())
@@ -704,6 +764,23 @@ mod tests {
         let w = resolve_widths(&t, &cols, 50.0, true, |c| (c == ColumnId::Album).then_some(123.0));
         let i = cols.iter().position(|c| c.id == ColumnId::Album).unwrap();
         assert_eq!(w[i], 123.0);
+    }
+
+    #[test]
+    fn a_squeezed_table_keeps_its_short_columns_readable() {
+        let t = TableConfig::for_item(ItemType::Song);
+        let cols = t.visible();
+        let at = |room: f32| resolve_widths(&t, &cols, room, true, |_| None);
+        let of = |w: &[f32], id| w[cols.iter().position(|c| c.id == id).unwrap()];
+        // Beside the 400 px sidebar at 960 px: the title keeps room for words.
+        assert!(of(&at(520.0), ColumnId::TitleCombined) >= 150.0);
+        for room in [520.0, 640.0, 900.0, 1140.0, 1500.0] {
+            let w = at(room);
+            assert!(w.iter().sum::<f32>() <= room, "no sideways overflow at {room}");
+            assert!(of(&w, ColumnId::Duration) >= 84.0, "the duration fits at {room}");
+        }
+        // The title takes the room: a 40-character Hangul title (~620 px) fits at 1140.
+        assert!(of(&at(1140.0), ColumnId::TitleCombined) >= 600.0);
     }
 
     #[test]

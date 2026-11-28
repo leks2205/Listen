@@ -79,6 +79,17 @@ fn shows(s: &Listen, text: &str) -> bool {
     ui.find(text).is_ok()
 }
 
+/// A table header's label, whole or cut to an ellipsis (the wide title column leaves the others narrow).
+fn shows_label(s: &Listen, text: &str) -> bool {
+    let _gpu = common::gpu();
+    let mut ui = Simulator::with_size(common::iced_settings(), SIZE, s.view());
+    ui.find(text).is_ok()
+        || (1..text.chars().count()).any(|n| {
+            let cut: String = text.chars().take(n).collect();
+            ui.find(format!("{cut}…")).is_ok()
+        })
+}
+
 fn key(s: &mut Listen, named: Named, modifiers: Modifiers) {
     let code = match named {
         Named::Enter => Code::Enter,
@@ -453,7 +464,7 @@ fn columns_come_from_the_settings() {
         c.table.column_mut(ColumnId::BitRate).unwrap().enabled = true;
         c.table.column_mut(ColumnId::Album).unwrap().enabled = false;
     });
-    assert!(shows(&s, "Bitrate"));
+    assert!(shows_label(&s, "Bitrate"));
     assert!(!shows(&s, "Album"));
 }
 
@@ -471,7 +482,7 @@ fn config_edits_go_through_messages_and_the_popover() {
     let _ = s.update(Message::List(ListMsg::ConfigMenu(ListId::Songs, iced::Point::new(900.0, 80.0))));
     assert!(shows(&s, "List options"));
     assert!(shows(&s, "Row size"));
-    assert!(shows(&s, "Bitrate"));
+    assert!(shows_label(&s, "Bitrate"));
     let _ = s.update(Message::List(ListMsg::CloseMenu));
     assert!(!shows(&s, "List options"));
 }
@@ -576,7 +587,7 @@ fn the_albums_page_is_a_grid_with_selection_and_a_display_toggle() {
         ListId::Albums,
         listen::app::list::ConfigEdit::Display(DisplayType::Table),
     )));
-    assert!(shows(&s, "Release year"));
+    assert!(shows_label(&s, "Release year"));
     let _ = s.update(Message::List(ListMsg::Config(
         ListId::Albums,
         listen::app::list::ConfigEdit::Display(DisplayType::Detail),

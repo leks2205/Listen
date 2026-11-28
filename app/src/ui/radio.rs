@@ -97,10 +97,13 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         for station in shown {
             rows = rows.push(station_card(state, station));
         }
-        scrollable(container(rows).padding(Padding::from([0.0, metrics::PAGE_PADDING_X])))
-            .style(style::scrollbar(t))
-            .height(Length::Fill)
-            .into()
+        scrollable(
+            column![rows, super::compact::bottom_space(state)]
+                .padding(Padding::from([0.0, metrics::PAGE_PADDING_X])),
+        )
+        .style(style::scrollbar(t))
+        .height(Length::Fill)
+        .into()
     };
     column![head, super::divider_h(t), body].into()
 }

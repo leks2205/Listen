@@ -85,6 +85,7 @@ pub fn view<'a>(body: &Body<'a, Album>) -> Element<'a, Message> {
     if body.loading {
         out = out.push(container(label("Loading…", metrics::font_md(), t.muted)).padding(12));
     }
+    out = out.push(crate::ui::compact::bottom_space(body.state));
     let id = body.id.clone();
     scrollable(container(out).padding(Padding::from([0.0, super::table::PAD])))
         .id(body.id.scroll_id())

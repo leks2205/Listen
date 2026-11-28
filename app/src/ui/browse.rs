@@ -248,10 +248,14 @@ fn tree_panel<'a>(state: &'a Listen, current: &str) -> Element<'a, Message> {
     let mut rows = Vec::new();
     tree_rows(state, &mut rows, "", 0, current);
     col = col.extend(rows);
-    container(scrollable(col.padding(8)).style(style::scrollbar(t)).height(Length::Fill))
-        .width(TREE_W)
-        .height(Length::Fill)
-        .into()
+    container(
+        scrollable(col.padding(8).push(super::compact::bottom_space(state)))
+            .style(style::scrollbar(t))
+            .height(Length::Fill),
+    )
+    .width(TREE_W)
+    .height(Length::Fill)
+    .into()
 }
 
 fn crumbs<'a>(state: &'a Listen, current: &str) -> Element<'a, Message> {
