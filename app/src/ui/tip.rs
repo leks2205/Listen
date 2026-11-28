@@ -126,6 +126,15 @@ pub fn tip_raw<'a>(
     action: Option<&str>,
     position: Position,
 ) -> Element<'a, Message> {
+    // While a menu or dialog is open the pointer still rests on the button that opened it: its tooltip
+    // would hang over the menu's first row.
+    if state.menu.is_some()
+        || state.overlay.modal.is_some()
+        || state.sb.popup.is_some()
+        || state.audio.popup.is_some()
+    {
+        return content.into();
+    }
     let text = tip_text_raw(state, label, action);
     tooltip(content, bubble(state.tokens, text), position).delay(DELAY).gap(4).into()
 }

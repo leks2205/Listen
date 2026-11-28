@@ -358,8 +358,14 @@ pub fn divider_h<'a>(t: Tokens) -> Element<'a, Message> {
 
 /// Artwork placeholder: a coloured square with a centred glyph.
 pub fn art<'a>(color: (u8, u8, u8), size: f32, radius: f32, glyph: Icon) -> Element<'a, Message> {
-    let bg = Color::from_rgb8(color.0, color.1, color.2);
-    container(icon(glyph, size * 0.4, Color { a: 0.55, ..Color::WHITE }))
+    let mut bg = Color::from_rgb8(color.0, color.1, color.2);
+    // The glyph is white: a light generated colour is pulled down to a mid tone so the glyph stays
+    // readable on it (it was 1.3:1 on a light grey).
+    let lum = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+    if lum > 0.45 {
+        bg = style::darken(bg, 1.0 - 0.45 / lum);
+    }
+    container(icon(glyph, size * 0.4, Color { a: 0.8, ..Color::WHITE }))
         .width(size)
         .height(size)
         .center(size)
