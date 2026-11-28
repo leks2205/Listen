@@ -51,7 +51,10 @@ pub(super) fn scrobble(state: &Listen) -> Element<'_, Message> {
             "Scrobble minimum mode",
             "When a play counts: after a share of the song, after some seconds, or whichever comes first. \
              Skipping ahead does not count as listening.",
-            pick_list(ScrobbleMode::ALL, Some(ig.scrobble_mode), |m| set(I::ScrobbleMode(m))).into(),
+            pick_list(ScrobbleMode::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(ig.scrobble_mode)), |m| {
+                set(I::ScrobbleMode(m.0))
+            })
+            .into(),
         ),
     ];
     if ig.scrobble_mode != ScrobbleMode::Seconds {
@@ -193,14 +196,20 @@ pub(super) fn discord_rows(state: &Listen) -> Vec<Element<'_, Message>> {
             state,
             "Discord display type",
             "What your status line shows: the application name, the song or the artist.",
-            pick_list(DiscordDisplay::ALL, Some(d.display), |v| set(I::DiscordDisplay(v))).into(),
+            pick_list(DiscordDisplay::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(d.display)), |v| {
+                set(I::DiscordDisplay(v.0))
+            })
+            .into(),
         ),
         line(
             state,
             "Discord link type",
             "Link the song, artist and cover on Discord to Last.fm or MusicBrainz (MusicBrainz links use \
              the ids your server stores; without them it falls back to Last.fm where that is chosen).",
-            pick_list(DiscordLink::ALL, Some(d.link), |v| set(I::DiscordLink(v))).into(),
+            pick_list(DiscordLink::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(d.link)), |v| {
+                set(I::DiscordLink(v.0))
+            })
+            .into(),
         ),
         line(
             state,

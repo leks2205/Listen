@@ -84,9 +84,9 @@ pub fn format_title(
     info: bool,
     private: bool,
 ) -> String {
-    let suffix = if private { " (Private mode)" } else { "" };
+    let suffix = if private { format!(" ({})", crate::i18n::tr("Private mode")) } else { String::new() };
     let Some((title, artist)) = track.filter(|_| info) else { return format!("Listen{suffix}") };
-    let paused = if playing { "" } else { "Paused " };
+    let paused = if playing { String::new() } else { format!("{} ", crate::i18n::tr("Paused")) };
     let artist = if artist.is_empty() { String::new() } else { format!(" — {artist}") };
     format!("{paused}({} / {}) {title}{artist} — Listen{suffix}", position.0, position.1)
 }

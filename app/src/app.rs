@@ -1718,12 +1718,12 @@ impl Listen {
         // A ping that never returns must not hold the whole connect: right after a boot the
         // network answers late rather than not at all, and a future that neither resolves nor
         // errors leaves an empty window.
-        let ping = tokio::time::timeout(PING_TIMEOUT, source.ping())
-            .await
-            .map_err(|_| format!("{} did not answer within {} s", server.name, PING_TIMEOUT.as_secs()))?;
+        let ping = tokio::time::timeout(PING_TIMEOUT, source.ping()).await.map_err(|_| {
+            crate::i18n::trf("{} did not answer within {} s", &[&server.name, &PING_TIMEOUT.as_secs()])
+        })?;
         ping.map_err(|e| match e {
             listen_source::SourceError::Auth(m) if server.kind != SourceKind::YouTubeMusic => {
-                format!("Wrong username or password. ({m})")
+                crate::i18n::trf("Wrong username or password. ({})", &[&m])
             }
             other => other.to_string(),
         })?;
@@ -1951,6 +1951,11 @@ impl Listen {
                 let url = servers::normalize_url(&self.login.url);
                 if url.is_empty() || self.login.username.trim().is_empty() {
                     self.login.error = Some("Server URL and username are required.".into());
+                    return Task::none();
+                }
+                if url::Url::parse(&url).is_err() {
+                    self.login.error =
+                        Some("Enter the full server address, for example https://music.example.com.".into());
                     return Task::none();
                 }
                 let name = servers::host_of(&url);

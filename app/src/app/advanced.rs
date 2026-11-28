@@ -584,18 +584,20 @@ impl Listen {
                 return self.on_enter(route);
             }
             AdvancedMsg::ClearAsk(kind) => {
-                let what = kind.map_or("all caches".to_string(), |k| k.label().to_lowercase());
-                let extra = if matches!(kind, None | Some(CacheKind::YtmAudio)) {
-                    " Songs you played from YouTube Music are downloaded again the next time."
-                } else {
-                    ""
-                };
+                use crate::i18n::{tr, trf};
+                let what = kind.map_or_else(|| tr("all caches").to_string(), |k| tr(k.label()).to_string());
+                let mut text =
+                    trf("Delete the cached files of {}? They are fetched again when needed.", &[&what]);
+                if matches!(kind, None | Some(CacheKind::YtmAudio)) {
+                    text.push(' ');
+                    text.push_str(tr(
+                        "Songs you played from YouTube Music are downloaded again the next time.",
+                    ));
+                }
                 self.confirm(
                     super::overlay::Confirm::new(
                         "Clear cache",
-                        format!(
-                            "Delete the cached files of {what}? They are fetched again when needed.{extra}"
-                        ),
+                        text,
                         Message::Advanced(AdvancedMsg::Clear(kind)),
                     )
                     .labels("Clear", "Cancel")
@@ -666,24 +668,29 @@ impl Listen {
         let text = match std::fs::read_to_string(&path) {
             Ok(t) => t,
             Err(e) => {
-                self.toast_error(format!("Could not read {}: {e}", path.display()));
+                self.toast_error(crate::i18n::trf(
+                    "Could not read {}: {}",
+                    &[&path.display(), &os_error(&e)],
+                ));
                 return Task::none();
             }
         };
         match listen_core::settings::import_json(&self.config.settings, &text) {
-            Err(e) => self.toast_error(format!("Cannot import: {e}")),
+            Err(e) => self.toast_error(crate::i18n::trf("Cannot import: {}", &[&import_error(&e)])),
             Ok(report) => {
-                let mut msg = format!(
+                use crate::i18n::trf;
+                let mut msg = trf(
                     "{} settings will replace your current ones. Servers and sign-ins are not touched.",
-                    report.applied
+                    &[&report.applied],
                 );
                 if !report.issues.is_empty() {
-                    msg.push_str(&format!(
-                        "\n\n{} could not be imported and keep their value:",
-                        report.issues.len()
+                    msg.push_str("\n\n");
+                    msg.push_str(&trf(
+                        "{} could not be imported and keep their value:",
+                        &[&report.issues.len()],
                     ));
                     for i in report.issues.iter().take(6) {
-                        msg.push_str(&format!("\n- {i}"));
+                        msg.push_str(&format!("\n- {}", import_issue(i)));
                     }
                     if report.issues.len() > 6 {
                         msg.push_str("\n- ...");
@@ -875,4 +882,35 @@ enabled = true
         assert_eq!(std::fs::read(&a).unwrap(), b"1");
         let _ = std::fs::remove_dir_all(d);
     }
+}
+
+/// An OS error text without its English words: "No such file or directory (os error 2)" keeps only the
+/// code, so a German sentence is not followed by English.
+pub(super) fn os_error(e: &std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => crate::i18n::tr("file not found").to_string(),
+        std::io::ErrorKind::PermissionDenied => crate::i18n::tr("no permission").to_string(),
+        _ => e.to_string(),
+    }
+}
+
+/// One line of an import report (`core` builds them in English).
+fn import_issue(line: &str) -> String {
+    use crate::i18n::trf;
+    if let Some(k) = line.strip_suffix(": secrets are not imported") {
+        return trf("{}: secrets are not imported", &[&k]);
+    }
+    if let Some(k) = line.strip_suffix(": unknown setting") {
+        return trf("{}: unknown setting", &[&k]);
+    }
+    line.to_string()
+}
+
+/// Why an import was refused (`core` builds the reason in English).
+fn import_error(e: &str) -> String {
+    use crate::i18n::{tr, trf};
+    if let Some(detail) = e.strip_prefix("not valid JSON: ") {
+        return trf("not valid JSON: {}", &[&detail]);
+    }
+    tr(e).to_string()
 }

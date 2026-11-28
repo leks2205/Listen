@@ -21,9 +21,14 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
     for server in &state.config.servers {
         let active = state.config.active_server.as_ref() == Some(&server.id);
         let detail = match server.kind {
-            listen_core::model::SourceKind::YouTubeMusic => server.kind.label().to_string(),
-            listen_core::model::SourceKind::Local => format!("{} — {}", server.kind.label(), server.url),
-            _ => format!("{} — {} as {}", server.kind.label(), server.url, server.username),
+            listen_core::model::SourceKind::YouTubeMusic => crate::i18n::tr(server.kind.label()).to_string(),
+            listen_core::model::SourceKind::Local => {
+                format!("{} — {}", crate::i18n::tr(server.kind.label()), server.url)
+            }
+            _ => crate::i18n::trf(
+                "{} — {} as {}",
+                &[&crate::i18n::tr(server.kind.label()), &server.url, &server.username],
+            ),
         };
         let switch_button = button(label_w(
             if active { "Browsing" } else { "Switch" },
@@ -99,9 +104,10 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
 fn secret_store_row(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     let store = state.config.secret_store;
-    let described = state
-        .secret_store_description()
-        .map_or_else(|| "Not available.".to_string(), |d| format!("Passwords are kept in {d}."));
+    let described = state.secret_store_description().map_or_else(
+        || crate::i18n::tr("Not available.").to_string(),
+        |d| crate::i18n::trf("Passwords are kept in {}.", &[&d]),
+    );
     let pick = |title: &'static str, value: SecretStore| {
         let active = store == value;
         let b = button(label_w(

@@ -16,9 +16,9 @@ const KEYRING_NAME: &str = "Windows Credential Manager";
 const KEYRING_NAME: &str = "Secret Service";
 /// What the settings row says about the fallback file's protection.
 #[cfg(unix)]
-const PRIVATE: &str = "; permissions 0600";
+const PRIVATE: &str = "permissions 0600";
 #[cfg(not(unix))]
-const PRIVATE: &str = "; in your user profile";
+const PRIVATE: &str = "in your user profile";
 
 const SERVICE: &str = listen_core::config::APP_ID;
 
@@ -96,14 +96,15 @@ impl Secrets {
 
     /// Where the secrets are kept right now, for the settings row.
     pub fn describe(&self, keyring_ok: Option<bool>) -> String {
+        use crate::i18n::{tr, trf};
+        let file = self.fallback.display();
+        let private = tr(PRIVATE);
         match (self.store(), keyring_ok) {
-            (SecretStore::File, _) => format!("the file {}{}", self.fallback.display(), PRIVATE),
-            (SecretStore::Auto, Some(true)) => format!("the system keyring ({KEYRING_NAME})"),
-            (SecretStore::Auto, Some(false)) => {
-                format!("the file {} (no keyring found{})", self.fallback.display(), PRIVATE)
-            }
+            (SecretStore::File, _) => trf("the file {} ({})", &[&file, &private]),
+            (SecretStore::Auto, Some(true)) => trf("the system keyring ({})", &[&tr(KEYRING_NAME)]),
+            (SecretStore::Auto, Some(false)) => trf("the file {} (no keyring found; {})", &[&file, &private]),
             (SecretStore::Auto, None) => {
-                "the system keyring, or a private file if there is none (checking…)".into()
+                tr("the system keyring, or a private file if there is none (checking…)").to_string()
             }
         }
     }

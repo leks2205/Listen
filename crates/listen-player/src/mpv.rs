@@ -14,7 +14,12 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 
 #[derive(Debug, thiserror::Error)]
 pub enum MpvError {
+    #[cfg(not(windows))]
     #[error("could not start mpv ({0}); is the `mpv` package installed?")]
+    Spawn(std::io::Error),
+    // Windows has no package manager the user relies on: Listen installs mpv itself.
+    #[cfg(windows)]
+    #[error("could not start mpv ({0}); install it under Settings → Advanced → Helper programs")]
     Spawn(std::io::Error),
     #[error("could not connect to mpv's IPC socket: {0}")]
     Connect(std::io::Error),

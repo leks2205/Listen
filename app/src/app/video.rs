@@ -318,7 +318,13 @@ fn spawn(url: &str, start: f64, song_id: &str) -> Result<Session, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("could not start mpv ({e}); is the `mpv` package installed?"))?;
+        .map_err(|e| {
+            if cfg!(windows) {
+                format!("could not start mpv ({e}); install it under Settings → Advanced → Helper programs")
+            } else {
+                format!("could not start mpv ({e}); is the `mpv` package installed?")
+            }
+        })?;
     let mut out = child.stdout.take().ok_or("mpv gave no output")?;
     let (tx, frames) = sync_channel(QUEUE);
     std::thread::spawn(move || {

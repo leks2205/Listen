@@ -37,13 +37,15 @@ pub fn global_shortcuts(state: &Listen) -> Element<'_, Message> {
             .color(t.muted)
             .into(),
         );
-        if let Some(e) = &state.global_error {
+        if state.global_error.is_some() {
             rows.push(
-                crate::ui::t_text(format!("The desktop refused system-wide shortcuts: {e}"))
-                    .font(crate::appearance::current_font())
-                    .size(metrics::font_sm())
-                    .color(t.error)
-                    .into(),
+                crate::ui::t_text(
+                    "The desktop did not allow system-wide shortcuts (the log has the details).",
+                )
+                .font(crate::appearance::current_font())
+                .size(metrics::font_sm())
+                .color(t.error)
+                .into(),
             );
         }
     }

@@ -69,23 +69,42 @@ fn small_button<'a>(state: &Listen, text: &'static str, msg: Option<Message>) ->
     .into()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GaplessChoice(String);
+
+impl std::fmt::Display for GaplessChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let label = match self.0.as_str() {
+            "weak" => "Weak",
+            "yes" => "Yes",
+            "no" => "No",
+            other => other,
+        };
+        f.write_str(&crate::i18n::tr(label))
+    }
+}
+
 fn playback_section(state: &Listen) -> Element<'_, Message> {
     let p = &state.config.settings.playback;
-    let gapless = ["weak", "yes", "no"].map(String::from).to_vec();
+    // mpv's own values; shown as words (the value itself is what is stored).
+    let gapless = ["weak", "yes", "no"].map(|v| GaplessChoice(v.to_string())).to_vec();
     let mut rows = vec![
         line(
             state,
             "Gapless playback",
             "mpv gapless-audio (Feishin default: weak).",
-            pick_list(gapless, Some(p.gapless.clone()), |v| Message::Setting(Setting::Gapless(v))).into(),
+            pick_list(gapless, Some(GaplessChoice(p.gapless.clone())), |v| {
+                Message::Setting(Setting::Gapless(v.0))
+            })
+            .into(),
         ),
         line(
             state,
             "Streaming quality",
             "Lower quality saves bandwidth: Navidrome transcodes to MP3 up to the chosen bit rate, YouTube \
              Music picks a smaller audio format. Songs that are already downloaded stay original.",
-            pick_list(StreamQuality::ALL, Some(p.stream_quality), |v| {
-                Message::Setting(Setting::StreamQuality(v))
+            pick_list(StreamQuality::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(p.stream_quality)), |v| {
+                Message::Setting(Setting::StreamQuality(v.0))
             })
             .into(),
         ),
@@ -136,9 +155,11 @@ fn playback_section(state: &Listen) -> Element<'_, Message> {
                 "Audio player",
                 "mpv plays on this computer. Jukebox lets the server play the queue through its own \
                  speakers; this computer then only controls it.",
-                pick_list(settings::AudioPlayer::ALL, Some(p.audio_player), |v| {
-                    Message::Radio(crate::app::radio::RadioMsg::SetAudioPlayer(v))
-                })
+                pick_list(
+                    settings::AudioPlayer::ALL.map(crate::ui::Tr),
+                    Some(crate::ui::Tr(p.audio_player)),
+                    |v| Message::Radio(crate::app::radio::RadioMsg::SetAudioPlayer(v.0)),
+                )
                 .into(),
             ),
         );
@@ -263,7 +284,10 @@ fn replay_gain(state: &Listen) -> Element<'_, Message> {
                 state,
                 "Mode",
                 "Normalize loudness with ReplayGain tags (when Volume levelling is off).",
-                pick_list(rg, Some(p.replay_gain), |v| Message::Setting(Setting::ReplayGain(v))).into(),
+                pick_list(rg.map(crate::ui::Tr), Some(crate::ui::Tr(p.replay_gain)), |v| {
+                    Message::Setting(Setting::ReplayGain(v.0))
+                })
+                .into(),
             ),
             line(
                 state,

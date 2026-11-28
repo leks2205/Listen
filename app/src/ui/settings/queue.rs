@@ -109,9 +109,11 @@ pub(super) fn queue(state: &Listen) -> Element<'_, Message> {
                 state,
                 "Side play queue style",
                 "Attached is a panel at the side; Detached is a drawer that slides in when you rest the pointer on the right edge.",
-                pick_list([SideQueueStyle::Attached, SideQueueStyle::Detached], Some(q.side_style), |v| {
-                    setting(QueueSetting::Style(v))
-                })
+                pick_list(
+                    [SideQueueStyle::Attached, SideQueueStyle::Detached].map(crate::ui::Tr),
+                    Some(crate::ui::Tr(q.side_style)),
+                    |v| setting(QueueSetting::Style(v.0)),
+                )
                 .into(),
             ),
             line(
@@ -119,9 +121,9 @@ pub(super) fn queue(state: &Listen) -> Element<'_, Message> {
                 "Side queue layout",
                 "Horizontal puts the queue in a column on the right; vertical puts it in a panel under the page.",
                 pick_list(
-                    [SideQueueLayout::Horizontal, SideQueueLayout::Vertical],
-                    Some(q.side_layout),
-                    |v| setting(QueueSetting::Layout(v)),
+                    [SideQueueLayout::Horizontal, SideQueueLayout::Vertical].map(crate::ui::Tr),
+                    Some(crate::ui::Tr(q.side_layout)),
+                    |v| setting(QueueSetting::Layout(v.0)),
                 )
                 .into(),
             ),
@@ -193,9 +195,16 @@ pub(super) fn filters(state: &Listen) -> Element<'_, Message> {
         let ops = FilterOp::for_kind(f.field.kind());
         let rule = row![
             toggler(f.enabled).on_toggle(move |v| setting(QueueSetting::FilterEnabled(i, v))).size(20),
-            pick_list(FilterField::ALL, Some(f.field), move |v| setting(QueueSetting::FilterField(i, v)))
-                .width(150),
-            pick_list(ops, Some(f.op), move |v| setting(QueueSetting::FilterOp(i, v))).width(170),
+            pick_list(FilterField::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(f.field)), move |v| setting(
+                QueueSetting::FilterField(i, v.0)
+            ))
+            .width(150),
+            pick_list(
+                ops.iter().copied().map(crate::ui::Tr).collect::<Vec<_>>(),
+                Some(crate::ui::Tr(f.op)),
+                move |v| setting(QueueSetting::FilterOp(i, v.0))
+            )
+            .width(170),
             text_input(crate::i18n::tr("Value"), &f.value)
                 .on_input(move |v| setting(QueueSetting::FilterValue(i, v)))
                 .style(style::input(t))

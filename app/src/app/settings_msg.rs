@@ -323,9 +323,14 @@ impl Listen {
                             self.toast_success("Feishin settings imported.".into());
                             player_changed = true;
                         }
-                        Err(e) => self.toast_error(format!("Not a Feishin settings file: {e}")),
+                        Err(e) => {
+                            self.toast_error(crate::i18n::trf("Not a Feishin settings file: {}", &[&e]))
+                        }
                     },
-                    Err(e) => self.toast_error(format!("Could not read {}: {e}", path.display())),
+                    Err(e) => self.toast_error(crate::i18n::trf(
+                        "Could not read {}: {}",
+                        &[&path.display(), &super::advanced::os_error(&e)],
+                    )),
                 }
             }
             other @ (Setting::AiDj(_)
