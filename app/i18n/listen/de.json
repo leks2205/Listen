@@ -2345,7 +2345,7 @@
 "Corrects your headphones to a neutral sound (AutoEq profiles, applied before the equalizer). The profile belongs to an output: it switches when you change between Bluetooth and wired.": "Korrigiert deine Kopfhörer zu einem neutralen Klang (AutoEq-Profile, vor dem Equalizer). Das Profil gehört zu einem Ausgang: Es wechselt, wenn du zwischen Bluetooth und Kabel wechselst.",
 "This output": "Dieser Ausgang",
 "No profile": "Kein Profil",
-"Headphone model, or paste a ParametricEQ.txt": "Kopfhörermodell, oder eine ParametricEQ.txt einfügen",
+"Headphone model, or paste a ParametricEQ.txt": "Kopfhörermodell oder ParametricEQ.txt einfügen",
 "Use pasted profile": "Eingefügtes Profil verwenden",
 "Lines left out (not supported): {}": "Weggelassene Zeilen (nicht unterstützt): {}",
 "Find your headphones": "Deine Kopfhörer finden",
@@ -2448,5 +2448,6 @@
 "Next Track": "Nächster Titel",
 "All tracks": "Alle Titel",
 "Song count": "Anzahl Titel",
-"Theme": "Design"
+"Theme": "Design",
+"Not a colour yet: write it like rgb(53, 116, 252) or #3574fc.": "Noch keine Farbe: Schreibe sie als rgb(53, 116, 252) oder #3574fc."
 }

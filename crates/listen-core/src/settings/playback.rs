@@ -615,7 +615,10 @@ mod tests {
     fn an_old_ten_band_equalizer_becomes_twelve_bands() {
         let old = [31.5, 63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
         let mut p = Playback {
-            equalizer: old.iter().map(|&freq| EqBand { freq, gain: if freq == 4000.0 { 3.0 } else { 0.0 } }).collect(),
+            equalizer: old
+                .iter()
+                .map(|&freq| EqBand { freq, gain: if freq == 4000.0 { 3.0 } else { 0.0 } })
+                .collect(),
             ..Default::default()
         };
         p.normalize_equalizer();

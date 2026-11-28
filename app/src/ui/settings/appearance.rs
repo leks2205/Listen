@@ -88,11 +88,18 @@ pub fn colour_rows(state: &Listen) -> Vec<Element<'_, Message>> {
     if enabled {
         field = field.on_input(|v| Message::Appearance(A::AccentText(v)));
     }
+    // Typing applies the colour as soon as it parses; until then say why nothing changes.
+    let invalid = enabled
+        && !state.accent_input.trim().is_empty()
+        && listen_core::theme::custom::parse_color(&serde_json::Value::String(state.accent_input.clone()))
+            .is_none();
     let mut rows = vec![
         line(
             state,
             "Accent colour",
-            if enabled {
+            if invalid {
+                "Not a colour yet: write it like rgb(53, 116, 252) or #3574fc."
+            } else if enabled {
                 "Pick a swatch or type a CSS colour, e.g. rgb(53, 116, 252) or #3574fc."
             } else {
                 "Turn off \"Use the theme's accent colour\" to choose your own."

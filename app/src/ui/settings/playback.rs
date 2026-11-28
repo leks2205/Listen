@@ -512,7 +512,16 @@ fn headphone(state: &Listen) -> Element<'_, Message> {
         state,
         "This output",
         "",
-        column![label(output_label.clone(), metrics::font_sm(), t.muted), current].spacing(2).into(),
+        column![
+            crate::ui::data_label(
+                crate::ui::ellipsize_px(&output_label, 330.0, metrics::font_sm()),
+                metrics::font_sm(),
+                t.muted
+            ),
+            current
+        ]
+        .spacing(2)
+        .into(),
     ));
     let query = state.headphone.query.trim();
     let mut search = column![
