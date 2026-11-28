@@ -99,6 +99,13 @@ pub fn toasts(state: &Listen) -> Option<Element<'_, Message>> {
     for toast in &state.overlay.toasts {
         col = col.push(toast_card(t, toast, width));
     }
+    // The sleep-timer popover sits in the same corner: the toasts step aside, left of it.
+    let aside = if state.fs.sleep_ui.open && !state.needs_login() {
+        let room = (state.window_size.width - width - 2.0 * metrics::space_lg()).max(0.0);
+        (super::sleep_popover::WIDTH + metrics::space_lg()).min(room)
+    } else {
+        0.0
+    };
     Some(
         container(col)
             .width(Length::Fill)
@@ -106,7 +113,7 @@ pub fn toasts(state: &Listen) -> Option<Element<'_, Message>> {
             .align_x(iced::alignment::Horizontal::Right)
             .align_y(iced::alignment::Vertical::Bottom)
             .padding(Padding {
-                right: metrics::space_lg(),
+                right: metrics::space_lg() + aside,
                 bottom: metrics::PLAYER_BAR_HEIGHT + metrics::space_lg(),
                 ..Padding::ZERO
             })
