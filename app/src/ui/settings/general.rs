@@ -71,23 +71,46 @@ pub(super) fn servers(state: &Listen) -> Option<Element<'_, Message>> {
                 .on_press(Message::ConfirmRemoveServer(Some(server.id.clone())))
                 .into()
         };
-        rows.push(
-            row![
+        // The name and the detail line wrap inside their column (they were one unbroken line that
+        // ran under the buttons).
+        let text = column![
+            iced::widget::text(server.name.clone())
+                .font(crate::ui::font(Weight::Medium))
+                .size(metrics::font_md())
+                .color(t.foreground),
+            iced::widget::text(detail)
+                .font(crate::appearance::current_font())
+                .size(metrics::font_sm())
+                .color(t.muted),
+        ]
+        .spacing(2)
+        .width(Length::Fill);
+        if super::narrow(state) {
+            rows.push(
                 column![
-                    label_w(server.name.clone(), metrics::font_md(), t.foreground, Weight::Medium),
-                    label(detail, metrics::font_sm(), t.muted),
+                    text,
+                    row![switch_button]
+                        .extend(rescan_buttons)
+                        .push(edit_button)
+                        .push(remove_button)
+                        .spacing(metrics::space_sm())
+                        .wrap()
+                        .vertical_spacing(metrics::space_sm()),
                 ]
-                .spacing(2)
-                .width(Length::Fill),
-                switch_button,
-            ]
-            .extend(rescan_buttons)
-            .push(edit_button)
-            .push(remove_button)
-            .spacing(metrics::space_sm())
-            .align_y(Alignment::Center)
-            .into(),
-        );
+                .spacing(metrics::space_sm())
+                .into(),
+            );
+        } else {
+            rows.push(
+                row![text, switch_button]
+                    .extend(rescan_buttons)
+                    .push(edit_button)
+                    .push(remove_button)
+                    .spacing(metrics::space_sm())
+                    .align_y(Alignment::Center)
+                    .into(),
+            );
+        }
     }
     rows.push(
         button(label_w("Add server", metrics::font_md(), iced::Color::WHITE, Weight::Semibold))

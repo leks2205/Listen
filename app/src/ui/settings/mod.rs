@@ -99,6 +99,27 @@ pub(super) fn line<'a>(
     hint: impl iced::widget::text::IntoFragment<'a>,
     control: Element<'a, Message>,
 ) -> Element<'a, Message> {
+    line_in(state, name, hint, control, false)
+}
+
+/// A [`line`] whose control is wide (several fields and a button) and always goes under the text:
+/// beside it the description was squeezed into a 120 px column.
+pub(super) fn line_below<'a>(
+    state: &'a Listen,
+    name: &'static str,
+    hint: impl iced::widget::text::IntoFragment<'a>,
+    control: Element<'a, Message>,
+) -> Element<'a, Message> {
+    line_in(state, name, hint, control, true)
+}
+
+fn line_in<'a>(
+    state: &'a Listen,
+    name: &'static str,
+    hint: impl iced::widget::text::IntoFragment<'a>,
+    control: Element<'a, Message>,
+    below: bool,
+) -> Element<'a, Message> {
     let t = state.tokens;
     let hint = crate::i18n::tr_cow(hint.into_fragment());
     if let Some(q) = query(state) {
@@ -112,21 +133,25 @@ pub(super) fn line<'a>(
             return hidden();
         }
     }
-    row![
-        column![
-            label_w(name, metrics::font_md(), t.foreground, Weight::Medium),
-            iced::widget::text(hint)
-                .font(crate::appearance::current_font())
-                .size(metrics::font_sm())
-                .color(t.muted),
-        ]
-        .spacing(2)
-        .width(Length::Fill),
-        control,
+    let text = column![
+        label_w(name, metrics::font_md(), t.foreground, Weight::Medium),
+        iced::widget::text(hint)
+            .font(crate::appearance::current_font())
+            .size(metrics::font_sm())
+            .color(t.muted),
     ]
-    .spacing(metrics::space_lg())
-    .align_y(Alignment::Center)
-    .into()
+    .spacing(2)
+    .width(Length::Fill);
+    if below || narrow(state) {
+        // No room beside the text: the control goes under it instead of squeezing it to a word a line.
+        return column![text, control].spacing(metrics::space_sm()).into();
+    }
+    row![text, control].spacing(metrics::space_lg()).align_y(Alignment::Center).into()
+}
+
+/// The page is too narrow for a control beside its text (compact windows, a wide sidebar or queue).
+pub(super) fn narrow(state: &Listen) -> bool {
+    state.page_width() - 2.0 * 32.0 - 2.0 * 20.0 < 560.0
 }
 
 /// A row that is not a [`line`] (e.g. a hotkey) taking part in the search: it counts like a line and
@@ -222,7 +247,17 @@ fn header(state: &Listen) -> Element<'_, Message> {
         .padding(Padding::from([8.0, 16.0]))
         .style(style::default_button(t))
         .on_press(Message::Shell(ShellMsg::ResetAsk));
-    row![label_w("Settings", 36.0, t.foreground, Weight::Bold), space().width(Length::Fill), search, reset,]
+    let title = label_w("Settings", 36.0, t.foreground, Weight::Bold);
+    if narrow(state) {
+        // Title on its own line, the search field takes what the reset button leaves.
+        return column![
+            title,
+            row![search.width(Length::Fill), reset].spacing(metrics::space_md()).align_y(Alignment::Center)
+        ]
+        .spacing(metrics::space_md())
+        .into();
+    }
+    row![title, space().width(Length::Fill), search, reset,]
         .spacing(metrics::space_md())
         .align_y(Alignment::Center)
         .into()
@@ -245,7 +280,8 @@ fn tab_bar(state: &Listen) -> Element<'_, Message> {
             .on_press(Message::Shell(ShellMsg::Tab(tab))),
         );
     }
-    bar.into()
+    // A row of tabs that wraps: at 480 px "Erweitert" and "Über" would be off the window.
+    bar.wrap().vertical_spacing(metrics::space_xs()).into()
 }
 
 pub fn view(state: &Listen) -> Element<'_, Message> {

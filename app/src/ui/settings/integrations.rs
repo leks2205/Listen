@@ -1,7 +1,7 @@
 //! Scrobble options, Last.fm, Discord rich presence details, the remote control server and the MCP
 //! server (Feishin: general/scrobble-settings, window/discord-settings, window/remote-settings).
 
-use super::{line, section, stepper, switch};
+use super::{line, line_below, section, stepper, switch};
 use crate::app::integrations::{Field, IntegrationSetting as I, IntegrationsMsg};
 use crate::app::{Listen, Message, Setting};
 use crate::style;
@@ -167,7 +167,7 @@ fn lastfm_rows(state: &Listen) -> Vec<Element<'_, Message>> {
          access in the browser."
             .into()
     });
-    vec![line(state, "Last.fm", hint, fields.into())]
+    vec![line_below(state, "Last.fm", hint, fields.wrap().vertical_spacing(8).into())]
 }
 
 /// The Discord rows below "Discord application ID" (Window tab).
