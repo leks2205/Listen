@@ -113,6 +113,14 @@ pub const OBSERVED: &[&str] = &[
     "metadata",
 ];
 
+/// Read buffer of mpv's stream layer (default 128 KiB). A FLAC file without a seek table is seeked by a
+/// binary search whose probes land a few hundred KiB apart; with the small buffer every probe is a new
+/// HTTPS request (0.2–2 s each on a remote server, 4–7 probes per seek: 1.5–2.7 s of silence after a
+/// seek into the not yet buffered part of a 24-bit Navidrome file). 2 MiB keeps the late, close probes
+/// inside the buffer: 2–3 requests instead of 5, about a second faster. A partial network read still
+/// returns at once, so playback does not wait for the buffer to fill.
+const STREAM_BUFFER_ARG: &str = "--stream-buffer-size=2MiB";
+
 impl Mpv {
     pub async fn spawn(opts: &MpvOptions) -> Result<(Self, mpsc::UnboundedReceiver<MpvEvent>), MpvError> {
         remove_stale_sockets();
@@ -130,6 +138,7 @@ impl Mpv {
             "--ytdl=no".into(),
             "--network-timeout=10".into(),
             "--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_delay_max=5".into(),
+            STREAM_BUFFER_ARG.into(),
             format!("--input-ipc-server={}", socket.display()),
         ];
         args.push(if opts.video { "--vid=auto" } else { "--no-video" }.into());
@@ -502,6 +511,18 @@ mod tests {
     fn socket_names_carry_the_pid() {
         assert_eq!(socket_pid("listen-mpv-1234-7.sock"), Some(1234));
         assert_eq!(socket_pid("other.sock"), None);
+    }
+
+    /// mpv must accept the buffer option (a typo would make every start fail); skipped without mpv.
+    #[test]
+    fn mpv_accepts_the_stream_buffer_option() {
+        let binary = std::env::var_os("LISTEN_MPV").unwrap_or_else(|| "mpv".into());
+        let Ok(out) =
+            std::process::Command::new(binary).args(["--no-config", STREAM_BUFFER_ARG, "--version"]).output()
+        else {
+            return;
+        };
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     }
 
     #[test]
