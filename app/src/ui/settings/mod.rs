@@ -288,12 +288,15 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let t = state.tokens;
     ROWS.with(|r| r.set((0, 0)));
     MATCHES.with(|m| m.set(0));
-    let mut page = Column::new().spacing(metrics::space_xl()).push(header(state));
+    // The title, search and tabs stay put; only the sections scroll (they used to scroll away, and
+    // with them the way to another tab).
+    let mut top = Column::new().spacing(metrics::space_xl()).push(header(state));
+    let mut page = Column::new().spacing(metrics::space_xl());
     let searching = query(state).is_some();
     let sections: Vec<_> = if searching {
         SettingsTab::ALL.into_iter().flat_map(|tab| tab_sections(state, tab)).collect()
     } else {
-        page = page.push(tab_bar(state));
+        top = top.push(tab_bar(state));
         tab_sections(state, state.config.settings.settings_tab)
     };
     let mut any = false;
@@ -305,12 +308,35 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         page = page.push(label("No settings match your search.", metrics::font_md(), t.muted));
     }
 
-    scrollable(
-        container(page.padding(Padding { top: 48.0, right: 32.0, bottom: 80.0, left: 32.0 }).max_width(1000))
+    if state.window_size.height < 520.0 {
+        // A short window has no room for a fixed header: everything scrolls.
+        let all = Column::new().spacing(metrics::space_xl()).push(top).push(page);
+        return scrollable(
+            container(
+                all.padding(Padding { top: 48.0, right: 32.0, bottom: 80.0, left: 32.0 }).max_width(1000),
+            )
             .center_x(Length::Fill),
-    )
-    .style(style::scrollbar(t))
-    .height(Length::Fill)
+        )
+        .style(style::scrollbar(t))
+        .height(Length::Fill)
+        .into();
+    }
+    let fixed = container(
+        container(top.padding(Padding { top: 48.0, right: 32.0, bottom: 0.0, left: 32.0 }).max_width(1000))
+            .center_x(Length::Fill),
+    );
+    column![
+        fixed,
+        scrollable(
+            container(
+                page.padding(Padding { top: metrics::space_xl(), right: 32.0, bottom: 80.0, left: 32.0 })
+                    .max_width(1000)
+            )
+            .center_x(Length::Fill),
+        )
+        .style(style::scrollbar(t))
+        .height(Length::Fill)
+    ]
     .into()
 }
 
