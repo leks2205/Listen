@@ -372,6 +372,22 @@ impl Playback {
     /// Sets the band gains from `preset` and the preamp to 0, as Feishin does.
     /// The bands keep their frequencies: a config from before the twelve-band
     /// layout (ten bands) takes the gain of the nearest preset band.
+    /// Brings a stored band list to [`EQ_FREQS`]: an older version saved ten bands (with 8 kHz, without
+    /// 3 k, 6.3 k and 10 k), and the page offers exactly the stored ones. Each new band takes the gain of
+    /// the nearest stored one, so the sound stays the same.
+    pub fn normalize_equalizer(&mut self) {
+        if self.equalizer.len() == EQ_FREQS.len()
+            && self.equalizer.iter().zip(EQ_FREQS).all(|(b, f)| (b.freq - f).abs() < 0.01)
+        {
+            return;
+        }
+        let old = std::mem::take(&mut self.equalizer);
+        self.equalizer = EQ_FREQS
+            .iter()
+            .map(|&freq| EqBand { freq, gain: if old.is_empty() { 0.0 } else { nearest_gain(&old, freq) } })
+            .collect();
+    }
+
     pub fn apply_eq_preset(&mut self, name: &str, preset: &[EqBand]) {
         for band in &mut self.equalizer {
             band.gain = nearest_gain(preset, band.freq);
@@ -593,6 +609,25 @@ mod tests {
         };
         let af = mpv_audio_filters(&p);
         assert!(af.contains("ratio=20:attack=0.01:release=9000:") && af.contains("knee=8]"), "{af}");
+    }
+
+    #[test]
+    fn an_old_ten_band_equalizer_becomes_twelve_bands() {
+        let old = [31.5, 63.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 16000.0];
+        let mut p = Playback {
+            equalizer: old.iter().map(|&freq| EqBand { freq, gain: if freq == 4000.0 { 3.0 } else { 0.0 } }).collect(),
+            ..Default::default()
+        };
+        p.normalize_equalizer();
+        assert_eq!(p.equalizer.len(), 12);
+        assert_eq!(p.equalizer.iter().map(|b| b.freq).collect::<Vec<_>>(), EQ_FREQS.to_vec());
+        let at = |f: f32| p.equalizer.iter().find(|b| b.freq == f).unwrap().gain;
+        assert_eq!(at(4000.0), 3.0);
+        assert_eq!(at(31.5), 0.0);
+        // Already current: untouched.
+        let before = p.equalizer.clone();
+        p.normalize_equalizer();
+        assert_eq!(p.equalizer, before);
     }
 
     #[test]

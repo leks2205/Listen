@@ -165,6 +165,7 @@ impl Config {
                 let mut cfg: Self = toml::from_str(&text)
                     .map_err(|source| ConfigError::Parse { path: path.into(), source })?;
                 cfg.settings.sidebar.add_missing_items();
+                cfg.settings.playback.normalize_equalizer();
                 cfg.settings.lists.album_group.normalize();
                 for (action, key) in Settings::default().hotkeys {
                     cfg.settings.hotkeys.entry(action).or_insert(key);
