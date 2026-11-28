@@ -59,16 +59,27 @@ pub fn size_string(bytes: u64) -> String {
     format!("{size:.2} {}", UNITS[unit])
 }
 
-/// "1h 3m 45s" (Feishin `formatDurationString`).
+/// "1h 3m 45s" (Feishin `formatDurationString`); in a translated UI "1 Std. 3 Min. 45 Sek.".
 pub fn duration_words(d: Duration) -> String {
+    use crate::i18n::tr;
     let s = d.as_secs();
     let (h, m, sec) = (s / 3600, (s % 3600) / 60, s % 60);
+    let (hr, min, secs) = (tr("hr"), tr("min"), tr("sec"));
+    if hr == "hr" {
+        return if h > 0 {
+            format!("{h}h {m}m {sec}s")
+        } else if m > 0 {
+            format!("{m}m {sec}s")
+        } else {
+            format!("{sec}s")
+        };
+    }
     if h > 0 {
-        format!("{h}h {m}m {sec}s")
+        format!("{h} {hr} {m} {min} {sec} {secs}")
     } else if m > 0 {
-        format!("{m}m {sec}s")
+        format!("{m} {min} {sec} {secs}")
     } else {
-        format!("{sec}s")
+        format!("{sec} {secs}")
     }
 }
 

@@ -181,7 +181,7 @@ impl Rows {
     }
 
     fn yes_no(&mut self, label: &str, value: Option<bool>) {
-        self.add(label, value.map(|v| if v { "Yes" } else { "No" }.to_string()));
+        self.add(label, value.map(|v| crate::i18n::tr(if v { "Yes" } else { "No" }).to_string()));
     }
 }
 

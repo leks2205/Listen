@@ -344,10 +344,10 @@ impl Listen {
     fn load_carousels(&mut self, album: &Album) -> Task<Message> {
         let mut wanted: Vec<(String, Option<String>, Option<String>)> = Vec::new();
         if let Some(artist) = album.album_artists.first() {
-            wanted.push((format!("More from {}", artist.name), artist.id.clone(), None));
+            wanted.push((crate::i18n::trf("More from {}", &[&artist.name]), artist.id.clone(), None));
         }
         for genre in album.genres.iter().take(MORE_GENRES) {
-            wanted.push((format!("More from {genre}"), None, Some(genre.clone())));
+            wanted.push((crate::i18n::trf("More from {}", &[&genre]), None, Some(genre.clone())));
         }
         self.album_page.carousels = vec![None; wanted.len()];
         let tasks: Vec<_> =

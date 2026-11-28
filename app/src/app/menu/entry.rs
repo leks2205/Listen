@@ -170,8 +170,8 @@ pub fn play_submenu() -> Entry {
         "Play",
         vec![
             Entry::action(Icon::LuPlay, "Play", MenuAction::Play),
-            Entry::action(Icon::LuSkipForward, "Next", MenuAction::PlayNext),
-            Entry::action(Icon::RiPlayListAddLine, "Last", MenuAction::AddToQueue),
+            Entry::action(Icon::LuSkipForward, "Play next", MenuAction::PlayNext),
+            Entry::action(Icon::RiPlayListAddLine, "Play last", MenuAction::AddToQueue),
             Entry::divider(),
             Entry::action(Icon::LuShuffle, "Play (shuffled)", MenuAction::Shuffle),
             Entry::action(Icon::LuSkipForward, "Next (shuffled)", MenuAction::PlayNextShuffled),
@@ -190,8 +190,8 @@ pub fn radio_submenu(cx: &Ctx, label: &str) -> Entry {
         label,
         vec![
             Entry::action(Icon::LuPlay, "Play", MenuAction::Radio(PlayHow::Now)),
-            Entry::action(Icon::LuSkipForward, "Next", MenuAction::Radio(PlayHow::Next)),
-            Entry::action(Icon::RiPlayListAddLine, "Last", MenuAction::Radio(PlayHow::Last)),
+            Entry::action(Icon::LuSkipForward, "Play next", MenuAction::Radio(PlayHow::Next)),
+            Entry::action(Icon::RiPlayListAddLine, "Play last", MenuAction::Radio(PlayHow::Last)),
         ],
     )
     .primary(MenuAction::Radio(match cx.state.play_behavior() {
