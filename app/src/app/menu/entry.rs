@@ -174,8 +174,8 @@ pub fn play_submenu() -> Entry {
             Entry::action(Icon::RiPlayListAddLine, "Play last", MenuAction::AddToQueue),
             Entry::divider(),
             Entry::action(Icon::LuShuffle, "Play (shuffled)", MenuAction::Shuffle),
-            Entry::action(Icon::LuSkipForward, "Next (shuffled)", MenuAction::PlayNextShuffled),
-            Entry::action(Icon::RiPlayListAddLine, "Last (shuffled)", MenuAction::AddToQueueShuffled),
+            Entry::action(Icon::LuSkipForward, "Play next (shuffled)", MenuAction::PlayNextShuffled),
+            Entry::action(Icon::RiPlayListAddLine, "Play last (shuffled)", MenuAction::AddToQueueShuffled),
         ],
     )
     // Clicking "Play" itself does what the Play buttons do (Lists → Play button behavior).

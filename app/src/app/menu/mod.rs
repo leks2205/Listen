@@ -242,7 +242,7 @@ pub enum MenuAction {
     Rename,
     ChooseDelete,
     Delete,
-    /// Play the shuffled songs next / last (Feishin: "Next (shuffled)", "Last (shuffled)").
+    /// Play the shuffled songs next / last (Feishin: "Next (shuffled)", "Last (shuffled)"; here "Play next (shuffled)", "Play last (shuffled)").
     PlayNextShuffled,
     AddToQueueShuffled,
     /// Favorite / unfavorite every target (YouTube Music: like, save to library, subscribe).

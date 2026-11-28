@@ -247,17 +247,20 @@ fn a_submenu_opens_on_hover_toggles_on_click_and_closes_with_escape() {
     let songs = songs_of(SourceKind::Subsonic, 1);
     let _ = s.update(Message::RightClickAt(Point::new(300.0, 100.0)));
     let _ = menu(&mut s, MenuMsg::Open(MenuTarget::song(&songs[0])));
-    assert!(!shows(&s, "Next (shuffled)"), "closed until asked");
+    assert!(!shows(&s, "Play next (shuffled)"), "closed until asked");
     // Row 0 of a song menu is "Play ▸", row 1 "Start radio".
     let _ = menu(&mut s, MenuMsg::Hover(0));
     assert_eq!(focus(&s), (Some(0), Some((0, None))));
-    assert!(shows(&s, "Next (shuffled)") && shows(&s, "Last"));
-    // Another row closes it; a click on the submenu row opens and closes it.
+    assert!(shows(&s, "Play next (shuffled)") && shows(&s, "Play last"));
+    // Another row closes it; a click on the submenu row opens it, and a click on a row whose submenu
+    // hovering has opened keeps it open (LX-SET-F30).
     let _ = menu(&mut s, MenuMsg::Hover(1));
     assert!(s.menu.as_ref().unwrap().sub.is_none());
     let _ = menu(&mut s, MenuMsg::ToggleSub(0));
     assert!(s.menu.as_ref().unwrap().sub.is_some());
     let _ = menu(&mut s, MenuMsg::ToggleSub(0));
+    assert!(s.menu.as_ref().unwrap().sub.is_some(), "a second click keeps it");
+    let _ = menu(&mut s, MenuMsg::Hover(1));
     assert!(s.menu.as_ref().unwrap().sub.is_none());
     // Escape closes the submenu first, then the menu.
     let _ = menu(&mut s, MenuMsg::ToggleSub(0));
@@ -286,9 +289,9 @@ fn a_submenu_flips_to_the_left_at_the_window_edge() {
         let mut ui = Simulator::with_size(common::iced_settings(), iced::Size::new(1200.0, 800.0), s.view());
         ui.find(text).expect("text").bounds().x
     };
-    // "Start radio" is in the main panel, "Next (shuffled)" in the submenu.
-    assert!(x_of(100.0, "Next (shuffled)") > x_of(100.0, "Start radio"), "right of the menu");
-    assert!(x_of(900.0, "Next (shuffled)") < x_of(900.0, "Start radio"), "left of the menu");
+    // "Start radio" is in the main panel, "Play next (shuffled)" in the submenu.
+    assert!(x_of(100.0, "Play next (shuffled)") > x_of(100.0, "Start radio"), "right of the menu");
+    assert!(x_of(900.0, "Play next (shuffled)") < x_of(900.0, "Start radio"), "left of the menu");
 }
 
 // --- keyboard ---

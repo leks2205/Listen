@@ -181,7 +181,7 @@ fn theme_errors_and_warnings_are_listed() {
     let _serial = serial();
     let loaded =
         themes_dir(&[("broken.json", "{ nope"), ("odd.json", r##"{"colors":{"primary":"banana"}}"##)]);
-    let error = format!("broken.json: {}", loaded.errors[0].message);
+    let error = format!("broken.json: could not be read as a theme ({})", loaded.errors[0].message);
     let mut s = boot();
     send(&mut s, A::ThemesChanged(Arc::new(loaded)));
     let _ = s.update(Message::Navigate(Route::Settings));

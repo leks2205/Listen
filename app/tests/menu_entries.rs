@@ -265,7 +265,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "song",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio",
             "-",
             "Add to playlist…",
@@ -289,7 +289,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "song",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio",
             "-",
             "Add to playlist…",
@@ -309,7 +309,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "song",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio",
             "-",
             "Add to playlist…",
@@ -328,7 +328,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "song",
         "ytm-guest",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio",
             "-",
             "Favorite > [Like, Remove from Liked Music]",
@@ -345,7 +345,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "song",
         "local",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio",
             "-",
             "Snooze 30 days",
@@ -361,7 +361,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "songs",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio (off)",
             "-",
             "Add to playlist…",
@@ -385,7 +385,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "songs",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio (off)",
             "-",
             "Add to playlist…",
@@ -405,7 +405,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "songs",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio (off)",
             "-",
             "Add to playlist…",
@@ -424,7 +424,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "songs",
         "ytm-guest",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio (off)",
             "-",
             "Favorite > [Like, Remove from Liked Music]",
@@ -441,7 +441,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "songs",
         "local",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Start radio (off)",
             "-",
             "Snooze 30 days",
@@ -459,7 +459,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         &[
             "Remove from queue",
             "-",
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Move items > [Move to top, Move to next, Move to bottom]",
             "Shuffle > [Shuffle selected, Shuffle all]",
             "Order for smooth mixing",
@@ -489,7 +489,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         &[
             "Remove from queue",
             "-",
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Move items > [Move to top, Move to next, Move to bottom]",
             "Shuffle > [Shuffle selected, Shuffle all]",
             "Order for smooth mixing",
@@ -515,7 +515,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         &[
             "Remove from queue",
             "-",
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Move items > [Move to top, Move to next, Move to bottom]",
             "Shuffle > [Shuffle selected, Shuffle all]",
             "Order for smooth mixing",
@@ -540,7 +540,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         &[
             "Remove from queue",
             "-",
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Move items > [Move to top, Move to next, Move to bottom]",
             "Shuffle > [Shuffle selected, Shuffle all]",
             "Order for smooth mixing",
@@ -563,7 +563,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         &[
             "Remove from queue",
             "-",
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "Move items > [Move to top, Move to next, Move to bottom]",
             "Shuffle > [Shuffle selected, Shuffle all]",
             "Order for smooth mixing",
@@ -583,8 +583,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "album",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -604,8 +604,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "album",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -621,8 +621,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "album",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -638,8 +638,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "album",
         "ytm-guest",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio > [Play, Play next, Play last]",
             "-",
             "Go to > [Go to album, Go to Neon Atlas]",
             "-",
@@ -651,7 +651,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "album",
         "local",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Go to > [Go to album, Go to Neon Atlas]",
             "-",
@@ -662,8 +662,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "albums",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio (off) > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio (off) > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -683,8 +683,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "albums",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio (off) > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio (off) > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -700,8 +700,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "albums",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio (off) > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio (off) > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -716,8 +716,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "albums",
         "ytm-guest",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Album radio (off) > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Album radio (off) > [Play, Play next, Play last]",
             "-",
             "Go to (off) > [Go to album, Go to Neon Atlas]",
             "-",
@@ -728,7 +728,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "albums",
         "local",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Go to (off) > [Go to album, Go to Neon Atlas]",
             "-",
@@ -739,8 +739,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "artist",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Artist radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Artist radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -755,8 +755,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "artist",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Artist radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Artist radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -769,8 +769,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "artist",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Artist radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Artist radio > [Play, Play next, Play last]",
             "-",
             "Add to playlist…",
             "-",
@@ -784,8 +784,8 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "artist",
         "ytm-guest",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
-            "Artist radio > [Play, Next, Last]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "Artist radio > [Play, Play next, Play last]",
             "-",
             "Get info",
             "Copy link",
@@ -794,13 +794,17 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
     (
         "artist",
         "local",
-        &["Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]", "-", "Get info"],
+        &[
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+            "-",
+            "Get info",
+        ],
     ),
     (
         "genre",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
         ],
@@ -809,7 +813,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "genre",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
         ],
@@ -818,7 +822,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "genre",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
         ],
@@ -826,14 +830,22 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
     (
         "genre",
         "ytm-guest",
-        &["Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]"],
+        &[
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+        ],
     ),
-    ("genre", "local", &["Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]"]),
+    (
+        "genre",
+        "local",
+        &[
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+        ],
+    ),
     (
         "folder",
         "navidrome",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
             "-",
@@ -845,7 +857,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "folder",
         "jellyfin",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
             "-",
@@ -856,7 +868,7 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
         "folder",
         "ytm",
         &[
-            "Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]",
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
             "-",
             "Add to playlist…",
         ],
@@ -864,9 +876,17 @@ const EXPECTED: &[(&str, &str, &[&str])] = &[
     (
         "folder",
         "ytm-guest",
-        &["Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]"],
+        &[
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+        ],
     ),
-    ("folder", "local", &["Play > [Play, Next, Last, -, Play (shuffled), Next (shuffled), Last (shuffled)]"]),
+    (
+        "folder",
+        "local",
+        &[
+            "Play > [Play, Play next, Play last, -, Play (shuffled), Play next (shuffled), Play last (shuffled)]",
+        ],
+    ),
 ];
 
 /// Every kind's entries, in Feishin's order, per capability set. A submenu

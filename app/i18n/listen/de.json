@@ -2470,5 +2470,7 @@
 "number": "Zahl",
 "boolean": "Ja/Nein",
 "date": "Datum",
-"playlist": "Wiedergabeliste"
+"playlist": "Wiedergabeliste",
+"Play next (shuffled)": "Als Nächstes (zufällige Wiedergabe)",
+"Play last (shuffled)": "Als Letztes (zufällige Wiedergabe)"
 }

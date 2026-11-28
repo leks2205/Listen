@@ -107,6 +107,13 @@ fn bubble<'a>(t: Tokens, content: String) -> Element<'a, Message> {
         .into()
 }
 
+/// A bubble with the tree shape of [`bubble`] that draws nothing (see [`tip_raw`]).
+fn hidden_bubble<'a>() -> Element<'a, Message> {
+    container(text("").size(style::metrics::font_sm()).color(iced::Color::TRANSPARENT))
+        .style(move |_| container::Style::default())
+        .into()
+}
+
 /// Wraps `content` in a tooltip showing `label` (translated) and the binding of `action`.
 pub fn tip<'a>(
     state: &Listen,
@@ -127,13 +134,14 @@ pub fn tip_raw<'a>(
     position: Position,
 ) -> Element<'a, Message> {
     // While a menu or dialog is open the pointer still rests on the button that opened it: its tooltip
-    // would hang over the menu's first row.
+    // would hang over the menu's first row. The wrapper stays (with nothing to show): taking it away
+    // would change the widget tree and reset every scrollable of the page under the menu.
     if state.menu.is_some()
         || state.overlay.modal.is_some()
         || state.sb.popup.is_some()
         || state.audio.popup.is_some()
     {
-        return content.into();
+        return tooltip(content, hidden_bubble(), position).delay(DELAY).gap(4).into();
     }
     let text = tip_text_raw(state, label, action);
     tooltip(content, bubble(state.tokens, text), position).delay(DELAY).gap(4).into()
