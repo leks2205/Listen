@@ -43,6 +43,12 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
             .collect();
         extra = extra.push(tabs(state, segments));
     }
+    // Nothing to play on an empty tab: the button is disabled (muted), not a bright no-op.
+    let has_items = match tab {
+        FavoritesTab::Songs => !state.library.favorites.is_empty(),
+        FavoritesTab::Albums => !x.fav_albums.is_empty(),
+        FavoritesTab::Artists => !x.fav_artists.is_empty(),
+    };
     extra = extra.push(
         button(
             row![
@@ -54,7 +60,7 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         )
         .padding(Padding::from([6.0, 14.0]))
         .style(style::primary_button(t))
-        .on_press(Message::Extra(ExtraMsg::FavPlay(state.play_behavior()))),
+        .on_press_maybe(has_items.then(|| Message::Extra(ExtraMsg::FavPlay(state.play_behavior())))),
     );
 
     let empty = if ytm { "Nothing liked yet." } else { "No favorites yet." };

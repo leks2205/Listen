@@ -438,7 +438,12 @@ pub fn primary_button(t: Tokens) -> impl Fn(&Theme, button::Status) -> button::S
         };
         button::Style {
             background: bg(background),
-            text_color: Color::WHITE,
+            // A disabled button's label is muted with its fill (the glyph beside it is not).
+            text_color: if status == button::Status::Disabled {
+                alpha(Color::WHITE, 0.6)
+            } else {
+                Color::WHITE
+            },
             border: border::rounded(t.radius_sm),
             snap: true,
             ..Default::default()

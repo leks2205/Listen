@@ -189,8 +189,10 @@ pub fn subscription(state: &Listen) -> iced::Subscription<Message> {
     })
 }
 
+/// The query is found in the English label and in the translated one the list shows.
 fn matches(label: &str, query: &str) -> bool {
-    query.is_empty() || label.to_lowercase().contains(&query.to_lowercase())
+    let q = query.to_lowercase();
+    q.is_empty() || label.to_lowercase().contains(&q) || crate::i18n::tr(label).to_lowercase().contains(&q)
 }
 
 impl Listen {
@@ -504,11 +506,13 @@ impl Listen {
         match item.cmd {
             Cmd::GoToPage => {
                 self.palette.pages.push(Page::GoTo);
+                self.palette.query.clear();
                 self.palette_reset_selection();
                 return focus;
             }
             Cmd::ServerCommands => {
                 self.palette.pages.push(Page::Servers);
+                self.palette.query.clear();
                 self.palette_reset_selection();
                 return focus;
             }
