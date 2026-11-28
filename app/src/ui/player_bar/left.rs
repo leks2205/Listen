@@ -24,7 +24,8 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
     };
     let song = &item.song;
     // Text width: the column minus padding and the cover, capped at 20vw like Feishin.
-    let cover = if state.config.settings.sidebar.cover_expanded { 0.0 } else { metrics::PLAYER_ART + 12.0 };
+    let show_cover = !state.config.settings.sidebar.cover_expanded && width >= super::COVER_FROM;
+    let cover = if show_cover { metrics::PLAYER_ART + 12.0 } else { 0.0 };
     let px = (width - metrics::space_lg() - cover - metrics::space_sm())
         .min(state.window_size.width * 0.2)
         .max(0.0);
@@ -149,7 +150,7 @@ pub(super) fn view(state: &Listen, width: f32) -> Element<'_, Message> {
         }
     };
     let mut info = Row::new().align_y(Alignment::Center);
-    if !state.config.settings.sidebar.cover_expanded {
+    if show_cover {
         let art = tip(
             state,
             button(song_cover(state, song, metrics::PLAYER_ART, 0.0))

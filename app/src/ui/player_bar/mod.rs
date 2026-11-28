@@ -16,8 +16,11 @@ use iced::{Element, Length};
 
 /// Gap between the three columns (Feishin: 1 rem).
 const GAP: f32 = metrics::SPACE_LG;
-/// A left column narrower than this (a cover sliver) is dropped.
-const MIN_LEFT: f32 = 100.0;
+/// A left column narrower than this is dropped: it must hold a readable stretch of title (a column
+/// that fits the cover but not the text shows a lone "…").
+const MIN_LEFT: f32 = 130.0;
+/// Below this the left column shows the text without the cover, so the song can still be read.
+pub(super) const COVER_FROM: f32 = 200.0;
 
 pub fn view(state: &Listen) -> Element<'_, Message> {
     if state.layout_mode() == super::LayoutMode::Compact {
@@ -86,5 +89,21 @@ pub(crate) fn volume_text(state: &Listen) -> String {
     match state.dlna_device() {
         Some(name) => crate::i18n::trf("{}: {}", &[&name, &level]),
         None => level,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_left_column_is_readable_or_gone_at_every_width() {
+        let (s, _) = crate::app::Listen::boot(&crate::Args { demo: true, ..crate::Args::default() });
+        for w in (770..=1600).step_by(10) {
+            let (l, c, r, _) = layout(&s, w as f32);
+            // A sliver that only fits the cover (a lone "…" for the title) is never shown.
+            assert!(l == 0.0 || l >= MIN_LEFT, "{w}: left {l}");
+            assert!(c + r + l <= w as f32, "{w}: columns {l} {c} {r}");
+        }
     }
 }
