@@ -9,7 +9,7 @@ use iced::font::Weight;
 use iced::widget::{
     button, column, container, pick_list, row, slider, text_editor, text_input, toggler, vertical_slider,
 };
-use iced::{Alignment, Element, Padding};
+use iced::{Alignment, Element, Length, Padding};
 use listen_core::settings::{self, ReplayGain, SkipParts, StreamQuality, TransitionEdges};
 
 /// Audio sections of the Playback tab: playback, output, ReplayGain, mpv, EQ, compressor, transcoding.
@@ -1146,7 +1146,9 @@ pub(super) fn dj_transitions(state: &Listen) -> Element<'_, Message> {
              to measure it and keeps only the results. Off by default; asks for an analysis folder first.",
             switch(a.youtube_music && !a.shared_dir.trim().is_empty(), Setting::AnalysisYtm),
         ),
-        container(crate::ui::data_label(status, metrics::font_sm(), t.muted)).into(),
+        container(crate::ui::data_label(status, metrics::font_sm(), t.muted).wrapping(iced::widget::text::Wrapping::WordOrGlyph))
+            .width(Length::Fill)
+            .into(),
         line(
             state,
             "Whole library",

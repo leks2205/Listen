@@ -183,7 +183,7 @@ pub(super) fn filters(state: &Listen) -> Element<'_, Message> {
     let q = &state.config.settings.queue;
     let mut rows: Vec<Element<'_, Message>> = vec![line(
         state,
-        "Player filters",
+        "Filter rules",
         "Songs that match a rule are kept out of the queue when you play or queue them. Auto-DJ and the AI DJ are not filtered.",
         button(label("Add rule", metrics::font_md(), t.foreground))
             .padding(Padding::from([6.0, 14.0]))

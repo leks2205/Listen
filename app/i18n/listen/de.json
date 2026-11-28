@@ -507,7 +507,7 @@
 "Cycle presets": "Voreinstellungen durchlaufen",
 "Cycle through every preset (off: only the selected ones).": "Alle Voreinstellungen durchlaufen (aus: nur die ausgewählten).",
 "Cycle time": "Zykluszeit",
-"DISPLAY": "ANZEIGE",
+"DISPLAY": "DARSTELLUNG",
 "DJ transitions": "DJ-Übergänge",
 "DJ transitions & song analysis": "DJ-Übergänge und Titelanalyse",
 "DJ transitions need to know each song's tempo, beats and key. Listen measures them once and keeps the results in this folder. Pick a synced folder (Nextcloud, Syncthing, …) and your other computers reuse the results.": "DJ-Übergänge müssen Tempo, Beats und Tonart jedes Titels kennen. Listen misst sie einmal und speichert die Ergebnisse in diesem Ordner. Wähle einen synchronisierten Ordner (Nextcloud, Syncthing, …), dann nutzen deine anderen Computer die Ergebnisse mit.",
@@ -1151,7 +1151,7 @@
 "Percentage or seconds": "Prozent oder Sekunden",
 "Persona": "Persona",
 "Pick a .ttf, .otf or .ttc file.": "Wähle eine .ttf-, .otf- oder .ttc-Datei.",
-"Pick a preset": "Voreinstellung wählen",
+"Pick a preset": "Vorlage wählen",
 "Pick a swatch or type a CSS colour, e.g. rgb(53, 116, 252) or #3574fc.": "Wähle eine Farbe oder gib eine CSS-Farbe ein, z. B. rgb(53, 116, 252) oder #3574fc.",
 "Pick songs whose tempo, key and energy follow on from the current one.": "Titel wählen, deren Tempo, Tonart und Energie zum aktuellen passen.",
 "Pick the next preset at random (off: the next in the list).": "Die nächste Voreinstellung zufällig wählen (aus: die nächste in der Liste).",
@@ -1806,7 +1806,7 @@
 "Your {} in music": "Dein {} in Musik",
 "Zoom": "Zoom",
 "[0] Discrete Frequencies": "[0] Diskrete Frequenzen",
-"[10] Line / Area graph": "[10] Linien- / Flächendiagramm",
+"[10] Line / Area graph": "[10] Linien / Fläche",
 "[1] 1/24th octave / 240 bands": "[1] 1/24-Oktave / 240 Bänder",
 "[2] 1/12th octave / 120 bands": "[2] 1/12-Oktave / 120 Bänder",
 "[3] 1/8th octave / 80 bands": "[3] 1/8-Oktave / 80 Bänder",
@@ -2451,5 +2451,10 @@
 "Not a colour yet: write it like rgb(53, 116, 252) or #3574fc.": "Noch keine Farbe: Schreibe sie als rgb(53, 116, 252) oder #3574fc.",
 "{} custom themes{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.": "{} eigene Themes{} in {}. Füge .json- oder .toml-Dateien hinzu; overrides.json|toml ändert Farben, Radien, Abstände und Schriftgrößen jedes Themes.",
 "{} custom theme{} in {}. Add .json or .toml files; overrides.json|toml changes colours, radii, spacing and font sizes of any theme.": "{} eigenes Theme{} in {}. Füge .json- oder .toml-Dateien hinzu; overrides.json|toml ändert Farben, Radien, Abstände und Schriftgrößen jedes Themes.",
-"{}: could not be read as a theme ({})": "{}: konnte nicht als Theme gelesen werden ({})"
+"{}: could not be read as a theme ({})": "{}: konnte nicht als Theme gelesen werden ({})",
+"built-in heuristic": "eingebaute Heuristik",
+"singing-voice detector": "Gesangserkennung",
+"Enter preset name": "Name eingeben",
+"Player filters": "Wiedergabefilter",
+"Filter rules": "Filterregeln"
 }
