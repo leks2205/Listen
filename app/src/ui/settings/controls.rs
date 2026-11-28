@@ -81,7 +81,7 @@ pub(super) fn home(state: &Listen) -> Element<'_, Message> {
         "Select the items and order in which they appear on the home page",
         row![].into(),
     ));
-    lines.extend(crate::ui::home::section_rows(state));
+    lines.extend(crate::ui::home::section_rows(state).into_iter().map(|r| super::child(state, r)));
     section(state, "Home", lines)
 }
 
@@ -195,7 +195,7 @@ pub(super) fn sidebar(state: &Listen) -> Element<'_, Message> {
             "Select the items and order in which they appear in the sidebar",
             row![].into(),
         ),
-        container(items).padding(Padding::from([0.0, 8.0])).into(),
+        super::child(state, container(items).padding(Padding::from([0.0, 8.0])).into()),
         line(
             state,
             "Sidebar playlist list",

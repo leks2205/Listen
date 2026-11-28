@@ -200,7 +200,7 @@ pub fn settings_rows(state: &Listen) -> Vec<Element<'_, Message>> {
         rows.push(line(
             state,
             "Waveform align",
-            "Waveform align",
+            "Where the bars sit on the line: at the top, in the middle or at the bottom.",
             pick_list(
                 [WaveformAlign::Top, WaveformAlign::Center, WaveformAlign::Bottom].map(AlignChoice),
                 Some(AlignChoice(pb.waveform_align)),
@@ -211,19 +211,19 @@ pub fn settings_rows(state: &Listen) -> Vec<Element<'_, Message>> {
         rows.push(line(
             state,
             "Waveform bar width",
-            "Waveform bar width",
+            "How wide each bar of the waveform is.",
             amount(1..=10, pb.waveform_bar_width, " px", SliderSetting::BarWidth),
         ));
         rows.push(line(
             state,
             "Waveform gap",
-            "Waveform gap",
+            "The space between two bars.",
             amount(0..=10, pb.waveform_gap, " px", SliderSetting::Gap),
         ));
         rows.push(line(
             state,
             "Waveform radius",
-            "Waveform radius",
+            "How rounded the ends of the bars are.",
             amount(0..=20, pb.waveform_radius, " px", SliderSetting::Radius),
         ));
         rows.push(line(

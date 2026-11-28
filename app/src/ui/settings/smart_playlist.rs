@@ -30,17 +30,16 @@ pub fn query_builder(state: &Listen) -> Option<Element<'_, Message>> {
                 .style(style::input(t))
                 .width(Length::FillPortion(2))
         };
-    let kinds: Vec<&'static str> = ["string", "number", "boolean", "date", "playlist"].to_vec();
+    let kinds: [&'static str; 5] = ["string", "number", "boolean", "date", "playlist"];
     let mut fields = Column::new().spacing(metrics::space_sm());
     for (i, f) in state.config.settings.query_builder.tags.iter().enumerate() {
         let kind = Kind::parse(&f.kind).name();
         fields = fields.push(
             row![
                 input("Label", &f.label, QueryTagSetting::Label, i),
-                pick_list(kinds.clone(), Some(kind), move |k: &str| change(QueryTagSetting::Kind(
-                    i,
-                    k.into()
-                )))
+                pick_list(kinds.clone().map(crate::ui::Tr), Some(crate::ui::Tr(kind)), move |k| change(
+                    QueryTagSetting::Kind(i, k.0.into())
+                ))
                 .text_size(metrics::font_sm())
                 .width(Length::FillPortion(1)),
                 input("Tag", &f.tag, QueryTagSetting::Tag, i),

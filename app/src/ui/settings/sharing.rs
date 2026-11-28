@@ -27,19 +27,31 @@ pub(super) fn sharing(state: &Listen) -> Element<'_, Message> {
         line(
             state,
             "Default share expiration",
-            "How long a new share link works (you can change it for each share)",
-            row![
-                text_input(crate::i18n::tr("1"), &e.amount.to_string())
-                    .on_input(|v| change(SharingSetting::Amount(v.trim().parse().unwrap_or(1))))
-                    .size(metrics::font_md())
-                    .padding(Padding::from([6.0, 10.0]))
-                    .style(style::input(t))
-                    .width(80),
-                pick_list(ExpiryUnit::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(e.unit)), |u| {
-                    change(SharingSetting::Unit(u.0))
-                })
-                .width(120),
-            ]
+            "How long a new share link works (you can change it for each share). Not used while the server's default is on.",
+            if e.use_server_default {
+                // The server sets the expiry, so these values are not used: show them, not editable.
+                row![
+                    text_input(crate::i18n::tr("1"), &e.amount.to_string())
+                        .size(metrics::font_md())
+                        .padding(Padding::from([6.0, 10.0]))
+                        .style(style::input(t))
+                        .width(80),
+                    crate::ui::label(crate::i18n::tr_cow(e.unit.to_string().into()).into_owned(), metrics::font_md(), t.muted).width(120),
+                ]
+            } else {
+                row![
+                    text_input(crate::i18n::tr("1"), &e.amount.to_string())
+                        .on_input(|v| change(SharingSetting::Amount(v.trim().parse().unwrap_or(1))))
+                        .size(metrics::font_md())
+                        .padding(Padding::from([6.0, 10.0]))
+                        .style(style::input(t))
+                        .width(80),
+                    pick_list(ExpiryUnit::ALL.map(crate::ui::Tr), Some(crate::ui::Tr(e.unit)), |u| {
+                        change(SharingSetting::Unit(u.0))
+                    })
+                    .width(120),
+                ]
+            }
             .spacing(metrics::space_sm())
             .align_y(Alignment::Center)
             .into(),

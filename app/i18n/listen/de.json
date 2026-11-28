@@ -2432,7 +2432,7 @@
 "Save as collection": "Als Sammlung speichern",
 "Sidebar (collapsed) navigation": "Navigation in der Seitenleiste (eingeklappt)",
 "Sidebar playlist sorting": "Sortierung der Wiedergabelisten in der Seitenleiste",
-"Waveform bar width": "Breite der Wellenform-Leiste",
+"Waveform bar width": "Breite der Wellenform-Balken",
 "Query builder": "Abfrage-Editor",
 "Play button behavior": "Verhalten der Wiedergabetaste",
 "Follow current song": "Dem aktuellen Titel folgen",
@@ -2457,5 +2457,18 @@
 "Enter preset name": "Name eingeben",
 "Player filters": "Wiedergabefilter",
 "Filter rules": "Filterregeln",
-"Not a colour yet: write it as #rrggbb, like #3574fc. Until then the lines keep the theme's colour.": "Noch keine Farbe: schreibe sie als #rrggbb, zum Beispiel #3574fc. Bis dahin behalten die Linien die Farbe des Themes."
+"Not a colour yet: write it as #rrggbb, like #3574fc. Until then the lines keep the theme's colour.": "Noch keine Farbe: schreibe sie als #rrggbb, zum Beispiel #3574fc. Bis dahin behalten die Linien die Farbe des Themes.",
+"Waveform align": "Wellenform ausrichten",
+"Waveform gap": "Abstand der Wellenform-Balken",
+"Waveform radius": "Rundung der Wellenform-Balken",
+"Where the bars sit on the line: at the top, in the middle or at the bottom.": "Wo die Balken auf der Linie sitzen: oben, in der Mitte oder unten.",
+"How wide each bar of the waveform is.": "Wie breit jeder Balken der Wellenform ist.",
+"The space between two bars.": "Der Abstand zwischen zwei Balken.",
+"How rounded the ends of the bars are.": "Wie stark die Enden der Balken abgerundet sind.",
+"How long a new share link works (you can change it for each share). Not used while the server's default is on.": "Wie lange ein neuer Freigabelink gilt (du kannst es bei jeder Freigabe ändern). Wird nicht verwendet, solange der Standard des Servers an ist.",
+"string": "Text",
+"number": "Zahl",
+"boolean": "Ja/Nein",
+"date": "Datum",
+"playlist": "Wiedergabeliste"
 }

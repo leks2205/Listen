@@ -60,7 +60,8 @@ pub(super) fn player_bar_rows(state: &Listen) -> Vec<Element<'_, Message>> {
     };
     for (i, item) in items.iter().enumerate() {
         let name = RIGHT_CONTROLS.iter().find(|(id, _)| *id == item.id).map_or("", |(_, n)| *n);
-        rows.push(
+        rows.push(super::child(
+            state,
             row![
                 checkbox(item.visible)
                     .label(crate::i18n::tr(name))
@@ -78,7 +79,7 @@ pub(super) fn player_bar_rows(state: &Listen) -> Vec<Element<'_, Message>> {
             .align_y(Alignment::Center)
             .padding(Padding::from([0.0, 8.0]))
             .into(),
-        );
+        ));
     }
     rows
 }

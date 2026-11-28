@@ -3,7 +3,7 @@
 //!
 //! Search contract: rows built with [`line`] or [`searchable`] are counted for the [`section`] that
 //! follows them and hide themselves when the query misses them, so build a section's rows right
-//! before calling `section` for it. Other rows show or hide only with their section's title. A row
+//! before calling `section` for it. Rows that belong to a line (a list under a heading) go through [`child`]; a search for a section's title shows the whole section. A row
 //! that is a 0×0 fixed-size widget counts as [`hidden`] and is dropped.
 
 mod about;
@@ -39,6 +39,18 @@ thread_local! {
     static ROWS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
     /// Rows (or section titles) that matched the search on the whole page.
     static MATCHES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether the last [`line`] matched the search (the rows that belong to it follow its fate).
+    /// Titles of sections whose title matched the search while some of their rows did not (pass 1).
+    static TITLE_HITS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// Pass 2 of a search: build these sections with every row shown and drop the others.
+    static FORCE: std::cell::RefCell<Option<Vec<&'static str>>> = const { std::cell::RefCell::new(None) };
+    static LAST_FOUND: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// A row that belongs to the [`line`] built just before it (a list of items under a heading line):
+/// while searching it is shown only when that line matched, so a sub-list is not left without its heading.
+pub(super) fn child<'a>(state: &Listen, row: Element<'a, Message>) -> Element<'a, Message> {
+    if query(state).is_some() && !LAST_FOUND.with(std::cell::Cell::get) { hidden() } else { row }
 }
 
 /// Placeholder that takes no room; `section` drops it.
@@ -64,12 +76,24 @@ pub(super) fn section<'a>(
 ) -> Element<'a, Message> {
     let t = state.tokens;
     let (shown, built) = ROWS.with(|r| r.replace((0, 0)));
-    if let Some(q) = query(state) {
+    let forced = FORCE.with(|f| f.borrow().as_ref().map(|titles| titles.contains(&title)));
+    if forced == Some(false) {
+        return hidden();
+    }
+    if let (Some(q), None) = (query(state), forced) {
         // Rows that don't match are already gone; a section without a match
         // goes too (one without rows only stays when its title matches).
-        let keep = if built == 0 { crate::i18n::tr(title).to_lowercase().contains(&q) } else { shown > 0 };
+        let title_hit = crate::i18n::tr(title).to_lowercase().contains(&q);
+        let keep = if built == 0 { title_hit } else { shown > 0 };
         if keep && built == 0 {
             MATCHES.with(|m| m.set(m.get() + 1));
+        }
+        if title_hit && built > shown {
+            // Searching a section's name shows the whole section (view() builds it again with all rows).
+            TITLE_HITS.with(|h| h.borrow_mut().push(title));
+            if shown == 0 {
+                MATCHES.with(|m| m.set(m.get() + 1));
+            }
         }
         if !keep {
             return hidden();
@@ -122,13 +146,14 @@ fn line_in<'a>(
 ) -> Element<'a, Message> {
     let t = state.tokens;
     let hint = crate::i18n::tr_cow(hint.into_fragment());
-    if let Some(q) = query(state) {
+    if let (Some(q), false) = (query(state), FORCE.with(|f| f.borrow().is_some())) {
         let found = crate::i18n::tr(name).to_lowercase().contains(&q) || hint.to_lowercase().contains(&q);
         ROWS.with(|r| {
             let (shown, built) = r.get();
             r.set((shown + usize::from(found), built + 1));
             MATCHES.with(|m| m.set(m.get() + usize::from(found)));
         });
+        LAST_FOUND.with(|l| l.set(found));
         if !found {
             return hidden();
         }
@@ -295,7 +320,23 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     let mut page = Column::new().spacing(metrics::space_xl());
     let searching = query(state).is_some();
     let sections: Vec<_> = if searching {
-        SettingsTab::ALL.into_iter().flat_map(|tab| tab_sections(state, tab)).collect()
+        let build = || SettingsTab::ALL.into_iter().flat_map(|tab| tab_sections(state, tab)).collect::<Vec<_>>();
+        TITLE_HITS.with(|h| h.borrow_mut().clear());
+        let mut sections = build();
+        let hits = TITLE_HITS.with(|h| std::mem::take(&mut *h.borrow_mut()));
+        if !hits.is_empty() {
+            // A section found by its name: build it again with all its rows and swap it in.
+            let counts = (ROWS.with(std::cell::Cell::get), MATCHES.with(std::cell::Cell::get));
+            FORCE.with(|f| *f.borrow_mut() = Some(hits));
+            let full = build();
+            FORCE.with(|f| *f.borrow_mut() = None);
+            ROWS.with(|r| r.set(counts.0));
+            MATCHES.with(|m| m.set(counts.1));
+            if full.len() == sections.len() {
+                sections = sections.into_iter().zip(full).map(|(a, b)| if is_hidden(&b) { a } else { b }).collect();
+            }
+        }
+        sections
     } else {
         top = top.push(tab_bar(state));
         tab_sections(state, state.config.settings.settings_tab)

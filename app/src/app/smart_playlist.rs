@@ -52,8 +52,12 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(id: Option<String>, tags: &[listen_core::settings::QueryTag]) -> Self {
-        let fields: Vec<FieldOpt> =
-            field_options(tags.iter().map(|t| (t.label.as_str(), t.kind.as_str(), t.tag.as_str())));
+        // A custom field still without its tag (just added in Settings) is no field yet.
+        let fields: Vec<FieldOpt> = field_options(
+            tags.iter()
+                .filter(|t| !t.tag.trim().is_empty())
+                .map(|t| (t.label.as_str(), t.kind.as_str(), t.tag.as_str())),
+        );
         Self {
             id,
             name: String::new(),
@@ -371,5 +375,20 @@ impl QueryTagSetting {
             }
             QueryTagSetting::Remove(_) => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tag_tests {
+    use super::*;
+    use listen_core::settings::QueryTag;
+
+    #[test]
+    fn a_custom_field_without_a_tag_is_not_offered() {
+        let blank = QueryTag { kind: "string".into(), ..Default::default() };
+        let full = QueryTag { label: "Mood".into(), kind: "string".into(), tag: "mood".into() };
+        let without = Editor::new(None, &[]).fields.len();
+        assert_eq!(Editor::new(None, &[blank.clone()]).fields.len(), without);
+        assert_eq!(Editor::new(None, &[blank, full]).fields.len(), without + 1);
     }
 }
