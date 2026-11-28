@@ -563,10 +563,12 @@ impl Listen {
                 }
             }
             QueueMsg::Shuffle => {
+                self.queue_ui.more_menu = None;
                 self.queue.shuffle_all();
                 return self.refresh_next();
             }
             QueueMsg::Clear => {
+                self.queue_ui.more_menu = None;
                 if self.queue.is_empty() {
                     return Task::none();
                 }
