@@ -23,9 +23,13 @@ const HEADER_H: f32 = 40.0;
 const RESIZE_W: f32 = 6.0;
 
 /// The label a column has in the header (icons for the narrow ones).
-fn header_label<'a>(state: &Listen, col: ColumnId) -> Element<'a, Message> {
+fn header_label<'a>(state: &Listen, list: &ListId, col: ColumnId) -> Element<'a, Message> {
     let t = state.tokens;
     match col {
+        // The genre's name: not the same "Title" the song-count column ("Songs") is read next to.
+        ColumnId::Title if *list == ListId::Genres => {
+            label_w("Genre", metrics::font_sm(), t.muted, Weight::Medium).into()
+        }
         ColumnId::UserFavorite => icon(Icon::RiHeartLine, metrics::font_md(), t.muted),
         ColumnId::Image | ColumnId::Actions => space().width(0).into(),
         other => label_w(other.label(), metrics::font_sm(), t.muted, Weight::Medium).into(),
@@ -41,7 +45,8 @@ pub fn table_header<'a, T: ListItem>(body: &Body<'a, T>, shape: &Shape) -> Eleme
         for n in range {
             let (col, width) = (&shape.columns[n], shape.widths[n]);
             let target = drag.is_some_and(|d| d.over == Some(col.id) && d.column != col.id);
-            let title = sized(header_label(body.state, col.id), (width - RESIZE_W).max(10.0), col.align);
+            let title =
+                sized(header_label(body.state, &body.id, col.id), (width - RESIZE_W).max(10.0), col.align);
             let handle = mouse_area(container(space()).width(RESIZE_W).height(HEADER_H - 12.0))
                 .interaction(iced::mouse::Interaction::ResizingHorizontally)
                 .on_press(Message::List(ListMsg::ColumnResizeStart(body.id.clone(), col.id)));

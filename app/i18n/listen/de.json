@@ -2399,5 +2399,6 @@
 "Skipped": "Übersprungen",
 "Mismatch": "Abweichung",
 "Not in database": "Nicht in der Datenbank",
-"Log": "Protokoll"
+"Log": "Protokoll",
+"Sleep timer: paused after {}.": "Schlaf-Timer: Wiedergabe nach „{}“ pausiert."
 }
