@@ -390,8 +390,12 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         }
         page = page.push(container(list).padding(Padding::from([0.0, 32.0])));
     }
+    // Pinned near the top rather than centred: the form's height changes with the tab (Local is much
+    // shorter), and a centred card made the tab row jump by ~160 px.
     container(scrollable(container(page).center_x(Length::Fill).padding(Padding::from([32.0, 0.0]))))
-        .center(Length::Fill)
+        .center_x(Length::Fill)
+        .align_top(Length::Fill)
+        .padding(Padding { top: (state.window_size.height * 0.08).clamp(0.0, 72.0), ..Padding::ZERO })
         .into()
 }
 
