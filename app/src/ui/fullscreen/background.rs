@@ -1,5 +1,5 @@
 //! The full-screen player's background: the cover's dominant colour, the
-//! blurred cover over it (optional) and a black veil of `opacity / 120`.
+//! blurred cover over it (optional) and a veil (black on dark themes, white on light ones) of `opacity / 120`.
 
 use crate::app::{Listen, Message};
 use iced::widget::{container, image, space, stack};
@@ -38,11 +38,10 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
     if !s.dynamic_background {
         return fill(t.background);
     }
-    let base = state
-        .fs
-        .backdrop
-        .as_ref()
-        .map_or_else(|| crate::style::darken(t.primary, 0.55), |b| fit_to_theme(b.color, t.dark));
+    let base = state.fs.backdrop.as_ref().map_or_else(
+        || if t.dark { crate::style::darken(t.primary, 0.55) } else { fit_to_theme(t.primary, false) },
+        |b| fit_to_theme(b.color, t.dark),
+    );
     let mut layers = stack![fill(base)];
     if s.dynamic_is_image
         && let Some(handle) = state.fs.backdrop.as_ref().and_then(|b| b.image.clone())
@@ -57,7 +56,9 @@ pub fn view(state: &Listen) -> Element<'_, Message> {
         );
     }
     layers
-        .push(fill(Color { a: s.overlay_alpha(), ..Color::BLACK }))
+        // The veil follows the theme: black over a dark theme's backdrop, white over a light one (a black veil
+        // made the backdrop dark and the light theme's dark text unreadable).
+        .push(fill(Color { a: s.overlay_alpha(), ..if t.dark { Color::BLACK } else { Color::WHITE } }))
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
