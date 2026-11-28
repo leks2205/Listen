@@ -248,7 +248,8 @@ fn header(state: &Listen) -> Element<'_, Message> {
         .style(style::default_button(t))
         .on_press(Message::Shell(ShellMsg::ResetAsk));
     let title = label_w("Settings", 36.0, t.foreground, Weight::Bold);
-    if narrow(state) {
+    // The title (about 270 px), the search field (260) and the reset button (up to 200 in German) in one row.
+    if state.page_width() - 2.0 * 32.0 < 800.0 {
         // Title on its own line, the search field takes what the reset button leaves.
         return column![
             title,

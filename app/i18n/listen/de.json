@@ -1777,7 +1777,7 @@
 "Windows or macOS buttons in Listen's own bar, or the desktop's native frame.": "Windows- oder macOS-Schaltflächen in Listens eigener Leiste oder der native Rahmen des Desktops.",
 "Work through the library in the background (the queue always comes first).": "Die Bibliothek im Hintergrund abarbeiten (die Warteschlange hat immer Vorrang).",
 "Working...": "Wird ausgeführt ...",
-"Wrapped": "Rückblick",
+"Wrapped": "Mehrzeilig",
 "Write tags": "Tags schreiben",
 "Writes all settings to a JSON file in your Downloads folder. Passwords and tokens are not included.": "Schreibt alle Einstellungen in eine JSON-Datei in deinem Downloads-Ordner. Passwörter und Tokens sind nicht enthalten.",
 "Writes the history to your Downloads folder.": "Schreibt den Verlauf in deinen Downloads-Ordner.",

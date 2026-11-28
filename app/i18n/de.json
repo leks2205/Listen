@@ -2329,7 +2329,7 @@
 "Work through the library in the background (the queue always comes first).": "Die Bibliothek im Hintergrund abarbeiten (die Warteschlange hat immer Vorrang).",
 "Working...": "Wird ausgeführt ...",
 "Working…": "Wird ausgeführt …",
-"Wrapped": "Rückblick",
+"Wrapped": "Mehrzeilig",
 "Write tags": "Tags schreiben",
 "Writer": "Autor",
 "Writes all settings to a JSON file in your Downloads folder. Passwords and tokens are not included.": "Schreibt alle Einstellungen in eine JSON-Datei in deinem Downloads-Ordner. Passwörter und Tokens sind nicht enthalten.",

@@ -244,7 +244,7 @@ pub(super) fn view(state: &Listen, width: f32, squeeze: u8) -> Element<'_, Messa
         });
     // The right label is the total, or the time left ("-m:ss") after a click on it.
     let remaining = s.show_time_remaining;
-    let end_text = if remaining {
+    let end_text = if remaining && !duration.is_zero() {
         format!("-{}", format_duration(duration.saturating_sub(shown)))
     } else {
         format_duration(duration)
