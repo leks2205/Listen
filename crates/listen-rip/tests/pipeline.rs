@@ -436,7 +436,13 @@ async fn unknown_disc_is_named_from_gnudb_and_still_flagged() {
     if !tools() {
         return;
     }
-    let entry = || Some(Box::new(gnudb::parse_read(include_str!("fixtures/gnudb_read_heart.txt")).unwrap()));
+    let entry = || {
+        Some(Box::new(
+            gnudb::Recorded::new()
+                .cddb(&gnudb::query_command(&unknown_toc()), include_str!("fixtures/gnudb_query_heart.txt"))
+                .cddb("cddb read data 4603b98a", include_str!("fixtures/gnudb_read_heart.txt")),
+        ))
+    };
     let cd_text = "CD_DA\nCD_TEXT {\n  LANGUAGE 0 {\n    TITLE \"Mixtape\"\n    PERFORMER \"Band\"\n  }\n}\n";
     let ripper = || MockRipper { toc_text: Some(cd_text.into()), ..mock(6) };
 
@@ -500,6 +506,92 @@ async fn unknown_disc_is_named_from_gnudb_and_still_flagged() {
     let (updates, end) = drive_job(cfg, ripper(), |_| None).await;
     assert_eq!(end, Stage::Done);
     assert_eq!(report_of(&updates).source, MetaSource::CdText);
+}
+
+/// RESCENE – PULSE (미니4집): gnudb refuses the disc's length, then lists two exact entries with the
+/// same TOC (an Erik Satie tribute first). iTunes knows PULSE with the disc's track lengths and
+/// nothing of the other one, so PULSE names the disc; with no outside source confirming either,
+/// neither does.
+#[tokio::test(flavor = "multi_thread")]
+async fn colliding_gnudb_entries_need_an_outside_confirmation() {
+    if !tools() {
+        return;
+    }
+    let toc = || Toc::from_offsets(1, 71_175, &[150, 10_725, 25_125, 41_025, 54_675]);
+    let gnudb = || {
+        gnudb::Recorded::new()
+            .cddb(
+                "cddb query 3703b305 5 150 10725 25125 41025 54675 949",
+                include_str!("fixtures/gnudb_query_pulse_refused.txt"),
+            )
+            .cddb(
+                "cddb query 3703b305 5 150 10725 25125 41025 54675 947",
+                include_str!("fixtures/gnudb_query_pulse.txt"),
+            )
+            .cddb("cddb read data 3703b39a", include_str!("fixtures/gnudb_read_fadladder.txt"))
+            .cddb("cddb read data 3703b39c", include_str!("fixtures/gnudb_read_pulse.txt"))
+    };
+    let confirmed = gnudb()
+        .json(
+            "https://itunes.apple.com/search?term=RESCENE PULSE&entity=album&limit=10",
+            include_str!("fixtures/itunes_search_pulse.json"),
+        )
+        .json(
+            "https://itunes.apple.com/lookup?id=6828335122&entity=song",
+            include_str!("fixtures/itunes_lookup_pulse.json"),
+        )
+        .json(
+            "https://itunes.apple.com/search?term=Fadladder Fadladder Play Erik Satie&entity=album&limit=10",
+            include_str!("fixtures/itunes_search_fadladder.json"),
+        )
+        .json(
+            "https://api.deezer.com/search/album?q=Fadladder Fadladder Play Erik Satie",
+            include_str!("fixtures/deezer_search_fadladder.json"),
+        );
+
+    let sb = Sandbox::new("gnudb-collide");
+    let lookup = Lookup::Given {
+        releases: vec![],
+        cover: None,
+        exact: false,
+        gnudb: Some(Box::new(confirmed.clone())),
+    };
+    let mut cfg = sb.cfg(toc(), lookup);
+    cfg.gnudb_email = "someone@example.com".into();
+    let (updates, end) = drive_job(cfg, mock(5), |_| None).await;
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    let report = report_of(&updates);
+    assert_eq!(report.source, MetaSource::Gnudb);
+    let dir = sb.dest().join("RESCENE/PULSE (미니4집)");
+    assert_eq!(report.folder, dir);
+    let tags = flac::read_tags(&dir.join("01 Finest Thing.flac")).await.unwrap();
+    assert_eq!(tags_of(&tags, "ALBUM"), ["PULSE (미니4집)"]);
+    assert_eq!(tags_of(&tags, "ALBUMARTIST"), ["RESCENE"]);
+    assert_eq!(tags_of(&tags, "DATE"), ["2026"]);
+    assert_eq!(tags_of(&tags, "LISTEN_NEEDS_FIX"), ["1"]);
+    assert!(!sb.dest().join("Fadladder").exists());
+    let asked = confirmed.asked();
+    assert_eq!(
+        asked[..2],
+        [
+            "cddb query 3703b305 5 150 10725 25125 41025 54675 949",
+            "cddb query 3703b305 5 150 10725 25125 41025 54675 947"
+        ]
+    );
+
+    // Neither iTunes nor Deezer knows either record: "Unknown Album", still flagged.
+    let sb2 = Sandbox::new("gnudb-collide-none");
+    let lookup =
+        Lookup::Given { releases: vec![], cover: None, exact: false, gnudb: Some(Box::new(gnudb())) };
+    let mut cfg = sb2.cfg(toc(), lookup);
+    cfg.gnudb_email = "someone@example.com".into();
+    let (updates, end) = drive_job(cfg, mock(5), |_| None).await;
+    assert_eq!(end, Stage::Done, "{updates:?}");
+    assert_eq!(report_of(&updates).source, MetaSource::Unknown);
+    let dir = sb2.dest().join("Unknown Artist/Unknown Album (2026-10-01 14.32)");
+    let tags = flac::read_tags(&dir.join("01 Track 01.flac")).await.unwrap();
+    assert_eq!(tags_of(&tags, "LISTEN_NEEDS_FIX"), ["1"]);
+    assert!(!sb2.dest().join("RESCENE").exists() && !sb2.dest().join("Fadladder").exists());
 }
 
 #[tokio::test(flavor = "multi_thread")]

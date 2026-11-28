@@ -1,0 +1,32 @@
+210 data 3703b39c CD database entry follows (until terminating `.')
+# xmcd
+#
+# Track frame offsets:
+#     150
+#     10725
+#     25125
+#     41025
+#     54675
+#
+# Disc length: 949
+#
+# Revision: 1
+# Submitted via: fre:ac v1.1.7
+#
+DISCID=3703b305
+DTITLE=RESCENE / PULSE (미니4집)
+DYEAR=2026
+DGENRE=Ballad
+TTITLE0=Finest Thing
+TTITLE1=With
+TTITLE2=백화요란(Inside Out)
+TTITLE3=MEME
+TTITLE4=Dragon
+EXTD= YEAR: 2002
+EXTT0=
+EXTT1=
+EXTT2=
+EXTT3=
+EXTT4=
+PLAYORDER=
+.

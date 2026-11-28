@@ -68,9 +68,14 @@ pub fn cddb_id(toc: &Toc) -> u32 {
         s
     };
     let sum: u32 = toc.tracks.iter().map(|t| digits((t.lba + PREGAP) / FRAMES_PER_SECOND)).sum();
+    ((sum % 255) << 24) | ((cddb_length(toc) & 0xFFFF) << 8) | (toc.tracks.len() as u32 & 0xFF)
+}
+
+/// The disc's playing time in seconds as the CDDB disc ID counts it: from the first track's start
+/// to the lead-out (each rounded down to whole seconds first).
+pub fn cddb_length(toc: &Toc) -> u32 {
     let start = toc.tracks.first().map_or(0, |t| t.lba) / FRAMES_PER_SECOND;
-    let length = (toc.leadout_lba / FRAMES_PER_SECOND).saturating_sub(start);
-    ((sum % 255) << 24) | ((length & 0xFFFF) << 8) | (toc.tracks.len() as u32 & 0xFF)
+    (toc.leadout_lba / FRAMES_PER_SECOND).saturating_sub(start)
 }
 
 /// AccurateRip v1 and v2 checksums of one track: `pcm` is its 16-bit stereo little-endian audio,

@@ -1,0 +1,32 @@
+210 data 3703b39a CD database entry follows (until terminating `.')
+# xmcd
+#
+# Track frame offsets:
+#     150
+#     10725
+#     25125
+#     41025
+#     54675
+#
+# Disc length: 949
+#
+# Revision: 0
+# Submitted via: fre:ac v1.1.7
+#
+DISCID=3703b305
+DTITLE=Fadladder / Fadladder Play Erik Satie
+DYEAR=2002
+DGENRE=Tribal
+TTITLE0=gnossinopedie one
+TTITLE1=gnossinopedie two
+TTITLE2=gnossinopedie three
+TTITLE3=gnossinopedie four
+TTITLE4=gnossinopedie five
+EXTD= YEAR: 2002
+EXTT0=
+EXTT1=
+EXTT2=
+EXTT3=
+EXTT4=
+PLAYORDER=
+.

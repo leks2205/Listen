@@ -42,7 +42,7 @@ counts as unreadable.
 |---|---|
 | Detect | UDisks2; also while Listen sits in the tray |
 | Rip | Fast: `cd-paranoia` burst read + AccurateRip; Secure: whipper secure rip. Drive offset from the AccurateRip drive database (or **Verify offset**) |
-| Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → gnudb (only with an e-mail address set) → CD-Text → "Unknown Album (…)"; everything after MusicBrainz is listed under "Rips to fix" |
+| Identify | MusicBrainz disc ID → fuzzy TOC match whose every track fits within 3 s → gnudb (only with an e-mail address set; colliding entries only when iTunes/Deezer confirm exactly one) → CD-Text → "Unknown Album (…)"; everything after MusicBrainz is listed under "Rips to fix" |
 | Several matching releases | a picker; the best match is taken after 30 s |
 | Cover | Cover Art Archive (release → release group) → iTunes (by artist and album for gnudb and CD-Text discs); 1200 px, embedded + `cover.jpg` |
 | Files | `Album Artist/Album/NN Title.flac`, multi-disc `D-NN Title.flac`, ReplayGain track + album |
@@ -56,10 +56,23 @@ after you enter an address in **Settings → Advanced → CD ripping → gnudb e
 program for a contact address and Listen sends it with every lookup (`hello=<user> <host>
 ListenMusicPlayer <version>`); Listen ships no address of its own, so with the field empty gnudb is never asked.
 
-Listen sends `cddb query` with the disc's CDDB ID, track offsets and length, then `cddb read` with the
-category and ID the query answered (which can differ from the computed one). An exact match (`200`/`210`)
-names the album, album artist, track titles and year; an inexact one (`211`) is only used when it has as many
-tracks as the disc. gnudb entries are submitted by other people and nobody checks them; they can be wrong.
+Listen sends `cddb query` with the disc's CDDB ID, track offsets and length (lead-out / 75), then `cddb read`
+with the category and ID the query answered (which can differ from the computed one). gnudb refuses some
+lengths outright (`500 Command syntax error.` for 949 s, while 948 and 950 are answered); a refused query is
+sent once more with the length the CDDB disc ID counts (lead-out − first track, / 75; 947 for that disc). A
+`202` (no match) is not asked again. An exact match (`200`/`210`) names the album, album artist, track titles
+and year; an inexact one (`211`) is only used when it has as many tracks as the disc. gnudb entries are
+submitted by other people and nobody checks them; they can be wrong.
+
+When gnudb lists several entries, Listen reads up to five of them and drops every one whose stored frame
+offsets or track count differ from the disc's. One left: it names the disc, as a single match does. Several
+left (different records typed in for the same TOC, which the TOC cannot tell apart): an entry is only used
+when an outside source confirms exactly one of them. It is confirmed when iTunes has its album (artist and
+title, without bracketed parts) with the disc's track count and every track within 3 s of the disc's; when
+iTunes has no album of that name, Deezer's album search with the same track count counts instead. Zero or
+several confirmed: none is used, and the disc goes on to CD-Text / "Unknown Album". Listen never picks
+among such entries by list order, genre, year or title; the log has one line per entry with its verdict.
+An entry that couldn't be read still counts as one of the colliding entries.
 The album gets no MusicBrainz IDs, stays `LISTEN_NEEDS_FIX=1` and is listed under "Rips to fix" with the link
 for adding the disc to MusicBrainz.
 

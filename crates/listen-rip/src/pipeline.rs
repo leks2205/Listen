@@ -53,9 +53,10 @@ pub enum Lookup {
     /// Nothing (CD-Text or "Unknown").
     Offline,
     /// Already known (tests): these releases, this cover. `exact` = the disc ID
-    /// matched; `false` makes them fuzzy TOC candidates that have to fit. `gnudb` is what gnudb
-    /// would answer when MusicBrainz has nothing (and an address is set).
-    Given { releases: Vec<Release>, cover: Option<Vec<u8>>, exact: bool, gnudb: Option<Box<gnudb::Entry>> },
+    /// matched; `false` makes them fuzzy TOC candidates that have to fit. `gnudb` answers what
+    /// the gnudb lookup asks (gnudb, and the stores that confirm colliding entries) when
+    /// MusicBrainz has nothing (and an address is set); `None`: gnudb has nothing.
+    Given { releases: Vec<Release>, cover: Option<Vec<u8>>, exact: bool, gnudb: Option<Box<gnudb::Recorded>> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -324,6 +325,9 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
         })
     };
     let mut lookup = Some(lookup);
+    // gnudb, started as soon as MusicBrainz turns out not to know the disc (often while the disc
+    // is still being read). `None`: not started yet; `Some(None)`: not asked (no address, offline).
+    let mut gnudb_task: Option<Option<GnudbTask>> = None;
 
     let stamp = time_stamp_for_log();
     let req = RipRequest {
@@ -359,6 +363,9 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
                 match found {
                     Ok(rs) => job.set_releases(rs),
                     Err(e) => job.warn(format!("MusicBrainz lookup failed: {e}")),
+                }
+                if job.releases.is_empty() {
+                    gnudb_task = Some(start_gnudb(&cfg, http));
                 }
             }
             Some(c) = job.rx.recv() => {
@@ -405,6 +412,9 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
             Ok(Ok(Err(e))) => job.warn(format!("MusicBrainz lookup failed: {e}")),
             _ => job.warn("MusicBrainz didn't answer in time".into()),
         }
+        if job.releases.is_empty() && gnudb_task.is_none() {
+            gnudb_task = Some(start_gnudb(&cfg, http));
+        }
     }
     while let Some(deadline) = job.deadline.filter(|d| !job.user_chose && Instant::now() < *d) {
         tokio::select! {
@@ -421,7 +431,11 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
             AlbumMeta::from_release(r, medium, &cfg.toc)
         }
         None => {
-            if let Some(entry) = ask_gnudb(&cfg, http).await {
+            let gnudb = match gnudb_task.take().unwrap_or_else(|| start_gnudb(&cfg, http)) {
+                Some(mut t) => (&mut t.0).await.ok().flatten(),
+                None => None,
+            };
+            if let Some(entry) = gnudb {
                 AlbumMeta::from_gnudb(&entry, &cfg.toc, &cfg.stamp)
             } else {
                 let text = outcome
@@ -537,35 +551,50 @@ async fn run_job(job: &mut Job, ripper: &Ripper, http: &reqwest::Client) -> Stag
     Stage::Done
 }
 
-/// gnudb's entry for a disc MusicBrainz doesn't know; `None` when no address is set, when the
-/// lookup is offline, or when gnudb has nothing usable (failures are logged, the disc then falls
-/// through to CD-Text).
-async fn ask_gnudb(cfg: &JobConfig, http: &reqwest::Client) -> Option<gnudb::Entry> {
+/// A running gnudb lookup; dropped (a cancelled job), it stops.
+struct GnudbTask(tokio::task::JoinHandle<Option<gnudb::Entry>>);
+
+impl Drop for GnudbTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+/// Starts the gnudb lookup for a disc MusicBrainz doesn't know; `None` when no address is set or
+/// the lookup is offline. The task yields `None` when gnudb has nothing usable (failures are
+/// logged, the disc then falls through to CD-Text); it gives up after 30 s.
+fn start_gnudb(cfg: &JobConfig, http: &reqwest::Client) -> Option<GnudbTask> {
     if matches!(cfg.lookup, Lookup::Offline) {
         return None;
     }
-    let email = cfg.gnudb_email.trim();
+    let email = cfg.gnudb_email.trim().to_string();
     if email.is_empty() {
         tracing::info!("gnudb lookup skipped: no e-mail address set (Settings → Advanced → CD ripping)");
         return None;
     }
-    match &cfg.lookup {
-        Lookup::Given { gnudb, .. } => gnudb.as_deref().cloned(),
-        Lookup::Offline => None,
-        Lookup::Online => {
-            match tokio::time::timeout(Duration::from_secs(30), gnudb::lookup(http, &cfg.toc, email)).await {
-                Ok(Ok(entry)) => entry,
-                Ok(Err(e)) => {
-                    tracing::warn!("gnudb lookup failed: {e}");
-                    None
-                }
-                Err(_) => {
-                    tracing::warn!("gnudb didn't answer in time");
-                    None
-                }
+    let (http, toc, lookup) = (http.clone(), cfg.toc.clone(), cfg.lookup.clone());
+    Some(GnudbTask(tokio::spawn(async move {
+        let answer = match &lookup {
+            Lookup::Given { gnudb: None, .. } | Lookup::Offline => return None,
+            Lookup::Given { gnudb: Some(recorded), .. } => {
+                tokio::time::timeout(Duration::from_secs(30), gnudb::resolve(&**recorded, &toc)).await
+            }
+            Lookup::Online => {
+                tokio::time::timeout(Duration::from_secs(30), gnudb::lookup(&http, &toc, &email)).await
+            }
+        };
+        match answer {
+            Ok(Ok(entry)) => entry,
+            Ok(Err(e)) => {
+                tracing::warn!("gnudb lookup failed: {e}");
+                None
+            }
+            Err(_) => {
+                tracing::warn!("gnudb didn't answer in time");
+                None
             }
         }
-    }
+    })))
 }
 
 /// The track titles of `meta` for the rip window.

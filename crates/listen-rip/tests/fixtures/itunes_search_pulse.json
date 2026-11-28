@@ -1,0 +1,10 @@
+
+
+
+{
+ "resultCount":1,
+ "results": [
+{"wrapperType":"collection", "collectionType":"Album", "artistId":1732658659, "collectionId":6828335122, "artistName":"RESCENE", "collectionName":"PULSE - EP", "collectionCensoredName":"PULSE - EP", "artistViewUrl":"https://music.apple.com/us/artist/rescene/1732658659?uo=4", "collectionViewUrl":"https://music.apple.com/us/album/pulse-ep/6828335122?uo=4", "artworkUrl60":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/b3/df/b7/b3dfb7ba-715f-1f5a-5528-eb82acd5225a/888272191394_Cover.jpg/60x60bb.jpg", "artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/b3/df/b7/b3dfb7ba-715f-1f5a-5528-eb82acd5225a/888272191394_Cover.jpg/100x100bb.jpg", "collectionPrice":4.99, "collectionExplicitness":"notExplicit", "trackCount":5, "copyright":"℗ 2026 The Muze Entertainment", "country":"USA", "currency":"USD", "releaseDate":"2026-11-03T08:00:00Z", "primaryGenreName":"K-Pop"}]
+}
+
+

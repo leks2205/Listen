@@ -3,6 +3,13 @@
 #
 # Track frame offsets:
 #	150
+#	12000
+#	24000
+#	36000
+#	48000
+#
+# Disc length: 800 seconds
+#
 DISCID=7a0b3c06
 DTITLE=Some Band / Close Enough
 DYEAR=1999

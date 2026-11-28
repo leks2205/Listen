@@ -24,7 +24,7 @@ pub fn fold(s: &str) -> String {
 /// is dropped with the brackets; a closing bracket without an opener is dropped alone. Nothing else
 /// changes (no case or space folding), so `"Song (Live) [2011]"` gives `"Song  "`. The version and
 /// release keys use it; `substitute::split_extras` keeps the bracketed parts as extras instead.
-pub(crate) fn without_brackets(s: &str) -> String {
+pub fn without_brackets(s: &str) -> String {
     let mut base = String::with_capacity(s.len());
     let mut depth = 0usize;
     for c in s.chars() {

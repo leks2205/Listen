@@ -5,6 +5,7 @@
 //! Navidrome scans, never deleting anything there.
 
 pub mod accuraterip;
+pub mod confirm;
 pub mod cover;
 pub mod detect;
 pub mod drive;

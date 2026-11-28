@@ -35,15 +35,26 @@ async fn image(http: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
     (ok && bytes.len() > 1000).then_some(bytes)
 }
 
+/// Whether a store's album (`found_artist`, `found_album`) is the one asked for: the artists
+/// contain one another and one title starts with the other, compared [`fold`]ed ("PULSE" fits
+/// "PULSE - EP"). Empty names fit nothing.
+pub fn album_fits(found_artist: &str, found_album: &str, artist: &str, album: &str) -> bool {
+    let (a, t) = (fold(artist), fold(album));
+    let (ra, rt) = (fold(found_artist), fold(found_album));
+    ![&a, &t, &ra, &rt].iter().any(|s| s.is_empty())
+        && (ra.contains(&a) || a.contains(&ra))
+        && (rt.starts_with(&t) || t.starts_with(&rt))
+}
+
 /// The 1200 px artwork URL of the iTunes album matching artist + title.
 pub fn itunes_pick(body: &Value, artist: &str, album: &str) -> Option<String> {
-    let (a, t) = (fold(artist), fold(album));
     body["results"].as_array()?.iter().find_map(|r| {
-        let ra = fold(r["artistName"].as_str().unwrap_or(""));
-        let rt = fold(r["collectionName"].as_str().unwrap_or(""));
-        let fits = !a.is_empty()
-            && (ra.contains(&a) || a.contains(&ra))
-            && (rt.starts_with(&t) || t.starts_with(&rt));
+        let fits = album_fits(
+            r["artistName"].as_str().unwrap_or(""),
+            r["collectionName"].as_str().unwrap_or(""),
+            artist,
+            album,
+        );
         fits.then(|| r["artworkUrl100"].as_str().map(|u| u.replace("100x100bb", "1200x1200bb")))?
     })
 }
