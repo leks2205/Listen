@@ -712,6 +712,37 @@ impl Listen {
     }
 }
 
+/// An OS error text without its English words: "No such file or directory (os error 2)" keeps only the
+/// code, so a German sentence is not followed by English.
+pub(super) fn os_error(e: &std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::NotFound => crate::i18n::tr("file not found").to_string(),
+        std::io::ErrorKind::PermissionDenied => crate::i18n::tr("no permission").to_string(),
+        _ => e.to_string(),
+    }
+}
+
+/// One line of an import report (`core` builds them in English).
+fn import_issue(line: &str) -> String {
+    use crate::i18n::trf;
+    if let Some(k) = line.strip_suffix(": secrets are not imported") {
+        return trf("{}: secrets are not imported", &[&k]);
+    }
+    if let Some(k) = line.strip_suffix(": unknown setting") {
+        return trf("{}: unknown setting", &[&k]);
+    }
+    line.to_string()
+}
+
+/// Why an import was refused (`core` builds the reason in English).
+fn import_error(e: &str) -> String {
+    use crate::i18n::{tr, trf};
+    if let Some(detail) = e.strip_prefix("not valid JSON: ") {
+        return trf("not valid JSON: {}", &[&detail]);
+    }
+    tr(e).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -882,35 +913,4 @@ enabled = true
         assert_eq!(std::fs::read(&a).unwrap(), b"1");
         let _ = std::fs::remove_dir_all(d);
     }
-}
-
-/// An OS error text without its English words: "No such file or directory (os error 2)" keeps only the
-/// code, so a German sentence is not followed by English.
-pub(super) fn os_error(e: &std::io::Error) -> String {
-    match e.kind() {
-        std::io::ErrorKind::NotFound => crate::i18n::tr("file not found").to_string(),
-        std::io::ErrorKind::PermissionDenied => crate::i18n::tr("no permission").to_string(),
-        _ => e.to_string(),
-    }
-}
-
-/// One line of an import report (`core` builds them in English).
-fn import_issue(line: &str) -> String {
-    use crate::i18n::trf;
-    if let Some(k) = line.strip_suffix(": secrets are not imported") {
-        return trf("{}: secrets are not imported", &[&k]);
-    }
-    if let Some(k) = line.strip_suffix(": unknown setting") {
-        return trf("{}: unknown setting", &[&k]);
-    }
-    line.to_string()
-}
-
-/// Why an import was refused (`core` builds the reason in English).
-fn import_error(e: &str) -> String {
-    use crate::i18n::{tr, trf};
-    if let Some(detail) = e.strip_prefix("not valid JSON: ") {
-        return trf("not valid JSON: {}", &[&detail]);
-    }
-    tr(e).to_string()
 }

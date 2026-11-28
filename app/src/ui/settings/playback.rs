@@ -80,7 +80,7 @@ impl std::fmt::Display for GaplessChoice {
             "no" => "No",
             other => other,
         };
-        f.write_str(&crate::i18n::tr(label))
+        f.write_str(crate::i18n::tr(label))
     }
 }
 
