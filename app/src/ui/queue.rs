@@ -285,12 +285,19 @@ fn table_of<'a>(state: &'a Listen, id: ListId) -> Element<'a, Message> {
             container(
                 column![
                     icon(Icon::LuListMusic, 36.0, t.muted),
-                    label("The queue is empty", metrics::font_lg(), t.muted),
-                    label("Drop songs, albums or playlists here to play them.", metrics::font_sm(), t.muted),
+                    label("The queue is empty", metrics::font_lg(), t.muted)
+                        .wrapping(iced::widget::text::Wrapping::Word)
+                        .align_x(iced::alignment::Horizontal::Center)
+                        .width(Length::Fill),
+                    label("Drop songs, albums or playlists here to play them.", metrics::font_sm(), t.muted)
+                        .wrapping(iced::widget::text::Wrapping::Word)
+                        .align_x(iced::alignment::Horizontal::Center)
+                        .width(Length::Fill),
                 ]
                 .spacing(metrics::space_sm())
                 .align_x(Alignment::Center),
             )
+            .padding(metrics::space_lg())
             .center(Length::Fill),
             DropTarget::QueueEmpty,
         );
@@ -503,7 +510,10 @@ fn more_menu<'a>(state: &'a Listen, tier: u8) -> Element<'a, Message> {
             button(
                 row![
                     icon(x.glyph(), metrics::font_lg(), t.foreground),
+                    // A long (translated) name wraps inside the menu instead of running out of it.
                     label_w(x.name(), metrics::font_md(), t.foreground, Weight::Medium)
+                        .wrapping(iced::widget::text::Wrapping::WordOrGlyph)
+                        .width(Length::Fill)
                 ]
                 .spacing(metrics::space_md())
                 .align_y(Alignment::Center),
@@ -964,7 +974,9 @@ pub fn overlay<'a>(state: &'a Listen, root: Element<'a, Message>) -> Element<'a,
     }
     if let Some((at, tier)) = state.queue_ui.more_menu {
         let close = Message::Queue(QueueMsg::MoreMenu(None));
-        let at = super::popover::place(at, iced::Size::new(260.0, 200.0), state.window_size);
+        // Up to two lines per entry; the menu must stay inside the window.
+        let height = 8.0 + 54.0 * folded(tier, state.queue_server_sync()).len() as f32;
+        let at = super::popover::place(at, iced::Size::new(260.0, height), state.window_size);
         let backdrop = mouse_area(space().width(Length::Fill).height(Length::Fill))
             .on_press(close.clone())
             .on_right_press(close);
